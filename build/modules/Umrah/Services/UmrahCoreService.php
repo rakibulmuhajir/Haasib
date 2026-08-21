@@ -1008,9 +1008,7 @@ class UmrahCoreService
             }
             $groupIds = [];
             foreach ($payment->allAllocations()->whereNull('reversed_at')->lockForUpdate()->get() as $allocation) {
-                $transaction = $allocation->transaction_id ? Transaction::find($allocation->transaction_id) : null;
-                $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
-                $allocation->update(['reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
+                $this->reverseAllocationEntry($allocation, $reason, $userId);
                 $groupIds[] = $allocation->visa_group_id;
             }
             $transaction = $payment->transaction_id ? Transaction::find($payment->transaction_id) : null;
@@ -1032,6 +1030,65 @@ class UmrahCoreService
             }
 
             return $payment->fresh();
+        });
+    }
+
+    /**
+     * Reverses one allocation's ledger entry and stamps its reversal columns.
+     * No recalculation here — reversePayment() batches its recalculation once
+     * after the whole loop, and reverseAllocation() does its own below. This
+     * is the shared middle step so both paths post identically by construction.
+     */
+    private function reverseAllocationEntry(PaymentAllocation $allocation, string $reason, ?string $userId): void
+    {
+        $transaction = $allocation->transaction_id ? Transaction::find($allocation->transaction_id) : null;
+        $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
+        $allocation->update(['reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
+    }
+
+    /**
+     * Reverses a single allocation without touching the rest of its payment.
+     *
+     * This exists because a refund returns credit to 2200 by undoing the
+     * specific allocation that put it there, not by netting the refund
+     * against the payment. recalculateGroup() computes total_paid from
+     * received allocations only — a refund posted without undoing the
+     * allocation would leave total_paid overstated, which is exactly why
+     * the allocation has to be reversed rather than the refund netted
+     * against it.
+     */
+    public function reverseAllocation(PaymentAllocation $allocation, string $reason, ?string $userId): PaymentAllocation
+    {
+        return DB::transaction(function () use ($allocation, $reason, $userId) {
+            $allocation = PaymentAllocation::where('company_id', $allocation->company_id)->lockForUpdate()->findOrFail($allocation->id);
+            if ($allocation->reversed_at) {
+                throw ValidationException::withMessages(['allocation' => 'This allocation has already been reversed.']);
+            }
+            $payment = GroupPayment::where('company_id', $allocation->company_id)->lockForUpdate()->findOrFail($allocation->group_payment_id);
+            if ($payment->status !== GroupPayment::STATUS_POSTED) {
+                throw ValidationException::withMessages(['payment' => 'This allocation cannot be reversed because its payment is not posted.']);
+            }
+
+            $this->reverseAllocationEntry($allocation, $reason, $userId);
+
+            $group = VisaGroup::where('company_id', $allocation->company_id)->find($allocation->visa_group_id);
+            if ($group) {
+                $this->recalculateGroup($group);
+            }
+            if ($payment->agent_id) {
+                $this->recalculateAgent($payment->agent_id);
+            }
+            if ($payment->visa_vendor_id) {
+                $this->recalculateVendor($payment->visa_vendor_id);
+            }
+            if ($payment->transport_vendor_id) {
+                $this->recalculateVendor($payment->transport_vendor_id);
+            }
+            if ($payment->hotel_vendor_id) {
+                $this->recalculateHotelVendor($payment->hotel_vendor_id);
+            }
+
+            return $allocation->fresh();
         });
     }
 

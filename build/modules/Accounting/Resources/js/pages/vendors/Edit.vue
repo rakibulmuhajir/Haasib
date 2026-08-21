@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Building2, Save } from 'lucide-vue-next'
 
@@ -87,7 +88,7 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Building2"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label>Vendor #</Label>
@@ -96,14 +97,17 @@ const handleSubmit = () => {
         <div>
           <Label for="name">Name</Label>
           <Input id="name" v-model="form.name" required />
+          <InputError :message="form.errors.name" />
         </div>
         <div>
           <Label for="email">Email</Label>
           <Input id="email" v-model="form.email" type="email" />
+          <InputError :message="form.errors.email" />
         </div>
         <div>
           <Label for="phone">Phone</Label>
           <Input id="phone" v-model="form.phone" />
+          <InputError :message="form.errors.phone" />
         </div>
         <div>
           <Label for="vendor_type">Supplier Type</Label>
@@ -117,18 +121,22 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.vendor_type" />
         </div>
         <div>
           <Label for="tax_id">Tax ID</Label>
           <Input id="tax_id" v-model="form.tax_id" />
+          <InputError :message="form.errors.tax_id" />
         </div>
         <div>
           <Label for="payment_terms">Payment Terms</Label>
           <Input id="payment_terms" v-model.number="form.payment_terms" type="number" min="0" max="365" />
+          <InputError :message="form.errors.payment_terms" />
         </div>
         <div>
           <Label for="account_number">Account #</Label>
           <Input id="account_number" v-model="form.account_number" />
+          <InputError :message="form.errors.account_number" />
         </div>
         <div>
           <Label for="ap_account_id">AP Account</Label>
@@ -147,10 +155,12 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.ap_account_id" />
         </div>
         <div>
           <Label for="website">Website</Label>
           <Input id="website" v-model="form.website" />
+          <InputError :message="form.errors.website" />
         </div>
       </div>
 
@@ -158,28 +168,34 @@ const handleSubmit = () => {
         <div>
           <Label>Street</Label>
           <Input v-model="form.address.street" />
+          <InputError :message="form.errors['address.street']" />
         </div>
         <div>
           <Label>City</Label>
           <Input v-model="form.address.city" />
+          <InputError :message="form.errors['address.city']" />
         </div>
         <div>
           <Label>State</Label>
           <Input v-model="form.address.state" />
+          <InputError :message="form.errors['address.state']" />
         </div>
         <div>
           <Label>ZIP</Label>
           <Input v-model="form.address.zip" />
+          <InputError :message="form.errors['address.zip']" />
         </div>
         <div>
           <Label>Country</Label>
           <Input v-model="form.address.country" maxlength="2" />
+          <InputError :message="form.errors['address.country']" />
         </div>
       </div>
 
       <div>
         <Label for="notes">Notes</Label>
         <Input id="notes" v-model="form.notes" />
+        <InputError :message="form.errors.notes" />
       </div>
 
       <div class="flex justify-end gap-3">

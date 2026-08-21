@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, CreditCard, Save, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
@@ -281,7 +282,7 @@ const saveAndPay = () => {
     </template>
 
     <div class="mx-auto w-full max-w-5xl">
-      <form @submit.prevent class="grid gap-5 lg:grid-cols-12 lg:gap-7">
+      <form novalidate @submit.prevent class="grid gap-5 lg:grid-cols-12 lg:gap-7">
         <div class="space-y-5 lg:col-span-7">
           <!-- Vendor Selection -->
           <div class="space-y-1.5">
@@ -335,6 +336,7 @@ const saveAndPay = () => {
                       :placeholder="t('billDescriptionPlaceholder')"
                       rows="2"
                     />
+                    <InputError :message="form.errors[`line_items.${idx}.description`]" />
                   </div>
 
                   <div class="w-full space-y-1.5 sm:w-[220px]">
@@ -343,6 +345,7 @@ const saveAndPay = () => {
                       v-model="item.unit_price"
                       :currency="company.base_currency"
                       :size="idx === 0 ? 'lg' : 'md'"
+                      :error="form.errors[`line_items.${idx}.unit_price`]"
                     />
                   </div>
                 </div>
@@ -351,6 +354,7 @@ const saveAndPay = () => {
                   <div class="flex items-center gap-2">
                     <Label class="text-xs font-medium text-muted-foreground">Qty</Label>
                     <Input v-model.number="item.quantity" type="number" min="0.01" step="0.01" class="h-9 w-24" />
+                    <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
                   </div>
 
                   <div v-if="idx === 0" class="flex items-center justify-between gap-3 sm:justify-end">
@@ -422,6 +426,7 @@ const saveAndPay = () => {
                     type="date"
                     v-model="form.bill_date"
                   />
+                  <InputError :message="form.errors.bill_date" />
                 </div>
                 <!-- Vendor Invoice Number -->
                 <div class="space-y-2">
@@ -430,6 +435,7 @@ const saveAndPay = () => {
                     v-model="form.bill_number"
                     :placeholder="t('vendorInvoiceNumberPlaceholder')"
                   />
+                  <InputError :message="form.errors.bill_number" />
                 </div>
               </div>
               <!-- Reference -->
@@ -439,6 +445,7 @@ const saveAndPay = () => {
                   v-model="form.reference"
                   :placeholder="t('referencePlaceholder')"
                 />
+                <InputError :message="form.errors.reference" />
               </div>
               <!-- Notes -->
               <div class="space-y-2">
@@ -448,6 +455,7 @@ const saveAndPay = () => {
                   :placeholder="t('internalNotesPlaceholder')"
                   rows="2"
                 />
+                <InputError :message="form.errors.notes" />
               </div>
             </CollapsibleContent>
           </Collapsible>

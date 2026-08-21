@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Plus, Calculator, CreditCard, Banknote, Smartphone, Building2, Search } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
@@ -285,7 +286,7 @@ const setPaymentTotal = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="formErrors.pump_id" class="text-sm text-destructive">{{ formErrors.pump_id[0] }}</p>
+                <InputError :message="formErrors.pump_id?.[0]" />
               </div>
 
               <div class="space-y-2">
@@ -303,7 +304,7 @@ const setPaymentTotal = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="formErrors.item_id" class="text-sm text-destructive">{{ formErrors.item_id[0] }}</p>
+                <InputError :message="formErrors.item_id?.[0]" />
               </div>
             </div>
 
@@ -318,7 +319,7 @@ const setPaymentTotal = () => {
                   placeholder="0.00"
                   :class="{ 'border-destructive': formErrors.quantity }"
                 />
-                <p v-if="formErrors.quantity" class="text-sm text-destructive">{{ formErrors.quantity[0] }}</p>
+                <InputError :message="formErrors.quantity?.[0]" />
               </div>
 
               <div class="space-y-2">
@@ -345,6 +346,7 @@ const setPaymentTotal = () => {
                     <SelectItem value="parco_card">Vendor Card</SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="formErrors.sale_type?.[0]" />
               </div>
             </div>
 
@@ -370,6 +372,7 @@ const setPaymentTotal = () => {
                   Select Customer
                 </Button>
               </div>
+              <InputError :message="formErrors.customer_id?.[0]" />
             </div>
 
             <!-- Bulk discount -->
@@ -383,7 +386,7 @@ const setPaymentTotal = () => {
                 placeholder="0.00"
                 :class="{ 'border-destructive': formErrors.discount_per_liter }"
               />
-              <p v-if="formErrors.discount_per_liter" class="text-sm text-destructive">{{ formErrors.discount_per_liter[0] }}</p>
+              <InputError :message="formErrors.discount_per_liter?.[0]" />
             </div>
           </CardContent>
         </Card>
@@ -405,6 +408,7 @@ const setPaymentTotal = () => {
                   Cash
                 </Label>
                 <Input v-model.number="cashAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.cash']?.[0]" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
@@ -412,6 +416,7 @@ const setPaymentTotal = () => {
                   EasyPaisa
                 </Label>
                 <Input v-model.number="easypaisaAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.easypaisa']?.[0]" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
@@ -419,6 +424,7 @@ const setPaymentTotal = () => {
                   JazzCash
                 </Label>
                 <Input v-model.number="jazzcashAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.jazzcash']?.[0]" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
@@ -426,6 +432,7 @@ const setPaymentTotal = () => {
                   Bank Transfer
                 </Label>
                 <Input v-model.number="bankTransferAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.bank_transfer']?.[0]" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
@@ -433,6 +440,7 @@ const setPaymentTotal = () => {
                   Card Swipe
                 </Label>
                 <Input v-model.number="cardSwipeAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.card_swipe']?.[0]" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
@@ -440,6 +448,7 @@ const setPaymentTotal = () => {
                   Vendor Card
                 </Label>
                 <Input v-model.number="parcoCardAmount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="formErrors['payment_breakdown.parco_card']?.[0]" />
               </div>
             </div>
 

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, ArrowRightLeft } from 'lucide-vue-next'
 import { computed } from 'vue'
+import InputError from '@/components/InputError.vue'
 
 interface Props {
   transaction: any
@@ -62,6 +63,7 @@ const submit = () => {
           </SelectItem>
         </SelectContent>
       </Select>
+      <InputError :message="form.errors.target_bank_account_id" />
     </div>
 
     <div class="flex justify-end pt-2">

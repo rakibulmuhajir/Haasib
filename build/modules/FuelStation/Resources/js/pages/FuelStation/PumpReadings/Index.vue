@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { CalendarDays, Gauge, Moon, Plus, SunMedium } from 'lucide-vue-next'
 
@@ -347,7 +348,7 @@ const submit = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="pump_id">Pump</Label>
@@ -362,7 +363,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.pump_id" class="text-sm text-destructive">{{ form.errors.pump_id }}</p>
+              <InputError :message="form.errors.pump_id" />
             </div>
 
             <div class="space-y-2">
@@ -373,7 +374,7 @@ const submit = () => {
                 type="date"
                 :class="{ 'border-destructive': form.errors.reading_date }"
               />
-              <p v-if="form.errors.reading_date" class="text-sm text-destructive">{{ form.errors.reading_date }}</p>
+              <InputError :message="form.errors.reading_date" />
             </div>
           </div>
 
@@ -388,7 +389,7 @@ const submit = () => {
                   <SelectItem v-for="s in props.shifts" :key="s" :value="s">{{ s }}</SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.shift" class="text-sm text-destructive">{{ form.errors.shift }}</p>
+              <InputError :message="form.errors.shift" />
             </div>
 
             <div class="space-y-2">
@@ -401,7 +402,7 @@ const submit = () => {
                 step="0.01"
                 :class="{ 'border-destructive': form.errors.opening_meter }"
               />
-              <p v-if="form.errors.opening_meter" class="text-sm text-destructive">{{ form.errors.opening_meter }}</p>
+              <InputError :message="form.errors.opening_meter" />
             </div>
 
             <div class="space-y-2">
@@ -414,7 +415,7 @@ const submit = () => {
                 step="0.01"
                 :class="{ 'border-destructive': form.errors.closing_meter }"
               />
-              <p v-if="form.errors.closing_meter" class="text-sm text-destructive">{{ form.errors.closing_meter }}</p>
+              <InputError :message="form.errors.closing_meter" />
             </div>
           </div>
 

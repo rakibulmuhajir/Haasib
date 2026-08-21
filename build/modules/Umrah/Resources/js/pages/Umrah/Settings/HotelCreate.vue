@@ -60,7 +60,7 @@ const submit = () => {
     <Card class="mx-auto max-w-4xl" variant="form">
       <CardHeader><CardTitle>Hotel Details</CardTitle></CardHeader>
       <CardContent>
-        <form class="space-y-6" @submit.prevent="submit">
+        <form novalidate class="space-y-6" @submit.prevent="submit">
           <div class="grid gap-4 md:grid-cols-3">
             <div class="space-y-2"><Label>Name</Label><Input v-model="form.name" required /><p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p></div>
             <div class="space-y-2"><Label>City</Label><Select v-model="form.city"><SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger><SelectContent><SelectItem value="Makkah">Makkah</SelectItem><SelectItem value="Madinah">Madinah</SelectItem></SelectContent></Select><p v-if="form.errors.city" class="text-xs text-destructive">{{ form.errors.city }}</p></div>

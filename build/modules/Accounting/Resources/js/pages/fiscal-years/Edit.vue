@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { CalendarDays, Save, Trash2 } from 'lucide-vue-next'
 
@@ -68,11 +69,11 @@ const destroy = () => {
         <CardTitle>Fiscal year</CardTitle>
       </CardHeader>
       <CardContent>
-        <form class="space-y-6" @submit.prevent="submit">
+        <form novalidate class="space-y-6" @submit.prevent="submit">
           <div>
             <Label for="name">Name</Label>
             <Input id="name" v-model="form.name" />
-            <p v-if="form.errors.name" class="text-sm text-status-critical mt-1">{{ form.errors.name }}</p>
+            <InputError :message="form.errors.name" />
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
@@ -82,12 +83,12 @@ const destroy = () => {
               <p v-if="hasPeriods" class="text-xs text-muted-foreground mt-1">
                 Dates are locked after periods are created.
               </p>
-              <p v-if="form.errors.start_date" class="text-sm text-status-critical mt-1">{{ form.errors.start_date }}</p>
+              <InputError :message="form.errors.start_date" />
             </div>
             <div>
               <Label for="end_date">End date</Label>
               <Input id="end_date" type="date" v-model="form.end_date" :disabled="hasPeriods" />
-              <p v-if="form.errors.end_date" class="text-sm text-status-critical mt-1">{{ form.errors.end_date }}</p>
+              <InputError :message="form.errors.end_date" />
             </div>
           </div>
 
@@ -97,6 +98,7 @@ const destroy = () => {
               <p class="text-xs text-muted-foreground">Marks this as the active fiscal year for the company</p>
             </div>
             <Switch v-model:checked="form.is_current" />
+            <InputError :message="form.errors.is_current" />
           </div>
 
           <div class="flex justify-between gap-3">

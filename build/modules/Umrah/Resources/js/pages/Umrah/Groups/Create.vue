@@ -642,7 +642,7 @@ const submit = () => {
         :breadcrumbs="breadcrumbs"
         :icon="Plane"
     >
-        <form class="space-y-6" @submit.prevent="submit">
+        <form novalidate class="space-y-6" @submit.prevent="submit">
             <div
                 v-if="!hasDefaultVisaVendor"
                 class="rounded-md border border-status-attention/40 bg-status-attention/10 p-4 text-sm"

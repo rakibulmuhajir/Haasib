@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { FileText, Save, Plus, Trash2, Info } from 'lucide-vue-next'
@@ -203,7 +204,7 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="FileText"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="vendor_id">{{ t('vendor') }}</Label>
@@ -222,22 +223,27 @@ const handleSubmit = () => {
               {{ v.name }}
             </option>
           </select>
+          <InputError :message="form.errors.vendor_id" />
         </div>
         <div>
           <Label for="bill_date">{{ t('billDate') }}</Label>
           <Input id="bill_date" v-model="form.bill_date" type="date" :disabled="!['draft','received'].includes(bill.status)" />
+          <InputError :message="form.errors.bill_date" />
         </div>
         <div>
           <Label for="due_date">{{ t('dueDate') }}</Label>
           <Input id="due_date" v-model="form.due_date" type="date" />
+          <InputError :message="form.errors.due_date" />
         </div>
         <div>
           <Label for="currency">{{ t('currency') }}</Label>
           <Input id="currency" v-model="form.currency" maxlength="3" disabled />
+          <InputError :message="form.errors.currency" />
         </div>
         <div>
           <Label for="payment_terms">{{ t('paymentTerms') }} ({{ t('days') }})</Label>
           <Input id="payment_terms" v-model.number="form.payment_terms" type="number" min="0" max="365" />
+          <InputError :message="form.errors.payment_terms" />
         </div>
         <div>
           <Label for="ap_account_id">{{ t('apAccount') }}</Label>
@@ -256,14 +262,17 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.ap_account_id" />
         </div>
         <div>
           <Label for="notes">{{ t('notes') }}</Label>
           <Input id="notes" v-model="form.notes" />
+          <InputError :message="form.errors.notes" />
         </div>
         <div>
           <Label for="internal_notes">{{ t('internalNotes') }}</Label>
           <Input id="internal_notes" v-model="form.internal_notes" />
+          <InputError :message="form.errors.internal_notes" />
         </div>
       </div>
 
@@ -307,6 +316,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.item_id`]" />
               </div>
               <div v-if="line.item_id && warehouses?.length">
                 <Label>Warehouse</Label>
@@ -325,6 +335,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.warehouse_id`]" />
               </div>
             </div>
 
@@ -333,22 +344,27 @@ const handleSubmit = () => {
               <div class="md:col-span-2">
                 <Label>{{ t('description') }}</Label>
                 <Input v-model="line.description" required />
+                <InputError :message="form.errors[`line_items.${idx}.description`]" />
               </div>
               <div>
                 <Label>{{ t('quantity') }}</Label>
                 <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+                <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
               </div>
               <div>
                 <Label>{{ t('unitPrice') }}</Label>
                 <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+                <InputError :message="form.errors[`line_items.${idx}.unit_price`]" />
               </div>
               <div>
                 <Label>{{ t('taxPercent') }}</Label>
                 <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
+                <InputError :message="form.errors[`line_items.${idx}.tax_rate`]" />
               </div>
               <div>
                 <Label>{{ t('discountPercent') }}</Label>
                 <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" />
+                <InputError :message="form.errors[`line_items.${idx}.discount_rate`]" />
               </div>
             </div>
 
@@ -386,6 +402,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.expense_account_id`]" />
               </div>
               <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)">
                 <Trash2 class="h-4 w-4" />

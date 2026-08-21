@@ -4,6 +4,7 @@ import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { useLexicon } from '@/composables/useLexicon'
 import { useFormFeedback } from '@/composables/useFormFeedback'
+import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -108,7 +109,7 @@ const submit = () => {
           <div class="space-y-2">
             <Label>Sale date</Label>
             <Input v-model="form.sale_date" type="date" />
-            <p v-if="form.errors.sale_date" class="text-sm text-destructive">{{ form.errors.sale_date }}</p>
+            <InputError :message="form.errors.sale_date" />
           </div>
 
           <div class="space-y-2">
@@ -126,7 +127,7 @@ const submit = () => {
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.deposit_account_id" class="text-sm text-destructive">{{ form.errors.deposit_account_id }}</p>
+            <InputError :message="form.errors.deposit_account_id" />
           </div>
         </CardContent>
       </Card>
@@ -152,10 +153,12 @@ const submit = () => {
               <div class="space-y-2">
                 <Label>{{ t('description') }}</Label>
                 <Input v-model="item.description" placeholder="e.g. Sale" />
+                <InputError :message="(form.errors as Record<string, string>)[`line_items.${idx}.description`]" />
               </div>
               <div class="space-y-2">
                 <Label>{{ t('amount') }}</Label>
                 <Input v-model="item.amount" type="number" min="0" step="0.01" />
+                <InputError :message="(form.errors as Record<string, string>)[`line_items.${idx}.amount`]" />
               </div>
             </div>
 
@@ -175,8 +178,11 @@ const submit = () => {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <InputError :message="(form.errors as Record<string, string>)[`line_items.${idx}.income_account_id`]" />
             </div>
           </div>
+
+          <InputError :message="form.errors.line_items" />
 
           <Separator />
 

@@ -3,6 +3,7 @@ import { useForm, usePage } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import { Loader2 } from 'lucide-vue-next'
 
 interface Props {
@@ -36,6 +37,7 @@ const submit = () => {
         placeholder="e.g. Not sure what this charge is, please check."
         class="min-h-[100px]"
       />
+      <InputError :message="form.errors.note" />
     </div>
 
     <div class="flex justify-end pt-2">

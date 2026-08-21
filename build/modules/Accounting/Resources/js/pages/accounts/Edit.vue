@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Layers, Save } from 'lucide-vue-next'
 
@@ -84,7 +85,7 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Layers"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label>Code</Label>
@@ -101,6 +102,7 @@ const handleSubmit = () => {
         <div>
           <Label for="name">Name</Label>
           <Input id="name" v-model="form.name" required />
+          <InputError :message="form.errors.name" />
         </div>
         <div>
           <Label for="currency">Currency (optional)</Label>
@@ -110,6 +112,7 @@ const handleSubmit = () => {
             placeholder="Leave blank for base"
             maxlength="3"
           />
+          <InputError :message="form.errors.currency" />
         </div>
         <div>
           <Label for="parent_id">Parent (optional)</Label>
@@ -128,11 +131,13 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.parent_id" />
         </div>
       </div>
       <div>
         <Label for="description">Description</Label>
         <Input id="description" v-model="form.description" placeholder="Optional description" />
+        <InputError :message="form.errors.description" />
       </div>
 
       <div class="flex justify-end gap-3">

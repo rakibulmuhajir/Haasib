@@ -22,6 +22,7 @@ import { formatDateTime } from '@/lib/datetime'
 import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface Customer {
   id: string
@@ -261,7 +262,7 @@ const goBack = () => {
           <DialogDescription>Set the maximum credit allowed for {{ customer.name }}.</DialogDescription>
         </DialogHeader>
 
-        <form @submit.prevent="submitLimit" class="space-y-4">
+        <form novalidate @submit.prevent="submitLimit" class="space-y-4">
           <div class="space-y-2">
             <Label for="credit_limit">Credit Limit</Label>
             <div class="relative">
@@ -277,7 +278,7 @@ const goBack = () => {
               />
             </div>
             <p class="text-sm text-muted-foreground">Set to 0 for unlimited credit.</p>
-            <p v-if="limitForm.errors.credit_limit" class="text-sm text-destructive">{{ limitForm.errors.credit_limit }}</p>
+            <InputError :message="limitForm.errors.credit_limit" />
           </div>
 
           <DialogFooter>

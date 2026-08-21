@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, Smartphone, FileText } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface CompanyRef {
   id: string
@@ -140,7 +141,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- General Errors -->
       <div v-if="Object.keys(form.errors).length > 0" class="rounded-md bg-destructive/15 p-4">
         <div class="text-sm text-destructive">
@@ -174,6 +175,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.customer_id" />
           </div>
           <div>
             <Label for="ar_account_id">AR Account</Label>
@@ -192,6 +194,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.ar_account_id" />
           </div>
           <div>
             <Label for="invoice_id">Apply to Invoice *</Label>
@@ -216,7 +219,7 @@ const submit = () => {
                 </template>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.invoice_id" class="text-sm text-destructive mt-1">{{ form.errors.invoice_id }}</p>
+            <InputError :message="form.errors.invoice_id" />
           </div>
           <div>
             <Label for="amount">Amount *</Label>
@@ -229,6 +232,7 @@ const submit = () => {
               placeholder="0.00"
               required
             />
+            <InputError :message="form.errors.amount" />
             <p class="text-sm text-muted-foreground mt-1">
               <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
@@ -241,6 +245,7 @@ const submit = () => {
               type="date"
               required
             />
+            <InputError :message="form.errors.payment_date" />
           </div>
           <div>
             <Label for="deposit_account_id">Deposit To *</Label>
@@ -258,6 +263,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.deposit_account_id" />
           </div>
           <div>
             <Label for="currency">Currency *</Label>
@@ -276,6 +282,7 @@ const submit = () => {
                 <SelectItem v-if="currencies.length === 0" value="USD">USD</SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.currency" />
           </div>
           <div>
             <Label for="reference_number">Reference Number</Label>
@@ -284,6 +291,7 @@ const submit = () => {
               v-model="form.reference_number"
               placeholder="Check #, transaction ID, etc."
             />
+            <InputError :message="form.errors.reference_number" />
           </div>
         </CardContent>
       </Card>
@@ -317,6 +325,7 @@ const submit = () => {
               </label>
             </div>
           </div>
+          <InputError :message="form.errors.payment_method" />
         </CardContent>
       </Card>
 
@@ -335,6 +344,7 @@ const submit = () => {
               placeholder="Additional payment notes..."
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

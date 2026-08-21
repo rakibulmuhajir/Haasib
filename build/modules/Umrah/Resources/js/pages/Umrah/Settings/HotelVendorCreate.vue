@@ -41,7 +41,7 @@ const submit = () => {
     <Card class="mx-auto max-w-2xl" variant="form">
       <CardHeader><CardTitle>Vendor Details</CardTitle></CardHeader>
       <CardContent>
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2"><Label>Vendor #</Label><Input v-model="form.vendor_number" /><p v-if="form.errors.vendor_number" class="text-xs text-destructive">{{ form.errors.vendor_number }}</p></div>
             <div class="space-y-2"><Label>Name</Label><Input v-model="form.name" required /><p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p></div>

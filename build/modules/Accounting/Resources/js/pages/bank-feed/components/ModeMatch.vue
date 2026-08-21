@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface Match {
   id: string
@@ -68,6 +69,7 @@ const submit = () => {
         </Label>
       </div>
     </RadioGroup>
+    <InputError :message="form.errors.target_id" />
 
     <div class="flex justify-end pt-2">
       <Button @click="submit" :disabled="form.processing">

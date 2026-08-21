@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Save } from 'lucide-vue-next'
 
@@ -144,19 +145,22 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Users"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="name">Name</Label>
           <Input id="name" v-model="form.name" required />
+          <InputError :message="form.errors.name" />
         </div>
         <div>
           <Label for="email">Email</Label>
           <Input id="email" v-model="form.email" type="email" />
+          <InputError :message="form.errors.email" />
         </div>
         <div>
           <Label for="phone">Phone</Label>
           <Input id="phone" v-model="form.phone" />
+          <InputError :message="form.errors.phone" />
         </div>
         <div>
           <Label for="base_currency">Currency</Label>
@@ -174,14 +178,17 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.base_currency" />
         </div>
         <div>
           <Label for="payment_terms">Payment Terms (days)</Label>
           <Input id="payment_terms" v-model="form.payment_terms" type="number" min="0" max="365" />
+          <InputError :message="form.errors.payment_terms" />
         </div>
         <div>
           <Label for="tax_id">Tax ID</Label>
           <Input id="tax_id" v-model="form.tax_id" />
+          <InputError :message="form.errors.tax_id" />
         </div>
         <div>
           <Label for="ar_account_id">AR Account</Label>
@@ -200,18 +207,22 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.ar_account_id" />
         </div>
         <div>
           <Label for="credit_limit">Credit Limit</Label>
           <Input id="credit_limit" v-model="form.credit_limit" type="number" min="0" step="0.01" />
+          <InputError :message="form.errors.credit_limit" />
         </div>
         <div>
           <Label for="logo_url">Logo URL</Label>
           <Input id="logo_url" v-model="form.logo_url" />
+          <InputError :message="form.errors.logo_url" />
         </div>
         <div class="md:col-span-2">
           <Label for="notes">Notes</Label>
           <Textarea id="notes" v-model="form.notes" />
+          <InputError :message="form.errors.notes" />
         </div>
         <div>
           <Label for="is_active">Status</Label>
@@ -224,6 +235,7 @@ const handleSubmit = () => {
               <SelectItem :value="false">Inactive</SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.is_active" />
         </div>
       </div>
 
@@ -233,25 +245,30 @@ const handleSubmit = () => {
           <div class="space-y-2">
             <Label for="billing_street">Street</Label>
             <Input id="billing_street" v-model="form.billing_street" />
+            <InputError :message="form.errors.billing_street" />
           </div>
           <div class="grid gap-2 md:grid-cols-2">
             <div>
               <Label for="billing_city">City</Label>
               <Input id="billing_city" v-model="form.billing_city" />
+              <InputError :message="form.errors.billing_city" />
             </div>
             <div>
               <Label for="billing_state">State</Label>
               <Input id="billing_state" v-model="form.billing_state" />
+              <InputError :message="form.errors.billing_state" />
             </div>
           </div>
           <div class="grid gap-2 md:grid-cols-2">
             <div>
               <Label for="billing_zip">ZIP</Label>
               <Input id="billing_zip" v-model="form.billing_zip" />
+              <InputError :message="form.errors.billing_zip" />
             </div>
             <div>
               <Label for="billing_country">Country (2-char)</Label>
               <Input id="billing_country" v-model="form.billing_country" maxlength="2" />
+              <InputError :message="form.errors.billing_country" />
             </div>
           </div>
         </div>
@@ -261,25 +278,30 @@ const handleSubmit = () => {
           <div class="space-y-2">
             <Label for="shipping_street">Street</Label>
             <Input id="shipping_street" v-model="form.shipping_street" />
+            <InputError :message="form.errors.shipping_street" />
           </div>
           <div class="grid gap-2 md:grid-cols-2">
             <div>
               <Label for="shipping_city">City</Label>
               <Input id="shipping_city" v-model="form.shipping_city" />
+              <InputError :message="form.errors.shipping_city" />
             </div>
             <div>
               <Label for="shipping_state">State</Label>
               <Input id="shipping_state" v-model="form.shipping_state" />
+              <InputError :message="form.errors.shipping_state" />
             </div>
           </div>
           <div class="grid gap-2 md:grid-cols-2">
             <div>
               <Label for="shipping_zip">ZIP</Label>
               <Input id="shipping_zip" v-model="form.shipping_zip" />
+              <InputError :message="form.errors.shipping_zip" />
             </div>
             <div>
               <Label for="shipping_country">Country (2-char)</Label>
               <Input id="shipping_country" v-model="form.shipping_country" maxlength="2" />
+              <InputError :message="form.errors.shipping_country" />
             </div>
           </div>
         </div>

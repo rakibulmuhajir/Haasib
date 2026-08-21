@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { CalendarClock, Droplet, Plus, TrendingUp } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
@@ -272,6 +273,10 @@ watch(() => form.item_id, () => {
 
 const nozzleForSnapshot = (nozzleId: string) => props.nozzles.find((nozzle) => nozzle.id === nozzleId)
 
+/** Laravel returns these as `snapshot_nozzle_readings.0.electronic_reading`. */
+const snapshotError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`snapshot_nozzle_readings.${index}.${field}`]
+
 const submit = () => {
   const slug = companySlug.value
   if (!slug) return
@@ -457,7 +462,7 @@ const submit = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submit">
+        <form novalidate class="flex min-h-0 flex-1 flex-col" @submit.prevent="submit">
           <div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
@@ -472,7 +477,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.item_id" class="text-sm text-destructive">{{ form.errors.item_id }}</p>
+              <InputError :message="form.errors.item_id" />
             </div>
 
             <div class="space-y-2">
@@ -483,7 +488,7 @@ const submit = () => {
                 type="date"
                 :class="{ 'border-destructive': form.errors.effective_date }"
               />
-              <p v-if="form.errors.effective_date" class="text-sm text-destructive">{{ form.errors.effective_date }}</p>
+              <InputError :message="form.errors.effective_date" />
             </div>
           </div>
 
@@ -502,7 +507,7 @@ const submit = () => {
               <p class="text-xs text-muted-foreground">
                 This does not change your current stock cost. Use the delivery bill for actual purchase cost.
               </p>
-              <p v-if="form.errors.purchase_rate" class="text-sm text-destructive">{{ form.errors.purchase_rate }}</p>
+              <InputError :message="form.errors.purchase_rate" />
             </div>
             <div class="space-y-2">
               <Label for="sale_rate">Govt sale rate (OGRA)</Label>
@@ -518,7 +523,7 @@ const submit = () => {
               <p class="text-xs text-muted-foreground">
                 Shift Close uses this to calculate revenue for the day/shift (unless overridden).
               </p>
-              <p v-if="form.errors.sale_rate" class="text-sm text-destructive">{{ form.errors.sale_rate }}</p>
+              <InputError :message="form.errors.sale_rate" />
             </div>
           </div>
 
@@ -549,9 +554,7 @@ const submit = () => {
                 <p class="text-xs text-muted-foreground">
                   Current estimate: {{ formatLiters(selectedStockLevel) }} L.
                 </p>
-                <p v-if="form.errors.stock_quantity_at_change" class="text-sm text-destructive">
-                  {{ form.errors.stock_quantity_at_change }}
-                </p>
+                <InputError :message="form.errors.stock_quantity_at_change" />
               </div>
 
               <div class="space-y-2">
@@ -569,9 +572,7 @@ const submit = () => {
                 <p v-if="selectedItemTanks.length === 0" class="text-xs text-muted-foreground">
                   No tank is linked to this product.
                 </p>
-                <p v-if="form.errors.snapshot_tank_id" class="text-sm text-destructive">
-                  {{ form.errors.snapshot_tank_id }}
-                </p>
+                <InputError :message="form.errors.snapshot_tank_id" />
               </div>
             </div>
 
@@ -587,9 +588,7 @@ const submit = () => {
                   placeholder="cm"
                   :class="{ 'border-destructive': form.errors.snapshot_stick_reading }"
                 />
-                <p v-if="form.errors.snapshot_stick_reading" class="text-sm text-destructive">
-                  {{ form.errors.snapshot_stick_reading }}
-                </p>
+                <InputError :message="form.errors.snapshot_stick_reading" />
               </div>
 
               <div class="space-y-2">
@@ -606,9 +605,7 @@ const submit = () => {
                 <p class="text-xs text-muted-foreground">
                   Used for revaluation if entered.
                 </p>
-                <p v-if="form.errors.snapshot_dip_liters" class="text-sm text-destructive">
-                  {{ form.errors.snapshot_dip_liters }}
-                </p>
+                <InputError :message="form.errors.snapshot_dip_liters" />
               </div>
             </div>
 
@@ -637,10 +634,12 @@ const submit = () => {
                 <div class="space-y-1">
                   <Label class="text-xs">Auto meter</Label>
                   <Input v-model.number="snapshot.electronic_reading" type="number" min="0" step="0.01" />
+                  <InputError :message="snapshotError(index, 'electronic_reading')" />
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs">Manual meter</Label>
                   <Input v-model.number="snapshot.manual_reading" type="number" min="0" step="0.01" />
+                  <InputError :message="snapshotError(index, 'manual_reading')" />
                 </div>
               </div>
             </div>
@@ -655,7 +654,7 @@ const submit = () => {
               placeholder="Optional note for the change (e.g., government notification #, effective time)."
               :class="{ 'border-destructive': form.errors.notes }"
             />
-            <p v-if="form.errors.notes" class="text-sm text-destructive">{{ form.errors.notes }}</p>
+            <InputError :message="form.errors.notes" />
           </div>
 
           </div>

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import InputError from '@/components/InputError.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
@@ -334,7 +335,7 @@ const getStatusBadge = (status: string) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label>Attendant *</Label>
@@ -348,7 +349,7 @@ const getStatusBadge = (status: string) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.attendant_id" class="text-sm text-destructive">{{ form.errors.attendant_id }}</p>
+              <InputError :message="form.errors.attendant_id" />
             </div>
 
             <div class="space-y-2">
@@ -363,7 +364,7 @@ const getStatusBadge = (status: string) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.pump_id" class="text-sm text-destructive">{{ form.errors.pump_id }}</p>
+              <InputError :message="form.errors.pump_id" />
             </div>
           </div>
 
@@ -379,11 +380,13 @@ const getStatusBadge = (status: string) => {
                   <SelectItem value="night">Night</SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.shift" />
             </div>
 
             <div class="space-y-2">
               <Label>Date/Time</Label>
               <Input v-model="form.handover_date" type="datetime-local" />
+              <InputError :message="form.errors.handover_date" />
             </div>
           </div>
 
@@ -393,26 +396,32 @@ const getStatusBadge = (status: string) => {
               <div class="space-y-1">
                 <Label class="text-xs">Cash</Label>
                 <Input v-model.number="form.cash_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.cash_amount" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs">EasyPaisa</Label>
                 <Input v-model.number="form.easypaisa_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.easypaisa_amount" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs">JazzCash</Label>
                 <Input v-model.number="form.jazzcash_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.jazzcash_amount" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs">Bank Transfer</Label>
                 <Input v-model.number="form.bank_transfer_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.bank_transfer_amount" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs">Card Swipe</Label>
                 <Input v-model.number="form.card_swipe_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.card_swipe_amount" />
               </div>
               <div class="space-y-1">
                 <Label class="text-xs">Vendor Card</Label>
                 <Input v-model.number="form.parco_card_amount" type="number" min="0" step="1" placeholder="0" />
+                <InputError :message="form.errors.parco_card_amount" />
               </div>
             </div>
             <div class="pt-2 border-t border-border/50 flex justify-between items-center">

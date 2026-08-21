@@ -106,7 +106,7 @@ const submit = () => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-6">
+          <form novalidate @submit.prevent="submit" class="space-y-6">
             <!-- Industry Selection -->
             <div class="space-y-2">
               <Label for="industry" class="text-base font-semibold">

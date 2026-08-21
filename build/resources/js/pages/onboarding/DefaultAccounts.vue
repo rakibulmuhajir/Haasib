@@ -123,7 +123,7 @@ const goBack = () => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-8">
+          <form novalidate @submit.prevent="submit" class="space-y-8">
             <!-- Receivables & Payables -->
             <div class="space-y-4">
               <h3 class="text-lg font-semibold text-text-primary border-b pb-2">

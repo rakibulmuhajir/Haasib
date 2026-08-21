@@ -5,6 +5,7 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import InputError from '@/components/InputError.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -317,7 +318,7 @@ const submitEdit = () => {
           <DialogDescription>Only draft readings can be edited.</DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submitEdit">
+        <form novalidate class="space-y-4" @submit.prevent="submitEdit">
           <div class="space-y-2">
             <Label for="dip">Dip measurement (liters)</Label>
             <Input
@@ -328,9 +329,7 @@ const submitEdit = () => {
               step="0.01"
               :class="{ 'border-destructive': form.errors.dip_measurement_liters }"
             />
-            <p v-if="form.errors.dip_measurement_liters" class="text-sm text-destructive">
-              {{ form.errors.dip_measurement_liters }}
-            </p>
+            <InputError :message="form.errors.dip_measurement_liters" />
           </div>
 
           <div class="space-y-2">
@@ -345,13 +344,13 @@ const submitEdit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.variance_reason" class="text-sm text-destructive">{{ form.errors.variance_reason }}</p>
+            <InputError :message="form.errors.variance_reason" />
           </div>
 
           <div class="space-y-2">
             <Label for="notes">Notes</Label>
             <Textarea id="notes" v-model="form.notes" rows="3" :class="{ 'border-destructive': form.errors.notes }" />
-            <p v-if="form.errors.notes" class="text-sm text-destructive">{{ form.errors.notes }}</p>
+            <InputError :message="form.errors.notes" />
           </div>
 
           <DialogFooter class="gap-2">

@@ -303,7 +303,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
               <CardDescription>Identity and contact information shown across Haasib.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form class="space-y-6" @submit.prevent="saveGeneralSettings">
+              <form novalidate class="space-y-6" @submit.prevent="saveGeneralSettings">
                 <div class="grid gap-5 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="company-name">Company name</Label>
@@ -393,7 +393,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
               <CardDescription>Create a login and assign the user’s company role.</CardDescription>
             </CardHeader>
             <CardContent class="space-y-5">
-              <form class="space-y-4" @submit.prevent="createUser">
+              <form novalidate class="space-y-4" @submit.prevent="createUser">
                 <div class="grid gap-4 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="new-user-name">Full name</Label>
@@ -581,7 +581,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
               <CardDescription>Choose how transactions are grouped into financial reporting periods.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form class="space-y-6" @submit.prevent="saveFiscalYearSettings">
+              <form novalidate class="space-y-6" @submit.prevent="saveFiscalYearSettings">
                 <div class="grid gap-5 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="fiscal-month">Fiscal year starts</Label>

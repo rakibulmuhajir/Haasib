@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Building2, Save, Mail, Phone, ImageIcon } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
@@ -73,7 +74,7 @@ const handleSubmit = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form class="space-y-5" @submit.prevent="handleSubmit">
+          <form novalidate class="space-y-5" @submit.prevent="handleSubmit">
             <div class="space-y-2">
               <Label for="name" class="flex items-center gap-2 text-text-primary">
                 <Building2 class="h-4 w-4 text-text-tertiary" />
@@ -86,7 +87,7 @@ const handleSubmit = () => {
                 required
                 class="border-rule-default"
               />
-              <p v-if="form.errors.name" class="text-xs text-status-critical">{{ form.errors.name }}</p>
+              <InputError :message="form.errors.name" />
             </div>
 
             <div class="space-y-2">
@@ -101,7 +102,7 @@ const handleSubmit = () => {
                 placeholder="accounts@acme.com"
                 class="border-rule-default"
               />
-              <p v-if="form.errors.email" class="text-xs text-status-critical">{{ form.errors.email }}</p>
+              <InputError :message="form.errors.email" />
             </div>
 
             <div class="space-y-2">
@@ -115,7 +116,7 @@ const handleSubmit = () => {
                 placeholder="+1 (555) 123-4567"
                 class="border-rule-default"
               />
-              <p v-if="form.errors.phone" class="text-xs text-status-critical">{{ form.errors.phone }}</p>
+              <InputError :message="form.errors.phone" />
             </div>
 
             <div class="space-y-2">
@@ -134,7 +135,7 @@ const handleSubmit = () => {
                 </SelectContent>
               </Select>
               <p class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel suppliers.</p>
-              <p v-if="form.errors.vendor_type" class="text-xs text-status-critical">{{ form.errors.vendor_type }}</p>
+              <InputError :message="form.errors.vendor_type" />
             </div>
 
             <div class="space-y-2">
@@ -149,7 +150,7 @@ const handleSubmit = () => {
                 placeholder="https://example.com/logo.png"
                 class="border-rule-default"
               />
-              <p v-if="form.errors.logo_url" class="text-xs text-status-critical">{{ form.errors.logo_url }}</p>
+              <InputError :message="form.errors.logo_url" />
             </div>
 
             <div class="flex justify-end gap-3 pt-4 border-t border-rule-subtle">

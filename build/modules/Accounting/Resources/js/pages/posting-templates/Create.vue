@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 
 interface CompanyRef {
@@ -186,28 +187,32 @@ const save = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.doc_type" />
           </div>
 
           <div class="space-y-2">
             <Label>Name</Label>
             <Input v-model="form.name" placeholder="e.g., Default AR Invoice" />
-            <div v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</div>
+            <InputError :message="form.errors.name" />
           </div>
         </div>
 
         <div class="space-y-2">
           <Label>Description</Label>
           <Input v-model="form.description" placeholder="Optional" />
+          <InputError :message="form.errors.description" />
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label>Effective From</Label>
             <Input v-model="form.effective_from" type="date" />
+            <InputError :message="form.errors.effective_from" />
           </div>
           <div class="space-y-2">
             <Label>Effective To</Label>
             <Input v-model="form.effective_to" type="date" />
+            <InputError :message="form.errors.effective_to" />
           </div>
         </div>
 
@@ -215,16 +220,18 @@ const save = () => {
           <div class="flex items-center gap-3">
             <Switch id="is-active" v-model:checked="form.is_active" />
             <Label for="is-active">Active</Label>
+            <InputError :message="form.errors.is_active" />
           </div>
           <div class="flex items-center gap-3">
             <Switch id="is-default" v-model:checked="form.is_default" />
             <Label for="is-default">Default for this doc type</Label>
+            <InputError :message="form.errors.is_default" />
           </div>
         </div>
 
         <div class="space-y-3">
           <div class="font-medium">Role Mappings</div>
-          <div v-for="line in form.lines" :key="line.role" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+          <div v-for="(line, index) in form.lines" :key="line.role" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
             <div>
               <div class="text-sm font-medium">
                 {{ roleMetaByRole[line.role]?.label ?? line.role }}
@@ -244,9 +251,11 @@ const save = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <!-- Laravel returns per-role rejections as `lines.<index>.account_id`. -->
+              <InputError :message="(form.errors as Record<string, string>)[`lines.${index}.account_id`]" />
 	            </div>
 	          </div>
-          <div v-if="form.errors.lines" class="text-sm text-destructive">{{ form.errors.lines }}</div>
+          <InputError :message="form.errors.lines" />
         </div>
 
         <div class="flex items-center justify-end gap-2">

@@ -442,7 +442,7 @@ const updateCatalogStatus = (path: string, record: any) => {
                     }}</CardTitle></CardHeader
                 >
                 <CardContent>
-                    <form class="space-y-4" @submit.prevent="submit">
+                    <form novalidate class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
                             <Label>Name</Label>
                             <Input
@@ -640,7 +640,7 @@ const updateCatalogStatus = (path: string, record: any) => {
                     ></CardHeader
                 >
                 <CardContent class="space-y-4">
-                    <form
+                    <form novalidate
                         class="grid gap-3 sm:grid-cols-2"
                         @submit.prevent="submitSector"
                     >
@@ -753,7 +753,7 @@ const updateCatalogStatus = (path: string, record: any) => {
                     ></CardHeader
                 >
                 <CardContent class="space-y-4">
-                    <form class="space-y-3" @submit.prevent="submitPackage">
+                    <form novalidate class="space-y-3" @submit.prevent="submitPackage">
                         <div class="space-y-2">
                             <Label>Package Name</Label
                             ><Input
@@ -880,7 +880,7 @@ const updateCatalogStatus = (path: string, record: any) => {
                 ><CardTitle>Sector and Journey Fares</CardTitle></CardHeader
             >
             <CardContent class="space-y-5">
-                <form
+                <form novalidate
                     class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                     @submit.prevent="submitFare"
                 >

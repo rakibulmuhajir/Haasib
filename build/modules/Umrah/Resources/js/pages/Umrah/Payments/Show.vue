@@ -169,7 +169,7 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
                         }}
                     </DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submitReview">
+                <form novalidate class="space-y-4" @submit.prevent="submitReview">
                     <template v-if="reviewDecision === 'approve'">
                         <div class="grid grid-cols-2 gap-3">
                             <div class="space-y-2">

@@ -652,7 +652,7 @@ const cancelAddressEdit = () => {
               <p v-else class="text-text-tertiary">No address set</p>
             </div>
 
-            <form v-else class="space-y-3" @submit.prevent="saveAddress">
+            <form novalidate v-else class="space-y-3" @submit.prevent="saveAddress">
               <div class="space-y-2">
                 <Label for="street">Street</Label>
                 <Input id="street" v-model="addressStreet" placeholder="123 Main St" />

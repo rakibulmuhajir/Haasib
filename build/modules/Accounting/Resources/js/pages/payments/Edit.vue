@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, FileText } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface CompanyRef {
   id: string
@@ -116,7 +117,7 @@ const allocatedAmount = computed(() => {
       </Card>
     </div>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- Payment Information -->
       <Card variant="form">
         <CardHeader>
@@ -135,6 +136,7 @@ const allocatedAmount = computed(() => {
                 <SelectItem :value="payment.customer.id">{{ payment.customer.name }}</SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.customer_id" />
           </div>
           <div>
             <Label for="amount">Amount *</Label>
@@ -147,6 +149,7 @@ const allocatedAmount = computed(() => {
               placeholder="0.00"
               required
             />
+            <InputError :message="form.errors.amount" />
             <p class="text-sm text-muted-foreground mt-1">
               <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
@@ -159,6 +162,7 @@ const allocatedAmount = computed(() => {
               type="date"
               required
             />
+            <InputError :message="form.errors.payment_date" />
           </div>
           <div>
             <Label for="currency">Currency *</Label>
@@ -173,6 +177,7 @@ const allocatedAmount = computed(() => {
                 <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.currency" />
           </div>
           <div>
             <Label for="reference_number">Reference Number</Label>
@@ -181,6 +186,7 @@ const allocatedAmount = computed(() => {
               v-model="form.reference_number"
               placeholder="Check #, transaction ID, etc."
             />
+            <InputError :message="form.errors.reference_number" />
           </div>
         </CardContent>
       </Card>
@@ -214,6 +220,7 @@ const allocatedAmount = computed(() => {
               </label>
             </div>
           </div>
+          <InputError :message="form.errors.payment_method" />
         </CardContent>
       </Card>
 
@@ -232,6 +239,7 @@ const allocatedAmount = computed(() => {
               placeholder="Additional payment notes..."
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

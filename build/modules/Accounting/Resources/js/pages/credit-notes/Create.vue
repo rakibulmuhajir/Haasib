@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
@@ -104,7 +105,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- General Errors -->
       <div v-if="Object.keys(form.errors).length > 0" class="rounded-md bg-destructive/15 p-4">
         <div class="text-sm text-destructive">
@@ -138,7 +139,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.customer_id" class="text-sm text-destructive mt-1">{{ form.errors.customer_id }}</p>
+            <InputError :message="form.errors.customer_id" />
           </div>
           <div>
             <Label for="invoice_id">Apply to Invoice (Optional)</Label>
@@ -163,6 +164,7 @@ const submit = () => {
                 </template>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.invoice_id" />
           </div>
         </CardContent>
       </Card>
@@ -186,8 +188,8 @@ const submit = () => {
               required
               :class="{ 'border-destructive': form.errors.amount }"
             />
-            <p v-if="form.errors.amount" class="text-sm text-destructive mt-1">{{ form.errors.amount }}</p>
-            <p v-else class="text-sm text-muted-foreground mt-1">
+            <InputError :message="form.errors.amount" />
+            <p v-if="!form.errors.amount" class="text-sm text-muted-foreground mt-1">
               <MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" />
             </p>
           </div>
@@ -199,6 +201,7 @@ const submit = () => {
               type="date"
               required
             />
+            <InputError :message="form.errors.credit_date" />
           </div>
           <div>
             <Label for="status">Status *</Label>
@@ -216,6 +219,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.status" />
           </div>
           <div>
             <Label for="base_currency">Currency *</Label>
@@ -234,6 +238,7 @@ const submit = () => {
                 <SelectItem v-if="currencies.length === 0" value="USD">USD</SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.base_currency" />
           </div>
         </CardContent>
       </Card>
@@ -254,7 +259,7 @@ const submit = () => {
               required
               :class="{ 'border-destructive': form.errors.reason }"
             />
-            <p v-if="form.errors.reason" class="text-sm text-destructive mt-1">{{ form.errors.reason }}</p>
+            <InputError :message="form.errors.reason" />
           </div>
         </CardContent>
       </Card>
@@ -274,6 +279,7 @@ const submit = () => {
               placeholder="Credit note terms and conditions..."
               rows="3"
             />
+            <InputError :message="form.errors.terms" />
           </div>
           <div>
             <Label for="notes">Internal Notes</Label>
@@ -283,6 +289,7 @@ const submit = () => {
               placeholder="Internal notes about this credit note..."
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

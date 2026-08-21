@@ -111,7 +111,7 @@ const submit = () => form.post(`/${props.company.slug}/umrah/expenses`);
             >
         </Alert>
 
-        <form class="max-w-4xl space-y-6" @submit.prevent="submit">
+        <form novalidate class="max-w-4xl space-y-6" @submit.prevent="submit">
             <Card variant="form">
                 <CardHeader
                     ><CardTitle

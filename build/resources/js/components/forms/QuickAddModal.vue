@@ -171,7 +171,7 @@ watch(() => props.open, (isOpen) => {
         </DialogDescription>
       </DialogHeader>
 
-      <form @submit.prevent="handleSubmit" class="space-y-4">
+      <form novalidate @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Name (Required) -->
         <div class="space-y-2">
           <Label for="quick-add-name" class="required">

@@ -183,7 +183,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form class="space-y-6" @submit.prevent="submit">
+    <form novalidate class="space-y-6" @submit.prevent="submit">
       <!-- Locked is a state that needs attention, not an adverse one: amber,
            with the status itself as the non-colour indicator. -->
       <Alert v-if="!isEditable" class="locked">

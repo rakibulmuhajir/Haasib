@@ -362,7 +362,7 @@ const submitAllocation = () => {
                 <DialogHeader
                     ><DialogTitle>Allocate Payment</DialogTitle></DialogHeader
                 >
-                <form class="space-y-4" @submit.prevent="submitAllocation">
+                <form novalidate class="space-y-4" @submit.prevent="submitAllocation">
                     <div class="space-y-2">
                         <Label>Group</Label>
                         <Select v-model="allocationForm.visa_group_id">

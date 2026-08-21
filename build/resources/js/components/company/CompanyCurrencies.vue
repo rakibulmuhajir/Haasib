@@ -83,7 +83,7 @@ const removeCurrency = () => {
       <p v-if="!enabled.length" class="p-3 text-sm text-muted-foreground">No secondary currencies enabled.</p>
     </div>
 
-    <form v-if="canManage && currencyOptions.length" class="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_auto] md:items-end" @submit.prevent="addCurrency">
+    <form novalidate v-if="canManage && currencyOptions.length" class="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_auto] md:items-end" @submit.prevent="addCurrency">
       <div class="space-y-1">
         <Label>Secondary Currency</Label>
         <Select v-model="addForm.currency_code"><SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger><SelectContent><SelectItem v-for="currency in currencyOptions" :key="currency.code" :value="currency.code">{{ currency.code }} · {{ currency.name }}</SelectItem></SelectContent></Select>

@@ -17,6 +17,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { ReceiptText, Save, ArrowLeft, Plus, Trash2 } from 'lucide-vue-next'
 import { useFormFeedback } from '@/composables/useFormFeedback'
+import InputError from '@/components/InputError.vue'
 
 interface CompanyRef {
   id: string
@@ -115,6 +116,10 @@ const totals = computed(() => {
   const total = subtotal + tax - discount
   return { subtotal, tax, discount, total }
 })
+
+/** Laravel returns these as `line_items.0.description`. */
+const lineError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`line_items.${index}.${field}`]
 
 const addLine = () => form.line_items.push(lineItemTemplate())
 const removeLine = (idx: number) => {
@@ -225,7 +230,7 @@ const isEditable = computed(() => {
       </div>
     </div>
 
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="vendor_id">Vendor</Label>
@@ -239,26 +244,32 @@ const isEditable = computed(() => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.vendor_id" />
         </div>
         <div>
           <Label for="credit_date">Credit Date</Label>
           <Input id="credit_date" v-model="form.credit_date" type="date" required :disabled="!isEditable" />
+          <InputError :message="form.errors.credit_date" />
         </div>
         <div>
           <Label for="amount">Amount</Label>
           <Input id="amount" v-model.number="form.amount" type="number" min="0.01" step="0.01" required :disabled="!isEditable" />
+          <InputError :message="form.errors.amount" />
         </div>
         <div>
           <Label for="currency">Currency</Label>
           <Input id="currency" v-model="form.currency" maxlength="3" :disabled="!isEditable" />
+          <InputError :message="form.errors.currency" />
         </div>
         <div>
           <Label for="exchange_rate">Exchange Rate</Label>
           <Input id="exchange_rate" v-model="form.exchange_rate" placeholder="Required if currency != base" :disabled="!isEditable" />
+          <InputError :message="form.errors.exchange_rate" />
         </div>
         <div>
           <Label for="reason">Reason</Label>
           <Input id="reason" v-model="form.reason" required :disabled="!isEditable" />
+          <InputError :message="form.errors.reason" />
         </div>
         <div>
           <Label for="ap_account_id">AP Account</Label>
@@ -276,10 +287,12 @@ const isEditable = computed(() => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.ap_account_id" />
         </div>
         <div class="md:col-span-2">
           <Label for="notes">Notes</Label>
           <Input id="notes" v-model="form.notes" :disabled="!isEditable" />
+          <InputError :message="form.errors.notes" />
         </div>
       </div>
 
@@ -311,14 +324,17 @@ const isEditable = computed(() => {
               <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-status-critical mt-1">
                 Description required - item will be excluded
               </p>
+              <InputError :message="lineError(idx, 'description')" />
             </div>
             <div>
               <Label>Qty</Label>
               <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" :disabled="!isEditable" />
+              <InputError :message="lineError(idx, 'quantity')" />
             </div>
             <div>
               <Label>Unit Price</Label>
               <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" :disabled="!isEditable" />
+              <InputError :message="lineError(idx, 'unit_price')" />
             </div>
             <div class="md:col-span-2">
               <Label>Expense Account</Label>
@@ -336,6 +352,7 @@ const isEditable = computed(() => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="lineError(idx, 'expense_account_id')" />
             </div>
             <div class="flex items-end justify-between gap-2">
               <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)" :disabled="!isEditable">
@@ -345,13 +362,16 @@ const isEditable = computed(() => {
             <div>
               <Label>Tax %</Label>
               <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" :disabled="!isEditable" />
+              <InputError :message="lineError(idx, 'tax_rate')" />
             </div>
             <div>
               <Label>Discount %</Label>
               <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" :disabled="!isEditable" />
+              <InputError :message="lineError(idx, 'discount_rate')" />
             </div>
           </div>
         </div>
+        <InputError :message="form.errors.line_items" />
       </div>
 
       <div class="grid gap-2 md:w-1/2">

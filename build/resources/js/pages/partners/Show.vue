@@ -323,7 +323,7 @@ const goBack = () => {
           <DialogDescription>Add a capital contribution from {{ partner.name }}.</DialogDescription>
         </DialogHeader>
 
-        <form @submit.prevent="submitInvestment" class="space-y-4">
+        <form novalidate @submit.prevent="submitInvestment" class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label for="invest_amount">Amount <span class="text-destructive">*</span></Label>
@@ -399,7 +399,7 @@ const goBack = () => {
           <DialogDescription>Record a partner drawing from {{ partner.name }}.</DialogDescription>
         </DialogHeader>
 
-        <form @submit.prevent="submitWithdrawal" class="space-y-4">
+        <form novalidate @submit.prevent="submitWithdrawal" class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label for="withdraw_amount">Amount <span class="text-destructive">*</span></Label>

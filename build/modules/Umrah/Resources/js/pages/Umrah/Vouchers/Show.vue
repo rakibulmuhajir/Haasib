@@ -1058,7 +1058,7 @@ const exportVoucher = () => {
                 <DialogHeader>
                     <DialogTitle>Move Passengers</DialogTitle>
                 </DialogHeader>
-                <form class="space-y-5" @submit.prevent="submitMove">
+                <form novalidate class="space-y-5" @submit.prevent="submitMove">
                     <div class="space-y-2">
                         <Label>Destination voucher</Label>
                         <Select v-model="moveForm.target_voucher_id">
@@ -1163,7 +1163,7 @@ const exportVoucher = () => {
                 <DialogHeader>
                     <DialogTitle>Separate Vouchers</DialogTitle>
                 </DialogHeader>
-                <form class="space-y-5" @submit.prevent="submitSeparation">
+                <form novalidate class="space-y-5" @submit.prevent="submitSeparation">
                     <div class="space-y-2">
                         <Label>Individual voucher passengers</Label>
                         <label

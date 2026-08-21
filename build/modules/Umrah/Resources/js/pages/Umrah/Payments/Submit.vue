@@ -75,7 +75,7 @@ const submit = () =>
             </Button>
         </template>
 
-        <form class="mx-auto max-w-xl" @submit.prevent="submit">
+        <form novalidate class="mx-auto max-w-xl" @submit.prevent="submit">
             <Card variant="form">
                 <CardHeader><CardTitle>Payment details</CardTitle></CardHeader>
                 <CardContent class="space-y-5">

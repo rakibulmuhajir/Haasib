@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import { watch } from 'vue'
+import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -134,7 +135,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-4xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-4xl">
       <!-- Basic Information -->
       <Card variant="form">
         <CardHeader>
@@ -151,7 +152,7 @@ const submit = () => {
                 placeholder="e.g., PROD-001"
                 :class="{ 'border-destructive': form.errors.sku }"
               />
-              <p v-if="form.errors.sku" class="text-sm text-destructive">{{ form.errors.sku }}</p>
+              <InputError :message="form.errors.sku" />
             </div>
 
             <div class="space-y-2">
@@ -162,7 +163,7 @@ const submit = () => {
                 placeholder="Item name"
                 :class="{ 'border-destructive': form.errors.name }"
               />
-              <p v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</p>
+              <InputError :message="form.errors.name" />
             </div>
           </div>
 
@@ -174,6 +175,7 @@ const submit = () => {
               placeholder="Item description"
               rows="3"
             />
+            <InputError :message="form.errors.description" />
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -190,6 +192,7 @@ const submit = () => {
                   <SelectItem value="bundle">Bundle</SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.item_type" />
             </div>
 
             <div class="space-y-2">
@@ -204,6 +207,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.category_id" />
             </div>
 
             <div class="space-y-2">
@@ -213,6 +217,7 @@ const submit = () => {
                 v-model="form.unit_of_measure"
                 placeholder="e.g., unit, kg, hour"
               />
+              <InputError :message="form.errors.unit_of_measure" />
             </div>
           </div>
 
@@ -223,6 +228,7 @@ const submit = () => {
               v-model="form.barcode"
               placeholder="Barcode / UPC / EAN"
             />
+            <InputError :message="form.errors.barcode" />
           </div>
         </CardContent>
       </Card>
@@ -244,6 +250,7 @@ const submit = () => {
                 step="0.01"
                 min="0"
               />
+              <InputError :message="form.errors.cost_price" />
             </div>
 
             <div class="space-y-2">
@@ -255,6 +262,7 @@ const submit = () => {
                 step="0.01"
                 min="0"
               />
+              <InputError :message="form.errors.selling_price" />
             </div>
 
             <div class="space-y-2">
@@ -269,6 +277,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.currency" />
             </div>
           </div>
 
@@ -284,6 +293,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.tax_rate_id" />
           </div>
         </CardContent>
       </Card>
@@ -299,6 +309,7 @@ const submit = () => {
             <Switch id="track_inventory" v-model:checked="form.track_inventory" />
             <Label for="track_inventory">Track inventory for this item</Label>
           </div>
+          <InputError :message="form.errors.track_inventory" />
 
           <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-2">
@@ -313,6 +324,7 @@ const submit = () => {
                 </SelectContent>
               </Select>
               <p class="text-sm text-muted-foreground">Use confirmation for physical deliveries; auto-receive for instant items.</p>
+              <InputError :message="form.errors.delivery_mode" />
             </div>
 
             <div class="space-y-2">
@@ -325,6 +337,7 @@ const submit = () => {
                 min="0"
               />
               <p class="text-sm text-muted-foreground">Alert when stock falls below this level</p>
+              <InputError :message="form.errors.reorder_point" />
             </div>
 
             <div class="space-y-2">
@@ -337,6 +350,7 @@ const submit = () => {
                 min="0"
               />
               <p class="text-sm text-muted-foreground">Suggested order quantity when reordering</p>
+              <InputError :message="form.errors.reorder_quantity" />
             </div>
           </div>
         </CardContent>
@@ -353,16 +367,19 @@ const submit = () => {
             <Switch id="is_sellable" v-model:checked="form.is_sellable" />
             <Label for="is_sellable">Available for sale (appears on invoices)</Label>
           </div>
+          <InputError :message="form.errors.is_sellable" />
 
           <div class="flex items-center space-x-2">
             <Switch id="is_purchasable" v-model:checked="form.is_purchasable" />
             <Label for="is_purchasable">Available for purchase (appears on bills)</Label>
           </div>
+          <InputError :message="form.errors.is_purchasable" />
 
           <div class="flex items-center space-x-2">
             <Switch id="is_active" v-model:checked="form.is_active" />
             <Label for="is_active">Active</Label>
           </div>
+          <InputError :message="form.errors.is_active" />
         </CardContent>
       </Card>
 

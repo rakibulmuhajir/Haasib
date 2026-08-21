@@ -141,7 +141,7 @@ const reactivateDriver = (driver: (typeof props.drivers)[number]) => {
                     }}</CardTitle></CardHeader
                 >
                 <CardContent>
-                    <form class="space-y-4" @submit.prevent="submit">
+                    <form novalidate class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
                             <Label>Name</Label>
                             <Input

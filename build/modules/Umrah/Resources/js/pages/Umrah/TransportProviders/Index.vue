@@ -191,7 +191,7 @@ const updateStatus = (provider: any) => {
                     <DialogTitle>{{ editing ? 'Edit Transport Vendor' : 'Add Transport Vendor' }}</DialogTitle>
                     <DialogDescription>Keep bus selling prices and supplier costs independent from visa rates.</DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submit">
+                <form novalidate class="space-y-4" @submit.prevent="submit">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div class="space-y-2"><Label for="transport-vendor-number">Vendor #</Label><Input id="transport-vendor-number" v-model="form.vendor_number" /><p v-if="form.errors.vendor_number" class="text-xs text-destructive">{{ form.errors.vendor_number }}</p></div>
                         <div class="space-y-2"><Label for="transport-vendor-name">Name</Label><Input id="transport-vendor-name" v-model="form.name" autofocus /><p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p></div>

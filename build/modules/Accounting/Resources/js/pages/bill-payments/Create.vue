@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { useFormFeedback } from '@/composables/useFormFeedback'
@@ -330,7 +331,7 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="CreditCard"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="vendor_id">Vendor</Label>
@@ -344,10 +345,12 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.vendor_id" />
         </div>
         <div>
           <Label for="payment_date">Payment Date</Label>
           <Input id="payment_date" v-model="form.payment_date" type="date" required />
+          <InputError :message="form.errors.payment_date" />
         </div>
         <div>
           <Label for="amount">Payment Amount</Label>
@@ -355,10 +358,12 @@ const handleSubmit = () => {
           <p class="mt-1 text-xs text-muted-foreground">
             Calculated from the bill allocation below.
           </p>
+          <InputError :message="form.errors.amount" />
         </div>
         <div>
           <Label for="currency">Currency</Label>
           <Input id="currency" v-model="form.currency" maxlength="3" />
+          <InputError :message="form.errors.currency" />
         </div>
         <div>
           <Label for="ap_account_id">AP Account</Label>
@@ -384,10 +389,12 @@ const handleSubmit = () => {
         <div>
           <Label for="reference_number">Reference</Label>
           <Input id="reference_number" v-model="form.reference_number" />
+          <InputError :message="form.errors.reference_number" />
         </div>
         <div class="md:col-span-2">
           <Label for="notes">Notes</Label>
           <Textarea id="notes" v-model="form.notes" />
+          <InputError :message="form.errors.notes" />
         </div>
       </div>
 
@@ -431,11 +438,13 @@ const handleSubmit = () => {
                 Est. balance {{ formatNumber(accountById(split.payment_account_id)?.estimated_balance ?? 0) }}
                 · After payment {{ formatNumber(projectedBalance(split) ?? 0) }}
               </p>
+              <InputError :message="form.errors[`payment_splits.${index}.payment_account_id`]" />
             </div>
 
             <div>
               <Label>Amount</Label>
               <Input v-model.number="split.amount" type="number" min="0.01" step="0.01" required />
+              <InputError :message="form.errors[`payment_splits.${index}.amount`]" />
             </div>
 
             <div>
@@ -450,11 +459,13 @@ const handleSubmit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors[`payment_splits.${index}.payment_method`]" />
             </div>
 
             <div>
               <Label>Reference</Label>
               <Input v-model="split.reference_number" placeholder="Optional" />
+              <InputError :message="form.errors[`payment_splits.${index}.reference_number`]" />
             </div>
 
             <div class="flex items-end justify-end">

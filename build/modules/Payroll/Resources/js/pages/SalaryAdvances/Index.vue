@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import InputError from '@/components/InputError.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -247,7 +248,7 @@ const recoveryPercentage = computed(() => {
                 >
             </CardHeader>
             <CardContent>
-                <form
+                <form novalidate
                     class="grid gap-4 lg:grid-cols-12"
                     @submit.prevent="submitAdvance"
                 >
@@ -272,12 +273,7 @@ const recoveryPercentage = computed(() => {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p
-                            v-if="advanceForm.errors.employee_id"
-                            class="text-sm text-destructive"
-                        >
-                            {{ advanceForm.errors.employee_id }}
-                        </p>
+                        <InputError :message="advanceForm.errors.employee_id" />
                     </div>
 
                     <div class="space-y-2 lg:col-span-2">
@@ -290,12 +286,7 @@ const recoveryPercentage = computed(() => {
                                 Boolean(advanceForm.errors.advance_date)
                             "
                         />
-                        <p
-                            v-if="advanceForm.errors.advance_date"
-                            class="text-sm text-destructive"
-                        >
-                            {{ advanceForm.errors.advance_date }}
-                        </p>
+                        <InputError :message="advanceForm.errors.advance_date" />
                     </div>
 
                     <div class="space-y-2 lg:col-span-2">
@@ -311,12 +302,7 @@ const recoveryPercentage = computed(() => {
                             placeholder="0.00"
                             :aria-invalid="Boolean(advanceForm.errors.amount)"
                         />
-                        <p
-                            v-if="advanceForm.errors.amount"
-                            class="text-sm text-destructive"
-                        >
-                            {{ advanceForm.errors.amount }}
-                        </p>
+                        <InputError :message="advanceForm.errors.amount" />
                     </div>
 
                     <div class="space-y-2 lg:col-span-2">
@@ -339,12 +325,7 @@ const recoveryPercentage = computed(() => {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p
-                            v-if="advanceForm.errors.bank_account_id"
-                            class="text-sm text-destructive"
-                        >
-                            {{ advanceForm.errors.bank_account_id }}
-                        </p>
+                        <InputError :message="advanceForm.errors.bank_account_id" />
                     </div>
 
                     <div class="space-y-2 lg:col-span-2">
@@ -359,6 +340,7 @@ const recoveryPercentage = computed(() => {
                                 <SelectItem value="cheque">Cheque</SelectItem>
                             </SelectContent>
                         </Select>
+                        <InputError :message="advanceForm.errors.payment_method" />
                     </div>
 
                     <div class="flex items-end lg:col-span-1">
@@ -386,6 +368,7 @@ const recoveryPercentage = computed(() => {
                             v-model="advanceForm.reference"
                             placeholder="Optional"
                         />
+                        <InputError :message="advanceForm.errors.reference" />
                     </div>
                     <div class="space-y-2 lg:col-span-8">
                         <Label for="advance-reason">Reason or notes</Label>
@@ -394,6 +377,7 @@ const recoveryPercentage = computed(() => {
                             v-model="advanceForm.reason"
                             placeholder="Optional"
                         />
+                        <InputError :message="advanceForm.errors.reason" />
                     </div>
 
                     <Alert

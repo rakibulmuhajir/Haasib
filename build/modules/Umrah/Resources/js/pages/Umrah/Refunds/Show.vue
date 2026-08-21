@@ -194,7 +194,7 @@ const submitSettle = () =>
                         This confirms the amount owed and moves the refund to Approved. It does not pay anything or post to the books — that happens when the refund is settled.
                     </DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submitApprove">
+                <form novalidate class="space-y-4" @submit.prevent="submitApprove">
                     <div class="space-y-2">
                         <Textarea v-model="approveForm.review_remarks" placeholder="Remarks (optional)" />
                         <p v-if="approveForm.errors.review_remarks" class="text-xs text-destructive">{{ approveForm.errors.review_remarks }}</p>
@@ -213,7 +213,7 @@ const submitSettle = () =>
                     <DialogTitle>Reject Refund</DialogTitle>
                     <DialogDescription>The requester will see your remarks.</DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submitReject">
+                <form novalidate class="space-y-4" @submit.prevent="submitReject">
                     <div class="space-y-2">
                         <Textarea v-model="rejectForm.review_remarks" required placeholder="Reason (required)" />
                         <p v-if="rejectForm.errors.review_remarks" class="text-xs text-destructive">{{ rejectForm.errors.review_remarks }}</p>
@@ -232,7 +232,7 @@ const submitSettle = () =>
                     <DialogTitle>Cancel Refund</DialogTitle>
                     <DialogDescription>This withdraws an accepted refund before it is settled.</DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submitCancel">
+                <form novalidate class="space-y-4" @submit.prevent="submitCancel">
                     <div class="space-y-2">
                         <Textarea v-model="cancelForm.cancellation_reason" required placeholder="Reason (required)" />
                         <p v-if="cancelForm.errors.cancellation_reason" class="text-xs text-destructive">{{ cancelForm.errors.cancellation_reason }}</p>
@@ -254,7 +254,7 @@ const submitSettle = () =>
                         <template v-else>Pay it back, or keep it as credit the agent can spend on a future group.</template>
                     </DialogDescription>
                 </DialogHeader>
-                <form class="space-y-4" @submit.prevent="submitSettle">
+                <form novalidate class="space-y-4" @submit.prevent="submitSettle">
                     <div v-if="!isVendorRefund" class="space-y-2">
                         <Label>How is this being settled?</Label>
                         <Select v-model="settleForm.settlement_method">

@@ -24,6 +24,7 @@ import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, Search, Banknote } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface VendorCardSale {
   id: string
@@ -427,7 +428,7 @@ const todayTableData = computed(() => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submitSettlement">
+        <form novalidate class="space-y-4" @submit.prevent="submitSettlement">
           <div class="space-y-2">
             <Label>Settlement Amount *</Label>
             <Input
@@ -438,14 +439,13 @@ const todayTableData = computed(() => {
               step="1"
               :class="{ 'border-destructive': settlementForm.errors.amount_received }"
             />
-            <p v-if="settlementForm.errors.amount_received" class="text-sm text-destructive">
-              {{ settlementForm.errors.amount_received[0] }}
-            </p>
+            <InputError :message="settlementForm.errors.amount_received" />
           </div>
 
           <div class="space-y-2">
             <Label>Settlement Date</Label>
             <Input v-model="settlementForm.settlement_date" type="date" />
+            <InputError :message="settlementForm.errors.settlement_date" />
           </div>
 
           <div class="space-y-2">
@@ -454,6 +454,7 @@ const todayTableData = computed(() => {
               v-model="settlementForm.reference"
               placeholder="Settlement reference number"
             />
+            <InputError :message="settlementForm.errors.reference" />
           </div>
 
           <div class="space-y-2">
@@ -462,6 +463,7 @@ const todayTableData = computed(() => {
               v-model="settlementForm.notes"
               placeholder="Optional notes..."
             />
+            <InputError :message="settlementForm.errors.notes" />
           </div>
 
           <DialogFooter class="gap-2">
@@ -490,7 +492,7 @@ const todayTableData = computed(() => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submitClearingSettlement">
+        <form novalidate class="space-y-4" @submit.prevent="submitClearingSettlement">
           <div class="space-y-2">
             <Label>Destination Bank *</Label>
             <Select v-model="clearingSettlementForm.bank_account_id">
@@ -501,27 +503,32 @@ const todayTableData = computed(() => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="clearingSettlementForm.errors.bank_account_id" />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-2">
               <Label>Amount Received *</Label>
               <Input v-model.number="clearingSettlementForm.amount_received" type="number" min="0.01" step="0.01" />
+              <InputError :message="clearingSettlementForm.errors.amount_received" />
             </div>
             <div class="space-y-2">
               <Label>Fees</Label>
               <Input v-model.number="clearingSettlementForm.fees" type="number" min="0" step="0.01" />
+              <InputError :message="clearingSettlementForm.errors.fees" />
             </div>
           </div>
 
           <div class="space-y-2">
             <Label>Settlement Date</Label>
             <Input v-model="clearingSettlementForm.settlement_date" type="date" />
+            <InputError :message="clearingSettlementForm.errors.settlement_date" />
           </div>
 
           <div class="space-y-2">
             <Label>Reference</Label>
             <Input v-model="clearingSettlementForm.reference" />
+            <InputError :message="clearingSettlementForm.errors.reference" />
           </div>
 
           <DialogFooter>

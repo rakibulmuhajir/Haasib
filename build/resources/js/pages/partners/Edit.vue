@@ -88,7 +88,7 @@ const goBack = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Partner Information</CardTitle>

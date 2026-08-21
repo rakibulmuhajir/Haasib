@@ -117,7 +117,7 @@ const taxInclusiveValue = computed({
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-8">
+          <form novalidate @submit.prevent="submit" class="space-y-8">
             <!-- Tax Registration Status -->
             <div class="space-y-4">
               <div>

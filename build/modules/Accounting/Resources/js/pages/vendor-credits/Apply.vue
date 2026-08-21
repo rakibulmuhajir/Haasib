@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -365,7 +366,7 @@ const getDaysOverdue = (dueDate?: string) => {
 
         <div v-else class="space-y-4">
           <div
-            v-for="bill in unpaidBills"
+            v-for="(bill, index) in unpaidBills"
             :key="bill.id"
             class="rounded-lg border p-4 transition-all hover:border-primary/50"
           >
@@ -407,6 +408,9 @@ const getDaysOverdue = (dueDate?: string) => {
                           @input="(e: any) => updateAmount(bill.id, parseFloat(e.target.value) || 0)"
                           class="font-mono"
                         />
+                        <!-- form.applications is built 1:1 from unpaidBills, in order, so the
+                             loop index here lines up with the server's applications.{index} key. -->
+                        <InputError :message="(form.errors as Record<string, string>)[`applications.${index}.amount_applied`]" />
                       </div>
                       <div class="text-sm text-muted-foreground">
                         <div>of <MoneyText :amount="bill.balance" :currency="bill.currency" /></div>
@@ -441,6 +445,8 @@ const getDaysOverdue = (dueDate?: string) => {
             </div>
           </div>
         </div>
+
+        <InputError class="mt-2" :message="form.errors.applications" />
       </CardContent>
     </Card>
 

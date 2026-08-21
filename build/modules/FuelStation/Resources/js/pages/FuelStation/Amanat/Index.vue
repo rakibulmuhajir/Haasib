@@ -22,6 +22,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { Wallet, Eye, Search, Users, Banknote, Plus, UserCog } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface AmanatCustomer {
   id: string
@@ -260,19 +261,19 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
             <div class="space-y-2 sm:col-span-2">
               <Label>Name</Label>
               <Input v-model="holderForm.name" placeholder="Customer name" />
-              <p v-if="holderForm.errors.name" class="text-xs text-status-critical">{{ holderForm.errors.name }}</p>
+              <InputError :message="holderForm.errors.name" />
             </div>
 
             <div class="space-y-2">
               <Label>Phone</Label>
               <Input v-model="holderForm.phone" placeholder="Optional" />
-              <p v-if="holderForm.errors.phone" class="text-xs text-status-critical">{{ holderForm.errors.phone }}</p>
+              <InputError :message="holderForm.errors.phone" />
             </div>
 
             <div class="space-y-2">
               <Label>CNIC</Label>
               <Input v-model="holderForm.cnic" placeholder="Optional" />
-              <p v-if="holderForm.errors.cnic" class="text-xs text-status-critical">{{ holderForm.errors.cnic }}</p>
+              <InputError :message="holderForm.errors.cnic" />
             </div>
 
             <div class="space-y-2">
@@ -287,7 +288,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
                   <SelectItem value="owner">Owner</SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="holderForm.errors.relationship" class="text-xs text-status-critical">{{ holderForm.errors.relationship }}</p>
+              <InputError :message="holderForm.errors.relationship" />
             </div>
 
           </div>

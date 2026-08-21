@@ -2,6 +2,7 @@
 import { Head, useForm } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import PageShell from '@/components/PageShell.vue'
+import InputError from '@/components/InputError.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -263,6 +264,7 @@ const createExemption = () => {
               </div>
               <Switch v-model:checked="settingsForm.tax_enabled" :disabled="!canManage.value" />
             </div>
+            <InputError :message="settingsForm.errors.tax_enabled" />
 
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
@@ -278,6 +280,7 @@ const createExemption = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="settingsForm.errors.default_jurisdiction_id" />
               </div>
               <div class="space-y-2">
                 <Label for="rounding_mode">Rounding mode</Label>
@@ -293,6 +296,7 @@ const createExemption = () => {
                     <SelectItem value="bankers">Bankers</SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="settingsForm.errors.rounding_mode" />
               </div>
             </div>
 
@@ -310,6 +314,7 @@ const createExemption = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="settingsForm.errors.default_sales_tax_rate_id" />
               </div>
               <div class="space-y-2">
                 <Label for="default_purchase_tax_rate_id">Default purchase rate</Label>
@@ -324,6 +329,7 @@ const createExemption = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="settingsForm.errors.default_purchase_tax_rate_id" />
               </div>
             </div>
 
@@ -331,10 +337,12 @@ const createExemption = () => {
               <div class="space-y-2">
                 <Label for="rounding_precision">Rounding precision</Label>
                 <Input id="rounding_precision" v-model.number="settingsForm.rounding_precision" type="number" min="0" max="6" :disabled="!canManage.value" />
+                <InputError :message="settingsForm.errors.rounding_precision" />
               </div>
               <div class="space-y-2">
                 <Label for="tax_number_label">Tax number label</Label>
                 <Input id="tax_number_label" v-model="settingsForm.tax_number_label" type="text" maxlength="50" :disabled="!canManage.value" />
+                <InputError :message="settingsForm.errors.tax_number_label" />
               </div>
             </div>
 
@@ -345,6 +353,7 @@ const createExemption = () => {
               </div>
               <Switch v-model:checked="settingsForm.price_includes_tax" :disabled="!canManage.value" />
             </div>
+            <InputError :message="settingsForm.errors.price_includes_tax" />
 
             <div class="flex items-center justify-between rounded-lg border p-3">
               <div>
@@ -353,6 +362,7 @@ const createExemption = () => {
               </div>
               <Switch v-model:checked="settingsForm.show_tax_column" :disabled="!canManage.value" />
             </div>
+            <InputError :message="settingsForm.errors.show_tax_column" />
 
             <Button class="w-full" :disabled="!canManage.value || settingsForm.processing" @click="saveSettings">
               Save settings
@@ -378,21 +388,25 @@ const createExemption = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="rateForm.errors.jurisdiction_id" />
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="rate_code">Code</Label>
                 <Input id="rate_code" v-model="rateForm.code" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.code" />
               </div>
               <div class="space-y-2">
                 <Label for="rate_name">Name</Label>
                 <Input id="rate_name" v-model="rateForm.name" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.name" />
               </div>
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="rate_percentage">Rate (%)</Label>
                 <Input id="rate_percentage" v-model.number="rateForm.rate" type="number" min="0" step="0.01" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.rate" />
               </div>
               <div class="space-y-2">
                 <Label for="rate_type">Type</Label>
@@ -407,16 +421,19 @@ const createExemption = () => {
                     <SelectItem value="both">Both</SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="rateForm.errors.tax_type" />
               </div>
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="rate_effective_from">Effective from</Label>
                 <Input id="rate_effective_from" v-model="rateForm.effective_from" type="date" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.effective_from" />
               </div>
               <div class="space-y-2">
                 <Label for="rate_effective_to">Effective to</Label>
                 <Input id="rate_effective_to" v-model="rateForm.effective_to" type="date" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.effective_to" />
               </div>
             </div>
             <div class="flex items-center justify-between rounded-lg border p-3">
@@ -426,24 +443,29 @@ const createExemption = () => {
               </div>
               <Switch v-model:checked="rateForm.is_compound" :disabled="!canManage.value" />
             </div>
+            <InputError :message="rateForm.errors.is_compound" />
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="compound_priority">Compound priority</Label>
                 <Input id="compound_priority" v-model.number="rateForm.compound_priority" type="number" min="0" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.compound_priority" />
               </div>
               <div class="space-y-2">
                 <Label for="rate_description">Description</Label>
                 <Textarea id="rate_description" v-model="rateForm.description" rows="2" :disabled="!canManage.value" />
+                <InputError :message="rateForm.errors.description" />
               </div>
             </div>
             <div class="flex items-center gap-3">
               <Switch id="rate_default" v-model:checked="rateForm.is_default" :disabled="!canManage.value" />
               <Label for="rate_default">Set as default</Label>
             </div>
+            <InputError :message="rateForm.errors.is_default" />
             <div class="flex items-center gap-3">
               <Switch id="rate_active" v-model:checked="rateForm.is_active" :disabled="!canManage.value" />
               <Label for="rate_active">Active</Label>
             </div>
+            <InputError :message="rateForm.errors.is_active" />
             <Button class="w-full" :disabled="!canManage.value || rateForm.processing" @click="createRate">
               Create rate
             </Button>
@@ -468,15 +490,18 @@ const createExemption = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="groupForm.errors.jurisdiction_id" />
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="group_code">Code</Label>
                 <Input id="group_code" v-model="groupForm.code" :disabled="!canManage.value" />
+                <InputError :message="groupForm.errors.code" />
               </div>
               <div class="space-y-2">
                 <Label for="group_name">Name</Label>
                 <Input id="group_name" v-model="groupForm.name" :disabled="!canManage.value" />
+                <InputError :message="groupForm.errors.name" />
               </div>
             </div>
             <div class="space-y-3">
@@ -498,6 +523,7 @@ const createExemption = () => {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <InputError :message="(groupForm.errors as Record<string, string>)[`components.${index}.tax_rate_id`]" />
                   </div>
                   <div class="space-y-2">
                     <Label :for="`component_priority_${index}`">Priority</Label>
@@ -508,18 +534,22 @@ const createExemption = () => {
                       min="1"
                       :disabled="!canManage.value"
                     />
+                    <InputError :message="(groupForm.errors as Record<string, string>)[`components.${index}.priority`]" />
                   </div>
                 </div>
               </div>
+              <InputError :message="groupForm.errors.components" />
             </div>
             <div class="flex items-center gap-3">
               <Switch id="group_default" v-model:checked="groupForm.is_default" :disabled="!canManage.value" />
               <Label for="group_default">Set as default</Label>
             </div>
+            <InputError :message="groupForm.errors.is_default" />
             <div class="flex items-center gap-3">
               <Switch id="group_active" v-model:checked="groupForm.is_active" :disabled="!canManage.value" />
               <Label for="group_active">Active</Label>
             </div>
+            <InputError :message="groupForm.errors.is_active" />
             <Button class="w-full" :disabled="!canManage.value || groupForm.processing" @click="createGroup">
               Create group
             </Button>
@@ -544,11 +574,13 @@ const createExemption = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="registrationForm.errors.jurisdiction_id" />
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="registration_number">Registration number</Label>
                 <Input id="registration_number" v-model="registrationForm.registration_number" :disabled="!canManage.value" />
+                <InputError :message="registrationForm.errors.registration_number" />
               </div>
               <div class="space-y-2">
                 <Label for="registration_type">Type</Label>
@@ -564,30 +596,36 @@ const createExemption = () => {
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="registrationForm.errors.registration_type" />
               </div>
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label for="registered_name">Registered name</Label>
                 <Input id="registered_name" v-model="registrationForm.registered_name" :disabled="!canManage.value" />
+                <InputError :message="registrationForm.errors.registered_name" />
               </div>
               <div class="space-y-2">
                 <Label for="registration_from">Effective from</Label>
                 <Input id="registration_from" v-model="registrationForm.effective_from" type="date" :disabled="!canManage.value" />
+                <InputError :message="registrationForm.errors.effective_from" />
               </div>
               <div class="space-y-2">
                 <Label for="registration_to">Effective to</Label>
                 <Input id="registration_to" v-model="registrationForm.effective_to" type="date" :disabled="!canManage.value" />
+                <InputError :message="registrationForm.errors.effective_to" />
               </div>
               <div class="space-y-2">
                 <Label for="registration_notes">Notes</Label>
                 <Textarea id="registration_notes" v-model="registrationForm.notes" rows="2" :disabled="!canManage.value" />
+                <InputError :message="registrationForm.errors.notes" />
               </div>
             </div>
             <div class="flex items-center gap-3">
               <Switch id="registration_active" v-model:checked="registrationForm.is_active" :disabled="!canManage.value" />
               <Label for="registration_active">Active</Label>
             </div>
+            <InputError :message="registrationForm.errors.is_active" />
             <Button class="w-full" :disabled="!canManage.value || registrationForm.processing" @click="createRegistration">
               Save registration
             </Button>
@@ -625,10 +663,12 @@ const createExemption = () => {
               <div class="space-y-2">
                 <Label for="exemption_code">Code</Label>
                 <Input id="exemption_code" v-model="exemptionForm.code" :disabled="!canManage.value" />
+                <InputError :message="exemptionForm.errors.code" />
               </div>
               <div class="space-y-2">
                 <Label for="exemption_name">Name</Label>
                 <Input id="exemption_name" v-model="exemptionForm.name" :disabled="!canManage.value" />
+                <InputError :message="exemptionForm.errors.name" />
               </div>
             </div>
             <div class="space-y-2">
@@ -643,6 +683,7 @@ const createExemption = () => {
                   <SelectItem value="rate_override">Rate override</SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="exemptionForm.errors.exemption_type" />
             </div>
             <div class="space-y-2">
               <Label for="override_rate">Override rate (%)</Label>
@@ -654,19 +695,23 @@ const createExemption = () => {
                 step="0.01"
                 :disabled="!canManage.value || exemptionForm.exemption_type !== 'rate_override'"
               />
+              <InputError :message="exemptionForm.errors.override_rate" />
             </div>
             <div class="space-y-2">
               <Label for="exemption_description">Description</Label>
               <Textarea id="exemption_description" v-model="exemptionForm.description" rows="2" :disabled="!canManage.value" />
+              <InputError :message="exemptionForm.errors.description" />
             </div>
             <div class="flex items-center gap-3">
               <Switch id="requires_certificate" v-model:checked="exemptionForm.requires_certificate" :disabled="!canManage.value" />
               <Label for="requires_certificate">Requires certificate</Label>
             </div>
+            <InputError :message="exemptionForm.errors.requires_certificate" />
             <div class="flex items-center gap-3">
               <Switch id="exemption_active" v-model:checked="exemptionForm.is_active" :disabled="!canManage.value" />
               <Label for="exemption_active">Active</Label>
             </div>
+            <InputError :message="exemptionForm.errors.is_active" />
             <Button class="w-full" :disabled="!canManage.value || exemptionForm.processing" @click="createExemption">
               Save exemption
             </Button>

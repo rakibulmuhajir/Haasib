@@ -121,7 +121,7 @@ const fiscalYearExample = computed(() => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-8">
+          <form novalidate @submit.prevent="submit" class="space-y-8">
             <!-- Fiscal Year Start Month -->
             <div class="space-y-4">
               <div>

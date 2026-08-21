@@ -6,6 +6,7 @@ import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InputError from '@/components/InputError.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -388,7 +389,7 @@ const goToWarehouses = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="space-y-2">
             <Label for="name">Pump Point</Label>
             <Input
@@ -398,7 +399,7 @@ const goToWarehouses = () => {
               :class="{ 'border-destructive': form.errors.name }"
             />
             <p class="text-sm text-text-secondary">Each pumping machine is identified as a point.</p>
-            <p v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</p>
+            <InputError :message="form.errors.name" />
           </div>
 
           <div class="space-y-2">
@@ -413,7 +414,7 @@ const goToWarehouses = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.tank_id" class="text-sm text-destructive">{{ form.errors.tank_id }}</p>
+            <InputError :message="form.errors.tank_id" />
             <div v-if="tankOptions.length === 0" class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-3">
               <p class="text-sm text-status-attention">
                 <strong>No tanks available.</strong> You need to create tank warehouses first before adding pumps.
@@ -437,6 +438,7 @@ const goToWarehouses = () => {
               <p class="text-sm text-text-secondary">Hide pumps under maintenance.</p>
             </div>
             <Switch id="isActive" v-model:checked="form.is_active" />
+            <InputError :message="form.errors.is_active" />
           </div>
 
           <!-- Nozzle Configuration (only for new pumps) -->
@@ -463,7 +465,7 @@ const goToWarehouses = () => {
                     <SelectItem value="2">2 Nozzles</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="form.errors.nozzle_count" class="text-sm text-destructive">{{ form.errors.nozzle_count }}</p>
+                <InputError :message="form.errors.nozzle_count" />
               </div>
 
               <p class="text-xs text-muted-foreground">
@@ -483,6 +485,7 @@ const goToWarehouses = () => {
                       step="0.01"
                       placeholder="0.00"
                     />
+                    <InputError :message="form.errors.front_electronic" />
                   </div>
                   <div class="space-y-1">
                     <Label class="text-xs">Manual Reading</Label>
@@ -493,6 +496,7 @@ const goToWarehouses = () => {
                       step="0.01"
                       placeholder="Optional"
                     />
+                    <InputError :message="form.errors.front_manual" />
                   </div>
                 </div>
               </div>
@@ -510,6 +514,7 @@ const goToWarehouses = () => {
                       step="0.01"
                       placeholder="0.00"
                     />
+                    <InputError :message="form.errors.back_electronic" />
                   </div>
                   <div class="space-y-1">
                     <Label class="text-xs">Manual Reading</Label>
@@ -520,6 +525,7 @@ const goToWarehouses = () => {
                       step="0.01"
                       placeholder="Optional"
                     />
+                    <InputError :message="form.errors.back_manual" />
                   </div>
                 </div>
               </div>

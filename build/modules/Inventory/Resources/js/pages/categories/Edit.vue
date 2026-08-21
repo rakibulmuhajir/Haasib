@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,7 +75,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <Card variant="form">
         <CardHeader>
           <CardTitle>Category Details</CardTitle>
@@ -90,7 +91,7 @@ const submit = () => {
                 placeholder="e.g., ELEC"
                 :class="{ 'border-destructive': form.errors.code }"
               />
-              <p v-if="form.errors.code" class="text-sm text-destructive">{{ form.errors.code }}</p>
+              <InputError :message="form.errors.code" />
             </div>
 
             <div class="space-y-2">
@@ -101,7 +102,7 @@ const submit = () => {
                 placeholder="Category name"
                 :class="{ 'border-destructive': form.errors.name }"
               />
-              <p v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</p>
+              <InputError :message="form.errors.name" />
             </div>
           </div>
 
@@ -113,6 +114,7 @@ const submit = () => {
               placeholder="Category description"
               rows="3"
             />
+            <InputError :message="form.errors.description" />
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,6 +131,7 @@ const submit = () => {
                 </SelectContent>
               </Select>
               <p class="text-sm text-muted-foreground">Leave empty for top-level category</p>
+              <InputError :message="form.errors.parent_id" />
             </div>
 
             <div class="space-y-2">
@@ -140,6 +143,7 @@ const submit = () => {
                 min="0"
               />
               <p class="text-sm text-muted-foreground">Lower numbers appear first</p>
+              <InputError :message="form.errors.sort_order" />
             </div>
           </div>
 
@@ -147,6 +151,7 @@ const submit = () => {
             <Switch id="is_active" v-model="form.is_active" />
             <Label for="is_active">Active</Label>
           </div>
+          <InputError :message="form.errors.is_active" />
         </CardContent>
       </Card>
 

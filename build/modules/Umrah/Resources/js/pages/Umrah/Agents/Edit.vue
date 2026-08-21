@@ -49,7 +49,7 @@ const submit = () => form.put(`/${props.company.slug}/umrah/agents/${props.agent
     <Card class="mx-auto max-w-2xl" variant="form">
       <CardHeader><CardTitle>Agent Details</CardTitle></CardHeader>
       <CardContent>
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label>Agent #</Label>

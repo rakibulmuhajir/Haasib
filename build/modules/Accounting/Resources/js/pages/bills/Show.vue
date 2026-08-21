@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -691,10 +692,12 @@ const navigateToVendor = () => {
             <div class="space-y-2">
               <Label for="receipt_date">Receipt date</Label>
               <Input id="receipt_date" v-model="receiptForm.receipt_date" type="date" />
+              <InputError :message="receiptForm.errors.receipt_date" />
             </div>
             <div class="space-y-2">
               <Label for="receipt_notes">Notes</Label>
               <Textarea id="receipt_notes" v-model="receiptForm.notes" rows="2" />
+              <InputError :message="receiptForm.errors.notes" />
             </div>
           </div>
 
@@ -823,10 +826,12 @@ const navigateToVendor = () => {
             <div class="space-y-2">
               <Label for="claim_received_date">Received date</Label>
               <Input id="claim_received_date" v-model="claimReceiptForm.received_date" type="date" />
+              <InputError :message="claimReceiptForm.errors.received_date" />
             </div>
             <div class="space-y-2">
               <Label for="claim_received_amount">Amount</Label>
               <Input id="claim_received_amount" v-model.number="claimReceiptForm.received_amount" type="number" min="0.01" step="0.01" />
+              <InputError :message="claimReceiptForm.errors.received_amount" />
             </div>
           </div>
 
@@ -842,11 +847,13 @@ const navigateToVendor = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="claimReceiptForm.errors.received_account_id" />
           </div>
 
           <div class="space-y-2">
             <Label for="claim_notes">Notes</Label>
             <Input id="claim_notes" v-model="claimReceiptForm.notes" placeholder="Optional" />
+            <InputError :message="claimReceiptForm.errors.notes" />
           </div>
 
           <div v-if="Object.keys(claimReceiptForm.errors).length" class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

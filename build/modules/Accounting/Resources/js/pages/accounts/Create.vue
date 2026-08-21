@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Layers, Save } from 'lucide-vue-next'
 
@@ -141,7 +142,7 @@ const handleSubmit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Layers"
   >
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="template_id">Start from template (optional)</Label>
@@ -160,14 +161,17 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.template_id" />
         </div>
         <div>
           <Label for="code">Code</Label>
           <Input id="code" v-model="form.code" required />
+          <InputError :message="form.errors.code" />
         </div>
         <div>
           <Label for="name">Name</Label>
           <Input id="name" v-model="form.name" required />
+          <InputError :message="form.errors.name" />
         </div>
         <div>
           <Label for="type">Type</Label>
@@ -179,6 +183,7 @@ const handleSubmit = () => {
               <SelectItem v-for="t in typeOptions" :key="t" :value="t">{{ t }}</SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.type" />
         </div>
         <div>
           <Label for="subtype">Subtype</Label>
@@ -190,6 +195,7 @@ const handleSubmit = () => {
               <SelectItem v-for="s in availableSubtypes" :key="s" :value="s">{{ s }}</SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.subtype" />
         </div>
         <div>
           <Label for="parent_id">Parent (optional)</Label>
@@ -208,6 +214,7 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <InputError :message="form.errors.parent_id" />
         </div>
         <div>
           <Label for="currency">Currency (optional)</Label>
@@ -217,11 +224,13 @@ const handleSubmit = () => {
             placeholder="Leave blank for base"
             maxlength="3"
           />
+          <InputError :message="form.errors.currency" />
         </div>
       </div>
       <div>
         <Label for="description">Description</Label>
         <Input id="description" v-model="form.description" placeholder="Optional description" />
+        <InputError :message="form.errors.description" />
       </div>
 
       <div class="flex justify-end gap-3">

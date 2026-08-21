@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Plus, Eye, Pencil, Search, Wallet, TrendingUp, Banknote } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
@@ -312,7 +313,7 @@ const goToShow = (row: any) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="space-y-2">
             <Label for="name">Name *</Label>
             <Input
@@ -321,7 +322,7 @@ const goToShow = (row: any) => {
               placeholder="Full name"
               :class="{ 'border-destructive': form.errors.name }"
             />
-            <p v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</p>
+            <InputError :message="form.errors.name" />
           </div>
 
           <div class="grid gap-4 sm:grid-cols-2">
@@ -333,7 +334,7 @@ const goToShow = (row: any) => {
                 placeholder="0300-1234567"
                 :class="{ 'border-destructive': form.errors.phone }"
               />
-              <p v-if="form.errors.phone" class="text-sm text-destructive">{{ form.errors.phone }}</p>
+              <InputError :message="form.errors.phone" />
             </div>
 
             <div class="space-y-2">
@@ -344,7 +345,7 @@ const goToShow = (row: any) => {
                 placeholder="35201-1234567-1"
                 :class="{ 'border-destructive': form.errors.cnic }"
               />
-              <p v-if="form.errors.cnic" class="text-sm text-destructive">{{ form.errors.cnic }}</p>
+              <InputError :message="form.errors.cnic" />
             </div>
           </div>
 

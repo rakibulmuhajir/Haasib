@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Lock, Unlock, Pencil } from 'lucide-vue-next'
@@ -142,9 +143,7 @@ const periodColumns = [
                     <SelectItem value="yearly">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="createPeriodsForm.errors.period_type" class="text-sm text-status-critical mt-1">
-                  {{ createPeriodsForm.errors.period_type }}
-                </p>
+                <InputError :message="createPeriodsForm.errors.period_type" />
               </div>
               <Button :disabled="createPeriodsForm.processing" @click="createPeriods">
                 Generate periods

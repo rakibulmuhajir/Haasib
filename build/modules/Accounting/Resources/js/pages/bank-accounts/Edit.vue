@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import InputError from '@/components/InputError.vue'
 import { Landmark, Save, X, AlertTriangle } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
@@ -124,7 +125,7 @@ const handleCancel = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Landmark"
   >
-    <form class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
       <!-- Currency Lock Warning -->
       <Alert v-if="hasTransactions" variant="warning">
         <AlertTriangle class="h-4 w-4" />
@@ -220,6 +221,7 @@ const handleCancel = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.bank_id" />
             </div>
 
             <div class="space-y-2">
@@ -239,6 +241,7 @@ const handleCancel = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.gl_account_id" />
             </div>
           </div>
         </CardContent>
@@ -271,6 +274,7 @@ const handleCancel = () => {
                 placeholder="e.g., RJHISARI"
                 maxlength="11"
               />
+              <InputError :message="form.errors.swift_code" />
             </div>
 
             <div class="space-y-2">
@@ -280,6 +284,7 @@ const handleCancel = () => {
                 v-model="form.routing_number"
                 placeholder="e.g., 021000021"
               />
+              <InputError :message="form.errors.routing_number" />
             </div>
 
             <div class="space-y-2">
@@ -289,6 +294,7 @@ const handleCancel = () => {
                 v-model="form.branch_name"
                 placeholder="e.g., Main Branch"
               />
+              <InputError :message="form.errors.branch_name" />
             </div>
           </div>
 
@@ -300,6 +306,7 @@ const handleCancel = () => {
               placeholder="Full branch address"
               rows="2"
             />
+            <InputError :message="form.errors.branch_address" />
           </div>
         </CardContent>
       </Card>
@@ -321,6 +328,7 @@ const handleCancel = () => {
                 step="0.01"
                 placeholder="0.00"
               />
+              <InputError :message="form.errors.opening_balance" />
             </div>
 
             <div class="space-y-2">
@@ -330,6 +338,7 @@ const handleCancel = () => {
                 v-model="form.opening_balance_date"
                 type="date"
               />
+              <InputError :message="form.errors.opening_balance_date" />
             </div>
           </div>
         </CardContent>
@@ -350,6 +359,7 @@ const handleCancel = () => {
             <Label for="is_primary" class="cursor-pointer">
               Set as primary account
             </Label>
+            <InputError :message="form.errors.is_primary" />
           </div>
 
           <div class="flex items-center gap-3">
@@ -361,6 +371,7 @@ const handleCancel = () => {
             <Label for="is_active" class="cursor-pointer">
               Account is active
             </Label>
+            <InputError :message="form.errors.is_active" />
           </div>
 
           <div class="space-y-2">
@@ -371,6 +382,7 @@ const handleCancel = () => {
               placeholder="Any additional notes about this account"
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

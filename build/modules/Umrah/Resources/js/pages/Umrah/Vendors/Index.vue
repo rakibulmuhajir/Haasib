@@ -251,7 +251,7 @@ const submit = () => {
                     </DialogHeader>
             <Card v-if="canManageVendors" class="min-w-0 border-0 shadow-none" variant="form">
                 <CardContent>
-                    <form class="space-y-4" @submit.prevent="submit">
+                    <form novalidate class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
                             <Label>Vendor #</Label>
                             <Input v-model="form.vendor_number" />

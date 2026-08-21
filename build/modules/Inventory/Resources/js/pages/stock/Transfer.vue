@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,7 +87,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <Card variant="form">
         <CardHeader>
           <CardTitle>Transfer Details</CardTitle>
@@ -107,7 +108,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.source_warehouse_id" class="text-sm text-destructive">{{ form.errors.source_warehouse_id }}</p>
+              <InputError :message="form.errors.source_warehouse_id" />
             </div>
 
             <div class="hidden md:flex items-center justify-center pb-2">
@@ -126,7 +127,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.destination_warehouse_id" class="text-sm text-destructive">{{ form.errors.destination_warehouse_id }}</p>
+              <InputError :message="form.errors.destination_warehouse_id" />
             </div>
           </div>
 
@@ -150,7 +151,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.item_id" class="text-sm text-destructive">{{ form.errors.item_id }}</p>
+            <InputError :message="form.errors.item_id" />
           </div>
 
           <!-- Quantity -->
@@ -170,7 +171,7 @@ const submit = () => {
                 {{ selectedItem.unit_of_measure }}
               </span>
             </div>
-            <p v-if="form.errors.quantity" class="text-sm text-destructive">{{ form.errors.quantity }}</p>
+            <InputError :message="form.errors.quantity" />
           </div>
 
           <!-- Date -->
@@ -182,6 +183,7 @@ const submit = () => {
               type="date"
               class="max-w-[200px]"
             />
+            <InputError :message="form.errors.movement_date" />
           </div>
 
           <!-- Notes -->
@@ -193,6 +195,7 @@ const submit = () => {
               placeholder="Transfer notes"
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

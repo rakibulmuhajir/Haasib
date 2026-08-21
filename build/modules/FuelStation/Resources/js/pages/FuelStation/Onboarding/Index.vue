@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import InputError from '@/components/InputError.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -572,6 +573,9 @@ const removeBankAccount = (index: number) => {
   bankAccountsForm.bank_accounts.splice(index, 1)
 }
 
+const bankAccountRowError = (index: number, field: string) =>
+  (bankAccountsForm.errors as Record<string, string>)[`bank_accounts.${index}.${field}`]
+
 const pickByCode = (accounts: AccountOption[], code: string, fallback?: string | null) => {
   return fallback || accounts.find((account) => account.code === code)?.id || accounts[0]?.id || ''
 }
@@ -662,6 +666,9 @@ const removePartner = (index: number) => {
   partnersForm.partners.splice(index, 1)
 }
 
+const partnerRowError = (index: number, field: string) =>
+  (partnersForm.errors as Record<string, string>)[`partners.${index}.${field}`]
+
 const totalProfitShare = computed(() => {
   return partnersForm.partners.reduce((sum, partner) => {
     const value = Number(partner.profit_share_percentage || 0)
@@ -722,6 +729,9 @@ const removeEmployee = (index: number) => {
   if (employeesForm.employees.length <= 1) return
   employeesForm.employees.splice(index, 1)
 }
+
+const employeeRowError = (index: number, field: string) =>
+  (employeesForm.errors as Record<string, string>)[`employees.${index}.${field}`]
 
 const taxSettingsForm = useForm({
   tax_registered: Boolean(props.company.tax_registered),
@@ -907,6 +917,9 @@ const removeLubricant = (index: number) => {
   lubricantsForm.lubricants.splice(index, 1)
 }
 
+const lubricantRowError = (index: number, field: string) =>
+  (lubricantsForm.errors as Record<string, string>)[`lubricants.${index}.${field}`]
+
 const tankItemOptions = computed(() => {
   const fuelOptions = props.fuelItems.map((item) => ({
     id: item.id as string,
@@ -1041,6 +1054,9 @@ const removeTank = (index: number) => {
   tanksForm.tanks.splice(index, 1)
 }
 
+const tankRowError = (index: number, field: string) =>
+  (tanksForm.errors as Record<string, string>)[`tanks.${index}.${field}`]
+
 const pumpsForm = useForm({
   pumps: [] as PumpRow[],
 })
@@ -1108,6 +1124,9 @@ const removePump = (index: number) => {
   pumpsForm.pumps.splice(index, 1)
 }
 
+const pumpRowError = (index: number, field: string) =>
+  (pumpsForm.errors as Record<string, string>)[`pumps.${index}.${field}`]
+
 const formatLocalDate = (date: Date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -1149,6 +1168,9 @@ watch(
   () => applyRatesPrefill(),
   { immediate: true }
 )
+
+const rateRowError = (index: number, field: string) =>
+  (ratesForm.errors as Record<string, string>)[`rates.${index}.${field}`]
 
 const openingStockForm = useForm({
   stock_date: todayLocal(),
@@ -1195,6 +1217,9 @@ watch(
   { immediate: true }
 )
 
+const stockReadingRowError = (index: number, field: string) =>
+  (openingStockForm.errors as Record<string, string>)[`tank_readings.${index}.${field}`]
+
 const openingCashForm = useForm({
   as_of_date: todayLocal(),
   cash_on_hand: '',
@@ -1226,6 +1251,9 @@ watch(
   () => applyOpeningCashPrefill(),
   { immediate: true }
 )
+
+const bankBalanceRowError = (index: number, field: string) =>
+  (openingCashForm.errors as Record<string, string>)[`bank_balances.${index}.${field}`]
 
 const formatNumber = (value: number | string) => {
   const numberValue = Number(value || 0)
@@ -1362,6 +1390,11 @@ const submitFuelItems = () => {
       // Don't preserve state - we need fresh props with the newly created fuel items
       preserveState: false,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => fuelItemsForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1397,6 +1430,11 @@ const submitLubricants = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => lubricantsForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1427,6 +1465,11 @@ const submitTanks = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => tanksForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1456,6 +1499,11 @@ const submitPumps = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => pumpsForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1482,6 +1530,11 @@ const submitRates = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => ratesForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1509,6 +1562,11 @@ const submitOpeningStock = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Posts through router, not the step form, because the payload is reshaped on
+      // the way out. Inertia hands the 422 to the visit rather than to the form, so
+      // without this the InputError tags on this step stay blank no matter what the
+      // server said.
+      onError: (errors) => openingStockForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1529,6 +1587,11 @@ const submitOpeningCash = () => {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => nextStep(),
+      // Each step posts through router, not the step form, because the payload is
+      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
+      // the form, so without this the InputError tags on this step stay blank no
+      // matter what the server said.
+      onError: (errors) => openingCashForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -1721,6 +1784,7 @@ onMounted(() => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="companyIdentityForm.errors.industry_code" />
                 <p v-if="props.company.industry_code" class="text-xs text-text-secondary">
                   Industry is locked after initial setup.
                 </p>
@@ -1730,10 +1794,12 @@ onMounted(() => {
                 <div class="space-y-2">
                   <Label>Registration / Tax Number</Label>
                   <Input v-model="companyIdentityForm.registration_number" type="text" placeholder="e.g. NTN-12345" />
+                  <InputError :message="companyIdentityForm.errors.registration_number" />
                 </div>
                 <div class="space-y-2">
                   <Label>Trade Name</Label>
                   <Input v-model="companyIdentityForm.trade_name" type="text" placeholder="Optional" />
+                  <InputError :message="companyIdentityForm.errors.trade_name" />
                 </div>
               </div>
 
@@ -1749,6 +1815,7 @@ onMounted(() => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="companyIdentityForm.errors.timezone" />
               </div>
 
               <div class="flex items-center justify-between pt-6 border-t">
@@ -1780,6 +1847,7 @@ onMounted(() => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="fiscalYearForm.errors.fiscal_year_start_month" />
               </div>
 
               <div class="space-y-3">
@@ -1798,6 +1866,7 @@ onMounted(() => {
                     <Label for="yearly">Yearly</Label>
                   </div>
                 </RadioGroup>
+                <InputError :message="fiscalYearForm.errors.period_frequency" />
               </div>
 
               <div class="flex items-center justify-between pt-6 border-t">
@@ -1841,6 +1910,7 @@ onMounted(() => {
                     <div class="space-y-2">
                       <Label>Account Name <span class="text-status-critical">*</span></Label>
                       <Input v-model="account.account_name" placeholder="Meezan Bank" />
+                      <InputError :message="bankAccountRowError(index, 'account_name')" />
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
@@ -1856,6 +1926,7 @@ onMounted(() => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="bankAccountRowError(index, 'currency')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Type <span class="text-status-critical">*</span></Label>
@@ -1868,6 +1939,7 @@ onMounted(() => {
                             <SelectItem value="cash">Cash</SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="bankAccountRowError(index, 'account_type')" />
                       </div>
                     </div>
                   </CardContent>
@@ -1916,6 +1988,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.ar_account_id" />
                 </div>
                 <div class="space-y-2">
                   <Label>Accounts Payable <span class="text-status-critical">*</span></Label>
@@ -1929,6 +2002,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.ap_account_id" />
                 </div>
               </div>
 
@@ -1945,6 +2019,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.income_account_id" />
                 </div>
                 <div class="space-y-2">
                   <Label>Default Expense <span class="text-status-critical">*</span></Label>
@@ -1958,6 +2033,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.expense_account_id" />
                 </div>
               </div>
 
@@ -1974,6 +2050,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.bank_account_id" />
                 </div>
                 <div class="space-y-2">
                   <Label>Retained Earnings <span class="text-status-critical">*</span></Label>
@@ -1991,6 +2068,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.retained_earnings_account_id" />
                 </div>
               </div>
 
@@ -2011,6 +2089,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.sales_tax_payable_account_id" />
                 </div>
                 <div class="space-y-2">
                   <Label>Purchase Tax Receivable</Label>
@@ -2028,6 +2107,7 @@ onMounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="defaultAccountsForm.errors.purchase_tax_receivable_account_id" />
                 </div>
               </div>
 
@@ -2078,10 +2158,12 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="partner.name" placeholder="Partner name" />
+                        <InputError :message="partnerRowError(index, 'name')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Phone</Label>
                         <Input v-model="partner.phone" placeholder="Optional" />
+                        <InputError :message="partnerRowError(index, 'phone')" />
                       </div>
                     </div>
 
@@ -2089,6 +2171,7 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Profit Share % <span class="text-status-critical">*</span></Label>
                         <Input v-model="partner.profit_share_percentage" type="number" step="0.01" />
+                        <InputError :message="partnerRowError(index, 'profit_share_percentage')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Drawing Limit Period</Label>
@@ -2102,12 +2185,14 @@ onMounted(() => {
                             <SelectItem value="none">None</SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="partnerRowError(index, 'drawing_limit_period')" />
                       </div>
                     </div>
 
                     <div class="space-y-2">
                       <Label>Drawing Limit Amount</Label>
                       <Input v-model="partner.drawing_limit_amount" type="number" step="0.01" />
+                      <InputError :message="partnerRowError(index, 'drawing_limit_amount')" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2165,10 +2250,12 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>First Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="employee.first_name" />
+                        <InputError :message="employeeRowError(index, 'first_name')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Last Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="employee.last_name" />
+                        <InputError :message="employeeRowError(index, 'last_name')" />
                       </div>
                     </div>
 
@@ -2176,6 +2263,7 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Phone</Label>
                         <Input v-model="employee.phone" />
+                        <InputError :message="employeeRowError(index, 'phone')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Designation</Label>
@@ -2192,12 +2280,14 @@ onMounted(() => {
                           </Button>
                         </div>
                         <Input v-model="employee.position" placeholder="Custom designation" />
+                        <InputError :message="employeeRowError(index, 'position')" />
                       </div>
                     </div>
 
                     <div class="space-y-2">
                       <Label>Base Salary <span class="text-status-critical">*</span></Label>
                       <Input v-model="employee.base_salary" type="number" step="0.01" />
+                      <InputError :message="employeeRowError(index, 'base_salary')" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2228,12 +2318,14 @@ onMounted(() => {
                   <Switch v-model:checked="taxSettingsForm.tax_registered" />
                   <span class="text-sm text-text-secondary">Tax registered business</span>
                 </div>
+                <InputError :message="taxSettingsForm.errors.tax_registered" />
               </div>
 
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
                   <Label>Tax Rate (%)</Label>
                   <Input v-model="taxSettingsForm.tax_rate" type="number" step="0.01" />
+                  <InputError :message="taxSettingsForm.errors.tax_rate" />
                 </div>
                 <div class="space-y-2">
                   <Label>Tax Inclusive</Label>
@@ -2241,6 +2333,7 @@ onMounted(() => {
                     <Switch v-model:checked="taxSettingsForm.tax_inclusive" />
                     <span class="text-sm text-text-secondary">Prices include tax</span>
                   </div>
+                  <InputError :message="taxSettingsForm.errors.tax_inclusive" />
                 </div>
               </div>
 
@@ -2262,10 +2355,12 @@ onMounted(() => {
                 <div class="space-y-2">
                   <Label>Invoice Prefix <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.invoice_prefix" />
+                  <InputError :message="numberingForm.errors.invoice_prefix" />
                 </div>
                 <div class="space-y-2">
                   <Label>Invoice Start Number <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.invoice_start_number" type="number" />
+                  <InputError :message="numberingForm.errors.invoice_start_number" />
                 </div>
               </div>
 
@@ -2273,10 +2368,12 @@ onMounted(() => {
                 <div class="space-y-2">
                   <Label>Bill Prefix <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.bill_prefix" />
+                  <InputError :message="numberingForm.errors.bill_prefix" />
                 </div>
                 <div class="space-y-2">
                   <Label>Bill Start Number <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.bill_start_number" type="number" />
+                  <InputError :message="numberingForm.errors.bill_start_number" />
                 </div>
               </div>
 
@@ -2298,10 +2395,12 @@ onMounted(() => {
                 <div class="space-y-2">
                   <Label>Customer Payment Terms (days)</Label>
                   <Input v-model="paymentTermsForm.default_customer_payment_terms" type="number" />
+                  <InputError :message="paymentTermsForm.errors.default_customer_payment_terms" />
                 </div>
                 <div class="space-y-2">
                   <Label>Vendor Payment Terms (days)</Label>
                   <Input v-model="paymentTermsForm.default_vendor_payment_terms" type="number" />
+                  <InputError :message="paymentTermsForm.errors.default_vendor_payment_terms" />
                 </div>
               </div>
 
@@ -2344,6 +2443,7 @@ onMounted(() => {
                   </div>
                 </Label>
               </div>
+              <InputError :message="fuelItemsForm.errors.fuel_items" />
 
               <div class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-4 text-sm text-status-attention">
                 <strong>Note:</strong> Accounts are mapped automatically. Prices will be set in the Rates step. Packaged lubricant bottles (0.7L, 1L, etc.) are configured separately in the Lubricants step.
@@ -2387,10 +2487,12 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Tank Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.name" />
+                        <InputError :message="tankRowError(index, 'name')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Tank Code <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.code" />
+                        <InputError :message="tankRowError(index, 'code')" />
                       </div>
                     </div>
 
@@ -2398,6 +2500,7 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Capacity (Liters) <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.capacity" type="number" step="0.01" />
+                        <InputError :message="tankRowError(index, 'capacity')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Linked Product <span class="text-status-critical">*</span></Label>
@@ -2415,16 +2518,19 @@ onMounted(() => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="tankRowError(index, 'linked_item_id')" />
                       </div>
                     </div>
 
                     <div class="space-y-2">
                       <Label>Dip Stick Code</Label>
                       <Input v-model="tank.dip_stick_code" placeholder="Optional" />
+                      <InputError :message="tankRowError(index, 'dip_stick_code')" />
                     </div>
                   </CardContent>
                 </Card>
               </div>
+              <InputError :message="tanksForm.errors.tanks" />
 
               <div class="flex flex-wrap gap-2">
                 <Button v-if="hasFuelCategory('petrol')" type="button" variant="outline" @click="addPetrolTank">
@@ -2488,6 +2594,7 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Pump Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="pump.name" />
+                        <InputError :message="pumpRowError(index, 'name')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Linked Tank <span class="text-status-critical">*</span></Label>
@@ -2501,6 +2608,7 @@ onMounted(() => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="pumpRowError(index, 'tank_id')" />
                       </div>
                     </div>
 
@@ -2517,6 +2625,7 @@ onMounted(() => {
                               <SelectItem :value="2">2 (Front & Back)</SelectItem>
                             </SelectContent>
                           </Select>
+                          <InputError :message="pumpRowError(index, 'nozzle_count')" />
                         </div>
                       </div>
 
@@ -2542,16 +2651,28 @@ onMounted(() => {
                           </div>
                           <div class="grid grid-cols-[minmax(3.5rem,1fr)_2fr_2fr] items-center gap-x-3 px-3 py-2">
                             <span class="text-sm font-medium">Front</span>
-                            <Input v-model="pump.front_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
-                            <Input v-model="pump.front_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                            <div>
+                              <Input v-model="pump.front_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                              <InputError :message="pumpRowError(index, 'front_electronic')" />
+                            </div>
+                            <div>
+                              <Input v-model="pump.front_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                              <InputError :message="pumpRowError(index, 'front_manual')" />
+                            </div>
                           </div>
                           <div
                             v-if="Number(pump.nozzle_count) === 2"
                             class="grid grid-cols-[minmax(3.5rem,1fr)_2fr_2fr] items-center gap-x-3 border-t border-rule-default px-3 py-2"
                           >
                             <span class="text-sm font-medium">Back</span>
-                            <Input v-model="pump.back_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
-                            <Input v-model="pump.back_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                            <div>
+                              <Input v-model="pump.back_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                              <InputError :message="pumpRowError(index, 'back_electronic')" />
+                            </div>
+                            <div>
+                              <Input v-model="pump.back_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                              <InputError :message="pumpRowError(index, 'back_manual')" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2588,6 +2709,7 @@ onMounted(() => {
                   <div class="space-y-2">
                     <Label>Effective Date</Label>
                     <Input v-model="ratesForm.effective_date" type="date" />
+                    <InputError :message="ratesForm.errors.effective_date" />
                   </div>
                   <div class="space-y-2">
                     <Label>Quick Select</Label>
@@ -2639,15 +2761,18 @@ onMounted(() => {
                         <div class="space-y-2">
                           <Label>Purchase Rate ({{ currencyCode }}/L)</Label>
                           <Input v-model="rate.purchase_rate" type="number" step="0.01" />
+                          <InputError :message="rateRowError(index, 'purchase_rate')" />
                         </div>
                         <div class="space-y-2">
                           <Label>Sale Rate ({{ currencyCode }}/L)</Label>
                           <Input v-model="rate.sale_rate" type="number" step="0.01" />
+                          <InputError :message="rateRowError(index, 'sale_rate')" />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
+                <InputError :message="ratesForm.errors.rates" />
               </div>
 
               <div class="flex items-center justify-between pt-6 border-t">
@@ -2689,10 +2814,12 @@ onMounted(() => {
                         <Label>Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.name" />
                         <p class="text-xs text-text-secondary">Include type (bike/car/truck) in the name if needed.</p>
+                        <InputError :message="lubricantRowError(index, 'name')" />
                       </div>
                       <div class="space-y-2">
                         <Label>SKU <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.sku" />
+                        <InputError :message="lubricantRowError(index, 'sku')" />
                       </div>
                     </div>
 
@@ -2700,14 +2827,17 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Brand</Label>
                         <Input v-model="lubricant.brand" placeholder="Brand (optional)" />
+                        <InputError :message="lubricantRowError(index, 'brand')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Unit / Size</Label>
                         <Input v-model="lubricant.unit" placeholder="1L, 2L, 40L" />
+                        <InputError :message="lubricantRowError(index, 'unit')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Opening Quantity</Label>
                         <Input v-model="lubricant.opening_quantity" type="number" step="1" />
+                        <InputError :message="lubricantRowError(index, 'opening_quantity')" />
                       </div>
                     </div>
 
@@ -2715,15 +2845,18 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Purchase Cost <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.cost_price" type="number" step="0.01" />
+                        <InputError :message="lubricantRowError(index, 'cost_price')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Sale Price <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.sale_price" type="number" step="0.01" />
+                        <InputError :message="lubricantRowError(index, 'sale_price')" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
+              <InputError :message="lubricantsForm.errors.lubricants" />
 
               <div class="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" @click="addLubricant">
@@ -2756,6 +2889,7 @@ onMounted(() => {
               <div class="space-y-2">
                 <Label>Stock Date</Label>
                 <Input v-model="openingStockForm.stock_date" type="date" />
+                <InputError :message="openingStockForm.errors.stock_date" />
               </div>
 
               <div class="space-y-4">
@@ -2772,19 +2906,23 @@ onMounted(() => {
                       <div class="space-y-2">
                         <Label>Stick Reading</Label>
                         <Input v-model="reading.stick_reading" type="number" step="0.01" />
+                        <InputError :message="stockReadingRowError(index, 'stick_reading')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Liters <span class="text-status-critical">*</span></Label>
                         <Input v-model="reading.liters" type="number" step="0.01" />
+                        <InputError :message="stockReadingRowError(index, 'liters')" />
                       </div>
                       <div class="space-y-2">
                         <Label>Value (optional)</Label>
                         <Input v-model="reading.value" type="number" step="0.01" />
+                        <InputError :message="stockReadingRowError(index, 'value')" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
+              <InputError :message="openingStockForm.errors.tank_readings" />
 
               <div class="flex items-center justify-between pt-6 border-t">
                 <Button type="button" variant="outline" @click="previousStep">
@@ -2807,16 +2945,19 @@ onMounted(() => {
               <div class="space-y-2">
                 <Label>As of Date</Label>
                 <Input v-model="openingCashForm.as_of_date" type="date" />
+                <InputError :message="openingCashForm.errors.as_of_date" />
               </div>
 
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
                   <Label>Cash on Hand ({{ currencyCode }})</Label>
                   <Input v-model="openingCashForm.cash_on_hand" type="number" step="0.01" />
+                  <InputError :message="openingCashForm.errors.cash_on_hand" />
                 </div>
                 <div class="space-y-2">
                   <Label>Operating Bank Balance ({{ currencyCode }})</Label>
                   <Input v-model="openingCashForm.bank_balance" type="number" step="0.01" />
+                  <InputError :message="openingCashForm.errors.bank_balance" />
                 </div>
               </div>
 
@@ -2824,14 +2965,16 @@ onMounted(() => {
                 <div class="text-sm font-semibold">Other Bank Balances</div>
                 <div class="grid gap-4 md:grid-cols-2">
                   <div
-                    v-for="row in openingCashForm.bank_balances"
+                    v-for="(row, index) in openingCashForm.bank_balances"
                     :key="row.account_id"
                     class="space-y-2"
                   >
                     <Label>{{ bankAccountLabels.get(row.account_id) || 'Bank Account' }}</Label>
                     <Input v-model="row.balance" type="number" step="0.01" />
+                    <InputError :message="bankBalanceRowError(index, 'balance')" />
                   </div>
                 </div>
+                <InputError :message="openingCashForm.errors.bank_balances" />
               </div>
 
               <div class="flex items-center justify-between pt-6 border-t">

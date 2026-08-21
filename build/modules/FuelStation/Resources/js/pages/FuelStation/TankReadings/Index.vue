@@ -6,6 +6,7 @@ import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import InputError from '@/components/InputError.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -474,7 +475,7 @@ const goToShow = (row: any) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form novalidate class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="tank_id">Tank</Label>
@@ -488,7 +489,7 @@ const goToShow = (row: any) => {
                 </SelectItem>
               </SelectContent>
             </Select>
-              <p v-if="form.errors.tank_id" class="text-sm text-destructive">{{ form.errors.tank_id }}</p>
+              <InputError :message="form.errors.tank_id" />
             </div>
 
             <div class="space-y-2">
@@ -499,7 +500,7 @@ const goToShow = (row: any) => {
                 type="date"
                 :class="{ 'border-destructive': form.errors.reading_date }"
               />
-              <p v-if="form.errors.reading_date" class="text-sm text-destructive">{{ form.errors.reading_date }}</p>
+              <InputError :message="form.errors.reading_date" />
             </div>
           </div>
 
@@ -520,7 +521,7 @@ const goToShow = (row: any) => {
                 </SelectItem>
               </SelectContent>
             </Select>
-              <p v-if="form.errors.reading_type" class="text-sm text-destructive">{{ form.errors.reading_type }}</p>
+              <InputError :message="form.errors.reading_type" />
             </div>
 
             <div class="space-y-2">
@@ -534,9 +535,7 @@ const goToShow = (row: any) => {
                 placeholder="cm"
                 :class="{ 'border-destructive': form.errors.stick_reading }"
               />
-              <p v-if="form.errors.stick_reading" class="text-sm text-destructive">
-                {{ form.errors.stick_reading }}
-              </p>
+              <InputError :message="form.errors.stick_reading" />
             </div>
           </div>
 
@@ -551,9 +550,7 @@ const goToShow = (row: any) => {
                 placeholder="0.00"
                 :class="{ 'border-destructive': form.errors.dip_measurement_liters }"
               />
-              <p v-if="form.errors.dip_measurement_liters" class="text-sm text-destructive">
-                {{ form.errors.dip_measurement_liters }}
-              </p>
+              <InputError :message="form.errors.dip_measurement_liters" />
           </div>
 
           <div class="rounded-xl border border-border/70 bg-muted/30 p-4">
@@ -583,7 +580,7 @@ const goToShow = (row: any) => {
                 </SelectItem>
               </SelectContent>
             </Select>
-              <p v-if="form.errors.variance_reason" class="text-sm text-destructive">{{ form.errors.variance_reason }}</p>
+              <InputError :message="form.errors.variance_reason" />
             </div>
           </div>
 
@@ -596,7 +593,7 @@ const goToShow = (row: any) => {
               placeholder="Optional notes (e.g., dip method, staff name, temperature)."
               :class="{ 'border-destructive': form.errors.notes }"
             />
-            <p v-if="form.errors.notes" class="text-sm text-destructive">{{ form.errors.notes }}</p>
+            <InputError :message="form.errors.notes" />
           </div>
 
           <DialogFooter class="gap-2">

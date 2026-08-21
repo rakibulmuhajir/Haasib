@@ -4,6 +4,7 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -629,6 +630,45 @@ const form = useForm({
   cash_variance: 0,
   notes: '',
 })
+
+// Row-array error lookups - server keys are `<array>.<index>.<field>`, one helper per array
+// since readings/tanks/deposits/etc. are separate arrays with independently-indexed rows.
+const nozzleError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`nozzle_readings.${index}.${field}`]
+
+const otherSaleError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`other_sales.${index}.${field}`]
+
+const tankReadingError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`tank_readings.${index}.${field}`]
+
+const partnerDepositError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`partner_deposits.${index}.${field}`]
+
+const amanatDepositError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`amanat_deposits.${index}.${field}`]
+
+const otherDepositError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`other_deposits.${index}.${field}`]
+
+// Payment receipts are keyed by channel code, not a plain array, so this indexes both.
+const paymentReceiptError = (channelCode: string, index: number, field: string) =>
+  (form.errors as Record<string, string>)[`payment_receipts.${channelCode}.entries.${index}.${field}`]
+
+const bankDepositError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`bank_deposits.${index}.${field}`]
+
+const partnerWithdrawalError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`partner_withdrawals.${index}.${field}`]
+
+const employeeAdvanceError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`employee_advances.${index}.${field}`]
+
+const amanatDisbursementError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`amanat_disbursements.${index}.${field}`]
+
+const expenseError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`expenses.${index}.${field}`]
 
 // Reset form to initial empty state (preserving structure from props)
 const resetFormToInitial = () => {
@@ -1647,6 +1687,7 @@ const submitDailyClose = () => {
   }
 
   submitting.value = true
+  form.clearErrors()
   form.cash_variance = cashVariance.value
 
   const cleanedData = getCleanedFormData()
@@ -1659,6 +1700,8 @@ const submitDailyClose = () => {
     }, {
       preserveScroll: true,
       onError: (errors) => {
+        // router.post bypasses form.post, so form.errors needs wiring up manually for InputError to see it
+        form.setError(errors as Record<string, string>)
         const firstError = Object.values(errors)[0]
         toast.error('Failed to post amendment', { description: firstError as string })
       },
@@ -1675,6 +1718,8 @@ const submitDailyClose = () => {
         }
       },
       onError: (errors) => {
+        // router.post bypasses form.post, so form.errors needs wiring up manually for InputError to see it
+        form.setError(errors as Record<string, string>)
         const firstError = Object.values(errors)[0]
         toast.error('Failed to post daily close', { description: firstError as string })
       },
@@ -1771,6 +1816,7 @@ const completedWorkflowSteps = computed(() => {
               class="mt-1"
               :class="{ 'border-status-critical': amendmentReason.length > 0 && amendmentReason.length < 10 }"
             />
+            <InputError :message="form.errors.amendment_reason" />
             <p v-if="amendmentReason.length > 0 && amendmentReason.length < 10" class="text-sm text-status-critical mt-1">
               Please provide at least 10 characters
             </p>
@@ -1786,6 +1832,7 @@ const completedWorkflowSteps = computed(() => {
             <div class="space-y-1.5">
               <Label>Date</Label>
               <Input v-model="form.date" type="date" />
+              <InputError :message="form.errors.date" />
             </div>
             <div class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <template v-if="previousClose.exists">
@@ -1885,6 +1932,7 @@ const completedWorkflowSteps = computed(() => {
                           step="1"
                           class="h-9 text-right bg-muted/30"
                         />
+                        <InputError :message="nozzleError(idx, 'opening_electronic')" />
                       </div>
                       <!-- Closing -->
                       <div class="col-span-2">
@@ -1894,6 +1942,7 @@ const completedWorkflowSteps = computed(() => {
                           step="1"
                           class="h-9 text-right"
                         />
+                        <InputError :message="nozzleError(idx, 'closing_electronic')" />
                       </div>
                       <!-- Liters -->
                       <div class="col-span-2 text-right">
@@ -1908,6 +1957,7 @@ const completedWorkflowSteps = computed(() => {
                           step="0.01"
                           class="h-9 text-right"
                         />
+                        <InputError :message="nozzleError(idx, 'sale_rate')" />
                       </div>
                       <!-- Amount -->
                       <div class="col-span-3 text-right">
@@ -1932,21 +1982,27 @@ const completedWorkflowSteps = computed(() => {
                         <div class="flex items-center gap-3 p-3 rounded-md bg-muted/30">
                           <span class="text-sm font-medium w-12">{{ getNozzlePosition(localIdx, pump.nozzle_indices.length) || 'Manual' }}</span>
                           <div class="flex-1 flex items-center gap-2">
-                            <Input
-                              v-model.number="form.nozzle_readings[idx].opening_manual"
-                              type="number"
-                              step="1"
-                              placeholder="Opening"
-                              class="h-8 text-right text-sm"
-                            />
+                            <div class="flex-1">
+                              <Input
+                                v-model.number="form.nozzle_readings[idx].opening_manual"
+                                type="number"
+                                step="1"
+                                placeholder="Opening"
+                                class="h-8 text-right text-sm"
+                              />
+                              <InputError :message="nozzleError(idx, 'opening_manual')" />
+                            </div>
                             <span class="text-muted-foreground">→</span>
-                            <Input
-                              v-model.number="form.nozzle_readings[idx].closing_manual"
-                              type="number"
-                              step="1"
-                              placeholder="Closing"
-                              class="h-8 text-right text-sm"
-                            />
+                            <div class="flex-1">
+                              <Input
+                                v-model.number="form.nozzle_readings[idx].closing_manual"
+                                type="number"
+                                step="1"
+                                placeholder="Closing"
+                                class="h-8 text-right text-sm"
+                              />
+                              <InputError :message="nozzleError(idx, 'closing_manual')" />
+                            </div>
                           </div>
                           <!-- Variance indicator -->
                           <div class="w-20 text-right">
@@ -2011,6 +2067,7 @@ const completedWorkflowSteps = computed(() => {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <InputError :message="otherSaleError(index, 'item_id')" />
                   </div>
                   <!-- Quantity -->
                   <div class="col-span-2">
@@ -2022,6 +2079,7 @@ const completedWorkflowSteps = computed(() => {
                       class="text-right"
                       @input="recalculateOtherSaleAmount(index)"
                     />
+                    <InputError :message="otherSaleError(index, 'quantity')" />
                   </div>
                   <!-- Unit Price -->
                   <div class="col-span-2">
@@ -2032,6 +2090,7 @@ const completedWorkflowSteps = computed(() => {
                       class="text-right"
                       @input="recalculateOtherSaleAmount(index)"
                     />
+                    <InputError :message="otherSaleError(index, 'unit_price')" />
                   </div>
                   <!-- Amount (calculated) -->
                   <div class="col-span-2 text-right font-semibold">
@@ -2186,10 +2245,12 @@ const completedWorkflowSteps = computed(() => {
                   <div class="col-span-2">
                     <Label class="text-xs">Stick Reading (cm)</Label>
                     <Input v-model.number="tank.stick_reading" type="number" step="0.1" placeholder="cm" class="mt-1" />
+                    <InputError :message="tankReadingError(index, 'stick_reading')" />
                   </div>
                   <div class="col-span-2">
                     <Label class="text-xs">Today's Closing (L)</Label>
                     <Input v-model.number="tank.liters" type="number" step="1" class="mt-1" />
+                    <InputError :message="tankReadingError(index, 'liters')" />
                   </div>
 
                   <!-- Calculated Values -->
@@ -2286,6 +2347,7 @@ const completedWorkflowSteps = computed(() => {
                 </div>
                 <div class="w-48">
                   <Input v-model.number="form.opening_cash" type="number" class="text-right text-lg font-semibold" />
+                  <InputError :message="form.errors.opening_cash" />
                 </div>
               </div>
             </div>
@@ -2337,10 +2399,12 @@ const completedWorkflowSteps = computed(() => {
                     <p v-if="getPartner(deposit.partner_id)" class="mt-1 text-xs text-muted-foreground">
                       Current capital: <MoneyText :amount="getPartner(deposit.partner_id)?.net_capital || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
+                    <InputError :message="partnerDepositError(index, 'partner_id')" />
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
                     <Input v-model.number="deposit.amount" type="number" />
+                    <InputError :message="partnerDepositError(index, 'amount')" />
                   </div>
                   <Button variant="ghost" size="icon" @click="removePartnerDeposit(index)">
                     <Trash2 class="h-4 w-4 text-destructive" />
@@ -2385,14 +2449,17 @@ const completedWorkflowSteps = computed(() => {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <InputError :message="amanatDepositError(index, 'customer_id')" />
                   </div>
                   <div class="col-span-3">
                     <Label class="text-xs">Reference</Label>
                     <Input v-model="deposit.reference" placeholder="Optional" />
+                    <InputError :message="amanatDepositError(index, 'reference')" />
                   </div>
                   <div class="col-span-3">
                     <Label class="text-xs">Amount</Label>
                     <Input v-model.number="deposit.amount" type="number" />
+                    <InputError :message="amanatDepositError(index, 'amount')" />
                   </div>
                   <Button variant="ghost" size="icon" @click="removeAmanatDeposit(index)">
                     <Trash2 class="h-4 w-4 text-destructive" />
@@ -2427,6 +2494,7 @@ const completedWorkflowSteps = computed(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="otherDepositError(index, 'deposit_type')" />
                 </div>
                 <div class="col-span-4">
                   <Label class="text-xs">Account</Label>
@@ -2440,14 +2508,17 @@ const completedWorkflowSteps = computed(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="otherDepositError(index, 'account_id')" />
                 </div>
                 <div class="col-span-3">
                   <Label class="text-xs">Description</Label>
                   <Input v-model="deposit.description" :placeholder="getOtherDepositTypeLabel(deposit.deposit_type)" />
+                  <InputError :message="otherDepositError(index, 'description')" />
                 </div>
                 <div class="col-span-1">
                   <Label class="text-xs">Amount</Label>
                   <Input v-model.number="deposit.amount" type="number" />
+                  <InputError :message="otherDepositError(index, 'amount')" />
                 </div>
                 <Button variant="ghost" size="icon" @click="removeOtherDeposit(index)">
                   <Trash2 class="h-4 w-4 text-destructive" />
@@ -2481,14 +2552,17 @@ const completedWorkflowSteps = computed(() => {
                   <div v-if="channel.type === 'card_pos'" class="w-32">
                     <Label class="text-xs">Last 4 Digits</Label>
                     <Input v-model="entry.last_four" maxlength="4" placeholder="1234" />
+                    <InputError :message="paymentReceiptError(channel.code, index, 'last_four')" />
                   </div>
                   <div v-else class="flex-1">
                     <Label class="text-xs">{{ channel.type === 'bank_transfer' ? 'Customer / Reference' : 'Card / Reference' }}</Label>
                     <Input v-model="entry.reference" :placeholder="channel.type === 'bank_transfer' ? 'Customer name or slip #' : 'Card #'" />
+                    <InputError :message="paymentReceiptError(channel.code, index, 'reference')" />
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
                     <Input v-model.number="entry.amount" type="number" />
+                    <InputError :message="paymentReceiptError(channel.code, index, 'amount')" />
                   </div>
                   <Button variant="ghost" size="icon" @click="removePaymentEntry(channel.code, index)">
                     <Trash2 class="h-4 w-4 text-destructive" />
@@ -2628,18 +2702,22 @@ const completedWorkflowSteps = computed(() => {
                       <SelectItem v-for="b in bankAccounts" :key="b.id" :value="b.id">{{ b.name }}</SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="bankDepositError(index, 'bank_account_id')" />
                 </div>
                 <div>
                   <Label class="text-xs">Amount</Label>
                   <Input v-model.number="deposit.amount" type="number" />
+                  <InputError :message="bankDepositError(index, 'amount')" />
                 </div>
                 <div>
                   <Label class="text-xs">Reference</Label>
                   <Input v-model="deposit.reference" placeholder="Slip #" />
+                  <InputError :message="bankDepositError(index, 'reference')" />
                 </div>
                 <div>
                   <Label class="text-xs">Purpose</Label>
                   <Input v-model="deposit.purpose" placeholder="e.g., vendor card payment" />
+                  <InputError :message="bankDepositError(index, 'purpose')" />
                 </div>
                 <Button variant="ghost" size="icon" @click="removeBankDeposit(index)">
                   <Trash2 class="h-4 w-4 text-destructive" />
@@ -2682,10 +2760,12 @@ const completedWorkflowSteps = computed(() => {
                       Capital <MoneyText :amount="getPartner(withdrawal.partner_id)?.net_capital || 0" :currency="currencyCode" :fraction-digits="0" /> ·
                       Withdrawn this period <MoneyText :amount="getPartner(withdrawal.partner_id)?.current_period_withdrawn || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
+                    <InputError :message="partnerWithdrawalError(index, 'partner_id')" />
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
                     <Input v-model.number="withdrawal.amount" type="number" />
+                    <InputError :message="partnerWithdrawalError(index, 'amount')" />
                   </div>
                   <Button variant="ghost" size="icon" @click="removePartnerWithdrawal(index)">
                     <Trash2 class="h-4 w-4 text-destructive" />
@@ -2733,14 +2813,17 @@ const completedWorkflowSteps = computed(() => {
                   <p v-if="getEmployee(advance.employee_id)" class="mt-1 text-xs text-muted-foreground">
                     Current advance balance: <MoneyText :amount="getEmployee(advance.employee_id)?.outstanding_advances || 0" :currency="currencyCode" :fraction-digits="0" />
                   </p>
+                  <InputError :message="employeeAdvanceError(index, 'employee_id')" />
                 </div>
                 <div>
                   <Label class="text-xs">Amount</Label>
                   <Input v-model.number="advance.amount" type="number" />
+                  <InputError :message="employeeAdvanceError(index, 'amount')" />
                 </div>
                 <div>
                   <Label class="text-xs">Reason</Label>
                   <Input v-model="advance.reason" placeholder="Optional" />
+                  <InputError :message="employeeAdvanceError(index, 'reason')" />
                 </div>
                 <Button variant="ghost" size="icon" @click="removeEmployeeAdvance(index)">
                   <Trash2 class="h-4 w-4 text-destructive" />
@@ -2859,10 +2942,12 @@ const completedWorkflowSteps = computed(() => {
                     <p v-if="getAmanatHolder(amanat.customer_id)" class="mt-1 text-xs text-muted-foreground">
                       Available Amanat: <MoneyText :amount="getAmanatHolder(amanat.customer_id)?.amanat_balance || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
+                    <InputError :message="amanatDisbursementError(index, 'customer_id')" />
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
                     <Input v-model.number="amanat.amount" type="number" />
+                    <InputError :message="amanatDisbursementError(index, 'amount')" />
                   </div>
                   <Button variant="ghost" size="icon" @click="removeAmanat(index)">
                     <Trash2 class="h-4 w-4 text-destructive" />
@@ -2896,14 +2981,17 @@ const completedWorkflowSteps = computed(() => {
                       <SelectItem v-for="a in expenseAccounts" :key="a.id" :value="a.id">{{ a.name }}</SelectItem>
                     </SelectContent>
                   </Select>
+                  <InputError :message="expenseError(index, 'account_id')" />
                 </div>
                 <div>
                   <Label class="text-xs">Description</Label>
                   <Input v-model="expense.description" placeholder="Details" />
+                  <InputError :message="expenseError(index, 'description')" />
                 </div>
                 <div>
                   <Label class="text-xs">Amount</Label>
                   <Input v-model.number="expense.amount" type="number" />
+                  <InputError :message="expenseError(index, 'amount')" />
                 </div>
                 <Button variant="ghost" size="icon" @click="removeExpense(index)">
                   <Trash2 class="h-4 w-4 text-destructive" />
@@ -3063,6 +3151,7 @@ const completedWorkflowSteps = computed(() => {
                 </div>
                 <div class="w-64">
                   <Input v-model.number="form.closing_cash" type="number" class="text-right text-2xl font-bold h-14" />
+                  <InputError :message="form.errors.closing_cash" />
                 </div>
               </div>
 
@@ -3085,6 +3174,7 @@ const completedWorkflowSteps = computed(() => {
             <div class="space-y-2">
               <Label>Notes</Label>
               <Textarea v-model="form.notes" placeholder="Any additional notes for this day..." rows="3" />
+              <InputError :message="form.errors.notes" />
             </div>
 
             <!-- Submit -->

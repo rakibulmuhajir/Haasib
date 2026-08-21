@@ -146,7 +146,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
       </Button>
     </template>
 
-    <form class="space-y-6" @submit.prevent="submit">
+    <form novalidate class="space-y-6" @submit.prevent="submit">
       <Alert v-if="hasErrors" variant="destructive">
         <AlertTriangle class="h-4 w-4" />
         <AlertTitle>This invoice was not saved</AlertTitle>

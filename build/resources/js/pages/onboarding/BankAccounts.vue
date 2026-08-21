@@ -142,7 +142,7 @@ onMounted(() => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-6">
+          <form novalidate @submit.prevent="submit" class="space-y-6">
             <!-- Bank Accounts List -->
             <div class="space-y-6">
               <div

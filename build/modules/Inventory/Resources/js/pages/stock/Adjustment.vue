@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import InputError from '@/components/InputError.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
@@ -126,7 +127,7 @@ const reasons = [
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <Card variant="form">
         <CardHeader>
           <CardTitle>Adjustment Details</CardTitle>
@@ -146,7 +147,7 @@ const reasons = [
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.warehouse_id" class="text-sm text-destructive">{{ form.errors.warehouse_id }}</p>
+            <InputError :message="form.errors.warehouse_id" />
           </div>
 
           <!-- Item -->
@@ -162,7 +163,7 @@ const reasons = [
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.item_id" class="text-sm text-destructive">{{ form.errors.item_id }}</p>
+            <InputError :message="form.errors.item_id" />
           </div>
 
           <!-- Adjustment Type -->
@@ -204,7 +205,7 @@ const reasons = [
                 {{ selectedItem.unit_of_measure }}
               </span>
             </div>
-            <p v-if="form.errors.quantity" class="text-sm text-destructive">{{ form.errors.quantity }}</p>
+            <InputError :message="form.errors.quantity" />
           </div>
 
           <!-- Unit Cost -->
@@ -230,7 +231,7 @@ const reasons = [
             <p v-if="estimatedValue > 0" class="text-sm text-text-secondary">
               Estimated value: <MoneyText :amount="estimatedValue" :currency="company.base_currency" />
             </p>
-            <p v-if="form.errors.unit_cost" class="text-sm text-destructive">{{ form.errors.unit_cost }}</p>
+            <InputError :message="form.errors.unit_cost" />
           </div>
 
           <!-- Date -->
@@ -242,6 +243,7 @@ const reasons = [
               type="date"
               class="max-w-[200px]"
             />
+            <InputError :message="form.errors.movement_date" />
           </div>
 
           <!-- Reason -->
@@ -257,6 +259,7 @@ const reasons = [
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.reason" />
           </div>
 
           <!-- Notes -->
@@ -268,6 +271,7 @@ const reasons = [
               placeholder="Additional notes"
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

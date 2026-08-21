@@ -794,7 +794,7 @@ const cancelShippingEdit = () => {
                 <p v-else class="text-text-tertiary">No billing address set</p>
               </div>
 
-              <form v-else class="space-y-3" @submit.prevent="saveBillingAddress">
+              <form novalidate v-else class="space-y-3" @submit.prevent="saveBillingAddress">
                 <div class="space-y-2">
                   <Label for="billing_street">Street</Label>
                   <Input id="billing_street" v-model="billingStreet" placeholder="123 Main St" />
@@ -871,7 +871,7 @@ const cancelShippingEdit = () => {
                 <p v-else class="text-text-tertiary">No shipping address set</p>
               </div>
 
-              <form v-else class="space-y-3" @submit.prevent="saveShippingAddress">
+              <form novalidate v-else class="space-y-3" @submit.prevent="saveShippingAddress">
                 <div class="space-y-2">
                   <Label for="shipping_street">Street</Label>
                   <Input id="shipping_street" v-model="shippingStreet" placeholder="123 Main St" />

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InputError from '@/components/InputError.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -143,7 +144,7 @@ const submit = () => {
             </Button>
         </template>
 
-        <form @submit.prevent="submit" class="max-w-4xl space-y-6">
+        <form novalidate @submit.prevent="submit" class="max-w-4xl space-y-6">
             <!-- Personal Information -->
             <Card>
                 <CardHeader>
@@ -162,12 +163,7 @@ const submit = () => {
                                         form.errors.employee_number,
                                 }"
                             />
-                            <p
-                                v-if="form.errors.employee_number"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.employee_number }}
-                            </p>
+                            <InputError :message="form.errors.employee_number" />
                         </div>
 
                         <div class="space-y-2">
@@ -180,12 +176,7 @@ const submit = () => {
                                         form.errors.first_name,
                                 }"
                             />
-                            <p
-                                v-if="form.errors.first_name"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.first_name }}
-                            </p>
+                            <InputError :message="form.errors.first_name" />
                         </div>
 
                         <div class="space-y-2">
@@ -197,12 +188,7 @@ const submit = () => {
                                     'border-destructive': form.errors.last_name,
                                 }"
                             />
-                            <p
-                                v-if="form.errors.last_name"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.last_name }}
-                            </p>
+                            <InputError :message="form.errors.last_name" />
                         </div>
                     </div>
 
@@ -214,11 +200,13 @@ const submit = () => {
                                 type="email"
                                 v-model="form.email"
                             />
+                            <InputError :message="form.errors.email" />
                         </div>
 
                         <div class="space-y-2">
                             <Label for="phone">Phone</Label>
                             <Input id="phone" v-model="form.phone" />
+                            <InputError :message="form.errors.phone" />
                         </div>
                     </div>
                 </CardContent>
@@ -244,12 +232,7 @@ const submit = () => {
                                     'border-destructive': form.errors.hire_date,
                                 }"
                             />
-                            <p
-                                v-if="form.errors.hire_date"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.hire_date }}
-                            </p>
+                            <InputError :message="form.errors.hire_date" />
                         </div>
 
                         <div class="space-y-2">
@@ -275,6 +258,7 @@ const submit = () => {
                                     >
                                 </SelectContent>
                             </Select>
+                            <InputError :message="form.errors.employment_type" />
                         </div>
 
                         <div class="space-y-2">
@@ -298,6 +282,7 @@ const submit = () => {
                                     >
                                 </SelectContent>
                             </Select>
+                            <InputError :message="form.errors.employment_status" />
                         </div>
                     </div>
 
@@ -315,6 +300,7 @@ const submit = () => {
                                 type="date"
                                 v-model="form.termination_date"
                             />
+                            <InputError :message="form.errors.termination_date" />
                         </div>
 
                         <div class="space-y-2">
@@ -326,6 +312,7 @@ const submit = () => {
                                 v-model="form.termination_reason"
                                 placeholder="Reason for termination"
                             />
+                            <InputError :message="form.errors.termination_reason" />
                         </div>
                     </div>
 
@@ -333,11 +320,13 @@ const submit = () => {
                         <div class="space-y-2">
                             <Label for="department">Department</Label>
                             <Input id="department" v-model="form.department" />
+                            <InputError :message="form.errors.department" />
                         </div>
 
                         <div class="space-y-2">
                             <Label for="position">Position</Label>
                             <Input id="position" v-model="form.position" />
+                            <InputError :message="form.errors.position" />
                         </div>
 
                         <div class="space-y-2">
@@ -362,6 +351,7 @@ const submit = () => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
+                            <InputError :message="form.errors.manager_id" />
                         </div>
                     </div>
                 </CardContent>
@@ -398,6 +388,7 @@ const submit = () => {
                                     >
                                 </SelectContent>
                             </Select>
+                            <InputError :message="form.errors.pay_frequency" />
                         </div>
 
                         <div class="space-y-2">
@@ -413,12 +404,7 @@ const submit = () => {
                                         form.errors.base_salary,
                                 }"
                             />
-                            <p
-                                v-if="form.errors.base_salary"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.base_salary }}
-                            </p>
+                            <InputError :message="form.errors.base_salary" />
                         </div>
 
                         <div class="space-y-2">
@@ -444,12 +430,7 @@ const submit = () => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p
-                                v-if="form.errors.currency"
-                                class="text-sm text-destructive"
-                            >
-                                {{ form.errors.currency }}
-                            </p>
+                            <InputError :message="form.errors.currency" />
                         </div>
                     </div>
                 </CardContent>
@@ -466,6 +447,7 @@ const submit = () => {
                         placeholder="Any additional notes..."
                         rows="3"
                     />
+                    <InputError :message="form.errors.notes" />
                 </CardContent>
             </Card>
 

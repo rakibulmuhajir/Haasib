@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
@@ -220,7 +221,7 @@ const handleSubmit = () => {
       </Button>
     </template>
 
-    <form class="space-y-6" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
       <!-- General Errors -->
       <div v-if="Object.keys(form.errors).length > 0" class="rounded-md bg-destructive/15 p-4">
         <div class="text-sm text-destructive">
@@ -273,11 +274,13 @@ const handleSubmit = () => {
               v-model="form.vendor_invoice_number"
               placeholder="Vendor's invoice #"
             />
+            <InputError :message="form.errors.vendor_invoice_number" />
           </div>
 
           <div>
             <Label for="bill_date">Bill Date *</Label>
             <Input id="bill_date" v-model="form.bill_date" type="date" required />
+            <InputError :message="form.errors.bill_date" />
           </div>
 
           <div>
@@ -290,12 +293,14 @@ const handleSubmit = () => {
               max="365"
               required
             />
+            <InputError :message="form.errors.payment_terms" />
           </div>
 
           <div>
             <Label for="due_date">Due Date</Label>
             <Input id="due_date" v-model="form.due_date" type="date" />
             <p class="text-xs text-muted-foreground mt-1">Auto-calculated from payment terms</p>
+            <InputError :message="form.errors.due_date" />
           </div>
 
           <div>
@@ -307,6 +312,7 @@ const handleSubmit = () => {
               placeholder="USD"
               required
             />
+            <InputError :message="form.errors.currency" />
           </div>
 
           <div>
@@ -326,6 +332,7 @@ const handleSubmit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.ap_account_id" />
           </div>
         </CardContent>
       </Card>
@@ -376,6 +383,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.item_id`]" />
               </div>
               <div v-if="line.item_id && warehouses?.length">
                 <Label>Warehouse</Label>
@@ -394,6 +402,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.warehouse_id`]" />
               </div>
             </div>
 
@@ -402,22 +411,27 @@ const handleSubmit = () => {
               <div class="md:col-span-2">
                 <Label>Description *</Label>
                 <Input v-model="line.description" placeholder="Item description" required />
+                <InputError :message="form.errors[`line_items.${idx}.description`]" />
               </div>
               <div>
                 <Label>Quantity *</Label>
                 <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+                <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
               </div>
               <div>
                 <Label>Unit Price *</Label>
                 <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+                <InputError :message="form.errors[`line_items.${idx}.unit_price`]" />
               </div>
               <div>
                 <Label>Tax %</Label>
                 <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
+                <InputError :message="form.errors[`line_items.${idx}.tax_rate`]" />
               </div>
               <div>
                 <Label>Discount %</Label>
                 <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
+                <InputError :message="form.errors[`line_items.${idx}.discount_rate`]" />
               </div>
               <div>
                 <div class="flex items-center gap-2">
@@ -451,6 +465,7 @@ const handleSubmit = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="form.errors[`line_items.${idx}.expense_account_id`]" />
               </div>
             </div>
 
@@ -512,6 +527,7 @@ const handleSubmit = () => {
               placeholder="Any notes about this bill..."
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
           <div>
             <Label for="internal_notes">Internal Notes (private)</Label>
@@ -521,6 +537,7 @@ const handleSubmit = () => {
               placeholder="Internal notes (not visible to vendor)..."
               rows="3"
             />
+            <InputError :message="form.errors.internal_notes" />
           </div>
         </CardContent>
       </Card>

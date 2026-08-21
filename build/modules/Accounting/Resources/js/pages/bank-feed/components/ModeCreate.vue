@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import InputError from '@/components/InputError.vue'
 import { Loader2 } from 'lucide-vue-next'
 
 interface Props {
@@ -94,11 +95,13 @@ const submit = () => {
             </template>
           </SelectContent>
         </Select>
+        <InputError :message="form.errors['allocations.0.account_id']" />
       </div>
 
       <div class="space-y-2">
         <Label>Description</Label>
         <Input v-model="form.allocations[0].description" />
+        <InputError :message="form.errors['allocations.0.description']" />
       </div>
 
       <!-- Advanced: Add splitting later -->

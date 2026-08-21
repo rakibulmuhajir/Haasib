@@ -14,6 +14,7 @@ import type { BreadcrumbItem } from '@/types'
 import { Droplets, Save, ArrowLeft, Plus, Trash2 } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface Tank {
   id: string
@@ -76,6 +77,10 @@ const getTankInfo = (tankId: string) => {
   return props.tanks.find((t) => t.id === tankId)
 }
 
+/** Laravel returns these as `lines.0.tank_id`. */
+const lineError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`lines.${index}.${field}`]
+
 const lineTotal = (line: ReceiptLine) => {
   if (!line.liters || !line.rate) return 0
   return line.liters * line.rate
@@ -126,7 +131,7 @@ const goBack = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- Header Info -->
       <Card>
         <CardHeader>
@@ -143,7 +148,7 @@ const goBack = () => {
                 type="date"
                 :class="{ 'border-destructive': form.errors.receipt_date }"
               />
-              <p v-if="form.errors.receipt_date" class="text-sm text-destructive">{{ form.errors.receipt_date }}</p>
+              <InputError :message="form.errors.receipt_date" />
             </div>
 
             <div class="space-y-2">
@@ -158,7 +163,7 @@ const goBack = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.vendor_id" class="text-sm text-destructive">{{ form.errors.vendor_id }}</p>
+              <InputError :message="form.errors.vendor_id" />
             </div>
 
             <div class="space-y-2">
@@ -169,7 +174,7 @@ const goBack = () => {
                 placeholder="e.g., INV-12345"
                 :class="{ 'border-destructive': form.errors.invoice_number }"
               />
-              <p v-if="form.errors.invoice_number" class="text-sm text-destructive">{{ form.errors.invoice_number }}</p>
+              <InputError :message="form.errors.invoice_number" />
             </div>
           </div>
         </CardContent>
@@ -223,6 +228,7 @@ const goBack = () => {
                     / {{ formatLiters(getTankInfo(line.tank_id)?.capacity || 0) }} L
                   </span>
                 </p>
+                <InputError :message="lineError(index, 'tank_id')" />
               </div>
 
               <div class="space-y-2">
@@ -234,6 +240,7 @@ const goBack = () => {
                   step="0.01"
                   placeholder="0"
                 />
+                <InputError :message="lineError(index, 'liters')" />
               </div>
 
               <div class="space-y-2">
@@ -249,6 +256,7 @@ const goBack = () => {
                     class="pl-14"
                   />
                 </div>
+                <InputError :message="lineError(index, 'rate')" />
               </div>
 
               <div class="space-y-2">
@@ -260,7 +268,7 @@ const goBack = () => {
             </div>
           </div>
 
-          <p v-if="form.errors.lines" class="text-sm text-destructive">{{ form.errors.lines }}</p>
+          <InputError :message="form.errors.lines" />
 
           <Separator />
 
@@ -291,6 +299,7 @@ const goBack = () => {
             placeholder="Any additional notes about this delivery..."
             rows="3"
           />
+          <InputError :message="form.errors.notes" />
         </CardContent>
       </Card>
 

@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
@@ -348,7 +349,7 @@ const getStatusBadgeClass = (status: string) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submitLot">
+        <form novalidate class="space-y-4" @submit.prevent="submitLot">
           <div class="space-y-2">
             <Label for="investment_amount">Investment Amount ({{ currency }}) *</Label>
             <Input
@@ -360,9 +361,7 @@ const getStatusBadgeClass = (status: string) => {
               placeholder="100000"
               :class="{ 'border-destructive': lotForm.errors.investment_amount }"
             />
-            <p v-if="lotForm.errors.investment_amount" class="text-sm text-destructive">
-              {{ lotForm.errors.investment_amount }}
-            </p>
+            <InputError :message="lotForm.errors.investment_amount" />
             <p v-if="lotForm.investment_amount && currentRate" class="text-sm text-text-secondary">
               = {{ formatNumber(lotForm.investment_amount / currentRate.purchase_rate) }} liters entitled
             </p>
@@ -376,9 +375,7 @@ const getStatusBadgeClass = (status: string) => {
               type="date"
               :class="{ 'border-destructive': lotForm.errors.deposit_date }"
             />
-            <p v-if="lotForm.errors.deposit_date" class="text-sm text-destructive">
-              {{ lotForm.errors.deposit_date }}
-            </p>
+            <InputError :message="lotForm.errors.deposit_date" />
           </div>
 
           <DialogFooter class="gap-2">
@@ -410,7 +407,7 @@ const getStatusBadgeClass = (status: string) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submitCommission">
+        <form novalidate class="space-y-4" @submit.prevent="submitCommission">
           <div class="space-y-2">
             <Label for="commission_amount">Payment Amount ({{ currency }}) *</Label>
             <Input
@@ -422,9 +419,7 @@ const getStatusBadgeClass = (status: string) => {
               step="1"
               :class="{ 'border-destructive': commissionForm.errors.amount }"
             />
-            <p v-if="commissionForm.errors.amount" class="text-sm text-destructive">
-              {{ commissionForm.errors.amount }}
-            </p>
+            <InputError :message="commissionForm.errors.amount" />
           </div>
 
           <div class="space-y-2">
@@ -435,9 +430,7 @@ const getStatusBadgeClass = (status: string) => {
               type="date"
               :class="{ 'border-destructive': commissionForm.errors.payment_date }"
             />
-            <p v-if="commissionForm.errors.payment_date" class="text-sm text-destructive">
-              {{ commissionForm.errors.payment_date }}
-            </p>
+            <InputError :message="commissionForm.errors.payment_date" />
           </div>
 
           <DialogFooter class="gap-2">

@@ -20,6 +20,7 @@ import type { BreadcrumbItem } from '@/types'
 import { Receipt, ArrowLeft, Banknote, Building2, ArrowRightLeft, FileText } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 
 interface Customer {
   id: string
@@ -98,7 +99,7 @@ const collectFull = () => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-6">
+          <form novalidate @submit.prevent="submit" class="space-y-6">
             <!-- Customer Selection -->
             <div class="space-y-2">
               <Label for="customer">Customer *</Label>
@@ -115,7 +116,7 @@ const collectFull = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.customer_id" class="text-sm text-destructive">{{ form.errors.customer_id }}</p>
+              <InputError :message="form.errors.customer_id" />
 
               <!-- Show customer balance -->
               <div v-if="selectedCustomer" class="rounded-md bg-status-attention/10 p-3 text-sm">
@@ -152,7 +153,7 @@ const collectFull = () => {
                   placeholder="0.00"
                 />
               </div>
-              <p v-if="form.errors.amount" class="text-sm text-destructive">{{ form.errors.amount }}</p>
+              <InputError :message="form.errors.amount" />
             </div>
 
             <!-- Collection Date -->
@@ -164,7 +165,7 @@ const collectFull = () => {
                 type="date"
                 :class="{ 'border-destructive': form.errors.collection_date }"
               />
-              <p v-if="form.errors.collection_date" class="text-sm text-destructive">{{ form.errors.collection_date }}</p>
+              <InputError :message="form.errors.collection_date" />
             </div>
 
             <!-- Payment Method -->
@@ -212,7 +213,7 @@ const collectFull = () => {
                   </Label>
                 </div>
               </RadioGroup>
-              <p v-if="form.errors.payment_method" class="text-sm text-destructive">{{ form.errors.payment_method }}</p>
+              <InputError :message="form.errors.payment_method" />
             </div>
 
             <!-- Reference -->
@@ -224,7 +225,7 @@ const collectFull = () => {
                 placeholder="Receipt or cheque number"
                 :class="{ 'border-destructive': form.errors.reference }"
               />
-              <p v-if="form.errors.reference" class="text-sm text-destructive">{{ form.errors.reference }}</p>
+              <InputError :message="form.errors.reference" />
             </div>
 
             <!-- Notes -->
@@ -237,7 +238,7 @@ const collectFull = () => {
                 rows="3"
                 :class="{ 'border-destructive': form.errors.notes }"
               />
-              <p v-if="form.errors.notes" class="text-sm text-destructive">{{ form.errors.notes }}</p>
+              <InputError :message="form.errors.notes" />
             </div>
 
             <!-- Submit -->

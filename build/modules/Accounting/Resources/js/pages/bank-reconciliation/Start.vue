@@ -103,7 +103,7 @@ const handleCancel = () => {
         </AlertDescription>
       </Alert>
 
-      <form @submit.prevent="handleSubmit">
+      <form novalidate @submit.prevent="handleSubmit">
         <Card variant="form">
           <CardHeader>
             <CardTitle>Reconciliation Details</CardTitle>

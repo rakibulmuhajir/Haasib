@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -83,23 +84,27 @@ const submit = () => {
     :breadcrumbs="breadcrumbs"
     :icon="FileText"
   >
-    <form class="space-y-6" @submit.prevent="submit">
+    <form novalidate class="space-y-6" @submit.prevent="submit">
       <div class="grid gap-4 md:grid-cols-3">
         <div>
           <Label for="transaction_date">Transaction Date</Label>
           <Input id="transaction_date" v-model="form.transaction_date" type="date" required />
+          <InputError :message="form.errors.transaction_date" />
         </div>
         <div>
           <Label for="posting_date">Posting Date</Label>
           <Input id="posting_date" v-model="form.posting_date" type="date" required />
+          <InputError :message="form.errors.posting_date" />
         </div>
         <div class="flex items-center gap-2 pt-6">
           <Checkbox id="post" v-model:checked="form.post" />
           <Label for="post">Post immediately</Label>
+          <InputError :message="form.errors.post" />
         </div>
         <div class="md:col-span-3">
           <Label for="description">Description</Label>
           <Input id="description" v-model="form.description" placeholder="Optional description" />
+          <InputError :message="form.errors.description" />
         </div>
       </div>
 
@@ -133,6 +138,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="(form.errors as Record<string, string>)[`entries.${idx}.account_id`]" />
           </div>
           <div class="md:col-span-2">
             <Label>Type</Label>
@@ -145,14 +151,17 @@ const submit = () => {
                 <SelectItem value="credit">Credit</SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="(form.errors as Record<string, string>)[`entries.${idx}.type`]" />
           </div>
           <div class="md:col-span-3">
             <Label>Amount</Label>
             <Input v-model="entry.amount" type="number" min="0" step="0.01" />
+            <InputError :message="(form.errors as Record<string, string>)[`entries.${idx}.amount`]" />
           </div>
           <div class="md:col-span-2">
             <Label>Description</Label>
             <Input v-model="entry.description" placeholder="Optional" />
+            <InputError :message="(form.errors as Record<string, string>)[`entries.${idx}.description`]" />
           </div>
           <div class="md:col-span-1 flex items-end justify-end">
             <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)">
@@ -161,6 +170,10 @@ const submit = () => {
           </div>
         </div>
       </div>
+
+      <!-- A journal that doesn't balance is a rule about the whole set of
+           entries, not one line, so it has no single control to sit next to. -->
+      <InputError :message="form.errors.entries" />
 
       <div class="grid gap-2 md:w-1/3">
         <div class="flex justify-between text-sm">

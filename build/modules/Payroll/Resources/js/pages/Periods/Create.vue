@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,7 +55,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Period Details</CardTitle>
@@ -70,7 +71,7 @@ const submit = () => {
                 v-model="form.period_start"
                 :class="{ 'border-destructive': form.errors.period_start }"
               />
-              <p v-if="form.errors.period_start" class="text-sm text-destructive">{{ form.errors.period_start }}</p>
+              <InputError :message="form.errors.period_start" />
             </div>
 
             <div class="space-y-2">
@@ -81,7 +82,7 @@ const submit = () => {
                 v-model="form.period_end"
                 :class="{ 'border-destructive': form.errors.period_end }"
               />
-              <p v-if="form.errors.period_end" class="text-sm text-destructive">{{ form.errors.period_end }}</p>
+              <InputError :message="form.errors.period_end" />
             </div>
           </div>
 
@@ -94,7 +95,7 @@ const submit = () => {
               :class="{ 'border-destructive': form.errors.payment_date }"
             />
             <p class="text-sm text-muted-foreground">The date when employees will be paid</p>
-            <p v-if="form.errors.payment_date" class="text-sm text-destructive">{{ form.errors.payment_date }}</p>
+            <InputError :message="form.errors.payment_date" />
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import { computed } from 'vue'
+import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,7 +86,7 @@ const submit = () => {
       </Button>
     </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
+    <form novalidate @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <!-- Basic Information -->
       <Card variant="form">
         <CardHeader>
@@ -102,7 +103,7 @@ const submit = () => {
                 placeholder="e.g., WH-MAIN, TK-001"
                 :class="{ 'border-destructive': form.errors.code }"
               />
-              <p v-if="form.errors.code" class="text-sm text-destructive">{{ form.errors.code }}</p>
+              <InputError :message="form.errors.code" />
             </div>
 
             <div class="space-y-2">
@@ -113,7 +114,7 @@ const submit = () => {
                 placeholder="Warehouse name"
                 :class="{ 'border-destructive': form.errors.name }"
               />
-              <p v-if="form.errors.name" class="text-sm text-destructive">{{ form.errors.name }}</p>
+              <InputError :message="form.errors.name" />
             </div>
           </div>
 
@@ -132,7 +133,7 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="form.errors.warehouse_type" class="text-sm text-destructive">{{ form.errors.warehouse_type }}</p>
+            <InputError :message="form.errors.warehouse_type" />
           </div>
 
           <!-- Tank-specific fields -->
@@ -154,7 +155,7 @@ const submit = () => {
                   placeholder="e.g., 10000"
                   :class="{ 'border-destructive': form.errors.capacity }"
                 />
-                <p v-if="form.errors.capacity" class="text-sm text-destructive">{{ form.errors.capacity }}</p>
+                <InputError :message="form.errors.capacity" />
               </div>
 
               <div class="space-y-2">
@@ -168,7 +169,7 @@ const submit = () => {
                   placeholder="e.g., 1000"
                   :class="{ 'border-destructive': form.errors.low_level_alert }"
                 />
-                <p v-if="form.errors.low_level_alert" class="text-sm text-destructive">{{ form.errors.low_level_alert }}</p>
+                <InputError :message="form.errors.low_level_alert" />
               </div>
             </div>
 
@@ -192,7 +193,7 @@ const submit = () => {
               <p class="text-sm text-muted-foreground">
                 Select the fuel item stored in this tank. Each tank stores one type of fuel.
               </p>
-              <p v-if="form.errors.linked_item_id" class="text-sm text-destructive">{{ form.errors.linked_item_id }}</p>
+              <InputError :message="form.errors.linked_item_id" />
               <div v-if="!fuelItemOptions.length" class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-3">
                 <p class="text-sm text-status-attention">
                   <strong>No fuel items found.</strong> Please create fuel items first to link with tanks.
@@ -218,17 +219,20 @@ const submit = () => {
               placeholder="Street address"
               rows="2"
             />
+            <InputError :message="form.errors.address" />
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-2">
               <Label for="city">City</Label>
               <Input id="city" v-model="form.city" placeholder="City" />
+              <InputError :message="form.errors.city" />
             </div>
 
             <div class="space-y-2">
               <Label for="state">State / Province</Label>
               <Input id="state" v-model="form.state" placeholder="State" />
+              <InputError :message="form.errors.state" />
             </div>
           </div>
 
@@ -236,11 +240,13 @@ const submit = () => {
             <div class="space-y-2">
               <Label for="postal_code">Postal Code</Label>
               <Input id="postal_code" v-model="form.postal_code" placeholder="Postal code" />
+              <InputError :message="form.errors.postal_code" />
             </div>
 
             <div class="space-y-2">
               <Label for="country_code">Country Code</Label>
               <Input id="country_code" v-model="form.country_code" placeholder="e.g., SA, US" maxlength="2" />
+              <InputError :message="form.errors.country_code" />
             </div>
           </div>
         </CardContent>
@@ -257,11 +263,13 @@ const submit = () => {
             <Label for="is_primary">Set as primary warehouse</Label>
           </div>
           <p class="text-sm text-muted-foreground">Primary warehouse is used as default for new stock movements</p>
+          <InputError :message="form.errors.is_primary" />
 
           <div class="flex items-center space-x-2">
             <Switch id="is_active" v-model="form.is_active" />
             <Label for="is_active">Active</Label>
           </div>
+          <InputError :message="form.errors.is_active" />
 
           <div class="space-y-2">
             <Label for="notes">Notes</Label>
@@ -271,6 +279,7 @@ const submit = () => {
               placeholder="Additional notes"
               rows="3"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

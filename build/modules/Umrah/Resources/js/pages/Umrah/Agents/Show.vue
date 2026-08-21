@@ -168,7 +168,7 @@ const saveAccess = () =>
                         {{ agent.user?.username || 'No login access' }}
                     </div>
                 </div>
-                <form
+                <form novalidate
                     v-if="agent.user_id"
                     class="space-y-3"
                     @submit.prevent="saveAccess"

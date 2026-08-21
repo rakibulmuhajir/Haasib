@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Save } from 'lucide-vue-next'
@@ -63,23 +64,23 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
           <CardTitle>Fiscal year details</CardTitle>
         </CardHeader>
         <CardContent>
-          <form class="space-y-6" @submit.prevent="submit">
+          <form novalidate class="space-y-6" @submit.prevent="submit">
             <div>
               <Label for="name">Name</Label>
               <Input id="name" v-model="form.name" placeholder="FY 2025" />
-              <p v-if="form.errors.name" class="text-sm text-status-critical mt-1">{{ form.errors.name }}</p>
+              <InputError :message="form.errors.name" />
             </div>
 
             <div class="grid gap-4 md:grid-cols-2">
               <div>
                 <Label for="start_date">Start date</Label>
                 <Input id="start_date" type="date" v-model="form.start_date" />
-                <p v-if="form.errors.start_date" class="text-sm text-status-critical mt-1">{{ form.errors.start_date }}</p>
+                <InputError :message="form.errors.start_date" />
               </div>
               <div>
                 <Label for="end_date">End date</Label>
                 <Input id="end_date" type="date" v-model="form.end_date" />
-                <p v-if="form.errors.end_date" class="text-sm text-status-critical mt-1">{{ form.errors.end_date }}</p>
+                <InputError :message="form.errors.end_date" />
               </div>
             </div>
 
@@ -96,7 +97,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
                     <SelectItem value="yearly">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="form.errors.period_type" class="text-sm text-status-critical mt-1">{{ form.errors.period_type }}</p>
+                <InputError :message="form.errors.period_type" />
               </div>
 
               <div class="flex items-center justify-between rounded-lg border p-3">
@@ -105,6 +106,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
                   <p class="text-xs text-muted-foreground">Generate periods immediately after creation</p>
                 </div>
                 <Switch v-model:checked="form.auto_create_periods" />
+                <InputError :message="form.errors.auto_create_periods" />
               </div>
             </div>
 

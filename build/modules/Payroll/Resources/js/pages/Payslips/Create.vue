@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InputError from '@/components/InputError.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -159,6 +160,11 @@ const removeLine = (index: number) => {
     form.lines.splice(index, 1);
 };
 
+/** Laravel returns these as `lines.0.amount`; `row` is matched back to its
+ *  position because the register slot hands back the row, not the index. */
+const lineError = (row: PayslipLine, field: string) =>
+    (form.errors as Record<string, string>)[`lines.${form.lines.indexOf(row)}.${field}`];
+
 /**
  * Earnings and deductions are being entered into one payslip, not two --
  * they were only ever split into separate tables because the old table
@@ -247,7 +253,7 @@ const submit = () => {
             </Button>
         </template>
 
-        <form @submit.prevent="submit" class="space-y-6">
+        <form novalidate @submit.prevent="submit" class="space-y-6">
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <!-- Main Content -->
                 <div class="space-y-6 lg:col-span-2">
@@ -302,12 +308,7 @@ const submit = () => {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <p
-                                        v-if="form.errors.employee_id"
-                                        class="text-sm text-destructive"
-                                    >
-                                        {{ form.errors.employee_id }}
-                                    </p>
+                                    <InputError :message="form.errors.employee_id" />
                                 </div>
 
                                 <div class="space-y-2">
@@ -344,12 +345,7 @@ const submit = () => {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <p
-                                        v-if="form.errors.payroll_period_id"
-                                        class="text-sm text-destructive"
-                                    >
-                                        {{ form.errors.payroll_period_id }}
-                                    </p>
+                                    <InputError :message="form.errors.payroll_period_id" />
                                 </div>
                             </div>
 
@@ -362,12 +358,7 @@ const submit = () => {
                                     readonly
                                     class="w-24"
                                 />
-                                <p
-                                    v-if="form.errors.currency"
-                                    class="text-sm text-destructive"
-                                >
-                                    {{ form.errors.currency }}
-                                </p>
+                                <InputError :message="form.errors.currency" />
                             </div>
 
                             <div
@@ -393,12 +384,7 @@ const submit = () => {
                                         1 {{ form.currency }} = this many
                                         {{ company.base_currency }}
                                     </p>
-                                    <p
-                                        v-if="form.errors.exchange_rate"
-                                        class="text-sm text-destructive"
-                                    >
-                                        {{ form.errors.exchange_rate }}
-                                    </p>
+                                    <InputError :message="form.errors.exchange_rate" />
                                 </div>
                                 <div
                                     class="rounded-md border bg-muted/30 p-3 text-sm"
@@ -530,6 +516,11 @@ const submit = () => {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <InputError
+                                        :message="row.line_type === 'earning'
+                                            ? lineError(row, 'earning_type_id')
+                                            : lineError(row, 'deduction_type_id')"
+                                    />
                                 </template>
 
                                 <template #cell-description="{ row }">
@@ -537,6 +528,7 @@ const submit = () => {
                                         v-model="row.description"
                                         placeholder="Description"
                                     />
+                                    <InputError :message="lineError(row, 'description')" />
                                 </template>
 
                                 <template #cell-quantity="{ row }">
@@ -548,6 +540,7 @@ const submit = () => {
                                         placeholder="Qty"
                                     />
                                     <span v-else>—</span>
+                                    <InputError :message="lineError(row, 'quantity')" />
                                 </template>
 
                                 <template #cell-rate="{ row }">
@@ -559,6 +552,7 @@ const submit = () => {
                                         placeholder="Rate"
                                     />
                                     <span v-else>—</span>
+                                    <InputError :message="lineError(row, 'rate')" />
                                 </template>
 
                                 <template #cell-earning="{ row }">
@@ -570,6 +564,7 @@ const submit = () => {
                                         min="0"
                                     />
                                     <span v-else>—</span>
+                                    <InputError v-if="row.line_type === 'earning'" :message="lineError(row, 'amount')" />
                                 </template>
 
                                 <template #cell-deduction="{ row }">
@@ -581,6 +576,7 @@ const submit = () => {
                                         min="0"
                                     />
                                     <span v-else>—</span>
+                                    <InputError v-if="row.line_type === 'deduction'" :message="lineError(row, 'amount')" />
                                 </template>
 
                                 <template #cell-actions="{ row }">
@@ -611,6 +607,7 @@ const submit = () => {
                                 placeholder="Any additional notes..."
                                 rows="3"
                             />
+                            <InputError :message="form.errors.notes" />
                         </CardContent>
                     </Card>
                 </div>

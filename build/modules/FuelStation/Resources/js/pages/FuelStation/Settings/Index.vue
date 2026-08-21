@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Settings, Building2, CreditCard, Wallet, Save, ChevronDown } from 'lucide-vue-next'
 
@@ -179,6 +180,14 @@ const submit = () => {
   form.put(`/${props.company.slug}/fuel/settings`)
 }
 
+/** Laravel returns these as `payment_channels.0.label`. */
+const channelError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`payment_channels.${index}.${field}`]
+
+/** Laravel returns these as `fuel_products.0.income_account_id`. */
+const productError = (index: number, field: string) =>
+  (form.errors as Record<string, string>)[`fuel_products.${index}.${field}`]
+
 // All accounts for generic dropdowns
 const allAccounts = computed(() => {
   return [
@@ -269,7 +278,7 @@ const formatFuelCategory = (category: string | null) => {
     :icon="Settings"
     :breadcrumbs="breadcrumbs"
   >
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- General Settings -->
       <Card>
         <CardHeader>
@@ -295,6 +304,7 @@ const formatFuelCategory = (category: string | null) => {
                 </SelectContent>
               </Select>
               <p class="text-xs text-muted-foreground">Choose the supplier brand used most often. Haasib also keeps a matching AP vendor available for Bills; add other suppliers from Vendors.</p>
+              <InputError :message="form.errors.fuel_vendor" />
             </div>
           </div>
 
@@ -311,6 +321,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.has_partners }}</p>
                 </div>
                 <Switch v-model:checked="form.has_partners" />
+                <InputError :message="form.errors.has_partners" />
               </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg border">
@@ -319,6 +330,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.has_amanat }}</p>
                 </div>
                 <Switch v-model:checked="form.has_amanat" />
+                <InputError :message="form.errors.has_amanat" />
               </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg border">
@@ -327,6 +339,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.has_lubricant_sales }}</p>
                 </div>
                 <Switch v-model:checked="form.has_lubricant_sales" />
+                <InputError :message="form.errors.has_lubricant_sales" />
               </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg border">
@@ -335,6 +348,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.has_investors }}</p>
                 </div>
                 <Switch v-model:checked="form.has_investors" />
+                <InputError :message="form.errors.has_investors" />
               </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg border">
@@ -343,6 +357,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.dual_meter_readings }}</p>
                 </div>
                 <Switch v-model:checked="form.dual_meter_readings" />
+                <InputError :message="form.errors.dual_meter_readings" />
               </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg border">
@@ -351,6 +366,7 @@ const formatFuelCategory = (category: string | null) => {
                   <p class="text-xs text-muted-foreground">{{ featureExplanations.track_attendant_handovers }}</p>
                 </div>
                 <Switch v-model:checked="form.track_attendant_handovers" />
+                <InputError :message="form.errors.track_attendant_handovers" />
               </div>
             </div>
           </div>
@@ -367,7 +383,7 @@ const formatFuelCategory = (category: string | null) => {
           <CardDescription>Enable only the ways customers pay you. Each enabled method needs enough routing for daily close.</CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div v-for="channel in form.payment_channels" :key="channel.code" class="space-y-3 rounded-lg border p-3">
+          <div v-for="(channel, channelIndex) in form.payment_channels" :key="channel.code" class="space-y-3 rounded-lg border p-3">
             <div class="flex items-center gap-4">
               <Switch
                 :checked="channel.enabled"
@@ -381,9 +397,11 @@ const formatFuelCategory = (category: string | null) => {
                   class="max-w-xs"
                   :disabled="channel.code === 'cash'"
                 />
+                <InputError :message="channelError(channelIndex, 'label')" />
               </div>
               <span class="text-xs text-muted-foreground capitalize">{{ channel.type.replace('_', ' ') }}</span>
             </div>
+            <InputError :message="channelError(channelIndex, 'enabled')" />
             <p class="pl-12 text-xs text-muted-foreground">{{ paymentChannelHelp(channel) }}</p>
 
             <div v-if="channel.enabled && channel.code !== 'cash'" class="grid grid-cols-1 gap-3 pl-12 md:grid-cols-2">
@@ -403,6 +421,7 @@ const formatFuelCategory = (category: string | null) => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="channelError(channelIndex, 'bank_account_id')" />
               </div>
 
               <div v-if="['card_pos', 'fuel_card', 'mobile_wallet'].includes(channel.type)" class="space-y-2">
@@ -421,6 +440,7 @@ const formatFuelCategory = (category: string | null) => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <InputError :message="channelError(channelIndex, 'clearing_account_id')" />
               </div>
             </div>
           </div>
@@ -463,7 +483,7 @@ const formatFuelCategory = (category: string | null) => {
 
                 <div class="space-y-4">
                   <div
-                    v-for="product in form.fuel_products"
+                    v-for="(product, productIndex) in form.fuel_products"
                     :key="product.id"
                     class="rounded-lg border bg-muted/20 p-3"
                   >
@@ -485,6 +505,7 @@ const formatFuelCategory = (category: string | null) => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="productError(productIndex, 'income_account_id')" />
                       </div>
 
                       <div class="space-y-2">
@@ -499,6 +520,7 @@ const formatFuelCategory = (category: string | null) => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="productError(productIndex, 'expense_account_id')" />
                       </div>
 
                       <div class="space-y-2">
@@ -513,6 +535,7 @@ const formatFuelCategory = (category: string | null) => {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        <InputError :message="productError(productIndex, 'asset_account_id')" />
                       </div>
                     </div>
                   </div>
@@ -563,6 +586,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.cash_account_id" />
             </div>
 
             <!-- Operating Bank -->
@@ -579,6 +603,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.operating_bank_account_id" />
             </div>
 
             <!-- Fuel Sales -->
@@ -595,6 +620,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.fuel_sales_account_id" />
             </div>
 
             <!-- Fuel COGS -->
@@ -611,6 +637,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.fuel_cogs_account_id" />
             </div>
 
             <!-- Fuel Inventory -->
@@ -627,6 +654,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.fuel_inventory_account_id" />
             </div>
 
             <!-- Cash Over/Short -->
@@ -643,6 +671,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.cash_over_short_account_id" />
             </div>
 
             <!-- Partner Drawings -->
@@ -659,6 +688,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.partner_drawings_account_id" />
             </div>
 
             <!-- Employee Advances -->
@@ -675,6 +705,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.employee_advances_account_id" />
             </div>
 
             <!-- Fuel Card Clearing -->
@@ -691,6 +722,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.fuel_card_clearing_account_id" />
             </div>
 
             <!-- Card POS Clearing -->
@@ -707,6 +739,7 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <InputError :message="form.errors.card_pos_clearing_account_id" />
             </div>
           </div>
                 </CollapsibleContent>

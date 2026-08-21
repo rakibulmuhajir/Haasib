@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import InputError from '@/components/InputError.vue'
 import { Wand2, Save, X, Plus, Trash2 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
@@ -143,6 +144,8 @@ const hasActiveAction = computed(() => {
 })
 
 const handleSubmit = () => {
+  form.clearErrors()
+
   // Filter out empty actions
   const filteredActions: Record<string, string> = {}
   for (const [key, value] of Object.entries(actions.value)) {
@@ -158,8 +161,15 @@ const handleSubmit = () => {
     actions: filteredActions,
   }
 
+  // router.put, not form.put: the payload is assembled from `conditions` and
+  // `actions`, which are plain refs outside useForm and cannot be reached
+  // through the form helper. The cost is that Inertia routes the 422 back to
+  // the visit, not to this form instance, so form.errors stays empty and every
+  // InputError below it renders nothing. Handing the errors over by hand is
+  // what makes a rejected submit visible on the field it belongs to.
   router.put(`/${props.company.slug}/banking/rules/${props.rule.id}`, payload, {
     preserveScroll: true,
+    onError: (errors) => form.setError(errors as Record<string, string>),
   })
 }
 
@@ -175,7 +185,7 @@ const handleCancel = () => {
     :breadcrumbs="breadcrumbs"
     :icon="Wand2"
   >
-    <form class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
+    <form novalidate class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
       <!-- Basic Information -->
       <Card variant="form">
         <CardHeader>
@@ -192,6 +202,7 @@ const handleCancel = () => {
                 placeholder="e.g., Utilities - Electric Bill"
                 required
               />
+              <InputError :message="form.errors.name" />
             </div>
 
             <div class="space-y-2">
@@ -204,6 +215,7 @@ const handleCancel = () => {
                 required
               />
               <p class="text-xs text-muted-foreground">Lower numbers run first</p>
+              <InputError :message="form.errors.priority" />
             </div>
 
             <div class="space-y-2">
@@ -224,6 +236,7 @@ const handleCancel = () => {
                 </SelectContent>
               </Select>
               <p class="text-xs text-muted-foreground">Leave blank to apply to all accounts</p>
+              <InputError :message="form.errors.bank_account_id" />
             </div>
 
             <div class="flex items-center gap-3 pt-6">
@@ -235,6 +248,7 @@ const handleCancel = () => {
               <Label for="is_active" class="cursor-pointer">
                 Rule is active
               </Label>
+              <InputError :message="form.errors.is_active" />
             </div>
           </div>
         </CardContent>

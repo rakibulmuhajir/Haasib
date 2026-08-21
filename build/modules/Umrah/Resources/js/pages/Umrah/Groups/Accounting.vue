@@ -226,7 +226,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <form id="group-accounting-form" class="space-y-6" @submit.prevent="submit">
+                <form novalidate id="group-accounting-form" class="space-y-6" @submit.prevent="submit">
                     <Card variant="form">
                         <CardHeader><CardTitle>Supplier Assignment</CardTitle></CardHeader>
                         <CardContent class="grid gap-4 md:grid-cols-2">

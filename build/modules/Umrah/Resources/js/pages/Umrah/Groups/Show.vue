@@ -1126,7 +1126,7 @@ const addPayment = () =>
                         </DialogHeader>
                 <Card class="border-0 shadow-none" variant="form">
                     <CardContent>
-                        <form class="space-y-3" @submit.prevent="addPassenger">
+                        <form novalidate class="space-y-3" @submit.prevent="addPassenger">
                             <div class="space-y-2">
                                 <Label>Name</Label
                                 ><Input
@@ -1263,7 +1263,7 @@ const addPayment = () =>
                                 :currency="company.base_currency"
                             />
                         </div>
-                        <form class="space-y-3" @submit.prevent="addPayment">
+                        <form novalidate class="space-y-3" @submit.prevent="addPayment">
                             <div class="space-y-2">
                                 <Label>Date</Label
                                 ><Input

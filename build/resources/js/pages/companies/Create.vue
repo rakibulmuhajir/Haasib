@@ -143,7 +143,7 @@ const submit = () => {
         </CardHeader>
 
         <CardContent>
-          <form @submit.prevent="submit" class="space-y-6">
+          <form novalidate @submit.prevent="submit" class="space-y-6">
             <div v-if="canAssignOwner" class="space-y-2">
               <Label for="owner" class="font-medium">
                 Owner <span class="text-status-critical">*</span>

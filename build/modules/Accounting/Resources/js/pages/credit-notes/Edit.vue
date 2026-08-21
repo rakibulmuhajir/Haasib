@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import StatusBadge from '@/components/StatusBadge.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
 
@@ -172,7 +173,7 @@ const isEditable = computed(() => {
       </Card>
     </div>
 
-    <form @submit.prevent="submit" class="space-y-6">
+    <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- Customer Information -->
       <Card variant="form">
         <CardHeader>
@@ -196,6 +197,7 @@ const isEditable = computed(() => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.customer_id" />
           </div>
           <div>
             <Label for="invoice_id">Apply to Invoice (Optional)</Label>
@@ -220,6 +222,7 @@ const isEditable = computed(() => {
             <p v-if="!form.customer_id" class="text-sm text-muted-foreground mt-1">
               Select a customer first to see available invoices
             </p>
+            <InputError :message="form.errors.invoice_id" />
           </div>
         </CardContent>
       </Card>
@@ -246,6 +249,7 @@ const isEditable = computed(() => {
             <p class="text-sm text-muted-foreground mt-1">
               <MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" />
             </p>
+            <InputError :message="form.errors.amount" />
           </div>
           <div>
             <Label for="credit_date">Credit Date *</Label>
@@ -256,6 +260,7 @@ const isEditable = computed(() => {
               required
               :disabled="!isEditable"
             />
+            <InputError :message="form.errors.credit_date" />
           </div>
           <div>
             <Label for="status">Status *</Label>
@@ -273,6 +278,7 @@ const isEditable = computed(() => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.status" />
           </div>
           <div>
             <Label for="base_currency">Currency *</Label>
@@ -290,6 +296,7 @@ const isEditable = computed(() => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="form.errors.base_currency" />
           </div>
         </CardContent>
       </Card>
@@ -310,6 +317,7 @@ const isEditable = computed(() => {
               required
               :disabled="!isEditable"
             />
+            <InputError :message="form.errors.reason" />
           </div>
         </CardContent>
       </Card>
@@ -330,6 +338,7 @@ const isEditable = computed(() => {
               rows="3"
               :disabled="!isEditable"
             />
+            <InputError :message="form.errors.terms" />
           </div>
           <div>
             <Label for="notes">Internal Notes</Label>
@@ -340,6 +349,7 @@ const isEditable = computed(() => {
               rows="3"
               :disabled="!isEditable"
             />
+            <InputError :message="form.errors.notes" />
           </div>
         </CardContent>
       </Card>

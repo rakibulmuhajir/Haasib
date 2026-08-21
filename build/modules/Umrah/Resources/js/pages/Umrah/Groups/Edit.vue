@@ -91,7 +91,7 @@ const submit = () =>
         :breadcrumbs="breadcrumbs"
         :icon="Plane"
     >
-        <form class="mx-auto max-w-4xl space-y-6" @submit.prevent="submit">
+        <form novalidate class="mx-auto max-w-4xl space-y-6" @submit.prevent="submit">
             <Card variant="form">
                 <CardHeader><CardTitle>Group</CardTitle></CardHeader>
                 <CardContent class="grid gap-4 md:grid-cols-2">

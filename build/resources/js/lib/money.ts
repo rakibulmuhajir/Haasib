@@ -206,3 +206,41 @@ export function formatMoneyText(
 ): string {
     return formatMoney(amount, { currency: currency || 'USD', ...options }).plain
 }
+
+/**
+ * `narrowSymbol` collides on purpose — Intl gives USD, CAD, AUD and SGD all
+ * `$`; PKR, INR and LKR all `Rs`; SAR, QAR and OMR all `﷼`. A marker whose only
+ * job is to say "this amount is not the base currency" says nothing when the
+ * glyph is shared by several currencies a business could plausibly hold.
+ *
+ * This is a hardcoded table of those known collisions, not a currency
+ * registry: it does not attempt to resolve or track every ISO-4217 symbol, and
+ * it does not know which currencies a given company actually transacts in. A
+ * currency outside these groups is assumed to resolve to a symbol distinct
+ * enough to stand alone. Extend the groups if another collision turns up.
+ */
+const AMBIGUOUS_SYMBOL_GROUPS: readonly (readonly string[])[] = [
+    ['USD', 'CAD', 'AUD', 'SGD'], // all render as $
+    ['PKR', 'INR', 'LKR'], // all render as Rs
+    ['SAR', 'QAR', 'OMR'], // all render as ﷼
+]
+
+const AMBIGUOUS_CURRENCIES = new Set(AMBIGUOUS_SYMBOL_GROUPS.flat())
+
+/**
+ * True when `currency`'s narrow symbol is shared with another currency in the
+ * known collision table above, and so needs its ISO code appended to actually
+ * disambiguate.
+ */
+export function isAmbiguousCurrencySymbol(currency: string | null | undefined): boolean {
+    if (!currency) return false
+    return AMBIGUOUS_CURRENCIES.has(currency.toUpperCase())
+}
+
+/**
+ * The marker text for a non-base amount: the bare symbol, or the symbol with
+ * its ISO code appended when that symbol is ambiguous (see above).
+ */
+export function currencyMarker(symbol: string, currency: string): string {
+    return isAmbiguousCurrencySymbol(currency) ? `${symbol} ${currency.toUpperCase()}` : symbol
+}

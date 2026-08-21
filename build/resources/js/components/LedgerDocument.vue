@@ -171,6 +171,10 @@ const partyLines = (party: DocumentParty) =>
             <div class="masthead">
                 <h1 class="masthead__type">{{ docType }}</h1>
                 <p v-if="docNumber" class="masthead__number">{{ docNumber }}</p>
+                <!-- A document leaves the app and loses the base-currency context that
+                     makes a bare figure readable, so it states its currency once, here,
+                     rather than marking every amount on the sheet. -->
+                <p class="masthead__currency">Currency: {{ currency.toUpperCase() }}</p>
                 <dl v-if="dates.length" class="dates">
                     <template v-for="date in dates" :key="date.label">
                         <dt>{{ date.label }}</dt>
@@ -273,6 +277,7 @@ const partyLines = (party: DocumentParty) =>
                         :amount="grandTotalAmount"
                         :currency="currency"
                         :locale="locale"
+                        :show-currency="false"
                         scale="conclusion"
                     />
                 </div>
@@ -284,6 +289,7 @@ const partyLines = (party: DocumentParty) =>
                         :amount="amountDueAmount"
                         :currency="currency"
                         :locale="locale"
+                        :show-currency="false"
                     />
                 </div>
             </div>
@@ -374,6 +380,18 @@ const partyLines = (party: DocumentParty) =>
     font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.02em;
+    color: var(--text-secondary);
+}
+
+/* Metadata, not a figure — mono and quiet, same register as the rest of the
+   masthead. States the currency once so the body's amounts don't have to. */
+.masthead__currency {
+    margin-top: 6px;
+    font-family: var(--mono-family);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--text-secondary);
 }
 

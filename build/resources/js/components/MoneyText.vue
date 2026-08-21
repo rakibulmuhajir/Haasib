@@ -19,12 +19,14 @@
  */
 import { computed } from 'vue'
 import {
+    currencyMarker,
     formatMoney,
     moneyLabel,
     type MoneyDirection,
     type MoneyTone,
     type NegativeConvention,
 } from '@/lib/money'
+import { useBaseCurrency } from '@/composables/useBaseCurrency'
 
 type Props = {
     amount: number | string | null | undefined
@@ -48,7 +50,12 @@ type Props = {
 
     /** `conclusion` is for the one figure a page exists to deliver. */
     scale?: 'default' | 'conclusion'
-    /** Show the currency symbol. Off inside a column already headed with it. */
+    /**
+     * Show the currency marker. Left unset, MoneyText decides for itself: no
+     * marker when `currency` matches the company's base currency, the marker
+     * otherwise. Pass explicitly only to override that — e.g. `false` inside a
+     * column already headed with the currency, or `true` to force it on.
+     */
     showCurrency?: boolean
     /** Render zero as an em dash — a long register scans better without 0.00. */
     dashZero?: boolean
@@ -62,11 +69,27 @@ const props = withDefaults(defineProps<Props>(), {
     tone: 'default',
     negative: 'minus',
     scale: 'default',
-    showCurrency: true,
+    showCurrency: undefined,
     dashZero: false,
     baseAmount: null,
     baseCurrency: undefined,
     fractionDigits: undefined,
+})
+
+const pageBaseCurrency = useBaseCurrency()
+
+/**
+ * `showCurrency` left unset means "decide automatically": no marker when this
+ * amount is already in the company's base currency, the marker otherwise. A
+ * base currency we couldn't determine (outside an Inertia page, or not yet
+ * shared) degrades to showing the marker — an unlabelled foreign amount is a
+ * wrong number, so silence is never the safe default.
+ */
+const effectiveShowCurrency = computed(() => {
+    if (props.showCurrency !== undefined) return props.showCurrency
+    const base = pageBaseCurrency.value
+    if (!base) return true
+    return props.currency !== base
 })
 
 const parts = computed(() =>
@@ -92,6 +115,10 @@ const base = computed(() => {
 })
 
 const label = computed(() => moneyLabel(parts.value, props.currency))
+
+/** The symbol, with its ISO code appended when that symbol is ambiguous. */
+const marker = computed(() => currencyMarker(parts.value.currency, props.currency))
+const baseMarker = computed(() => (base.value ? currencyMarker(base.value.currency, props.baseCurrency ?? '') : ''))
 </script>
 
 <template>
@@ -108,13 +135,13 @@ const label = computed(() => moneyLabel(parts.value, props.currency))
             <span aria-hidden="true">
                 <span v-if="parts.open">{{ parts.open }}</span>
                 <span v-if="parts.sign" class="money__sign">{{ parts.sign }}</span>
-                <span v-if="showCurrency" class="money__currency">{{ parts.currency }}</span>
+                <span v-if="effectiveShowCurrency" class="money__currency">{{ marker }}</span>
                 <span class="money__value">{{ parts.value }}</span>
                 <span v-if="parts.close">{{ parts.close }}</span>
             </span>
 
             <span v-if="base" class="money__base" aria-hidden="true">
-                {{ base.open }}{{ base.sign }}{{ base.currency }}&nbsp;{{ base.value }}{{ base.close }}
+                {{ base.open }}{{ base.sign }}{{ baseMarker }}&nbsp;{{ base.value }}{{ base.close }}
             </span>
         </template>
     </span>

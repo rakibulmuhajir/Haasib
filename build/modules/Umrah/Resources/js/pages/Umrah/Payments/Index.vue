@@ -302,7 +302,7 @@ const submitAllocation = () => {
                             >
                         </div>
                         <div v-else class="text-sm text-status-attention">
-                            Unallocated advance
+                            Credit held — not applied to a group
                         </div>
                     </template>
 

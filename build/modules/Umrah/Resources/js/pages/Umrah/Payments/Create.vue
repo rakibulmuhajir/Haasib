@@ -72,7 +72,9 @@ const selectedCurrency = computed(() =>
 const baseAmount = computed(
     () =>
         Math.round(
-            Number(form.amount || 0) * Number(form.exchange_rate || 1) * 100,
+            Math.max(Number(form.amount || 0), 0) *
+                Number(form.exchange_rate || 1) *
+                100,
         ) / 100,
 );
 const selectedPartyKey = computed(() => {
@@ -95,6 +97,18 @@ const allocatedAmount = computed(() =>
 );
 const unallocatedAmount = computed(() =>
     Math.max(Math.round((baseAmount.value - allocatedAmount.value) * 100) / 100, 0),
+);
+const partyOutstandingTotal = computed(() =>
+    partyGroups.value.reduce(
+        (total, group) => total + Number(group.outstanding_amount || 0),
+        0,
+    ),
+);
+const overpaymentAmount = computed(() =>
+    Math.max(
+        Math.round((baseAmount.value - partyOutstandingTotal.value) * 100) / 100,
+        0,
+    ),
 );
 const allocationError = computed(() =>
     Object.entries(form.errors).find(
@@ -360,7 +374,7 @@ const submit = () =>
                             <div>
                                 <Label>Allocate payment</Label>
                                 <div class="text-xs text-muted-foreground">
-                                    Unallocated advance:
+                                    Credit held — not applied to a group:
                                     <MoneyText
                                         :amount="unallocatedAmount"
                                         :currency="company.base_currency"
@@ -387,6 +401,21 @@ const submit = () =>
                                     Clear
                                 </Button>
                             </div>
+                        </div>
+
+                        <div
+                            v-if="overpaymentAmount > 0.009"
+                            class="rounded-md border border-status-attention/30 bg-status-attention/10 p-3 text-xs text-status-attention"
+                        >
+                            <span class="font-medium">Overpayment:</span> this
+                            payment is
+                            <MoneyText
+                                :amount="overpaymentAmount"
+                                :currency="company.base_currency"
+                            />
+                            more than this party owes across all their open
+                            groups. It stays on file as credit against them
+                            and can be applied to a later group.
                         </div>
 
                         <div

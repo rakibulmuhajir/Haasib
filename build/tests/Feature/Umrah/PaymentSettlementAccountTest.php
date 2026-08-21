@@ -136,6 +136,23 @@ test('a bank transfer receipt is still posted to the bank account', function () 
     expect(settlementDebitedAccountCode($payment))->toBe('1000');
 });
 
+test('a negative payment amount is rejected server-side', function () {
+    [$company, $owner, $agent] = settlementCompany();
+
+    $this->actingAs($owner)
+        ->post("/{$company->slug}/umrah/payments", [
+            'payment_date' => '2026-08-15',
+            'direction' => GroupPayment::DIRECTION_RECEIVED,
+            'agent_id' => $agent->id,
+            'amount' => -500,
+            'currency' => 'SAR',
+            'method' => GroupPayment::METHOD_CASH,
+        ])
+        ->assertSessionHasErrors('amount');
+
+    expect(GroupPayment::where('company_id', $company->id)->exists())->toBeFalse();
+});
+
 test('an explicitly chosen account still wins over the method', function () {
     [$company, $owner, $agent] = settlementCompany();
     $bankId = Account::where('company_id', $company->id)->where('code', '1000')->value('id');

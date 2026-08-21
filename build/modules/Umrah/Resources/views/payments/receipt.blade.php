@@ -12,7 +12,7 @@ body{font-family:DejaVu Sans,sans-serif;color:#111827;font-size:11px;margin:30px
 <tr><th>Method</th><td>{{ ucfirst(str_replace('_',' ',$payment->method)) }}</td><th>Reference</th><td>{{ $payment->reference ?: '-' }}</td></tr></table>
 @if($payment->status === 'reversed')<p class="reversed">REVERSED: {{ $payment->reversal_reason }}</p>@endif
 <h3>Allocations</h3><table><thead><tr><th>Group</th><th>Amount</th><th>Status</th></tr></thead><tbody>
-@forelse($payment->allAllocations as $allocation)<tr><td>{{ $allocation->group?->group_number }} - {{ $allocation->group?->name }}</td><td>{{ $payment->base_currency }} {{ number_format((float)$allocation->base_amount,2) }}</td><td>{{ $allocation->reversed_at ? 'Reversed' : 'Posted' }}</td></tr>@empty<tr><td colspan="3">Unallocated advance</td></tr>@endforelse
+@forelse($payment->allAllocations as $allocation)<tr><td>{{ $allocation->group?->group_number }} - {{ $allocation->group?->name }}</td><td>{{ $payment->base_currency }} {{ number_format((float)$allocation->base_amount,2) }}</td><td>{{ $allocation->reversed_at ? 'Reversed' : 'Posted' }}</td></tr>@empty<tr><td colspan="3">Held as credit — not applied to a group</td></tr>@endforelse
 </tbody></table>
 @if($payment->notes)<p><strong>Notes:</strong> {{ $payment->notes }}</p>@endif
 </body></html>

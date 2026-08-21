@@ -4,6 +4,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Refund;
+use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\RefundService;
 use App\Services\CompanyContextService;
@@ -161,7 +162,7 @@ test('a refund moves from requested to approved and stamps the approver', functi
         ->assertRedirect();
 
     $refund->refresh();
-    expect($refund->status)->toBe(Refund::STATUS_APPROVED)
+    expect($refund->status)->toBe(Refund::STATUS_ACCEPTED)
         ->and($refund->reviewed_by_user_id)->toBe($manager->id)
         ->and($refund->reviewed_at)->not->toBeNull()
         ->and($refund->review_remarks)->toBe('Confirmed against the group ledger.')
@@ -352,7 +353,7 @@ test('a refund cannot be approved for more than the credit available to the part
     $agent->update(['total_paid' => 300.0]);
     app(RefundService::class)->approve($refund->fresh(), [], $manager->id);
 
-    expect($refund->fresh()->status)->toBe(Refund::STATUS_APPROVED);
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 });
 
 test('a vendor refund for the full amount paid can be approved when cost equals paid', function () {
@@ -368,7 +369,7 @@ test('a vendor refund for the full amount paid can be approved when cost equals 
 
     app(RefundService::class)->approve($refund, [], $manager->id);
 
-    expect($refund->fresh()->status)->toBe(Refund::STATUS_APPROVED);
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 });
 
 test('a vendor refund cannot exceed what was actually paid', function () {
@@ -393,7 +394,7 @@ test('an already-approved refund consumes the ceiling, blocking a second full-am
 
     $first = app(RefundService::class)->request($company->id, requestVendorRefundPayload($vendor, 100), $owner->id);
     app(RefundService::class)->approve($first, [], $manager->id);
-    expect($first->fresh()->status)->toBe(Refund::STATUS_APPROVED);
+    expect($first->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 
     // The ceiling (total_paid = 100) is unchanged -- Phase 1 does not touch
     // it -- but the first refund already consumed all of it.
@@ -425,7 +426,7 @@ test('a rejected or cancelled refund does not consume the ceiling', function () 
     $final = app(RefundService::class)->request($company->id, requestVendorRefundPayload($vendor, 100), $owner->id);
     app(RefundService::class)->approve($final, [], $manager->id);
 
-    expect($final->fresh()->status)->toBe(Refund::STATUS_APPROVED);
+    expect($final->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 });
 
 test('the credit ceiling is compared in base currency, not the refund transaction currency', function () {
@@ -463,5 +464,119 @@ test('the credit ceiling is compared in base currency, not the refund transactio
     expect((float) $withinCeiling->base_amount)->toBe(400.0);
 
     app(RefundService::class)->approve($withinCeiling, [], $manager->id);
-    expect($withinCeiling->fresh()->status)->toBe(Refund::STATUS_APPROVED);
+    expect($withinCeiling->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
+});
+
+test('the create screen prefills the party from a valid query parameter', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'r1', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $this->actingAs($manager)
+        ->get("/{$company->slug}/umrah/refunds/create?party_type=agent&party_id={$agent->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial.party_type', Refund::PARTY_AGENT)
+            ->where('initial.party_id', $agent->id)
+        );
+});
+
+test('a malformed party_id in the link lands on a blank form, not an error', function () {
+    [$company, $owner] = refundTestCompany();
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    // These columns are uuid. Postgres raises a cast error on a malformed
+    // one rather than simply not matching, so an unguarded query would 500
+    // on a stale or hand-edited link instead of ignoring it.
+    $this->actingAs($manager)
+        ->get("/{$company->slug}/umrah/refunds/create?party_type=agent&party_id=not-a-uuid&visa_group_id=also-not-a-uuid")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial', [])
+        );
+});
+
+test('the create screen prefills the group and its agent from a valid visa_group_id', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'r2', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $group = VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'group_number' => 'UGR-RF01',
+        'name' => 'Refund Prefill Group',
+        'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+        'travel_date' => '2026-09-01',
+        'transport_required' => false,
+        'visa_sale_amount' => 1000,
+    ]);
+
+    $this->actingAs($manager)
+        ->get("/{$company->slug}/umrah/refunds/create?visa_group_id={$group->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial.party_type', Refund::PARTY_AGENT)
+            ->where('initial.party_id', $agent->id)
+            ->where('initial.visa_group_id', $group->id)
+        );
+});
+
+test('the create screen ignores a party that does not belong to this company', function () {
+    [$company, $owner] = refundTestCompany();
+    [$otherCompany, $otherOwner] = refundTestCompany();
+    [$agentUser, $foreignAgent] = refundTestAgent($otherCompany, 'r3', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    $this->actingAs($manager)
+        ->get("/{$company->slug}/umrah/refunds/create?party_type=agent&party_id={$foreignAgent->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial', [])
+        );
+});
+
+test('an agent member cannot widen their refund scope through a query parameter', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUserOne, $agentOne] = refundTestAgent($company, 'r4a', totalPaid: 500.0, totalReceivable: 0.0);
+    [$agentUserTwo, $agentTwo] = refundTestAgent($company, 'r4b', totalPaid: 500.0, totalReceivable: 0.0);
+
+    $group = VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agentTwo->id,
+        'group_number' => 'UGR-RF02',
+        'name' => 'Other Agent Group',
+        'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+        'travel_date' => '2026-09-01',
+        'transport_required' => false,
+        'visa_sale_amount' => 1000,
+    ]);
+
+    // agentUserOne tries to request a refund as agentTwo, and against
+    // agentTwo's group, purely through the query string.
+    $this->actingAs($agentUserOne)
+        ->get("/{$company->slug}/umrah/refunds/create?party_type=agent&party_id={$agentTwo->id}&visa_group_id={$group->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial.party_type', Refund::PARTY_AGENT)
+            ->where('initial.party_id', $agentOne->id)
+            ->missing('initial.visa_group_id')
+        );
+
+    // The same narrowing holds on submission: attempting to actually post a
+    // refund for agentTwo's party still lands on agentOne, exactly as
+    // "an agent user must not be able to widen their own scope through a
+    // query parameter" requires end to end, not just on the create screen.
+    $this->actingAs($agentUserOne)
+        ->post("/{$company->slug}/umrah/refunds?party_type=agent&party_id={$agentTwo->id}", requestRefundPayload($agentTwo, 100))
+        ->assertSessionHasNoErrors();
+
+    $refund = Refund::where('company_id', $company->id)->firstOrFail();
+    expect($refund->party_id)->toBe($agentOne->id);
 });

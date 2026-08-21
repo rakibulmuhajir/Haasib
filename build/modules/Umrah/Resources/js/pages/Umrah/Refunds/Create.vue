@@ -35,6 +35,11 @@ const props = defineProps<{
         outstanding_amount: number;
     }>;
     currencies: Array<{ currency_code: string; exchange_rate: string | number }>;
+    initial?: {
+        party_type?: string;
+        party_id?: string;
+        visa_group_id?: string;
+    };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -46,9 +51,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 const firstPartyType = Object.keys(props.partyTypes)[0] || 'agent';
 
 const form = useForm({
-    party_type: firstPartyType,
-    party_id: 'none',
-    visa_group_id: 'none',
+    party_type: props.initial?.party_type || firstPartyType,
+    party_id: props.initial?.party_id || 'none',
+    visa_group_id: props.initial?.visa_group_id || 'none',
     service: Object.keys(props.services)[0] || 'other',
     amount: '',
     currency: props.company.base_currency,
@@ -141,7 +146,7 @@ const submit = () =>
     <Head title="Request Refund" />
     <PageShell
         title="Request Refund"
-        description="Record what is owed back. Nothing moves and nothing posts until this is approved and settled."
+        description="Record what is owed back. Nothing moves and nothing posts until this is accepted and settled."
         :breadcrumbs="breadcrumbs"
         :icon="Undo2"
     >

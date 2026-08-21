@@ -94,7 +94,7 @@ class RefundService
             // this update runs. See class docblock.
 
             $refund->update([
-                'status' => Refund::STATUS_APPROVED,
+                'status' => Refund::STATUS_ACCEPTED,
                 'reviewed_by_user_id' => $userId,
                 'reviewed_at' => now(),
                 'review_remarks' => $data['review_remarks'] ?? null,
@@ -135,7 +135,7 @@ class RefundService
         return DB::transaction(function () use ($refund, $reason, $userId) {
             $refund = Refund::where('company_id', $refund->company_id)->lockForUpdate()->findOrFail($refund->id);
 
-            if ($refund->status !== Refund::STATUS_APPROVED) {
+            if ($refund->status !== Refund::STATUS_ACCEPTED) {
                 throw ValidationException::withMessages(['refund' => 'Only an approved refund can be cancelled.']);
             }
 
@@ -254,7 +254,7 @@ class RefundService
             ->where('party_type', $refund->party_type)
             ->where('party_id', $refund->party_id)
             ->where('id', '!=', $refund->id)
-            ->whereIn('status', [Refund::STATUS_APPROVED, Refund::STATUS_PAID])
+            ->whereIn('status', [Refund::STATUS_ACCEPTED, Refund::STATUS_PAID])
             ->lockForUpdate()
             ->get()
             ->sum(fn (Refund $granted) => round((float) $granted->base_amount, 2));

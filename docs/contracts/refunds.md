@@ -71,7 +71,7 @@ them apart would mean building the same workflow twice.
 | `reason` | required text. Why money is going back. |
 | `status` | see lifecycle |
 | `requested_by_user_id`, `requested_at` | |
-| `reviewed_by_user_id`, `reviewed_at`, `review_remarks` | One trio records the decision whichever way it went — approved or rejected. Status alone distinguishes the two outcomes. |
+| `reviewed_by_user_id`, `reviewed_at`, `review_remarks` | One trio records the decision whichever way it went — accepted or rejected. Status alone distinguishes the two outcomes. |
 | `settled_payment_id` | uuid, nullable — the `GroupPayment` that paid it |
 | `transaction_id` | uuid, nullable — the approval's GL transaction |
 | `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason` | |
@@ -84,18 +84,27 @@ is recognised separately (see Accounting).
 ## Lifecycle
 
 ```
-requested ──approve──> approved ──settle──> paid
-    │                      │
+                                        ┌──settle in cash──> refunded
+requested ──approve──> accepted ────────┤
+    │                      │            └──settle as credit─> credited
     └──reject──> rejected  └──cancel──> cancelled
 ```
 
 - **requested** — recorded, no ledger effect. Anyone with `refund.create`.
-- **approved** — posts to the ledger. This is the moment the money changes
+- **accepted** — posts to the ledger. This is the moment the money changes
   character. Requires `refund.approve`.
-- **paid** — a `GroupPayment` settled it. Set by the settlement, not by hand.
-- **rejected** — refused before approval. No ledger effect ever.
-- **cancelled** — approved but reversed before payment. Posts a reversing
+- **refunded** — cash went back. Set by the settlement, not by hand.
+- **credited** — settled by leaving the money with the party as an ordinary
+  advance. Also set by the settlement.
+- **rejected** — refused before acceptance. No ledger effect ever.
+- **cancelled** — accepted but reversed before settlement. Posts a reversing
   entry. Requires `refund.cancel`.
+
+The state is `accepted`, not `approved`, and the difference is not cosmetic.
+Approving a voucher authorises work. Accepting a refund is the company
+agreeing that it owes something. The person still *approves* — the action, the
+permission and the method keep that name — but what the record then *is* is a
+debt the company has taken on, and the chip should say so.
 
 Approving and rejecting are both a decision, made by the same person acting
 under the same permission, and both are recorded in the same
@@ -110,6 +119,50 @@ is free.
 **An agent may request. Only an approver may approve.** That split is the
 entire control — it is what stops an agent refunding themselves.
 
+## Settling a refund
+
+An accepted refund is a debt. It can be discharged two ways, and **which one
+is chosen at settlement, not at acceptance** — accepting is the company
+agreeing it owes the money; how it hands it over is a later conversation,
+usually had on WhatsApp days afterwards.
+
+- **Refunded** — cash goes back. `Dr 2300 / Cr cash or bank`.
+- **Kept as credit** — the money stays with the party as an ordinary advance,
+  available against their next group. `Dr 2300 / Cr 2200`.
+
+**`credited` and `cancelled` post the identical entry and mean opposite
+things.** Cancelled: the company changed its mind and owes nothing. Credited:
+the company honoured the refund in full and the money is staying put by
+agreement. Same debits, opposite histories. Nothing may collapse them into one
+state on the grounds that the ledger cannot tell them apart — that is exactly
+why the status column exists.
+
+### What credit does next needs nothing new
+
+Once the money is back in 2200 unallocated, it is an ordinary agent advance,
+and every existing path already applies to it:
+
+- **Applying it to a new group** is the payment-allocation screen that already
+  exists. De-allocating during the refund returns the credit to the original
+  payment's unallocated pool, and that pool is what the allocation screen
+  spends.
+- **Turning it into cash later** is another refund request against that
+  credit, travelling this same lifecycle. The agent asks, the company accepts,
+  the accountant settles. The loop closes on itself.
+
+One rough edge, named rather than hidden: allocation hangs off a *payment*, so
+applying credit means finding the payment it came from rather than starting
+from the agent. That is a discoverability problem, not a missing capability,
+and it is not solved here.
+
+### Only agent refunds may be settled as credit
+
+A vendor refund settled as credit would be `Dr 1160 Advances to Visa Vendors /
+Cr 1170` — coherent, and the company genuinely may leave money with a vendor
+against future work. It is not built, because it was not asked for. The path
+is written down here so that building it later is a small decision rather than
+a rediscovery.
+
 ## Accounting
 
 New accounts, added to the umrah COA template pack **and backfilled into
@@ -122,8 +175,9 @@ that only touches the template leaves every live company without them):
 ### Agent refund
 
 ```
-Approve   Dr 2200 Agent Advances        Cr 2300 Refunds Payable
-Pay       Dr 2300 Refunds Payable       Cr cash / bank
+Accept    Dr 2200 Agent Advances        Cr 2300 Refunds Payable
+Refund    Dr 2300 Refunds Payable       Cr cash / bank
+Credit    Dr 2300 Refunds Payable       Cr 2200 Agent Advances
 Cancel    Dr 2300 Refunds Payable       Cr 2200 Agent Advances
 ```
 
@@ -137,7 +191,7 @@ as its own line at approval:
 ### Vendor refund
 
 ```
-Approve   Dr 1170 Refunds Receivable    Cr 5100/5110/5120 cost by service
+Accept    Dr 1170 Refunds Receivable    Cr 5100/5110/5120 cost by service
 Receive   Dr cash / bank                Cr 1170 Refunds Receivable
 Cancel    Dr 5100/5110/5120             Cr 1170 Refunds Receivable
 ```
@@ -218,7 +272,7 @@ An agent's view is scoped to their own records by
    refund is a visa fee paid but never processed, where the recorded cost
    equals the amount paid — an overpayment-style ceiling would read that as
    zero credit and block the one case this feature exists for.
-4. An approved refund's `amount`, `party_id` and `service` are immutable. Cancel
+4. An accepted refund's `amount`, `party_id` and `service` are immutable. Cancel
    and re-request instead — the same rule an approved voucher already follows.
 5. The settling payment's `base_amount` must equal the refund's `base_amount`.
    Partial settlement is not supported; issue two refunds instead.
@@ -235,7 +289,9 @@ approve screens, accountant queue. No money moves.
 
 **2 — Settlement.** Single-allocation reversal extracted as a primitive, the
 two new accounts with backfill, the postings above, `GroupPayment` linked to
-the refund it settles.
+the refund it settles, and the two settlement outcomes — cash back, or kept as
+credit. Only when this lands may a chip read "Refunded": a settlement status
+with no ledger entry behind it is a lie on screen.
 
 **3 — Surfacing.** Fourth line on `umrah.cash_position` ("Refunds owed", from
 2300), refunds-awaiting-approval on the accountant's tab, and "Held for agents"

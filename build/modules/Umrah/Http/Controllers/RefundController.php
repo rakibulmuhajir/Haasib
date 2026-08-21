@@ -11,6 +11,7 @@ use App\Modules\Umrah\Http\Requests\StoreRefundRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Refund;
+use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\RefundService;
 use App\Modules\Umrah\Services\UmrahCoreService;
@@ -19,6 +20,7 @@ use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -79,7 +81,85 @@ class RefundController extends Controller
                 ->when($isMember, fn ($options) => $memberAgentId ? $options->where('party_key', 'agent:'.$memberAgentId) : collect())
                 ->values(),
             'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
+            'initial' => $this->initialFromQuery($request, $company->id, $isMember, $memberAgentId),
         ]);
+    }
+
+    /**
+     * A refund is requested from wherever a person is looking at the money
+     * that went wrong -- the agent's page, a group's accounting tab, a
+     * vendor's page -- each linking here with the party (and, for a group,
+     * the group) as query parameters. Every value is re-validated against
+     * this company rather than trusted, and ignored rather than erroring
+     * when it does not check out: a stale or hand-edited link should land
+     * on a blank form, not a 422.
+     *
+     * The $isMember narrowing wins over any prefill: an agent user's party
+     * is always their own linked agent, never whatever party_type/party_id
+     * a query string carries. This is the same rule store() already
+     * enforces on submission -- this method only makes the create screen
+     * agree with it before the user ever presses submit.
+     */
+    private function initialFromQuery(Request $request, string $companyId, bool $isMember, string|false|null $memberAgentId): array
+    {
+        $initial = [];
+
+        if ($isMember) {
+            if ($memberAgentId) {
+                $initial['party_type'] = Refund::PARTY_AGENT;
+                $initial['party_id'] = $memberAgentId;
+            }
+        } else {
+            $partyType = $request->query('party_type');
+            $partyId = $request->query('party_id');
+
+            if (is_string($partyType) && $this->isUuid($partyId) && array_key_exists($partyType, Refund::PARTY_TYPES)) {
+                $exists = match ($partyType) {
+                    Refund::PARTY_AGENT => Agent::where('company_id', $companyId)->whereKey($partyId)->exists(),
+                    Refund::PARTY_VISA_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->exists(),
+                    Refund::PARTY_TRANSPORT_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->exists(),
+                    Refund::PARTY_HOTEL_VENDOR => HotelVendor::where('company_id', $companyId)->whereKey($partyId)->exists(),
+                    default => false,
+                };
+
+                if ($exists) {
+                    $initial['party_type'] = $partyType;
+                    $initial['party_id'] = $partyId;
+                }
+            }
+        }
+
+        $groupId = $request->query('visa_group_id');
+        if ($this->isUuid($groupId)) {
+            $group = VisaGroup::where('company_id', $companyId)->find($groupId);
+
+            // Only an agent refund can be linked to a group, and only when
+            // the group's agent agrees with whatever party the block above
+            // already settled on (nothing, or that same agent).
+            if ($group
+                && $group->agent_id
+                && (! $isMember || $group->agent_id === $memberAgentId)
+                && ($initial['party_type'] ?? Refund::PARTY_AGENT) === Refund::PARTY_AGENT
+                && ($initial['party_id'] ?? $group->agent_id) === $group->agent_id
+            ) {
+                $initial['party_type'] = Refund::PARTY_AGENT;
+                $initial['party_id'] = $group->agent_id;
+                $initial['visa_group_id'] = $group->id;
+            }
+        }
+
+        return $initial;
+    }
+
+    /**
+     * These columns are uuid, and Postgres rejects a malformed uuid with a
+     * cast error rather than simply not matching. Without this guard a
+     * hand-edited link would raise a 500 from inside the query, which is the
+     * one thing initialFromQuery() promises not to do.
+     */
+    private function isUuid(mixed $value): bool
+    {
+        return is_string($value) && Str::isUuid($value);
     }
 
     public function store(StoreRefundRequest $request): RedirectResponse
@@ -108,7 +188,7 @@ class RefundController extends Controller
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'refund' => $this->withPartyName($record),
             'canApprove' => $record->status === Refund::STATUS_REQUESTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_APPROVE),
-            'canCancel' => $record->status === Refund::STATUS_APPROVED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CANCEL),
+            'canCancel' => $record->status === Refund::STATUS_ACCEPTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CANCEL),
         ]);
     }
 

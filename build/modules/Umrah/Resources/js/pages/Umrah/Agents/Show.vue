@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Pencil, Trash2, Users } from 'lucide-vue-next';
+import { Pencil, Trash2, Undo2, Users } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -24,6 +24,7 @@ const props = defineProps<{
     company: { slug: string; base_currency: string };
     agent: any;
     canManageAgents: boolean;
+    canCreateRefund: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -74,24 +75,39 @@ const saveAccess = () =>
         :breadcrumbs="breadcrumbs"
         :icon="Users"
     >
-        <template v-if="canManageAgents" #actions>
+        <template #actions>
             <Button
+                v-if="canCreateRefund"
                 variant="outline"
                 @click="
-                    router.get(`/${company.slug}/umrah/agents/${agent.id}/edit`)
+                    router.get(`/${company.slug}/umrah/refunds/create`, {
+                        party_type: 'agent',
+                        party_id: agent.id,
+                    })
                 "
             >
-                <Pencil class="mr-2 h-4 w-4" />
-                Edit
+                <Undo2 class="mr-2 h-4 w-4" />
+                Request a refund
             </Button>
-            <Button
-                variant="destructive"
-                :disabled="removeForm.processing"
-                @click="removeDialogOpen = true"
-            >
-                <Trash2 class="mr-2 h-4 w-4" />
-                Delete
-            </Button>
+            <template v-if="canManageAgents">
+                <Button
+                    variant="outline"
+                    @click="
+                        router.get(`/${company.slug}/umrah/agents/${agent.id}/edit`)
+                    "
+                >
+                    <Pencil class="mr-2 h-4 w-4" />
+                    Edit
+                </Button>
+                <Button
+                    variant="destructive"
+                    :disabled="removeForm.processing"
+                    @click="removeDialogOpen = true"
+                >
+                    <Trash2 class="mr-2 h-4 w-4" />
+                    Delete
+                </Button>
+            </template>
         </template>
 
         <div v-if="agent.logo_url" class="flex items-center gap-3">

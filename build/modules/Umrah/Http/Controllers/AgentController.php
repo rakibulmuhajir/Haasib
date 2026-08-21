@@ -124,6 +124,7 @@ class AgentController extends Controller
             'company' => $this->companyPayload($company),
             'agent' => $record,
             'canManageAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE),
+            'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
         ]);
     }
 

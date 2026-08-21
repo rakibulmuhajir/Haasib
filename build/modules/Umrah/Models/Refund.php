@@ -60,7 +60,7 @@ class Refund extends Model
 
     public const STATUS_REQUESTED = 'requested';
 
-    public const STATUS_APPROVED = 'approved';
+    public const STATUS_ACCEPTED = 'accepted';
 
     public const STATUS_PAID = 'paid';
 
@@ -70,7 +70,7 @@ class Refund extends Model
 
     public const STATUSES = [
         self::STATUS_REQUESTED => 'Requested',
-        self::STATUS_APPROVED => 'Approved',
+        self::STATUS_ACCEPTED => 'Accepted',
         self::STATUS_PAID => 'Paid',
         self::STATUS_REJECTED => 'Rejected',
         self::STATUS_CANCELLED => 'Cancelled',
@@ -134,7 +134,7 @@ class Refund extends Model
         static::updating(function (self $refund): void {
             $original = $refund->getOriginal('status');
 
-            if (! in_array($original, [self::STATUS_APPROVED, self::STATUS_PAID, self::STATUS_CANCELLED], true)) {
+            if (! in_array($original, [self::STATUS_ACCEPTED, self::STATUS_PAID, self::STATUS_CANCELLED], true)) {
                 return;
             }
 

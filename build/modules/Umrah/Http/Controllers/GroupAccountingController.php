@@ -34,6 +34,7 @@ class GroupAccountingController extends Controller
             'vendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id']),
             'transportVendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))->orderBy('name')->get(['id', 'name', 'is_company_owned', 'provides_mandatory_transport']),
             'canUpdate' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_GROUP_ACCOUNTING_UPDATE),
+            'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
         ]);
     }
 

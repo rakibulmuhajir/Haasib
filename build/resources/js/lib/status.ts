@@ -43,6 +43,9 @@ export const statusMeta = {
 
     // ── Decided ──────────────────────────────────────────────────────────
     approved: { label: 'Approved', tone: 'success' },
+    // A refund is *accepted*, not approved: the company is agreeing to owe
+    // something back, not authorising work the way an approved voucher does.
+    accepted: { label: 'Accepted', tone: 'success' },
     rejected: { label: 'Rejected', tone: 'critical' },
     confirmed: { label: 'Confirmed', tone: 'success' },
 

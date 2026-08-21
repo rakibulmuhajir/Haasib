@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, FileDown, Truck } from 'lucide-vue-next';
-import { reactive } from 'vue';
+import { ArrowLeft, FileDown, Truck, Undo2 } from 'lucide-vue-next';
+import { computed, reactive } from 'vue';
 
 const props = defineProps<{
     company: { slug: string; base_currency: string };
@@ -26,7 +26,15 @@ const props = defineProps<{
     filters: { date_from?: string; date_to?: string };
     backUrl?: string;
     statementUrl?: string;
+    canCreateRefund: boolean;
 }>();
+
+// This page renders both a visa vendor and a transport provider (see
+// TransportProviderController::show, which reuses it) -- the refund's
+// party_type has to follow whichever the record actually is.
+const refundPartyType = computed(() =>
+    props.vendor.vendor_type === 'transport_provider' ? 'transport_vendor' : 'visa_vendor',
+);
 
 const filter = reactive({
     date_from: props.filters.date_from || '',
@@ -81,6 +89,18 @@ const exportPdf = () => {
         <template #actions>
             <Button variant="outline" @click="router.get(backUrl || `/${company.slug}/umrah/vendors`)">
                 <ArrowLeft class="mr-2 h-4 w-4" />Back
+            </Button>
+            <Button
+                v-if="canCreateRefund"
+                variant="outline"
+                @click="
+                    router.get(`/${company.slug}/umrah/refunds/create`, {
+                        party_type: refundPartyType,
+                        party_id: vendor.id,
+                    })
+                "
+            >
+                <Undo2 class="mr-2 h-4 w-4" />Request a refund
             </Button>
             <Button @click="exportPdf"><FileDown class="mr-2 h-4 w-4" />PDF</Button>
         </template>

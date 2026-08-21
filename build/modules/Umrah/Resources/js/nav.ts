@@ -11,6 +11,7 @@ import {
     ReceiptText,
     ScrollText,
     Settings,
+    Undo2,
     Users,
     WalletCards,
 } from 'lucide-vue-next';
@@ -134,6 +135,11 @@ export const umrahNav: ModuleNavConfig = {
                           icon: WalletCards,
                       },
                   ]),
+            {
+                title: 'Refunds',
+                href: `/${slug}/umrah/refunds`,
+                icon: Undo2,
+            },
             ...(isBackOffice
                 ? [
                       {

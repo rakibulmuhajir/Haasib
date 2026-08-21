@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Calculator, Save } from 'lucide-vue-next';
+import { ArrowLeft, Calculator, Save, Undo2 } from 'lucide-vue-next';
 import { computed, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -45,7 +45,17 @@ const props = defineProps<{
     vendors: Vendor[];
     transportVendors: Vendor[];
     canUpdate: boolean;
+    canCreateRefund: boolean;
 }>();
+
+const requestRefund = () => {
+    const query: Record<string, string> = { visa_group_id: props.group.id };
+    if (props.group.agent_id) {
+        query.party_type = 'agent';
+        query.party_id = props.group.agent_id;
+    }
+    router.get(`/${props.company.slug}/umrah/refunds/create`, query);
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -150,6 +160,9 @@ const submit = () => {
         <template #actions>
             <Button variant="outline" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
                 <ArrowLeft class="mr-2 h-4 w-4" />Operational View
+            </Button>
+            <Button v-if="canCreateRefund" variant="outline" @click="requestRefund">
+                <Undo2 class="mr-2 h-4 w-4" />Request a refund
             </Button>
         </template>
 

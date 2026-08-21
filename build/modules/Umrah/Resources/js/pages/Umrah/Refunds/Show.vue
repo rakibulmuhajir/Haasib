@@ -190,7 +190,7 @@ const submitCancel = () =>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Cancel Refund</DialogTitle>
-                    <DialogDescription>This withdraws an approved refund before it is settled.</DialogDescription>
+                    <DialogDescription>This withdraws an accepted refund before it is settled.</DialogDescription>
                 </DialogHeader>
                 <form class="space-y-4" @submit.prevent="submitCancel">
                     <div class="space-y-2">

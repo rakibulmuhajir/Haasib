@@ -117,6 +117,16 @@ class RefundService
 
             $transaction = $this->coreService->postRefundAccept($refund);
 
+            // Mirrors the Dr agent_advances entry just posted, on the
+            // GroupPayment rows themselves -- see
+            // UmrahCoreService::debitAgentAdvances() for why this cannot
+            // be skipped: without it, allocatePayment() and the reporting
+            // views go on treating money the ledger already moved into
+            // refunds_payable as if it were still an unspent advance.
+            if ($refund->party_type === Refund::PARTY_AGENT) {
+                $this->coreService->debitAgentAdvances($refund);
+            }
+
             $refund->update([
                 'status' => Refund::STATUS_ACCEPTED,
                 'reviewed_by_user_id' => $userId,
@@ -167,6 +177,13 @@ class RefundService
 
             $transaction = $this->coreService->postRefundCancel($refund);
 
+            // Mirrors the Cr agent_advances entry postRefundCancel() just
+            // posted -- restores availability on the exact rows
+            // debitAgentAdvances() took it from at approve() time.
+            if ($refund->party_type === Refund::PARTY_AGENT) {
+                $this->coreService->reverseAgentAdvanceDebits($refund, $reason, $userId);
+            }
+
             $refund->update([
                 'status' => Refund::STATUS_CANCELLED,
                 'cancelled_at' => now(),
@@ -208,19 +225,29 @@ class RefundService
                 throw ValidationException::withMessages(['settlement_method' => 'A vendor refund can only be settled by receiving cash.']);
             }
 
+            $creditPayment = null;
+
             if ($method === Refund::SETTLEMENT_CASH) {
                 $this->coreService->postRefundSettleCash($refund, $data['account_id'], $data['date'] ?? now()->toDateString());
                 $status = Refund::STATUS_REFUNDED;
             } else {
-                $this->coreService->postRefundSettleCredit($refund);
+                $creditPayment = $this->coreService->postRefundSettleCredit($refund);
                 $status = Refund::STATUS_CREDITED;
             }
 
+            // settled_payment_id stays null for a cash settlement -- cash
+            // settles straight to a bank/cash account, not a party, and no
+            // GroupPayment row exists to point at (see
+            // 2026_08_21_000004_add_umrah_refund_settlement_lifecycle.php).
+            // A credit settlement's GroupPayment IS the credit, so recording
+            // the link here is what stops the refund and the advance it
+            // created from ever being reconciled apart.
             $refund->update([
                 'status' => $status,
                 'settlement_method' => $method,
                 'settled_at' => now(),
                 'settled_by_user_id' => $userId,
+                'settled_payment_id' => $creditPayment?->id,
             ]);
 
             return $refund->fresh();
@@ -328,22 +355,118 @@ class RefundService
      * ceiling. Postgres will not combine FOR UPDATE with an aggregate, so
      * the rows are fetched and summed in PHP rather than summed in SQL.
      * Callers must already be inside the transaction approve() opens.
+     *
+     * What is subtracted is a granted refund's amount MINUS whatever of it
+     * has already been drawn off the party's advances as
+     * payment_allocations rows -- see
+     * UmrahCoreService::debitAgentAdvances(). A draw has already shrunk
+     * the ceiling on the other side, inside
+     * unallocatedAgentAdvances(), so counting it here as well would
+     * subtract the same refund twice and make an agent's own credit
+     * unreachable the moment they used any of it. The two cases the
+     * remainder covers are real, not theoretical: a vendor refund draws
+     * nothing (debitAgentAdvances only runs for agents), and an agent
+     * whose ceiling came from the denormalised Agent::total_paid rather
+     * than from live advances has nothing on the rows to draw against.
+     * Both still have to consume the ceiling, and here is the only place
+     * that can do it.
      */
     private function consumedCredit(Refund $refund): float
     {
-        return (float) Refund::where('company_id', $refund->company_id)
+        $granted = Refund::where('company_id', $refund->company_id)
             ->where('party_type', $refund->party_type)
             ->where('party_id', $refund->party_id)
             ->where('id', '!=', $refund->id)
             ->whereIn('status', [Refund::STATUS_ACCEPTED, Refund::STATUS_REFUNDED, Refund::STATUS_CREDITED])
             ->lockForUpdate()
+            ->get();
+
+        if ($granted->isEmpty()) {
+            return 0.0;
+        }
+
+        $drawnByRefund = PaymentAllocation::whereIn('refund_id', $granted->pluck('id'))
+            ->whereNull('reversed_at')
+            ->lockForUpdate()
             ->get()
-            ->sum(fn (Refund $granted) => round((float) $granted->base_amount, 2));
+            ->groupBy('refund_id')
+            ->map(fn ($rows) => round((float) $rows->sum('base_amount'), 2));
+
+        return (float) $granted->sum(function (Refund $row) use ($drawnByRefund) {
+            $drawn = (float) ($drawnByRefund[$row->id] ?? 0.0);
+
+            return max(0.0, round((float) $row->base_amount, 2) - $drawn);
+        });
     }
 
+    /**
+     * `Agent::total_paid` is `recalculateAgent()`'s sum of *group*
+     * total_paid, and a group's total_paid can never exceed its
+     * total_receivable -- `allocatePayment()` caps every allocation at the
+     * group's outstanding balance (see `allocationOutstanding()`). So
+     * `total_paid - total_receivable` is structurally zero for every agent,
+     * every time recalculateAgent() has run; it is kept here only because
+     * existing tests seed it directly as a stand-in for a future ledger
+     * query, per the class docblock. A real overpayment never lives on a
+     * group at all -- it is the part of a payment `allocatePayment()`
+     * refused to cap onto one, which is exactly what settling a refund as
+     * credit now creates (an unallocated `GroupPayment`, see
+     * UmrahCoreService::postRefundSettleCredit()). Without counting that
+     * directly, a credited refund's money would be real in 2200 and
+     * invisible to the one check that decides whether it can ever come
+     * back out -- so it is summed here from the same unallocated-advance
+     * total `TravelReportService::agentStatement()` labels "Available
+     * advances" and `advances()` treats as `state = unallocated`.
+     */
     private function creditFromOverpayment(mixed $party): float
     {
-        return max(0.0, round((float) $party?->total_paid, 2) - round((float) $party?->total_receivable, 2));
+        $denormalised = max(0.0, round((float) $party?->total_paid, 2) - round((float) $party?->total_receivable, 2));
+        $unallocated = $party instanceof Agent ? $this->unallocatedAgentAdvances($party) : 0.0;
+
+        return round($denormalised + $unallocated, 2);
+    }
+
+    /**
+     * Locked for the same reason consumedCredit() locks its rows: two
+     * refund approvals (or an approval racing an allocation) must not both
+     * read the same unspent advance and both pass a check that, taken
+     * together, spends it twice. Callers must already be inside the
+     * transaction approve() opens.
+     */
+    private function unallocatedAgentAdvances(Agent $agent): float
+    {
+        $payments = GroupPayment::where('company_id', $agent->company_id)
+            ->where('agent_id', $agent->id)
+            ->where('direction', GroupPayment::DIRECTION_RECEIVED)
+            ->where('status', GroupPayment::STATUS_POSTED)
+            ->lockForUpdate()
+            ->get(['id', 'base_amount']);
+
+        if ($payments->isEmpty()) {
+            return 0.0;
+        }
+
+        $allocatedByPayment = PaymentAllocation::whereIn('group_payment_id', $payments->pluck('id'))
+            ->whereNull('reversed_at')
+            ->lockForUpdate()
+            ->get()
+            ->groupBy('group_payment_id')
+            ->map(fn ($rows) => (float) $rows->sum('base_amount'));
+
+        // The query above is deliberately not filtered by visa_group_id. A
+        // refund's approve() draws the agent's advances down through
+        // UmrahCoreService::debitAgentAdvances(), which writes ordinary
+        // payment_allocations rows carrying a refund_id instead of a
+        // visa_group_id. That money left 2200 for 2300 the moment approve()
+        // ran, so it must count against "available" exactly like a group
+        // allocation does -- and because both are the same row type, it
+        // already does. Subtracting refund draws a second time here is what
+        // would double-count them.
+        return round($payments->sum(function (GroupPayment $payment) use ($allocatedByPayment) {
+            $allocated = round((float) ($allocatedByPayment[$payment->id] ?? 0.0), 2);
+
+            return max(0.0, round((float) $payment->base_amount, 2) - $allocated);
+        }), 2);
     }
 
     private function creditFromAmountPaid(mixed $party): float

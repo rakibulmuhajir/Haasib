@@ -561,6 +561,11 @@ class UmrahCoreService
             }
             $group = VisaGroup::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($data['visa_group_id']);
             $amount = round((float) $data['base_amount'], 2);
+            // A refund's approve() can already have drawn part of this
+            // payment down via a refund-linked allocation row (see
+            // debitAgentAdvances()) -- allocations() sums those too, since
+            // it filters only on reversed_at, so that money is already off
+            // the available total here without any extra query.
             $allocated = (float) $payment->allocations()->sum('base_amount');
             $available = round((float) $payment->base_amount - $allocated, 2);
 
@@ -592,6 +597,109 @@ class UmrahCoreService
 
             return $allocation->fresh(['group']);
         });
+    }
+
+    /**
+     * Draws `refund->base_amount` out of the agent's live unallocated
+     * advances, oldest payment first, as ordinary payment_allocations rows
+     * (visa_group_id null, refund_id set) -- the row-level mirror of the
+     * Dr agent_advances entry RefundService::approve() posts via
+     * postRefundAccept() in the same transaction. Without this, that Dr
+     * only ever shows up in the aggregate 2200 balance: allocatePayment()
+     * and the reporting views that read GroupPayment/PaymentAllocation
+     * directly would go on treating the drawn amount as still sitting
+     * there unspent, because nothing on those rows changed.
+     *
+     * Deliberately does not go through postPaymentAllocation() -- that
+     * posts its own Dr agent_advances/Cr AR entry for allocating a payment
+     * to a group's receivable, and there is no group and no second GL
+     * entry here. postRefundAccept()'s accept entry is the whole of what
+     * this draw posts; this call only makes it visible on the row.
+     *
+     * "Available" here is computed the same way allocatePayment() computes
+     * it -- base_amount minus live allocations, which already includes any
+     * earlier refund draw against the same payment -- so nothing is drawn
+     * on twice.
+     *
+     * If the agent's real advances fall short of the refund amount, this
+     * draws what actually exists and stops -- it does not throw. The
+     * shortfall can only mean the ceiling that let approve() reach this
+     * point included the denormalised total_paid - total_receivable
+     * component (see RefundService::creditFromOverpayment()'s docblock),
+     * which by construction has no backing GroupPayment row to draw from.
+     * That is a pre-existing approximation this method does not own fixing;
+     * refusing to draw down the *real* rows that do exist here would only
+     * make the honest part of the ceiling wrong too.
+     *
+     * Vendor refunds never call this -- a vendor's ceiling
+     * (creditFromAmountPaid()) has nothing to do with GroupPayment.
+     *
+     * Caller (RefundService::approve()) already holds this refund's row
+     * lock and DB transaction.
+     */
+    public function debitAgentAdvances(Refund $refund): void
+    {
+        $remaining = round((float) $refund->base_amount, 2);
+        if ($remaining <= 0) {
+            return;
+        }
+
+        $payments = GroupPayment::where('company_id', $refund->company_id)
+            ->where('agent_id', $refund->party_id)
+            ->where('direction', GroupPayment::DIRECTION_RECEIVED)
+            ->where('status', GroupPayment::STATUS_POSTED)
+            ->orderBy('payment_date')
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($payments as $payment) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $allocated = (float) $payment->allocations()->sum('base_amount');
+            $available = round((float) $payment->base_amount - $allocated, 2);
+
+            if ($available <= 0) {
+                continue;
+            }
+
+            $draw = min($available, $remaining);
+
+            PaymentAllocation::create([
+                'company_id' => $refund->company_id,
+                'group_payment_id' => $payment->id,
+                'visa_group_id' => null,
+                'refund_id' => $refund->id,
+                'base_amount' => $draw,
+            ]);
+
+            $remaining = round($remaining - $draw, 2);
+        }
+    }
+
+    /**
+     * Undoes exactly what debitAgentAdvances() drew for this refund --
+     * called from RefundService::cancel(), which posts postRefundCancel()'s
+     * Dr refunds_payable/Cr agent_advances in the same transaction. Reuses
+     * reverseAllocation() itself: a refund's draw is stored as an ordinary
+     * payment_allocations row, so reversing it the same way reverses a
+     * specific allocation rather than netting the reversal against the
+     * payment. reverseAllocation()'s GL-reversal step is a no-op here
+     * (this row was never given its own transaction_id, since
+     * postPaymentAllocation() never ran for it) -- it only stamps
+     * reversed_at and recalculates the agent, both of which are exactly
+     * what is wanted.
+     */
+    public function reverseAgentAdvanceDebits(Refund $refund, string $reason, ?string $userId): void
+    {
+        PaymentAllocation::where('company_id', $refund->company_id)
+            ->where('refund_id', $refund->id)
+            ->whereNull('reversed_at')
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (PaymentAllocation $debit) => $this->reverseAllocation($debit, $reason, $userId));
     }
 
     public function recalculateAgent(string $agentId): void
@@ -1847,13 +1955,34 @@ class UmrahCoreService
      * Dr 2300/Cr 2200. The money never leaves the company; it goes back to
      * sitting as an agent advance the existing allocation screen already
      * knows how to spend against a future group.
+     *
+     * The GL entry above is the only place this credit is posted. A
+     * `GroupPayment` is created below to make that credit spendable --
+     * `allocatePayment()`, `agentStatement()`'s "Available advances" and
+     * `RefundService::availableCredit()` all read `GroupPayment`, not the
+     * ledger, so without this row the money is real in 2200 but invisible
+     * everywhere anyone would spend it. That row is created directly with
+     * `transaction_id` already stamped to the transaction just posted,
+     * bypassing `postAgentPayment()`/`postPaymentAndAllocate()` entirely --
+     * going through either would post a second Dr-cash/Cr-2200 entry for
+     * money that never moved a second time. `postAgentPayment()`'s own
+     * `if ($payment->transaction_id) return;` guard means even a future
+     * caller that mistakenly ran it against this row would no-op rather
+     * than double-post, but the honest fix is to never call it here at all.
+     * No allocation is created and no group is touched: the whole point is
+     * that this sits unallocated until the agent spends it or asks for it
+     * back, exactly like an ordinary overpayment does.
+     *
+     * Caller (RefundService::settle()) already holds this refund's row lock
+     * and DB transaction, matching every other post* method here -- this
+     * one does not open its own.
      */
-    public function postRefundSettleCredit(Refund $refund): Transaction
+    public function postRefundSettleCredit(Refund $refund): GroupPayment
     {
         $company = $this->company($refund->company_id);
         $amount = (float) $refund->base_amount;
 
-        return $this->glPostingService->postBalancedTransaction([
+        $transaction = $this->glPostingService->postBalancedTransaction([
             'company_id' => $refund->company_id,
             'transaction_number' => $this->transactionNumber('URC', $refund->id),
             'transaction_type' => 'umrah_refund_settle_credit',
@@ -1867,6 +1996,25 @@ class UmrahCoreService
         ], [
             ['account_id' => $this->accountId($company, 'refunds_payable'), 'type' => 'debit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} as credit"],
             ['account_id' => $this->accountId($company, 'agent_advances'), 'type' => 'credit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} as credit"],
+        ]);
+
+        return GroupPayment::create([
+            'company_id' => $refund->company_id,
+            'visa_group_id' => null,
+            'agent_id' => $refund->party_id,
+            'direction' => GroupPayment::DIRECTION_RECEIVED,
+            'payment_number' => $this->nextPaymentNumber($refund->company_id),
+            'payment_date' => now()->toDateString(),
+            'amount' => $refund->amount,
+            'currency' => $refund->currency,
+            'exchange_rate' => $refund->exchange_rate,
+            'base_currency' => $refund->base_currency,
+            'base_amount' => $refund->base_amount,
+            'method' => GroupPayment::METHOD_OTHER,
+            'reference' => $refund->refund_number,
+            'notes' => "Credit retained from refund {$refund->refund_number} instead of paying it back in cash.",
+            'status' => GroupPayment::STATUS_POSTED,
+            'transaction_id' => $transaction->id,
         ]);
     }
 

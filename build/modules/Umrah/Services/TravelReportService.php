@@ -156,8 +156,18 @@ class TravelReportService
             ->with(['agent:id,name', 'allocations.group:id,group_number'])
             ->get();
         foreach ($payments as $payment) {
-            $allocated = (float) $payment->allocations->sum('base_amount');
-            $advance = max((float) $payment->base_amount - $allocated, 0);
+            // Both halves are payment_allocations rows; what separates them
+            // is which target they name. A row with a visa_group_id is a
+            // receipt applied to a group, and belongs in the receipt column.
+            // A row with a refund_id is a draw made by a refund's approve()
+            // -- see UmrahCoreService::debitAgentAdvances() -- which the
+            // ledger already moved into refunds_payable. It reduces what is
+            // still available without ever having been a receipt against a
+            // group, so it is subtracted from the advance but kept out of
+            // the receipt figure.
+            $allocated = (float) $payment->allocations->whereNotNull('visa_group_id')->sum('base_amount');
+            $debited = (float) $payment->allocations->whereNotNull('refund_id')->sum('base_amount');
+            $advance = max((float) $payment->base_amount - $allocated - $debited, 0);
             $events->push([
                 'date' => $payment->payment_date->toDateString(), 'sort_at' => CarbonImmutable::parse($payment->payment_date),
                 'type' => $payment->status === GroupPayment::STATUS_REVERSED ? 'reversal' : 'allocation',
@@ -316,14 +326,18 @@ class TravelReportService
         $payments = GroupPayment::where('company_id', $company->id)
             ->where('status', GroupPayment::STATUS_POSTED)
             ->whereBetween('payment_date', [$filters['start'], $filters['end']])
-            ->with(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'allocations:id,group_payment_id,base_amount'])
+            ->with(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'allocations:id,group_payment_id,visa_group_id,refund_id,base_amount'])
             ->get();
 
         $rows = $payments->map(function (GroupPayment $payment): array {
-            $allocated = (float) $payment->allocations->sum('base_amount');
-            $available = max(round((float) $payment->base_amount - $allocated, 2), 0);
+            // Same split as agentStatement(): a row naming a group is an
+            // allocation, a row naming a refund is a draw. Both consume the
+            // advance, only the first belongs in the allocated column.
+            $allocated = (float) $payment->allocations->whereNotNull('visa_group_id')->sum('base_amount');
+            $debited = (float) $payment->allocations->whereNotNull('refund_id')->sum('base_amount');
+            $available = max(round((float) $payment->base_amount - $allocated - $debited, 2), 0);
             $party = $payment->agent ?? $payment->visaVendor ?? $payment->transportVendor ?? $payment->hotelVendor;
-            $state = $allocated <= 0 ? 'unallocated' : ($available > 0 ? 'partially_allocated' : 'allocated');
+            $state = ($allocated <= 0 && $debited <= 0) ? 'unallocated' : ($available > 0 ? 'partially_allocated' : 'allocated');
 
             return [
                 'href' => '/umrah/payments/'.$payment->id, 'payment' => $payment->payment_number,

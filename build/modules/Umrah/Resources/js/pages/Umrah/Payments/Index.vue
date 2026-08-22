@@ -288,18 +288,41 @@ const submitAllocation = () => {
                             v-if="row.allocations?.length"
                             class="flex max-w-56 flex-wrap gap-x-2 gap-y-1"
                         >
-                            <Button
+                            <template
                                 v-for="allocation in row.allocations"
                                 :key="allocation.id"
-                                variant="link"
-                                class="h-auto p-0 text-sm"
-                                @click="
-                                    router.get(
-                                        `/${company.slug}/umrah/groups/${allocation.visa_group_id}`,
-                                    )
-                                "
-                                >{{ allocation.group?.group_number }}</Button
                             >
+                                <!-- Two things land in this column and they
+                                     go to different places: money applied to
+                                     a group, and money a refund drew back
+                                     out. Both consumed the advance, so both
+                                     have to be named here. -->
+                                <Button
+                                    v-if="allocation.visa_group_id"
+                                    variant="link"
+                                    class="h-auto p-0 text-sm"
+                                    @click="
+                                        router.get(
+                                            `/${company.slug}/umrah/groups/${allocation.visa_group_id}`,
+                                        )
+                                    "
+                                    >{{ allocation.group?.group_number }}</Button
+                                >
+                                <Button
+                                    v-else-if="allocation.refund_id"
+                                    variant="link"
+                                    class="h-auto p-0 text-sm"
+                                    @click="
+                                        router.get(
+                                            `/${company.slug}/umrah/refunds/${allocation.refund_id}`,
+                                        )
+                                    "
+                                    >{{
+                                        allocation.refund?.refund_number ??
+                                        'Refund'
+                                    }}</Button
+                                >
+                            </template>
                         </div>
                         <div v-else class="text-sm text-status-attention">
                             Credit held — not applied to a group

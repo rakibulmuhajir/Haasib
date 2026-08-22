@@ -43,6 +43,12 @@ class PaymentController extends Controller
         $query = GroupPayment::where('company_id', $company->id)
             ->with([
                 'allocations.group:id,group_number,name',
+                // A refund's approval draws an agent's advance down as an
+                // allocation naming the refund instead of a group -- see
+                // UmrahCoreService::debitAgentAdvances(). It has to arrive
+                // with something to name it, or the register shows a
+                // consumed advance with a blank destination.
+                'allocations.refund:id,refund_number',
                 'agent:id,name',
                 'visaVendor:id,name',
                 'transportVendor:id,name',

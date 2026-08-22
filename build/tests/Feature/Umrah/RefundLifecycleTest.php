@@ -780,7 +780,15 @@ test('settling an accepted refund as credit posts Dr 2300 / Cr 2200', function (
         ->and($creditAccount->account_id)->toBe($agentAdvances);
 });
 
-test('after a credit settlement the party\'s available credit reflects it, and a second refund for the same money is refused', function () {
+test('after a credit settlement the credit is genuinely available, and only the amount actually still unspent can be reached again', function () {
+    // Originally this test asserted the opposite -- that a second refund
+    // against just-credited money was refused. That encoded the very bug
+    // fixed by postRefundSettleCredit() creating a GroupPayment: before the
+    // fix, settling as credit was invisible to availableCredit(), so a
+    // second refund against real, unspent money looked like a double-spend
+    // when it was not one. Now that the credit is a real, unallocated
+    // GroupPayment, a second refund for money still sitting there must
+    // succeed -- and a further refund for more than what remains must not.
     [$company, $owner] = refundTestCompany();
     [$agentUser, $agent] = refundTestAgent($company, 'ad', totalPaid: 500.0, totalReceivable: 0.0);
     $manager = User::factory()->withoutTwoFactor()->create();
@@ -792,11 +800,24 @@ test('after a credit settlement the party\'s available credit reflects it, and a
     expect($first->fresh()->status)->toBe(Refund::STATUS_CREDITED);
 
     $second = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 50), $agentUser->id);
+    app(RefundService::class)->approve($second, [], $manager->id);
+    expect($second->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 
-    expect(fn () => app(RefundService::class)->approve($second, [], $manager->id))
+    // Worth spelling out, because two 500s appear and only one of them is
+    // money. The ceiling reads 500 from the fixture's denormalised
+    // total_paid plus 450 still unspent on the credit GroupPayment (500
+    // less the 50 the second approval just drew off it) = 950.
+    // consumedCredit() subtracts the first refund's 500 in full, since it
+    // drew nothing off any payment row -- there was none to draw from --
+    // and subtracts nothing more for the second refund, whose 50 is already
+    // missing from the advance. 950 - 500 = 450, which is exactly the real,
+    // unspent money left. Asking for one more than that must fail.
+    $third = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 451), $agentUser->id);
+
+    expect(fn () => app(RefundService::class)->approve($third, [], $manager->id))
         ->toThrow(ValidationException::class);
 
-    expect($second->fresh()->status)->toBe(Refund::STATUS_REQUESTED);
+    expect($third->fresh()->status)->toBe(Refund::STATUS_REQUESTED);
 });
 
 test('cancelling an accepted refund posts the reversing entry and leaves the books balanced', function () {
@@ -862,11 +883,24 @@ test('a group refund reverses enough allocation to cover itself and re-allocates
     $group = $group->fresh();
     expect((float) $group->total_paid)->toBe(600.0);
 
-    $liveAllocation = PaymentAllocation::where('group_payment_id', $payment->id)->whereNull('reversed_at')->sole();
+    $liveAllocation = PaymentAllocation::where('group_payment_id', $payment->id)
+        ->whereNull('reversed_at')->whereNotNull('visa_group_id')->sole();
     expect((float) $liveAllocation->base_amount)->toBe(600.0);
 
     $originalAllocation = PaymentAllocation::where('group_payment_id', $payment->id)->whereNotNull('reversed_at')->sole();
     expect((float) $originalAllocation->base_amount)->toBe(1000.0);
+
+    // De-allocating freed 400 off this payment, and the refund immediately
+    // claimed it -- otherwise that 400 would sit there looking spendable
+    // while the ledger had already moved it into refunds_payable. The draw
+    // is an ordinary allocation row naming the refund instead of a group,
+    // so the payment now reads as fully consumed: 600 to the group, 400 to
+    // the refund, nothing available.
+    $draw = PaymentAllocation::where('group_payment_id', $payment->id)
+        ->whereNull('reversed_at')->whereNotNull('refund_id')->sole();
+    expect((float) $draw->base_amount)->toBe(400.0)
+        ->and($draw->refund_id)->toBe($refund->id)
+        ->and($draw->visa_group_id)->toBeNull();
 });
 
 test('a group refund larger than the credit allocated to that group is refused', function () {

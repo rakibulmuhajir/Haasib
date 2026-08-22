@@ -57,7 +57,7 @@ as a silent no-op.
 
 | Agent | Owes | Unallocated advance (spendable credit) |
 |---|---|---|
-| Al-Noor Travels | 0 | **PKR 250,000** — payment `UPM-00018`, ref `ADV-ALNOOR-2026-08` |
+| Al-Noor Travels | **238,000** on `UGR-00005` | **PKR 250,000** — payment `UPM-00018`, ref `ADV-ALNOOR-2026-08` |
 | Madina Tours | 397,500 | 0 |
 | Rehmat Travel Service | 1,469,875 | 0 |
 | QA Agent 2026 | 0 | 1.00 |
@@ -100,6 +100,29 @@ the data was correct and read wrongly. Please don't re-file any of these.
   handling on either. Rows now take focus and answer Enter and Space. This is
   the shared base, so it applies to every list in the app.
 - **6 and 7** — no action needed; you had already explained both.
+
+**Closed from your vendor-refund round:**
+
+- **Generic "Failed to approve refund" toast.** Real, and fixed. The server had
+  said exactly why — the vendor had nothing left to refund — but the message
+  arrived on the `amount` key, which the approve dialog has no field for, so it
+  had nowhere to render and became a toast. All four dialogs (approve, reject,
+  cancel, settle) now print the server's reason inside the dialog. The message
+  itself is rewritten too: it names the figure actually available and tells you
+  what to do, instead of saying a refund "exceeds the credit available".
+  `URF-00003` will now refuse with *"There is nothing left to refund against
+  this vendor…"*. That refusal is correct — **please re-test that you can now
+  read it.**
+- **Your blocked credit-allocation test.** You were right that it was data, not
+  code. Al-Noor's only group was settled to the rupee, so the allocation dialog
+  had no eligible group to offer. There is now **`UGR-00005` — "Al-Noor ·
+  October departure", receivable 238,000, nothing paid.** Section A5 is runnable
+  against it, and so is the rest of `UPM-00018`.
+
+To approve a **vendor** refund you need a vendor the company has actually paid.
+`Al-Haramain Visa Services` and `Safar Coaches` both carry real payments;
+`QA Visa Vendor 2026` does not, which is why `URF-00003` cannot be approved at
+any amount.
 
 Findings 3 and 4 describe behaviour that was already fixed before your run, so
 your browser was serving a stale bundle. If two pages disagree about the same

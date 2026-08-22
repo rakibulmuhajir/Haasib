@@ -53,37 +53,70 @@ const remarksCardTitle = computed(() =>
     props.refund.status === 'rejected' ? 'Rejection reason' : 'Review remarks',
 );
 
+/**
+ * A refusal here usually arrives on a key the dialog has no field for --
+ * `amount`, `refund`, `party` -- because what the server refused is the
+ * request as a whole, not something typed into the box. Those messages had
+ * nowhere to render, so every one of them collapsed into the same generic
+ * toast and the reason went in the bin. This picks up whatever is not already
+ * shown beside a field so it can be printed where the decision is being made.
+ */
+const unclaimedError = (
+    errors: Record<string, string>,
+    shown: string[],
+): string | null => {
+    const key = Object.keys(errors).find((name) => !shown.includes(name));
+
+    return key ? errors[key] : null;
+};
+
+/** Only shout when there is nothing to show quietly. */
+const toastIfSilent = (errors: Record<string, string>, message: string) => {
+    if (Object.keys(errors).length === 0) {
+        toast.error(message);
+    }
+};
+
 const approveOpen = ref(false);
 const approveForm = useForm({ review_remarks: '' });
+const approveError = computed(() =>
+    unclaimedError(approveForm.errors, ['review_remarks']),
+);
 const submitApprove = () =>
     approveForm.post(`/${props.company.slug}/umrah/refunds/${props.refund.id}/approve`, {
         preserveScroll: true,
         onSuccess: () => {
             approveOpen.value = false;
         },
-        onError: () => toast.error('Failed to approve refund'),
+        onError: (errors) => toastIfSilent(errors, 'Failed to approve refund'),
     });
 
 const rejectOpen = ref(false);
 const rejectForm = useForm({ review_remarks: '' });
+const rejectError = computed(() =>
+    unclaimedError(rejectForm.errors, ['review_remarks']),
+);
 const submitReject = () =>
     rejectForm.post(`/${props.company.slug}/umrah/refunds/${props.refund.id}/reject`, {
         preserveScroll: true,
         onSuccess: () => {
             rejectOpen.value = false;
         },
-        onError: () => toast.error('Failed to reject refund'),
+        onError: (errors) => toastIfSilent(errors, 'Failed to reject refund'),
     });
 
 const cancelOpen = ref(false);
 const cancelForm = useForm({ cancellation_reason: '' });
+const cancelError = computed(() =>
+    unclaimedError(cancelForm.errors, ['cancellation_reason']),
+);
 const submitCancel = () =>
     cancelForm.post(`/${props.company.slug}/umrah/refunds/${props.refund.id}/cancel`, {
         preserveScroll: true,
         onSuccess: () => {
             cancelOpen.value = false;
         },
-        onError: () => toast.error('Failed to cancel refund'),
+        onError: (errors) => toastIfSilent(errors, 'Failed to cancel refund'),
     });
 
 const settleOpen = ref(false);
@@ -92,6 +125,9 @@ const settleForm = useForm({
     account_id: '',
     date: new Date().toISOString().slice(0, 10),
 });
+const settleError = computed(() =>
+    unclaimedError(settleForm.errors, ['settlement_method', 'account_id', 'date']),
+);
 const submitSettle = () =>
     settleForm
         .transform((data) => ({
@@ -104,7 +140,7 @@ const submitSettle = () =>
             onSuccess: () => {
                 settleOpen.value = false;
             },
-            onError: () => toast.error('Failed to settle refund'),
+            onError: (errors) => toastIfSilent(errors, 'Failed to settle refund'),
         });
 </script>
 
@@ -195,6 +231,7 @@ const submitSettle = () =>
                     </DialogDescription>
                 </DialogHeader>
                 <form novalidate class="space-y-4" @submit.prevent="submitApprove">
+                    <p v-if="approveError" class="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{{ approveError }}</p>
                     <div class="space-y-2">
                         <Textarea v-model="approveForm.review_remarks" placeholder="Remarks (optional)" />
                         <p v-if="approveForm.errors.review_remarks" class="text-xs text-destructive">{{ approveForm.errors.review_remarks }}</p>
@@ -214,6 +251,7 @@ const submitSettle = () =>
                     <DialogDescription>The requester will see your remarks.</DialogDescription>
                 </DialogHeader>
                 <form novalidate class="space-y-4" @submit.prevent="submitReject">
+                    <p v-if="rejectError" class="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{{ rejectError }}</p>
                     <div class="space-y-2">
                         <Textarea v-model="rejectForm.review_remarks" required placeholder="Reason (required)" />
                         <p v-if="rejectForm.errors.review_remarks" class="text-xs text-destructive">{{ rejectForm.errors.review_remarks }}</p>
@@ -233,6 +271,7 @@ const submitSettle = () =>
                     <DialogDescription>This withdraws an accepted refund before it is settled.</DialogDescription>
                 </DialogHeader>
                 <form novalidate class="space-y-4" @submit.prevent="submitCancel">
+                    <p v-if="cancelError" class="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{{ cancelError }}</p>
                     <div class="space-y-2">
                         <Textarea v-model="cancelForm.cancellation_reason" required placeholder="Reason (required)" />
                         <p v-if="cancelForm.errors.cancellation_reason" class="text-xs text-destructive">{{ cancelForm.errors.cancellation_reason }}</p>
@@ -255,6 +294,7 @@ const submitSettle = () =>
                     </DialogDescription>
                 </DialogHeader>
                 <form novalidate class="space-y-4" @submit.prevent="submitSettle">
+                    <p v-if="settleError" class="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{{ settleError }}</p>
                     <div v-if="!isVendorRefund" class="space-y-2">
                         <Label>How is this being settled?</Label>
                         <Select v-model="settleForm.settlement_method">

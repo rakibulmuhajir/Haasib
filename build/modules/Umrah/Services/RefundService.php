@@ -285,13 +285,34 @@ class RefundService
      */
     public function assertWithinAvailableCredit(Refund $refund): void
     {
-        $available = $this->availableCredit($refund);
+        $available = round($this->availableCredit($refund), 2);
+        $requested = round((float) $refund->base_amount, 2);
 
-        if (round((float) $refund->base_amount, 2) > round($available, 2)) {
-            throw ValidationException::withMessages([
-                'amount' => 'This refund exceeds the credit currently available to this party.',
-            ]);
+        if ($requested <= $available) {
+            return;
         }
+
+        /*
+         * "Exceeds the credit currently available" is true and tells nobody
+         * what to do about it. Two different situations arrive here and they
+         * need different sentences: a party with nothing behind them can never
+         * have a refund approved at any amount, which is a different problem
+         * from having asked for too much. Only the second one has a number
+         * worth quoting, and quoting it is the whole point -- it turns a
+         * refusal into an instruction.
+         */
+        throw ValidationException::withMessages([
+            'amount' => $available <= 0
+                ? ($refund->party_type === Refund::PARTY_AGENT
+                    ? 'This agent has no unallocated advance left, so there is nothing to refund. An agent can only be refunded what they have paid in excess of what they owe.'
+                    : 'There is nothing left to refund against this vendor — either nothing has been paid to them, or earlier refunds already account for all of it.')
+                : sprintf(
+                    'This refund is for %s but only %s is available. Approve it for %s or less.',
+                    number_format($requested, 2),
+                    number_format($available, 2),
+                    number_format($available, 2),
+                ),
+        ]);
     }
 
     /**

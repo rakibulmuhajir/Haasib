@@ -554,6 +554,48 @@ class DemoTravelAgencySeeder extends Seeder
                 'payment_number' => null,
             ]);
             $this->command?->info('  unallocated agent advance: 250,000 (Al-Noor Travels)');
+
+            // ---- Somewhere for that advance to go --------------------------------
+            // Every group above is settled to the rupee, so an advance -- or a
+            // refund settled as credit -- had nothing it could be applied to:
+            // the allocation dialog offers only groups with a balance, and
+            // Al-Noor had none. Which left half the credit story untestable,
+            // since credit that cannot be spent can only ever be refunded. This
+            // is a group booked but not yet paid for, which is the ordinary
+            // reason an agent is carrying an advance in the first place.
+            $unpaidPassengers = [];
+            for ($seat = 0; $seat < 4; $seat++) {
+                $unpaidPassengers[] = [
+                    'full_name' => ['Bilal Anwar', 'Nadia Anwar', 'Usman Anwar', 'Hafsa Anwar'][$seat],
+                    'passport_number' => sprintf('AN%07d', 3_900_100 + $seat),
+                    'date_of_birth' => Carbon::parse('2026-10-12')->subYears(31 + $seat)->toDateString(),
+                    'service_type' => 'visa_transport',
+                    'visa_status' => 'approved',
+                ];
+            }
+
+            $unpaidGroup = $core->createGroup($company->id, [
+                'agent_id' => $advanceAgent->id,
+                'vendor_id' => $visaVendor->id,
+                'mandatory_transport_vendor_id' => $transportVendor->id,
+                'name' => 'Al-Noor · October departure',
+                'travel_date' => '2026-10-12',
+                'transport_required' => true,
+                'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+                'passenger_count' => count($unpaidPassengers),
+                'passengers' => $unpaidPassengers,
+                'flight_airline' => 'Saudia',
+                'flight_number' => 'SV731',
+                'hotel_makkah' => $hotels['Makkah']->name,
+                'hotel_madinah' => $hotels['Madinah']->name,
+            ]);
+
+            $groupsCreated++;
+            $this->command?->info(sprintf(
+                '  unpaid group for the advance: %s, receivable %s',
+                $unpaidGroup->group_number,
+                number_format((float) $unpaidGroup->total_receivable, 2),
+            ));
         }
 
         // ---- Office overheads ----------------------------------------------------

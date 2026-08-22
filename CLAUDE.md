@@ -71,7 +71,7 @@ Only for: simple fields, no calculations, no side effects
 ```bash
 php artisan octane:start --server=frankenphp --port=9001 --watch
 npm run dev
-# → http://localhost:5180
+# → http://localhost:9001  (app; Vite serves assets on 5173)
 ```
 
 ## 📚 Key Docs

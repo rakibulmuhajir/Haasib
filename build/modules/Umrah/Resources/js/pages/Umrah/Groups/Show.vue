@@ -145,13 +145,64 @@ const remainingAfterPayment = computed(() => {
         paymentForm.direction === 'received'
             ? Number(props.group.balance || 0)
             : Number(selectedPayee.value?.balance || 0);
-    return Math.max(currentBalance - paymentBaseAmount.value, 0);
+    // Clamped at zero because a negative amount would otherwise make the
+    // balance appear to *grow*, so typing -1 against a 60,000 balance
+    // previewed 60,001 -- a figure that reads as money arriving from a
+    // payment the server is about to refuse.
+    return Math.max(currentBalance - Math.max(paymentBaseAmount.value, 0), 0);
 });
-const canRecordPayment = computed(() =>
-    paymentForm.direction === 'received'
-        ? Number(props.group.balance || 0) > 0
-        : paymentForm.payee !== 'none' &&
-          Number(selectedPayee.value?.balance || 0) > 0,
+
+const paymentSubmitAttempted = ref(false);
+
+/**
+ * A number field holds three kinds of nothing-useful -- blank, zero and
+ * negative -- and the server rejects all three. Browser validation used to
+ * catch them before the form was ever submitted; it is switched off across the
+ * app now, so this says the same thing in the app's own voice, next to the
+ * field, as the figure is typed.
+ */
+const paymentAmountIssue = computed(() => {
+    const raw = String(paymentForm.amount ?? '').trim();
+
+    if (raw === '') {
+        // Nothing typed yet is not yet a mistake. An empty field only becomes
+        // one once someone has tried to submit it, so the dialog does not open
+        // already telling people off.
+        return paymentSubmitAttempted.value ? 'Enter an amount.' : null;
+    }
+
+    const value = Number(raw);
+
+    if (!Number.isFinite(value)) {
+        return 'Enter the amount as a number.';
+    }
+
+    return value > 0 ? null : 'An amount has to be more than zero.';
+});
+
+/**
+ * Why the submit is unavailable, in words. The button used to grey out on a
+ * condition held entirely off-screen -- a group with nothing outstanding, or a
+ * vendor not yet chosen -- which leaves someone clicking a dead control with
+ * nothing to read.
+ */
+const recordPaymentBlockedReason = computed(() => {
+    if (paymentForm.direction === 'received') {
+        return Number(props.group.balance || 0) > 0
+            ? null
+            : 'This group has nothing outstanding, so there is no payment left to record against it.';
+    }
+
+    if (paymentForm.payee === 'none') {
+        return 'Choose who the money was paid to.';
+    }
+
+    return Number(selectedPayee.value?.balance || 0) > 0
+        ? null
+        : 'Nothing is owed to this vendor for this group.';
+});
+const canRecordPayment = computed(
+    () => recordPaymentBlockedReason.value === null,
 );
 
 const passengers = computed(() => props.group.passengers || []);
@@ -371,8 +422,17 @@ const bulkUpdatePassengerStatus = () => {
         );
 };
 
-const addPayment = () =>
-    paymentForm
+const addPayment = () => {
+    paymentSubmitAttempted.value = true;
+
+    // Browser validation no longer stops a bad figure at the field, so a blank
+    // or zero amount would otherwise go to the server and come back as a toast
+    // with nothing pointing at the field that caused it.
+    if (paymentAmountIssue.value) {
+        return;
+    }
+
+    return paymentForm
         .transform((data) => ({
             payment_date: data.payment_date,
             direction: data.direction,
@@ -408,11 +468,13 @@ const addPayment = () =>
                     paymentForm.payment_date = new Date()
                         .toISOString()
                         .slice(0, 10);
+                    paymentSubmitAttempted.value = false;
                     recordPaymentOpen.value = false;
                 },
                 onError: () => toast.error('Failed to record payment'),
             },
         );
+};
 </script>
 
 <template>
@@ -1374,13 +1436,25 @@ const addPayment = () =>
                                         step="0.000001"
                                         required
                                     />
+                                    <!-- This message used to sit outside the
+                                         field's own column, so a two-column
+                                         grid placed it under Currency and it
+                                         read as belonging to the wrong field.
+                                         An error has to be next to the thing
+                                         that caused it. -->
+                                    <p
+                                        v-if="
+                                            paymentForm.errors.amount ||
+                                            paymentAmountIssue
+                                        "
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{
+                                            paymentForm.errors.amount ||
+                                            paymentAmountIssue
+                                        }}
+                                    </p>
                                 </div>
-                                <p
-                                    v-if="paymentForm.errors.amount"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ paymentForm.errors.amount }}
-                                </p>
                             </div>
                             <div
                                 v-if="
@@ -1413,6 +1487,15 @@ const addPayment = () =>
                                     {{ paymentForm.errors.exchange_rate }}
                                 </p>
                             </div>
+                            <!-- A disabled control has to say why. Without
+                                 this the button simply greyed out on a
+                                 condition held off-screen. -->
+                            <p
+                                v-if="recordPaymentBlockedReason"
+                                class="text-xs text-muted-foreground"
+                            >
+                                {{ recordPaymentBlockedReason }}
+                            </p>
                             <Button
                                 type="submit"
                                 class="w-full"

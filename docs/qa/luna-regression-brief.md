@@ -10,12 +10,41 @@ reachable before today.
 
 **Environment**
 
-1. The dev server must be restarted so the new service code is loaded:
-   `php artisan octane:start --server=frankenphp --port=9001 --watch`
-2. `npm run dev`, then work at `http://localhost:5180`.
-3. The migration this work needs (`2026_08_22_000001_add_refund_id_to_payment_allocations`)
+1. **Work at `http://localhost:9001`.** Both servers are already up — the app on
+   9001, Vite serving assets on 5173. Earlier drafts of this brief and
+   `CLAUDE.md` said 5180; that was wrong, and there is a stale listener on 5180
+   that answers every request with a 404. If a page 404s, check the port first.
+2. The migration this work needs (`2026_08_22_000001_add_refund_id_to_payment_allocations`)
    is already applied to the dev database. You do not need to migrate.
-4. Test company: **demo-babalsalam-travel**. Base currency **PKR**.
+3. Test company: **demo-babalsalam-travel**. Base currency **PKR**.
+
+**Sign-ins.** One per role, all on the travel demo company, all with the
+password **`demo-password`**. These are local dev fixtures and exist only in
+this database.
+
+| Role | Email | Can do |
+|---|---|---|
+| Owner | `demo@haasib.app` | everything |
+| Manager | `manager@demo.haasib.app` | request **and** decide refunds |
+| Accountant | `accountant@demo.haasib.app` | request **and** decide refunds |
+| Operations | `operations@demo.haasib.app` | request only |
+| Agent | `agent@demo.haasib.app` | request only — **is** Al-Noor Travels |
+
+The agent seat is Al-Noor Travels itself, which is the agent holding the
+250,000 advance below. That pairing is deliberate: it is the only agent with
+money behind them, so it is the only one whose refund can be approved.
+
+**You have standing permission to change data.** This is a local dev database
+seeded from scratch and nothing in it is real. Create, edit, approve, cancel and
+delete whatever a test needs — new agents, groups, payments, refunds, even new
+users — without stopping to ask first. Rebuilding it is one command. The only
+thing worth flagging is data you could **not** create when you should have been
+able to; that is a finding, not a blocker. Do not stop a run to request
+approval.
+
+If a seat ever stops working, re-run
+`php artisan db:seed --class="Database\Seeders\Demo\DemoRoleUsersSeeder" --force`
+— it resets all four passwords and re-grants the roles.
 
 **Browser validation is now switched off across the app.** Every form carries
 `novalidate`, so the browser will no longer block a submit for a blank or

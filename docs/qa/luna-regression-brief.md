@@ -128,6 +128,17 @@ Findings 3 and 4 describe behaviour that was already fixed before your run, so
 your browser was serving a stale bundle. If two pages disagree about the same
 record again, hard-reload before filing it.
 
+**Your reversed date range on Group Profitability.** Fixed, and it was worse
+than it looked. The server had always refused a `To` earlier than a `From` — the
+reports page simply never rendered validation errors at all, so every refusal
+arrived as silence and the register kept the previous period. It now says
+*"The From date is after the To date. Swap them to set a period."* under the To
+field the moment you type it, and Apply and PDF are both disabled while it
+stands. The same line now also carries anything else the server refuses, so the
+366-day ceiling has somewhere to appear. This is on the shared reports page, so
+it holds for all ten reports, not just Group Profitability — worth a spot check
+on a second one.
+
 **Known open, already logged, fix pending.** If you hit these, skip them:
 
 - `FuelStation → Sales → Form` indexes `[0]` into error strings as if they were

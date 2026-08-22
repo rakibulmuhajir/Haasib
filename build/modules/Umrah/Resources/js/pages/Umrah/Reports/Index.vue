@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import DateTimeText from '@/components/DateTimeText.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -50,6 +50,30 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.report.title, href: `/${props.company.slug}/umrah/reports/${props.report.key}` },
 ]
 
+/*
+ * A backwards range is refused by the server (`end` is `after_or_equal:start`),
+ * but this page never rendered `errors`, so the refusal arrived as nothing at
+ * all: the register kept the previous period and Apply looked like it had
+ * worked. Catching it here means the page says so before the round trip, and
+ * reading the server's own message means anything it refuses for a reason this
+ * page has not thought of -- the 366-day ceiling, an unknown agent id -- still
+ * reaches the person who typed it.
+ */
+const dateRangeIssue = computed(() => {
+    if (!filters.start || !filters.end) return 'Both dates are needed to set a period.'
+    return filters.start > filters.end ? 'The From date is after the To date. Swap them to set a period.' : null
+})
+
+const inertiaPage = usePage()
+const serverError = computed(() => {
+    const errors = (inertiaPage.props.errors ?? {}) as Record<string, string>
+    const key = Object.keys(errors)[0]
+    return key ? errors[key] : null
+})
+
+/** The typed problem wins over the returned one -- it is the one still on screen. */
+const dateRangeError = computed(() => dateRangeIssue.value ?? serverError.value)
+
 const query = (page = 1) => {
     const values: Record<string, string | number> = { start: filters.start, end: filters.end, page, per_page: filters.per_page }
     for (const definition of props.report.filter_definitions) {
@@ -59,9 +83,13 @@ const query = (page = 1) => {
     return values
 }
 
-const applyFilters = () => router.get(`/${props.company.slug}/umrah/reports/${props.report.key}`, query(), { preserveState: true, replace: true })
+const applyFilters = () => {
+    if (dateRangeIssue.value) return
+    router.get(`/${props.company.slug}/umrah/reports/${props.report.key}`, query(), { preserveState: true, replace: true })
+}
 const changeReport = (key: string) => router.get(`/${props.company.slug}/umrah/reports/${key}`)
 const exportPdf = () => {
+    if (dateRangeIssue.value) return
     const params = new URLSearchParams(query() as Record<string, string>).toString()
     window.location.href = `/${props.company.slug}/umrah/reports/${props.report.key}/pdf?${params}`
 }
@@ -124,8 +152,23 @@ const showing = computed(() => {
                 </Select>
             </div>
             <div class="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                <div class="space-y-1.5"><Label for="report-start">From</Label><Input id="report-start" v-model="filters.start" type="date" /></div>
-                <div class="space-y-1.5"><Label for="report-end">To</Label><Input id="report-end" v-model="filters.end" type="date" /></div>
+                <div class="space-y-1.5">
+                    <Label for="report-start">From</Label>
+                    <Input id="report-start" v-model="filters.start" type="date" :aria-invalid="dateRangeError ? true : undefined" />
+                </div>
+                <div class="space-y-1.5">
+                    <Label for="report-end">To</Label>
+                    <Input
+                        id="report-end"
+                        v-model="filters.end"
+                        type="date"
+                        :aria-invalid="dateRangeError ? true : undefined"
+                        :aria-describedby="dateRangeError ? 'report-range-error' : undefined"
+                    />
+                    <!-- Inside the field's own stack rather than beside it in the
+                         grid, so the sentence sits under the date it is about. -->
+                    <p v-if="dateRangeError" id="report-range-error" class="text-sm text-destructive">{{ dateRangeError }}</p>
+                </div>
                 <div v-for="definition in report.filter_definitions" :key="definition.key" class="space-y-1.5">
                     <Label :for="`filter-${definition.key}`">{{ definition.label }}</Label>
                     <Select v-if="definition.type === 'select'" v-model="filters[definition.key]">
@@ -139,8 +182,8 @@ const showing = computed(() => {
                 </div>
             </div>
             <div class="flex gap-2">
-                <Button @click="applyFilters"><Search class="size-4" />Apply</Button>
-                <Button variant="outline" @click="exportPdf"><Download class="size-4" />PDF</Button>
+                <Button :disabled="dateRangeIssue !== null" @click="applyFilters"><Search class="size-4" />Apply</Button>
+                <Button variant="outline" :disabled="dateRangeIssue !== null" @click="exportPdf"><Download class="size-4" />PDF</Button>
             </div>
         </div>
 

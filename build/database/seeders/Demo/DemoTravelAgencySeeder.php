@@ -531,6 +531,31 @@ class DemoTravelAgencySeeder extends Seeder
 
         $this->command?->info("  agents: {$agents->count()} groups: {$groupsCreated} vouchers approved: {$vouchersApproved}");
 
+        // ---- An agent sends money ahead of a group -------------------------------
+        // Every receipt above names a visa_group_id, and allocatePayment() caps
+        // each one at that group's outstanding balance, so nothing was ever left
+        // over. That made the whole refund feature unreachable in the demo data:
+        // a refund's ceiling is what the agent paid in excess of what they owe,
+        // and no agent here had a rupee of excess. This is the ordinary case that
+        // creates one -- an agent wires a round sum for a group that has not been
+        // priced yet, so it sits as an unallocated advance until there is
+        // something to apply it to, or until they ask for it back.
+        $advanceAgent = $agents->firstWhere('name', 'Al-Noor Travels');
+        if ($advanceAgent) {
+            $core->addPayment($company->id, [
+                'agent_id' => $advanceAgent->id,
+                'direction' => 'received',
+                'payment_date' => '2026-08-05',
+                'amount' => 250_000,
+                'currency' => 'PKR',
+                'method' => 'bank_transfer',
+                'account_id' => $bank->id,
+                'reference' => 'ADV-ALNOOR-2026-08',
+                'payment_number' => null,
+            ]);
+            $this->command?->info('  unallocated agent advance: 250,000 (Al-Noor Travels)');
+        }
+
         // ---- Office overheads ----------------------------------------------------
         // Sized against roughly 800,000 of gross profit across the period, so the
         // agency lands on a believable single-digit net margin.

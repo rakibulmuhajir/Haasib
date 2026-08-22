@@ -393,7 +393,10 @@ const handleRowClick = (row: T) => {
                     <template v-for="(row, rowIndex) in data" :key="rowKey(row, rowIndex)">
                     <tr
                         :class="[hoverable && 'reg-row--hover', isClickable && 'cursor-pointer']"
+                        :tabindex="isClickable ? 0 : undefined"
                         @click="handleRowClick(row)"
+                        @keydown.enter.prevent="handleRowClick(row)"
+                        @keydown.space.prevent="handleRowClick(row)"
                     >
                         <td
                             v-for="column in columns"
@@ -462,7 +465,19 @@ const handleRowClick = (row: T) => {
                     name="mobile-card"
                     :row="row"
                 >
-                    <div class="slip" :class="{ 'cursor-pointer': isClickable }" @click="handleRowClick(row)">
+                    <!-- A slip that opens a record is a control, and a control
+                         reachable only by mouse is reachable by roughly nobody
+                         using a keyboard or a screen reader. The desktop row
+                         above has the same problem and the same fix. -->
+                    <div
+                        class="slip"
+                        :class="{ 'cursor-pointer': isClickable }"
+                        :role="isClickable ? 'button' : undefined"
+                        :tabindex="isClickable ? 0 : undefined"
+                        @click="handleRowClick(row)"
+                        @keydown.enter.prevent="handleRowClick(row)"
+                        @keydown.space.prevent="handleRowClick(row)"
+                    >
                         <div
                             v-for="column in columns"
                             :key="String(column.key)"
@@ -662,6 +677,15 @@ table {
 .reg-row--hover:hover {
     outline: var(--rule-w-base, 1.5px) solid var(--rule-emphasis);
     outline-offset: calc(var(--rule-w-base, 1.5px) * -1);
+}
+
+/* Keyboard focus lands on the same outline the pointer draws, so arriving at a
+   row by Tab looks like arriving at it by mouse. Drawn heavier than hover
+   because a focus ring is the only thing telling someone where they are. */
+.register tr[tabindex]:focus-visible,
+.slip[tabindex]:focus-visible {
+    outline: calc(var(--rule-w-base, 1.5px) * 2) solid var(--rule-emphasis);
+    outline-offset: calc(var(--rule-w-base, 1.5px) * -2);
 }
 
 .reg-cell {

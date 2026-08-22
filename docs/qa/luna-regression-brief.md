@@ -77,6 +77,34 @@ is correctly *refused*.
 fixed. What you flagged as "critical database corruption" was not corruption;
 the data was correct and read wrongly. Please don't re-file any of these.
 
+**Closed from your regression round**, all seven:
+
+- **1 — Record Payment dialog.** Real, and fixed. The amount error was written
+  outside its own grid column, so a two-column layout put it under Currency; a
+  negative amount was subtracted unclamped, which is why `-1` previewed 60,001
+  against a 60,000 balance; and the submit greyed out on conditions held
+  off-screen. All three now say what they mean, next to the field. **Please
+  re-test this one** — it is the only finding here that changed code you can see.
+- **2 — not duplication.** `UPM-00017` **is** 60,001, with 60,000 allocated and
+  1.00 left over. The two figures were read the wrong way round.
+- **3 — `UGR-00004` transport.** No inconsistency: the group is self-arranged
+  (`transport_mode` = `none`), and its accounting now reads `Visa`, quantity 1,
+  charge 60,000. "Visa with mandatory transport" was the pre-fix label.
+- **4 — `UVR-00001` list vs detail.** The voucher's bundle is `visa` = **Visa
+  Only**, and the detail page hides the Transport card entirely for a
+  self-arranged group. "Visa + Transport / Standard bus transport" was, again,
+  the pre-fix rendering.
+- **5 — invisible voucher row.** Real, and fixed, though not as a voucher
+  problem: every register renders rows twice (a table above 1024px, stacked
+  slips below), and a clickable row carried no `tabindex`, no `role` and no key
+  handling on either. Rows now take focus and answer Enter and Space. This is
+  the shared base, so it applies to every list in the app.
+- **6 and 7** — no action needed; you had already explained both.
+
+Findings 3 and 4 describe behaviour that was already fixed before your run, so
+your browser was serving a stale bundle. If two pages disagree about the same
+record again, hard-reload before filing it.
+
 **Known open, already logged, fix pending.** If you hit these, skip them:
 
 - `FuelStation → Sales → Form` indexes `[0]` into error strings as if they were

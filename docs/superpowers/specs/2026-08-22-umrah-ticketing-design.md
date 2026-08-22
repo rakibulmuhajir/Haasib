@@ -1,7 +1,7 @@
 # Umrah Ticketing — Design
 
-**Date:** 2026-08-22
-**Status:** Approved for planning
+**Date:** 2026-08-22 · revised 2026-08-23 after accounting review
+**Status:** Draft for review
 **Scope:** The accounting of air ticket sales. No booking engine, no airline API, no seat inventory.
 
 ## The three parties
@@ -11,19 +11,17 @@ Every sentence below uses these words and no synonyms.
 | Word | Who |
 |---|---|
 | **Company** | The Haasib tenant. The travel business using the app. |
-| **Supplier** | Who the company buys tickets from — an airline, or a B2B consolidator. |
+| **Supplier** | Who the company gets tickets from — an airline, or a B2B consolidator. |
 | **Buyer** | Who the company sells to — an agent on account, or a walk-in customer. |
 
 ```
-Supplier  ──sells to──►  Company  ──sells to──►  Buyer
+Supplier  ──────────►  Company  ──────────►  Buyer
 ```
 
 ## Why this exists
 
-The Umrah module sells visas, transport and hotels. It cannot sell a ticket,
-so ticket sales are kept outside the app and reconciled by hand. The schema
-contract anticipated this: *"avoid generic travel complexity until
-ticketing/hotel/transport are separately required."* Ticketing is now required.
+The Umrah module sells visas, transport and hotels. It cannot sell a ticket, so
+ticket sales are kept outside the app and reconciled by hand.
 
 Ticketing is not a visa group with different labels. A visa group has one sale
 price and one supplier cost. A ticket has five money lines, because the company
@@ -36,327 +34,415 @@ statement.
 
 | Question | Decision |
 |---|---|
-| Who buys | **Agents and walk-in customers.** Walk-ins reuse `acct.customers`; one person is one record across the app. |
-| Money lines | **Full trade anatomy** — gross fare, taxes, supplier cost, discount, service fee. |
-| Record shape | **A booking holds tickets**, mirroring `visa_groups → passengers`. |
-| Supplier record | **Rename `visa_vendors` → `vendors`**, add `vendor_type = 'ticket_supplier'`. |
-| Cancellation | **One cancellation record raises both refund legs.** |
-| Supplier refunds | **Settleable as credit**, not cash only. |
+| Revenue basis | **Agent — net revenue.** Phase 1 invariant. |
+| Who buys | Agents and walk-in customers, both as `acct.customers`. |
+| Money lines | Full trade anatomy — gross fare, taxes, supplier cost, discount, service fee. |
+| Record shape | A booking holds tickets. |
+| Where the money lives | **`acct.invoices` and `acct.bills`.** The booking is operational only. |
+| Supplier record | **`acct.vendors`**, with an optional ticketing profile. No rename. |
+| Cancellation | **Credit note + vendor credit.** Refunds only for residual cash. |
+| Atomicity | Booking, invoice, bill and postings created by **one command, idempotently**. |
+
+### What changed from the first draft, and why
+
+The first draft had the company as principal, a bespoke Umrah subledger, a
+70-file vendor rename, and a cancellation that always raised two refund records.
+All four were wrong. The review that found them is the reason this section
+exists — a spec that quietly replaces its own history teaches nobody.
+
+- **Principal → agent.** See below.
+- **Umrah subledger → `acct`.** A CHECK constraint on `group_payments` forbids a
+  received payment without an agent, so a walk-in customer literally could not
+  pay. That was discoverable before the draft was written.
+- **Vendor rename dropped.** Once suppliers are `acct.vendors`, renaming
+  `umrah.visa_vendors` is unrelated work. It may still be worth doing; it is not
+  this.
+- **Two refunds → one credit note and one vendor credit.** The old design
+  created a refund liability even when the buyer still owed money, overstating
+  AR and refunds payable simultaneously.
 
 ---
 
-## 1. The vendor rename
+## 1. Revenue basis: agent
 
-`umrah.visa_vendors` already holds visa providers, transport providers and
-government bodies, keyed by `vendor_type`. Ticket suppliers are the fourth kind.
-The name is now actively misleading, so it changes with this work rather than
-after it.
+**The company arranges air travel; it does not control a seat.** Revenue is what
+the company keeps — commission plus service fee, less discount given.
 
-- Table `umrah.visa_vendors` → `umrah.vendors`
-- Model `VisaVendor` → `UmrahVendor`
-- `vendor_type` gains `ticket_supplier`
+This is a **Phase 1 invariant, not a per-booking setting.** Seat blocks,
+inventory risk and booking control are explicitly out of scope, so the agent
+conclusion follows from the scope rather than from a judgement someone makes per
+sale. A dropdown offering principal or agent per booking would be an invitation
+to choose whichever produces a nicer revenue figure.
 
-**Blast radius: ~70 files**, all mechanical. 7 models, 7 controllers, 12 form
-requests, 4 services, ~9 Vue pages, 7 test files, 2 seeders. The 13 existing
-migrations that name the old table are **not edited** — a rename migration runs
-after them.
+If a company later genuinely buys seat inventory at its own risk, principal
+accounting is added as a **separate capability** with its own posting path, not
+by loosening this one.
 
-Routes are already `umrah/vendors`, not `umrah/visa-vendors`, so no URL moves
-and the menu freeze is untouched.
+Bearing the buyer's credit risk does not make the company principal. An agent
+who invoices a buyer carries that receivable too. Control of the seat is the
+test, and the company never has it.
 
-Refunds' `party_type` keeps its existing values (`visa_vendor`,
-`transport_vendor`) even though the table renames. Those describe *what the
-vendor is*, not *where it lives*, and changing them would rewrite live refund
-rows for no gain.
+**Consequence: there is no ticket COGS account.** Supplier cost is a payable
+that passes through a clearing account, never an expense.
 
-**This lands as its own commit, before any ticketing table exists.** A
-mechanical refactor must never share a diff with new behaviour — a reviewer
-cannot tell them apart, and a bisect cannot separate them.
+## 2. The postings
 
-## 2. The chart of accounts
+### Selling a ticket
 
-Four accounts, added to the umrah COA template pack **and backfilled into
-existing companies**. The pack is applied at company creation, so a migration
-that only touches the template leaves every live company without them — the
-same trap `2300`/`1170` had to avoid.
+Worked example: gross fare 85,000, taxes 12,400, supplier cost 91,000, discount
+2,000, service fee 1,500. The buyer pays 96,900.
 
-| Code | Account | Type |
-|---|---|---|
-| 4130 | Ticket Revenue | revenue |
-| 4135 | Ticket Discount | contra-revenue |
-| 4140 | Ticket Service Fee Income | revenue |
-| 5130 | Ticket Cost | cogs |
+**Buyer invoice** — `acct.invoices`, four lines, each carrying its own
+`income_account_id`:
 
-`UmrahCoreService::accountId()` gains roles `ticket_revenue`,
-`ticket_discount`, `ticket_service_fee`, `ticket_cost`. It is the only
-account-role map in the module and it stays that way.
+```
+Dr  Accounts Receivable                    96,900
+Dr  Ticket Discount            (4150)       2,000
+    Cr  Ticket Supplier Clearing (2350)             91,000
+    Cr  Ticket Commission Revenue (4130)             6,400
+    Cr  Ticket Service Fee Revenue (4140)            1,500
+```
 
-**4110 and 4120 are already taken** by Transport Revenue and Hotel Revenue.
-Ticket accounts start at 4130.
+**Supplier bill** — `acct.bills`:
 
-## 3. Tables
+```
+Dr  Ticket Supplier Clearing   (2350)      91,000
+    Cr  Accounts Payable                            91,000
+```
+
+Clearing nets to zero — always, because §5 creates both documents in one
+transaction at one rate. Reported revenue is net and correct:
+
+```
+Commission        6,400
+Service fee       1,500
+Discount         (2,000)
+=================  =====
+Net revenue       5,900
+```
+
+`InvoiceLineItem.income_account_id` already exists, so this is four ordinary
+invoice lines — no bespoke journal entry and no new posting engine.
+
+**To verify in step 4:** whether the invoice posting path accepts a negative
+line (the discount) or whether the discount must use the invoice-level
+`discount_amount` field, and if so which account that posts to. This decides
+whether `4150` is reachable as a line account or needs a different mechanism.
+
+### Cancelling a ticket
+
+A cancellation raises **one credit note and one vendor credit**. Neither is a
+refund. Refunds exist only for residual cash actually going back.
+
+```
+Buyer side     acct.credit_notes    for buyer_returns_amount
+               applied to the ticket invoice
+
+Supplier side  acct.vendor_credits  for supplier_returns_amount
+               applied to the supplier bill
+```
+
+This handles every payment state without branching:
+
+| Invoice state | What the credit note does |
+|---|---|
+| Unpaid | Reduces AR. Nothing else happens. |
+| Part-paid | Clears the remaining AR; the excess stays as customer credit. |
+| Fully paid | The whole amount becomes customer credit. |
+| Buyer wants cash | A refund settles the remaining customer credit. |
+
+The supplier side mirrors it exactly through AP and vendor credit.
+
+**"Exactly two refunds" was wrong** and is replaced by "one credit note and one
+vendor credit; settlement records are optional and created later." A zero-value
+leg raises nothing at all — `payment_allocations` already carries
+`CHECK (base_amount > 0)`, so a zero refund is not representable and should not
+be invented.
+
+### What the cancellation cost
+
+`supplier_returns_base - buyer_returns_base`. In base, for the same reason
+commission is: the two sides may be in different currencies. Reported on the
+cancellation and in the cancellations report. It is the number a manager asks
+about and it exists nowhere today.
+
+## 3. Currency
+
+`docs/contracts/multicurrency-rules.md` is **LOCKED**. This design complies with
+it; it does not amend it.
+
+- Revenue and contra-revenue accounts are **base-currency only** — the contract
+  forbids foreign currency on revenue, COGS and expense accounts. `4130`, `4140`
+  and `4150` are therefore base-only.
+- `2350 Ticket Supplier Clearing` is an **Other Current Liability**, so the
+  contract permits it to hold foreign currency.
+- The buyer invoice and the supplier bill carry **independent currencies and
+  independent rates**. A booking does not have "a" currency. The buyer may be
+  billed PKR while the supplier charges USD, and that is the normal case, not an
+  edge one.
+- Base amounts are immutable once posted. Rule 3: *"Exchange rates on posted
+  transactions never change."*
+
+### Base currency holds the two sides together
+
+The journal is base-only at `numeric(15,2)`. A USD supplier bill is logged with
+`base_amount` in the company's base currency, and so is the buyer invoice. So the
+clearing account is a **base-currency comparison** between two documents that may
+each have been quoted in something else.
+
+```
+Supplier bill    USD    325.00  × 280.00  →  PKR 91,000.00 base
+Buyer invoice    PKR  96,900.00 (base)    →  clearing line PKR 91,000.00
+                                             ────────────────
+Clearing balance                             PKR      0.00
+```
+
+**The two sides net to zero because the design converts them at the same rate in
+the same transaction.** That is not an accident and it is not an assumption to be
+monitored — it is why §5 requires the invoice and the bill to be created by one
+atomic command. Supplier cost is known at the instant of issue: the consolidator
+portal charges it, or the card is debited. There is no window in which the
+company has sold a ticket but does not yet know what it cost.
+
+**An earlier draft made `bill_id` nullable "until the supplier bills". That was
+the flaw.** An invoice posted today at 280 and a bill posted next week at 284
+would leave a residual in `2350` that nothing ever clears — not FX, just a hole
+that grows one ticket at a time. The bill is therefore **created with the
+booking, never later**. A supplier's own paperwork may arrive whenever it likes;
+the amount does not wait for it.
+
+### The FX that does exist
+
+Ordinary and already handled. The USD bill sits in AP as a foreign-currency
+payable. Paying it recognises realized FX through the existing bill-payment path,
+per the contract's *"only realized FX on payments"*. Ticketing builds nothing for
+this and changes nothing about it.
+
+### Rounding
+
+When the buyer invoice is in a **third** currency — buyer billed SAR, supplier
+charging USD, base PKR — both convert to base independently and rounding to two
+decimals can leave a sub-unit residual in clearing. That is rounding, not FX.
+Tolerance is one base-currency unit per booking; anything larger is a defect and
+should fail a test, not be written off.
+
+## 4. Tables
 
 ### `umrah.ticket_bookings`
 
-One PNR, one buyer, one supplier. Carries the receivable.
+Operational only. It holds no balance, no `total_paid`, no transaction link —
+Accounting owns all of that.
 
 | Column | Notes |
 |---|---|
 | `id`, `company_id` | uuid, RLS scoped |
-| `booking_number` | `TKB-00001`, company-sequential, same generator as vouchers |
-| `buyer_type` | `agent` \| `customer` |
-| `buyer_id` | uuid → `umrah.agents` or `acct.customers`, per `buyer_type`. **No database FK** — the target table varies, so the constraint is a CHECK on `buyer_type` plus validation in the form request. |
-| `supplier_id` | uuid → `umrah.vendors` where `vendor_type = 'ticket_supplier'` |
-| `pnr` | the supplier's booking reference, nullable |
-| `booking_date` | date the sale is recognised |
+| `booking_number` | `TKB-00001`, company-sequential |
+| `agent_id` | uuid → `umrah.agents`, nullable |
+| `customer_id` | uuid → `acct.customers`, nullable |
+| `supplier_vendor_id` | uuid → `acct.vendors` |
+| `invoice_id` | uuid → `acct.invoices` |
+| `bill_id` | uuid → `acct.bills`, **not null** — see §3 |
+| `pnr` | supplier booking reference, nullable |
+| `booking_date` | |
 | `status` | `issued` \| `partially_cancelled` \| `cancelled` |
-| `currency`, `exchange_rate`, `base_currency` | mirrors `group_payments` exactly |
-| `gross_fare_amount`, `tax_amount` | rolled up from tickets |
-| `supplier_cost_amount`, `discount_amount`, `service_fee_amount` | rolled up from tickets |
-| `buyer_total_amount` | what the buyer owes |
-| `total_paid`, `balance` | maintained by the existing allocation machinery |
-| `sale_transaction_id`, `cost_transaction_id` | GL idempotency links |
-| `notes` | |
+| `created_by_user_id`, `updated_by_user_id` | |
 
-No `draft` status. A booking exists because a ticket was issued; a booking
-nobody issued is not a record, it is an abandoned form.
+**Real foreign keys, no polymorphism.** `agent_id` and `customer_id` are both
+nullable with `CHECK (num_nonnulls(agent_id, customer_id) = 1)`. A
+`buyer_type`/`buyer_id` pair cannot be constrained by the database and was a
+mistake in the first draft.
+
+**Every agent is linked to an `acct.customer`** for ticket billing. That link is
+added to `umrah.agents` as a nullable `customer_id`, created on demand the first
+time an agent is billed for a ticket. Without it an agent has two identities and
+two statements.
 
 ### `umrah.tickets`
-
-One passenger, one ticket. Carries the itinerary and its own money.
 
 | Column | Notes |
 |---|---|
 | `id`, `company_id`, `booking_id` | |
-| `ticket_number` | `TKT-00001`, internal, company-sequential |
-| `airline_ticket_number` | the supplier's stock number, nullable until issued |
-| `passenger_name`, `passenger_type` | `adult` \| `child` \| `infant` |
+| `ticket_number` | `TKT-00001`, internal. **Unique per company.** |
+| `airline_ticket_number` | supplier stock number, nullable. **Unique per company when set.** |
+| `passenger_id` | uuid → `umrah.passengers`, nullable |
+| `passenger_name`, `passenger_type` | **name is a snapshot**, always stored |
 | `passport_number`, `date_of_birth` | nullable |
-| `airline` | IATA code, 2 chars |
-| `origin`, `destination` | IATA codes, 3 chars |
-| `departure_at`, `return_at` | `return_at` nullable — one-way is normal |
+| `airline`, `origin`, `destination` | IATA codes |
+| `departure_at`, `return_at` | `return_at` nullable |
 | `route_description` | free text for multi-sector, nullable |
 | `cabin_class` | `economy` \| `premium_economy` \| `business` \| `first` |
-| `gross_fare`, `taxes` | what the fare is before anything |
-| `supplier_cost` | what the company owes the supplier for this ticket |
-| `discount`, `service_fee` | what the company gave away and what it charged |
-| `buyer_amount` | `gross_fare + taxes - discount + service_fee` |
-| `visa_group_id` | nullable — links a pilgrim's flight to their group |
+| `gross_fare`, `taxes`, `discount`, `service_fee` | in the **sale** currency |
+| `gross_fare_base`, `taxes_base`, `discount_base`, `service_fee_base` | |
+| `supplier_cost` | in the **supplier** currency |
+| `supplier_cost_base` | |
+| `visa_group_id` | nullable |
 | `status` | `issued` \| `cancelled` |
 
-**Commission is derived, never stored.** It is
-`(gross_fare + taxes) - supplier_cost`. Storing it would create a fifth figure
-that can contradict the other four. It is computed for display and for the
-supplier reconciliation report.
+Dual recording per the multicurrency contract: every figure is stored in its
+document's currency **and** in base. The rates live on the invoice and the bill;
+tickets do not carry their own.
 
-The `visa_group_id` link is nullable and costs one column. Umrah pilgrims fly,
-and being able to see a group's flights beside its visas is most of why this
-module is being built here rather than as a separate product.
+**Commission is derived in base, never in a document currency:**
+
+```
+commission_base = (gross_fare_base + taxes_base) - supplier_cost_base
+```
+
+Subtracting a USD supplier cost from a PKR fare is meaningless, and a design that
+stores the five figures without their base counterparts invites exactly that
+subtraction. It is derived and never stored — a sixth figure could contradict the
+other five.
+
+`passenger_id` **plus** a name snapshot, not `visa_group_id` alone — a group link
+cannot say which pilgrim holds the ticket. The snapshot survives the passenger
+record being corrected or the group being restructured.
 
 ### `umrah.ticket_cancellations`
 
 | Column | Notes |
 |---|---|
-| `id`, `company_id`, `ticket_id` | |
+| `id`, `company_id`, `ticket_id` | **Unique on `ticket_id`** — one cancellation per ticket |
 | `cancellation_number` | `TCX-00001` |
 | `cancelled_at`, `cancelled_by_user_id`, `reason` | reason required |
-| `supplier_returns_amount` | what the supplier gives the company back |
-| `buyer_returns_amount` | what the company gives the buyer back |
-| `buyer_refund_id`, `supplier_refund_id` | the two legs it raised |
+| `supplier_returns_amount` | supplier currency, entered not computed |
+| `buyer_returns_amount` | sale currency, entered not computed |
+| `supplier_returns_base`, `buyer_returns_base` | at the credit documents' rates |
+| `buyer_credit_note_id` | uuid → `acct.credit_notes` |
+| `supplier_vendor_credit_id` | uuid → `acct.vendor_credits` |
+| `buyer_refund_id` | nullable — only if residual settled in cash |
+| `supplier_refund_receipt_id` | nullable — same, other direction |
 
-Both amounts are entered, not calculated. What the supplier withholds is the
-supplier's decision and what the company passes on is the company's — the app
-records an agreement, it does not compute one. This follows the existing refund
-contract: *"It is not computed."*
+Both amounts are entered. What the supplier withholds is the supplier's decision
+and what the company passes on is the company's; the app records an agreement, it
+does not compute one. This follows `refunds.md`: *"It is not computed."*
 
-A **void** — cancelling the same day, before the supplier bills — is this record
-with nothing withheld. It is not a separate concept and gets no separate screen.
+A **void** — same-day cancellation before the supplier bills — is this record
+with nothing withheld. Not a separate concept, not a separate screen.
 
-### Changes to `umrah.refunds`
+## 5. Atomicity and immutability
 
-- `party_type` gains `customer` and `ticket_supplier`
-- `service` gains `ticket`
-- `booking_id` and `ticket_id` added, nullable
-- CHECK constraint: **at most one** of `visa_group_id`, `booking_id`,
-  `ticket_id` is set — the same pattern shipped on `payment_allocations` in
-  `2026_08_22_000001`. All three null remains legal; a refund need not belong to
-  anything.
+**One command creates a booking.** Booking, tickets, invoice, bill and postings
+are created inside one transaction, keyed by an idempotency token so a retried
+submit cannot produce two invoices. Half a booking is a reconciliation problem
+that outlives whoever created it.
 
----
+**One command cancels a ticket.** Cancellation, credit note, vendor credit, both
+applications and the ticket status change are one atomic, idempotent unit.
 
-## 4. The postings
+**Issued records are not freely editable.**
 
-### Selling a ticket
-
-Using the worked example: gross fare 85,000, taxes 12,400, supplier cost
-91,000, discount 2,000, service fee 1,500. The buyer pays 96,900.
-
-```
-Dr  Accounts Receivable (buyer)        96,900
-Dr  Ticket Discount        (4135)       2,000
-    Cr  Ticket Revenue     (4130)                97,400
-    Cr  Service Fee Income (4140)                 1,500
-
-Dr  Ticket Cost            (5130)      91,000
-    Cr  Accounts Payable (supplier)              91,000
-```
-
-Margin is 5,900 — revenue less discount less cost. Commission (6,400) is the gap
-between gross sale and supplier cost; it is reported, not posted. Posting it
-would double-count what 4130 and 5130 already say.
-
-### Cancelling a ticket
-
-The cancellation raises two refunds. Each travels the lifecycle that already
-shipped — `requested → accepted → settled`, with request and approve held by
-different people.
-
-Worked example — a **different, single-ticket booking**, so the arithmetic below
-stands on its own: the buyer paid 32,300, the supplier cost 30,400. The supplier
-returns 20,300 and the buyer gets back 22,800.
-
-**Buyer leg** — the company owes the buyer 22,800.
-
-```
-Accept    Dr  Ticket Revenue      (4130)   22,800
-              Cr  Refunds Payable (2300)             22,800
-```
-
-Debiting revenue, not agent advances. This was an open question and this is the
-answer: the existing agent refund debits `2200 Agent Advances`, which assumes
-the buyer prepaid. A cancelled-before-payment booking is the common case, not
-the edge one, and debiting revenue is correct either way — the sale is being
-partly undone, whether or not cash ever arrived.
-
-**Supplier leg** — the supplier owes the company 20,300.
-
-```
-Accept    Dr  Refunds Receivable  (1170)   20,300
-              Cr  Ticket Cost     (5130)             20,300
-```
-
-**No commission clawback entry exists.** Commission is derived from revenue and
-cost, and both have just moved. An explicit clawback would reverse the same
-money twice. (An earlier draft of this design had one; it was wrong.)
-
-### Settlement
-
-Each leg settles independently, often weeks apart. Three routes each, uniform in
-shape:
-
-| Buyer leg (`Dr 2300`) | Credits |
+| Change | How |
 |---|---|
-| Pay cash | bank / cash |
-| Keep as credit | `2200 Agent Advances` — **agents only**; a walk-in has no running account |
-| Offset what they owe | Accounts Receivable |
+| Passenger name, passport, itinerary | Edit in place, audited via `TravelChangeLogger` |
+| Any monetary field | **Not editable.** Cancel and re-issue, or raise an adjustment. |
 
-| Supplier leg (`Cr 1170`) | Debits |
-|---|---|
-| Receive cash | bank / cash |
-| Leave with supplier | `1160 Vendor Advances` |
-| Offset what we owe | Accounts Payable |
+An issued ticket's fare has already been invoiced and billed. Letting someone
+retype it silently desynchronises three documents.
 
-Supplier-credit settlement is **new**. The refund contract sketched it and
-declined to build it — *"not built, because it was not asked for"*. Ticketing
-asks for it: B2B suppliers run standing accounts and net refunds off the next
-purchase rather than wiring money. Recording that as cash received followed by
-cash paid would invent two bank movements that never happened.
+**Period lock is validated** before any posting, using the existing
+`AccountingPeriod` check. A booking dated into a closed period is refused with a
+reason, not posted.
 
-That contract section is updated by this work, not contradicted.
+## 6. Screens
 
-### What the cancellation cost
+- **Bookings** — index (`LedgerRegister`), show, create. The show page is a
+  document: header, ticket rows, money block, and links to its invoice and bill.
+- **Tickets** — reached through the booking. Own show page, because cancellation
+  acts on one ticket.
+- **Cancellation** — a dialog on the ticket. Two amounts and a reason.
+- **Suppliers** — `acct.vendors`, with the ticketing profile on the vendor page.
 
-`supplier_returns_amount - buyer_returns_amount` — in the example, −2,500.
-
-The ticket's margin was 1,900 and is now −600. Both figures are shown: the
-change is what a manager asks about, the resulting margin is what the report
-totals.
-
----
-
-## 5. Screens
-
-Following the existing module's shape, and the ledger design system.
-
-- **Bookings** — index (`LedgerRegister`), show, create/edit. The show page is a
-  document: booking header, ticket rows, money block, payments, cancellations.
-- **Tickets** — no index of its own. A ticket is reached through its booking, or
-  through search. It has a show page because a cancellation acts on one ticket.
-- **Cancellation** — a dialog on the ticket, not a page. Two amounts and a
-  reason.
-- **Refunds** — the existing screens, widened. A refund now shows which booking
-  or ticket it came from, and a cancellation's two legs each name the other.
-- **Suppliers** — the renamed vendor screens, with the fourth type.
+All following `docs/ledger-design-system.md`: Shadcn components, Inertia forms,
+`useLexicon()` for terminology, Sonner for server errors, inline errors for
+validation, explicit loading states on every submit.
 
 ### Reports
 
-Three, on the existing shared reports page — which means they inherit the date
-validation, the PDF export and the pagination for free.
+Three, on the existing shared Umrah reports page, inheriting its date
+validation, PDF export and pagination.
 
-- **Ticket sales** — bookings in a period with margin and discount given.
+- **Ticket sales** — bookings in a period, with commission, discount and net
+  revenue.
 - **Supplier reconciliation** — tickets by supplier with cost and derived
-  commission, to check against the supplier's statement. This is the report that
-  justifies the full money anatomy.
+  commission, to check against the supplier's statement. Shows the clearing
+  balance as a control figure: it should read zero, and a non-zero balance means
+  a booking was posted through a path that bypassed the command in §5.
 - **Cancellations** — what was cancelled and what it cost.
 
-`TravelReportRequest::COMPANY_REPORTS` gains all three. Agents get none of them:
-supplier cost and commission are company-only, as the schema contract requires.
+`TravelReportRequest::COMPANY_REPORTS` gains all three. Agents get none:
+supplier cost and commission are company-only.
 
-## 6. Permissions
-
-Following `app/Constants/Permissions.php` and the four-step RBAC process:
+## 7. Permissions
 
 `UMRAH_TICKET_VIEW`, `UMRAH_TICKET_CREATE`, `UMRAH_TICKET_UPDATE`,
 `UMRAH_TICKET_CANCEL`, `UMRAH_TICKET_OWN_VIEW`.
 
-Cancellation is its own permission, separate from update. It moves money and
-raises two refunds; whoever may correct a passenger name should not
-automatically be able to do that.
+Cancellation is its own permission. It moves money and raises two accounting
+documents; whoever may correct a passenger name should not automatically do that.
 
-Role assignment: owner and manager get all; accountant gets view, create,
-update; operations gets view and create; agent gets `OWN_VIEW` only, scoped by
-`Agent.user_id` the way group access already is.
+Owner and manager get all. Accountant gets view, create, update. Operations gets
+view and create. Agent gets `OWN_VIEW` only, scoped by `Agent.user_id`.
 
-## 7. Build order
+Added via the four-step RBAC process in `CLAUDE.md`.
 
-Each step lands complete, verified, and committed before the next begins.
+## 8. Build order
 
-1. **Vendor rename.** No new behaviour. Full test suite must pass unchanged.
-2. **COA accounts** + backfill migration + `accountId()` roles.
-3. **Tables and models** — bookings, tickets, cancellations. RLS policies.
-4. **Booking CRUD and the sale posting.** The module can sell a ticket.
-5. **Payments** — verify the existing allocation machinery works against a
-   booking with no changes. If it needs changes, that is a finding, not a task.
-6. **Refund extension** — party types, service, target columns.
-7. **Cancellation** — the record, both legs, settlement routes.
+**Contracts before migrations**, per `CLAUDE.md`.
+
+1. **Contracts.** `umrah-schema.md` (three new tables), `refunds.md` (refunds are
+   now residual-only for tickets), `accounting-invoicing-contract.md` (ticket
+   invoices and their line accounts), `coa-schema.md` (four new accounts).
+2. **Chart of accounts** — `4130`, `4140`, `4150`, `2350` added to the umrah COA
+   pack **and backfilled into existing companies**. The pack applies at company
+   creation, so a template-only migration leaves every live company without them.
+3. **Agent → customer link.** Nullable `customer_id` on `umrah.agents`, plus
+   on-demand creation.
+4. **Tables and models**, with RLS policies, audit triggers, and the unique and
+   CHECK constraints named above. Verify the discount line question from §2.
+5. **The booking command** — atomic, idempotent, creates invoice and bill.
+6. **The cancellation command** — atomic, idempotent, credit note and vendor
+   credit with applications.
+7. **Residual refunds** — only the remainder after offsets, through the existing
+   refund lifecycle.
 8. **Reports and permissions.**
 
 ## Testing
 
-- The sale posting balances, for every combination of discount and service fee
-  including both zero.
-- Commission derives correctly and is never stored.
-- A cancellation raises exactly two refunds and links them.
-- Each of the six settlement routes posts a balanced entry.
-- A cancelled-before-payment booking and a cancelled-after-payment booking both
-  end with the right receivable.
+- The buyer invoice balances and the clearing account nets to **exactly** zero
+  for every combination of discount and service fee, including both zero.
+- Clearing nets to zero when the supplier bill is in a foreign currency —
+  PKR invoice, USD bill — because both convert at the same rate in one
+  transaction.
+- Buyer in SAR, supplier in USD, base PKR: the clearing residual is under one
+  base unit. Larger fails.
+- Net revenue equals commission + fee − discount, always, in base.
+- Commission derives in base and is never stored.
+- A cancellation against an unpaid, a part-paid and a fully-paid invoice each
+  produce the right AR and the right residual credit.
+- A zero-value leg raises no refund record.
+- Retrying the booking command with the same idempotency token creates one
+  invoice, not two.
+- Paying a foreign-currency supplier bill at a moved rate recognises realized FX
+  through the existing path, and does not touch clearing.
+- A closed period refuses the posting with a reason.
 - An agent sees only their own bookings and no supplier cost anywhere.
-- The rename breaks nothing: the suite passes at 185/937 before step 2 starts.
 
 ## Deliberately not built
 
-- **Airline or GDS integration.** No fare search, no issuance, no PNR sync.
-- **Seat inventory or block bookings.**
-- **Date changes / reissues.** A reissue is a cancellation plus a new ticket
-  until someone asks otherwise.
-- **Discount schemes per agent.** Discount is typed per ticket. A rule engine
-  can come when there is a rule.
-- **Multi-sector fare breakdown.** One fare per ticket; the route is text.
+- **Principal accounting.** A separate capability if a company ever buys seat
+  inventory at its own risk.
+- **Airline or GDS integration**, seat inventory, block bookings.
+- **Date changes / reissues.** A reissue is a cancellation plus a new ticket.
+- **Discount schemes per agent.** Typed per ticket; a rule engine when there is a
+  rule.
+- **Multi-sector fare breakdown.** One fare per ticket; route is text.
 - **BSP / IATA settlement files.**
+- **Moving visa groups onto `acct`.** The right long-term direction, and
+  explicitly not in this blast radius. Ticketing is built the way visas should
+  eventually be, which makes that migration easier rather than harder.
 
 ## Open
 
-Nothing blocking. One thing to watch: `acct.customers` is the invoicing
-module's table and this is the first time Umrah reaches across into `acct`. The
-FK is legal and RLS applies on both sides, but step 3 should confirm the
-customer selector honours company scope before it is trusted.
+Nothing blocking. Two things to settle during the build, both named above: the
+discount-line mechanism in step 4, and confirming the customer selector honours
+company scope the first time Umrah reaches into `acct.customers`.

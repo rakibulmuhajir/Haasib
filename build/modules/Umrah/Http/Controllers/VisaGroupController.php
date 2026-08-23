@@ -128,7 +128,6 @@ class VisaGroupController extends Controller
             'isOperations' => $this->access->companyRole($company->id, $request->user()) === 'operations',
             'transportFares' => $transportFares,
             'passengerStatuses' => Passenger::STATUSES,
-            'passengerServiceTypes' => Passenger::SERVICE_TYPES,
             'countries' => Agent::COUNTRIES,
         ]);
     }

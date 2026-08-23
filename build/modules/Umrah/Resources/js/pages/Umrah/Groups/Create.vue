@@ -29,8 +29,6 @@ type PassengerFormRow = {
     imported_age: string;
     nationality: string;
     visa_status: string;
-    service_type: string;
-    transport_charge_amount: string;
 };
 
 type TransportItemFormRow = {
@@ -54,8 +52,6 @@ const emptyPassenger = (nationality = 'Pakistan'): PassengerFormRow => ({
     imported_age: '',
     nationality,
     visa_status: 'received',
-    service_type: 'visa_transport',
-    transport_charge_amount: '0',
 });
 
 const props = defineProps<{
@@ -73,7 +69,6 @@ const props = defineProps<{
     isOperations: boolean;
     transportFares: any[];
     passengerStatuses: Record<string, string>;
-    passengerServiceTypes: Record<string, string>;
     countries: Record<string, string>;
 }>();
 
@@ -109,6 +104,7 @@ const form = useForm({
     mandatory_transport_vendor_id: 'none',
     travel_date: '',
     transport_required: true,
+    includes_visa: true,
     transport_mode: 'standard_bus',
     transport_service_id: 'none',
     driver_id: 'none',
@@ -123,6 +119,28 @@ const form = useForm({
     notes: '',
     passengers: [emptyPassenger()] as PassengerFormRow[],
     transport_items: [] as TransportItemFormRow[],
+});
+
+// Transport-only is the absence of a visa, not a kind of transport. Folding
+// it into the `transport_mode` enum as a fourth value would make it
+// mutually exclusive with both bus options, when it is really an
+// `includes_visa` toggle that happens to also fix transport_mode at
+// 'specialized'. So this stays two fields, unified here only for the radio
+// group's display value.
+const groupService = computed({
+    get: () => {
+        if (!form.includes_visa) return 'transport_only';
+        if (form.transport_mode === 'none') return 'visa_only';
+        if (form.transport_mode === 'standard_bus') return 'visa_bus';
+        return 'visa_specialized';
+    },
+    set: (value: string) => {
+        form.includes_visa = value !== 'transport_only';
+        form.transport_mode =
+            value === 'visa_only' ? 'none'
+            : value === 'visa_bus' ? 'standard_bus'
+            : 'specialized';
+    },
 });
 
 const quickAgentOpen = ref(false);
@@ -213,20 +231,10 @@ const defaultNationality = computed(
 const namedPassengers = computed(() =>
     form.passengers.filter((passenger) => passenger.full_name.trim() !== ''),
 );
-const visaPassengers = computed(() =>
-    namedPassengers.value.filter(
-        (passenger) => passenger.service_type !== 'transport_only',
-    ),
-);
 const selectedTransportVendor = computed(() =>
     props.transportVendors.find(
         (item) => item.id === form.mandatory_transport_vendor_id,
     ),
-);
-const availablePassengerServiceTypes = computed(() =>
-    form.transport_mode === 'none'
-        ? { visa_transport: 'Visa only' }
-        : props.passengerServiceTypes,
 );
 
 const fareFor = (fareId: string) =>
@@ -265,16 +273,6 @@ const transportFareTotals = computed(() =>
         },
         { sale: 0, cost: 0 },
     ),
-);
-
-const transportOnlyCharges = computed(() =>
-    namedPassengers.value
-        .filter((passenger) => passenger.service_type === 'transport_only')
-        .reduce(
-            (total, passenger) =>
-                total + Number(passenger.transport_charge_amount || 0),
-            0,
-        ),
 );
 
 const normalizeDate = (value: string | null | undefined) =>
@@ -330,7 +328,7 @@ const calculateVisaPricing = () => {
 
     const passengersForPricing =
         namedPassengers.value.length > 0
-            ? visaPassengers.value
+            ? namedPassengers.value
             : Array.from(
                   { length: Math.max(Number(form.passenger_count || 0), 0) },
                   () => ({ date_of_birth: '', imported_age: '' }),
@@ -355,7 +353,7 @@ const standardBusPricing = computed(() => {
 
     const chargeChildren = Boolean(selectedTransportVendor.value.charge_child_fare);
     const passengers = namedPassengers.value.length
-        ? visaPassengers.value.filter(
+        ? namedPassengers.value.filter(
               (passenger) => chargeChildren || ageBand(passenger) === 'adult',
           ).length
         : Math.max(Number(form.passenger_count || 0), 0);
@@ -369,17 +367,19 @@ const standardBusPricing = computed(() => {
 
 const updateVisaPricing = () => {
     const pricing = calculateVisaPricing();
-    form.visa_sale_amount = String(pricing.sale.toFixed(2));
-    form.visa_cost_amount = String(pricing.cost.toFixed(2));
+    form.visa_sale_amount = form.includes_visa
+        ? String(pricing.sale.toFixed(2))
+        : '0.00';
+    form.visa_cost_amount = form.includes_visa
+        ? String(pricing.cost.toFixed(2))
+        : '0.00';
     form.transport_amount = String(
-        ((form.transport_mode === 'none'
+        (form.transport_mode === 'none'
             ? 0
             : form.transport_mode === 'standard_bus'
               ? standardBusPricing.value.sale
-              : transportFareTotals.value.sale) +
-            (form.transport_mode === 'none' ? 0 : transportOnlyCharges.value)).toFixed(
-            2,
-        ),
+              : transportFareTotals.value.sale
+        ).toFixed(2),
     );
     form.transport_cost_amount = String(
         (form.transport_mode === 'none'
@@ -413,6 +413,7 @@ watch(
         form.travel_date,
         form.passenger_count,
         form.passengers,
+        form.includes_visa,
     ],
     updateVisaPricing,
     { deep: true },
@@ -427,10 +428,6 @@ watch(() => form.transport_mode, (mode) => {
     form.transport_service_id = 'none';
     form.driver_id = 'none';
     form.transport_items = [];
-    form.passengers.forEach((passenger) => {
-        passenger.service_type = 'visa_transport';
-        passenger.transport_charge_amount = '0';
-    });
 });
 
 const addPassenger = () => {
@@ -449,8 +446,45 @@ const addTransportItem = () => {
     });
 };
 
-const removeTransportItem = (index: number) =>
+const removeTransportItem = (index: number) => {
     form.transport_items.splice(index, 1);
+    // The notices are keyed by row index, and every row after this one has
+    // just moved up. Dropping only this key would leave the rest pointing at
+    // their neighbour's row. The watcher rebuilds whatever is still true.
+    transportSeatNotices.value = {};
+};
+
+const seatsForItem = (item: TransportItemFormRow) =>
+    Number(fareFor(item.transport_fare_id)?.service?.pax_capacity || 0);
+
+// Records the vehicle count the watcher below most recently raised a row
+// to, keyed by row index, so the hint under that row can tell "I just
+// corrected this" (attention tone) apart from a quantity the operator
+// chose themselves (no hint at all).
+const transportSeatNotices = ref<Record<number, number>>({});
+
+watch(
+    () => form.transport_items,
+    (items) => {
+        items.forEach((item, index) => {
+            const seats = seatsForItem(item);
+            const pax = Number(item.passenger_count || 0);
+            const needed = seats > 0 ? Math.ceil(pax / seats) : 0;
+            const quantity = Number(item.quantity || 0);
+
+            if (needed > quantity) {
+                // Mirrors the server, which uses max(submitted, needed, 1) --
+                // only ever raise the vehicle count, never lower it. An
+                // operator who booked extra vehicles on purpose keeps them.
+                item.quantity = String(needed);
+                transportSeatNotices.value[index] = needed;
+            } else if (transportSeatNotices.value[index] !== quantity) {
+                delete transportSeatNotices.value[index];
+            }
+        });
+    },
+    { deep: true },
+);
 
 const appendImportedMutamers = (rows: any[]) => {
     if (form.passengers.length === 1 && !form.passengers[0].full_name.trim()) {
@@ -469,8 +503,6 @@ const appendImportedMutamers = (rows: any[]) => {
                     : String(row.imported_age),
             nationality: row.nationality || defaultNationality.value,
             visa_status: row.visa_status || 'received',
-            service_type: row.service_type || 'visa_transport',
-            transport_charge_amount: String(row.transport_charge_amount || 0),
         });
     });
 
@@ -577,7 +609,12 @@ const createVendor = () => {
 const submit = () => {
     form.transform((data) => ({
         ...data,
-        vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
+        includes_visa: data.includes_visa,
+        vendor_id: data.includes_visa
+            ? data.vendor_id === 'none'
+                ? null
+                : data.vendor_id
+            : null,
         mandatory_transport_vendor_id:
             data.transport_mode === 'standard_bus' &&
             data.mandatory_transport_vendor_id !== 'none'
@@ -595,10 +632,14 @@ const submit = () => {
             ? Number(data.transport_pax_capacity)
             : null,
         passenger_count: Number(data.passenger_count || 0),
-        visa_sale_amount: Number(data.visa_sale_amount || 0),
+        visa_sale_amount: data.includes_visa
+            ? Number(data.visa_sale_amount || 0)
+            : 0,
         transport_amount: Number(data.transport_amount || 0),
         discount_amount: Number(data.discount_amount || 0),
-        visa_cost_amount: Number(data.visa_cost_amount || 0),
+        visa_cost_amount: data.includes_visa
+            ? Number(data.visa_cost_amount || 0)
+            : 0,
         transport_cost_amount: Number(data.transport_cost_amount || 0),
         passengers: data.passengers
             .filter((p) => p.full_name.trim() !== '')
@@ -612,8 +653,6 @@ const submit = () => {
                         : Number(passenger.imported_age),
                 nationality: passenger.nationality,
                 visa_status: passenger.visa_status,
-                service_type: data.transport_mode === 'none' ? 'visa_transport' : passenger.service_type,
-                transport_charge_amount: data.transport_mode === 'none' ? 0 : Number(passenger.transport_charge_amount || 0),
             })),
         transport_items:
             data.transport_mode === 'specialized'
@@ -813,7 +852,7 @@ const submit = () => {
                                     >
                                 </div>
                             </div>
-                            <div v-if="canManageSetup" class="space-y-2">
+                            <div v-if="canManageSetup && form.includes_visa" class="space-y-2">
                                 <div
                                     class="flex items-center justify-between gap-3"
                                 >
@@ -1079,56 +1118,73 @@ const submit = () => {
 
                     <Card variant="form">
                         <CardHeader
-                            ><CardTitle>Transport</CardTitle></CardHeader
+                            ><CardTitle>What this group includes</CardTitle></CardHeader
                         >
                         <CardContent class="space-y-4">
                             <RadioGroup
-                                v-model="form.transport_mode"
-                                class="grid gap-3 md:grid-cols-3"
+                                v-model="groupService"
+                                class="grid gap-3 md:grid-cols-2"
                             >
                                 <Label
-                                    for="transport-none"
+                                    for="group-service-visa-only"
                                     class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
                                 >
-                                    <RadioGroupItem id="transport-none" value="none" />
-                                    <span><span class="block font-medium">Self-arranged transport</span><span class="mt-1 block text-xs text-muted-foreground">Passengers arrange their own transport. No vehicle, driver, fare, or transport charge is recorded.</span></span>
-                                </Label>
-                                <Label
-                                    for="transport-standard"
-                                    class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
-                                >
-                                    <RadioGroupItem
-                                        id="transport-standard"
-                                        value="standard_bus"
-                                    />
+                                    <RadioGroupItem id="group-service-visa-only" value="visa_only" />
                                     <span
                                         ><span class="block font-medium"
-                                            >Standard bus</span
+                                            >Visa only (self transport)</span
                                         ><span
                                             class="mt-1 block text-xs text-muted-foreground"
-                                            >{{
-                                                isOperations
-                                                    ? 'Complete journey included with the visa service.'
-                                                    : 'Complete journey included with the visa cost.'
-                                            }}</span
+                                            >Passengers arrange their own
+                                            transport. No vehicle, driver or
+                                            fare is recorded.</span
                                         ></span
                                     >
                                 </Label>
                                 <Label
-                                    for="transport-specialized"
+                                    for="group-service-visa-bus"
                                     class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
                                 >
-                                    <RadioGroupItem
-                                        id="transport-specialized"
-                                        value="specialized"
-                                    />
+                                    <RadioGroupItem id="group-service-visa-bus" value="visa_bus" />
                                     <span
                                         ><span class="block font-medium"
-                                            >Specialized transport</span
+                                            >Visa and standard bus</span
                                         ><span
                                             class="mt-1 block text-xs text-muted-foreground"
-                                            >Choose complete-journey or sector
-                                            fares by vehicle.</span
+                                            >One per-head bus rate from the
+                                            transport provider, alongside the
+                                            visa.</span
+                                        ></span
+                                    >
+                                </Label>
+                                <Label
+                                    for="group-service-visa-specialized"
+                                    class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                                >
+                                    <RadioGroupItem id="group-service-visa-specialized" value="visa_specialized" />
+                                    <span
+                                        ><span class="block font-medium"
+                                            >Visa and specialized transport</span
+                                        ><span
+                                            class="mt-1 block text-xs text-muted-foreground"
+                                            >Chartered vehicles priced per
+                                            vehicle, alongside the visa.</span
+                                        ></span
+                                    >
+                                </Label>
+                                <Label
+                                    for="group-service-transport-only"
+                                    class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                                >
+                                    <RadioGroupItem id="group-service-transport-only" value="transport_only" />
+                                    <span
+                                        ><span class="block font-medium"
+                                            >Transport only</span
+                                        ><span
+                                            class="mt-1 block text-xs text-muted-foreground"
+                                            >Everyone already holds a visa.
+                                            No visa vendor, no visa
+                                            charge.</span
                                         ></span
                                     >
                                 </Label>
@@ -1394,6 +1450,37 @@ const submit = () => {
                                             applied</span
                                         >
                                     </div>
+                                    <div
+                                        v-if="fareFor(item.transport_fare_id)"
+                                        class="text-xs text-muted-foreground lg:col-span-6"
+                                    >
+                                        <span
+                                            v-if="transportSeatNotices[index] !== undefined"
+                                            class="block text-status-attention"
+                                        >
+                                            Raised to
+                                            {{ transportSeatNotices[index] }}
+                                            vehicles to seat
+                                            {{ Number(item.passenger_count || 0) }}
+                                            passengers.
+                                        </span>
+                                        <span v-if="seatsForItem(item) > 0">
+                                            {{ seatsForItem(item) }} seats per
+                                            vehicle ·
+                                            {{
+                                                seatsForItem(item) *
+                                                Number(item.quantity || 0)
+                                            }}
+                                            seats for
+                                            {{ Number(item.passenger_count || 0) }}
+                                            passengers
+                                        </span>
+                                        <span v-else>
+                                            This vehicle states no seat
+                                            count. Check the vehicle count
+                                            yourself.
+                                        </span>
+                                    </div>
                                 </div>
                                 <Button
                                     type="button"
@@ -1477,7 +1564,7 @@ const submit = () => {
                                 v-for="(passenger, index) in form.passengers"
                                 :key="passenger.row_id"
                                 data-passenger-row
-                                class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_220px_130px_40px]"
+                                class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_40px]"
                             >
                                 <div
                                     v-if="!isOperations"
@@ -1591,74 +1678,6 @@ const submit = () => {
                                         }}
                                     </p>
                                 </div>
-                                <div class="space-y-1">
-                                    <Label class="text-xs text-muted-foreground"
-                                        >Service</Label
-                                    >
-                                    <Select v-model="passenger.service_type">
-                                        <SelectTrigger
-                                            ><SelectValue
-                                        /></SelectTrigger>
-                                        <SelectContent
-                                            ><SelectItem
-                                                v-for="(
-                                                    label, value
-                                                ) in availablePassengerServiceTypes"
-                                                :key="value"
-                                                :value="value"
-                                                >{{ label }}</SelectItem
-                                            ></SelectContent
-                                        >
-                                    </Select>
-                                    <p
-                                        v-if="
-                                            nestedError(
-                                                `passengers.${index}.service_type`,
-                                            )
-                                        "
-                                        class="text-xs text-destructive"
-                                    >
-                                        {{
-                                            nestedError(
-                                                `passengers.${index}.service_type`,
-                                            )
-                                        }}
-                                    </p>
-                                </div>
-                                <div
-                                    v-if="!isOperations"
-                                    class="space-y-1"
-                                >
-                                    <Label class="text-xs text-muted-foreground"
-                                        >Transport Charge</Label
-                                    >
-                                    <Input
-                                        v-model="
-                                            passenger.transport_charge_amount
-                                        "
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        :disabled="
-                                            form.transport_mode === 'none' ||
-                                            passenger.service_type !== 'transport_only'
-                                        "
-                                    />
-                                    <p
-                                        v-if="
-                                            nestedError(
-                                                `passengers.${index}.transport_charge_amount`,
-                                            )
-                                        "
-                                        class="text-xs text-destructive"
-                                    >
-                                        {{
-                                            nestedError(
-                                                `passengers.${index}.transport_charge_amount`,
-                                            )
-                                        }}
-                                    </p>
-                                </div>
                                 <div class="flex items-end">
                                     <Button
                                         type="button"
@@ -1686,7 +1705,7 @@ const submit = () => {
                     <Card v-if="!isOperations" variant="form">
                         <CardHeader><CardTitle>Amounts</CardTitle></CardHeader>
                         <CardContent class="space-y-4">
-                            <div v-if="isAgent && agentVisaPricing" class="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">
+                            <div v-if="isAgent && agentVisaPricing && form.includes_visa" class="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">
                                 <div>
                                     <div class="text-muted-foreground">Adult visa rate</div>
                                     <MoneyText :amount="agentVisaPricing.adult_retail_amount" :currency="company.base_currency" />

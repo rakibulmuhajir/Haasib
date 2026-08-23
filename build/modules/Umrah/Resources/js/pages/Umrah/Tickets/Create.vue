@@ -207,14 +207,16 @@ const submit = () => {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <button
+                        <Button
                             v-if="form.agent_id"
                             type="button"
-                            class="text-xs text-muted-foreground underline"
+                            variant="link"
+                            size="sm"
+                            class="h-auto p-0 text-xs text-muted-foreground"
                             @click="clearAgent"
                         >
                             Clear agent, bill a walk-in customer instead
-                        </button>
+                        </Button>
                         <p v-if="form.errors.agent_id" class="text-sm text-destructive">
                             {{ form.errors.agent_id }}
                         </p>

@@ -20,16 +20,53 @@
 - Copy the migration pattern from `modules/Umrah/Database/Migrations/2026_08_21_000001_create_umrah_refunds.php` exactly: UUID default, `char(3)` currency with an FK to `public.currencies`, CHECK constraints via `DB::statement`, RLS enabled + forced + a company-isolation policy.
 - Money columns: `decimal(18, 6)` for transaction amounts, `decimal(15, 2)` for base amounts, `decimal(18, 8)` for rates. `docs/contracts/multicurrency-rules.md` is **LOCKED**.
 - Never instantiate a service directly. Commands go through `Bus::dispatch()`.
-- **This codebase has no model factories.** There is no `CompanyFactory`,
-  `CustomerFactory`, `AgentFactory` or anything like them — `Model::factory()`
-  will fatal. Build fixtures with `Model::create([...])`, following
-  `tests/Feature/Umrah/RefundLifecycleTest.php`. Every `::factory()` call written
-  in this plan is a mistake in the plan; replace it. Task 1's instruction to
-  "write a factory if none exists" is withdrawn — put the fixture builders in
-  `TicketingFixtures.php` instead, where Tasks 2-6 already expect them.
-- **Company creation does not seed a chart of accounts.** The COA arrives only
-  through `CompanyOnboardingService::setupCompanyIdentity()`. Any test that posts
-  to an account must arrange for that account to exist.
+- **The app's own models have no factories.** `Company::factory()`,
+  `Customer::factory()`, `Vendor::factory()`, `Agent::factory()` do not exist and
+  will fatal. `User::factory()` **does** exist — it is the Laravel default. Every
+  non-`User` `::factory()` call written in this plan is a mistake in the plan;
+  replace it with `Model::create([...])`. Task 1's instruction to "write a factory
+  if none exists" is withdrawn — put fixture builders in `TicketingFixtures.php`,
+  where Tasks 2-6 already expect them.
+
+- **Company creation seeds nothing.** No chart of accounts, no fiscal year, no
+  currency row. A posting test must arrange all of it. Copy
+  `billPaymentTestFixture()` in `tests/Feature/Accounting/BillPaymentPostingTest.php`
+  — it is the working reference for this whole plan. The shape:
+
+```php
+$user = User::factory()->create();
+
+$company = Company::create([
+    'name' => 'Ticketing Test',
+    'slug' => 'ticketing-test-'.str()->lower(str()->random(8)),
+    'owner_id' => $user->id,
+    'base_currency' => 'PKR',
+]);
+
+// public.currencies is not seeded in tests -- insert what you use.
+if (! DB::table('public.currencies')->where('code', 'PKR')->exists()) {
+    DB::table('public.currencies')->insert(['code' => 'PKR', 'name' => 'Pakistan Rupee', 'symbol' => 'Rs']);
+}
+
+// Postings are refused outside an open period. Every test in this plan
+// posts, so every fixture needs both of these.
+$fy = FiscalYear::create([
+    'company_id' => $company->id, 'name' => 'FY 2026',
+    'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open',
+]);
+
+AccountingPeriod::create([
+    'company_id' => $company->id, 'fiscal_year_id' => $fy->id,
+    'name' => 'Sep 2026', 'period_number' => 9,
+    'start_date' => '2026-09-01', 'end_date' => '2026-09-30',
+]);
+```
+
+  Then create the accounts the test posts to with `Account::create([...])`, or
+  run the ticket-account backfill migration the way
+  `tests/Feature/Accounting/TicketAccountsTest.php` does. **All the plan's dates
+  sit in September 2026 — keep the period covering them, or every posting test
+  fails on a locked period rather than on the thing it is testing.**
 - Never use `$request->validate()`. Use a FormRequest.
 - Pest helper functions declared at file top-level are **global across the whole suite** — redefining a name collides rather than shadows. Prefix every helper in this plan with `ticketing`.
 - **Test baseline is 185 passed / 937 assertions.** Run `php artisan test` before every commit; never let it drop.
@@ -59,33 +96,40 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Umrah\Models\Agent;
 
 it('links an agent to the customer who carries the balance', function () {
-    $company = Company::factory()->create();
-    $customer = Customer::factory()->for($company)->create(['name' => 'Al-Noor Travels']);
-    $agent = Agent::factory()->for($company)->create(['customer_id' => $customer->id]);
+    $f = ticketingCompany();
+    $customer = ticketingCustomer($f->company, ['name' => 'Al-Noor Travels']);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id]);
 
     expect($agent->customer->name)->toBe('Al-Noor Travels');
 });
 
 it('leaves existing agents unlinked rather than inventing a customer', function () {
-    $company = Company::factory()->create();
-    $agent = Agent::factory()->for($company)->create();
+    $f = ticketingCompany();
 
-    expect($agent->customer_id)->toBeNull();
+    // An agent that predates this column has no customer record to point
+    // at, and inventing one would put a duplicate party on the books.
+    expect(ticketingAgent($f->company)->customer_id)->toBeNull();
 });
 
-it('refuses a customer belonging to another company', function () {
-    $mine = Company::factory()->create();
-    $theirs = Company::factory()->create();
-    $stranger = Customer::factory()->for($theirs)->create();
+it('reaches the customer through the relation', function () {
+    $f = ticketingCompany();
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id]);
 
-    // RLS scopes acct.customers by company, so the row is invisible and
-    // the foreign key cannot resolve.
-    expect(fn () => Agent::factory()->for($mine)->create(['customer_id' => $stranger->id]))
-        ->toThrow(\Illuminate\Database\QueryException::class);
+    expect($agent->customer)->toBeInstanceOf(\App\Modules\Accounting\Models\Customer::class)
+        ->and($agent->customer->id)->toBe($customer->id);
 });
 ```
 
-If `Agent` has no factory, write one at `modules/Umrah/Database/Factories/AgentFactory.php` following whichever Umrah factory already exists, and wire `newFactory()` on the model.
+Write `ticketingCompany()`, `ticketingCustomer()` and `ticketingAgent()` in
+`tests/Feature/Umrah/TicketingFixtures.php` now, to the recipe in Global
+Constraints — Tasks 2 through 6 all build on them, so getting them right here
+saves five repetitions.
+
+There is deliberately **no** test that the database refuses a customer from
+another company. RLS and foreign-key evaluation interact in ways that would make
+such a test assert the wrong mechanism. The cross-company guard that matters is
+in the booking command, and Task 5 tests it there.
 
 - [ ] **Step 2: Run it and watch it fail**
 

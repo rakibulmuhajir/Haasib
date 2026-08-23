@@ -22,10 +22,16 @@
 - Routes are `/{company}/...` with `->middleware(['auth', 'identify.company'])`.
 - Company context is `app(CurrentCompany::class)->get()`. **Never `session('active_company_id')`.**
 - Authorisation is `$this->hasCompanyPermission(Permissions::UMRAH_TICKET_...)`.
-- **This codebase has no model factories.** `Model::factory()` will fatal. Build
-  fixtures with `Model::create([...])`, following
-  `tests/Feature/CompanyRoleAccessTest.php` for the user-and-role setup this
-  plan's permission tests need.
+- **The app's own models have no factories.** `Company::factory()`,
+  `Customer::factory()` and the rest do not exist and will fatal.
+  `User::factory()` **does** exist. Build the rest with `Model::create([...])`,
+  following `tests/Feature/CompanyRoleAccessTest.php` for the user-and-role setup
+  this plan's permission tests need, and `billPaymentTestFixture()` in
+  `tests/Feature/Accounting/BillPaymentPostingTest.php` for a company that can
+  actually be posted to.
+- **A posting needs an open `AccountingPeriod` covering its date.** Every fixture
+  in Plan B carries a fiscal year and a September 2026 period; reuse the same
+  builders here rather than writing new ones.
 - **Menu freeze:** do not rename, move, remove or repoint any existing nav item. Adding a new one is fine.
 - Currency display: the base currency is not announced beside every amount. Non-base amounts show the **symbol**, not the ISO code. Documents state `Currency: SAR` once, on export.
 - **Verification quad**, from `build/`:

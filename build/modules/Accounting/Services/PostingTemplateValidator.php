@@ -84,6 +84,10 @@ class PostingTemplateValidator
             'AP_BILL' => [['AP'], ['EXPENSE']],
             'AP_PAYMENT' => [['AP'], ['BANK', 'CASH']],
             'AP_VENDOR_CREDIT' => [['AP'], ['EXPENSE']],
+            'TICKET_INVOICE' => [['AR'], ['CLEARING'], ['REVENUE'], ['DISCOUNT_GIVEN']],
+            'TICKET_BILL' => [['AP'], ['CLEARING']],
+            'TICKET_CREDIT_NOTE' => [['AR'], ['CANCELLATION_ADJUSTMENT']],
+            'TICKET_VENDOR_CREDIT' => [['AP'], ['CANCELLATION_ADJUSTMENT']],
             default => [],
         };
     }
@@ -101,6 +105,9 @@ class PostingTemplateValidator
             'TAX_RECEIVABLE' => $account->type === 'asset',
             'DISCOUNT_GIVEN' => in_array($account->type, ['expense', 'other_expense', 'revenue'], true),
             'DISCOUNT_RECEIVED' => in_array($account->type, ['revenue', 'other_income'], true),
+            'SERVICE_FEE' => $account->type === 'revenue',
+            'CANCELLATION_ADJUSTMENT' => $account->type === 'revenue',
+            'ROUNDING' => in_array($account->type, ['expense', 'other_expense', 'revenue', 'other_income'], true),
             default => true,
         };
 

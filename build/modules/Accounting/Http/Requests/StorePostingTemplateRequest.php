@@ -40,7 +40,7 @@ class StorePostingTemplateRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'doc_type' => ['required', 'string', 'in:AR_INVOICE,AR_PAYMENT,AR_CREDIT_NOTE,AP_BILL,AP_PAYMENT,AP_VENDOR_CREDIT,BANK_TRANSFER,BANK_FEE,PAYROLL'],
+            'doc_type' => ['required', 'string', 'in:AR_INVOICE,AR_PAYMENT,AR_CREDIT_NOTE,AP_BILL,AP_PAYMENT,AP_VENDOR_CREDIT,BANK_TRANSFER,BANK_FEE,PAYROLL,TICKET_INVOICE,TICKET_BILL,TICKET_CREDIT_NOTE,TICKET_VENDOR_CREDIT'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],

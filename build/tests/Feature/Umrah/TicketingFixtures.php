@@ -4,13 +4,16 @@ use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Models\VendorCredit;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
+use App\Modules\Umrah\Models\TicketCancellation;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -251,5 +254,65 @@ function ticketingTicket(?object $context = null, array $overrides = []): Ticket
         'supplier_cost_base' => 91_000,
         'base_currency' => $context->company->base_currency,
         'status' => 'issued',
+    ], $overrides));
+}
+
+/**
+ * A cancellation of its own fresh ticket (its own company and booking,
+ * via ticketingTicket()), with a buyer credit note and a supplier
+ * vendor credit already raised. Override 'ticket_id' to collide two
+ * cancellations against the same ticket deliberately; override
+ * 'buyer_credit_note_id' or 'supplier_vendor_credit_id' to null out a
+ * leg the fixture created but the test does not want counted.
+ */
+function ticketingCancellation(array $overrides = []): TicketCancellation
+{
+    $ticket = ticketingTicket();
+    $company = Company::find($ticket->company_id);
+    $booking = TicketBooking::find($ticket->ticket_booking_id);
+
+    $creditNote = CreditNote::create([
+        'company_id' => $company->id,
+        'customer_id' => $booking->customer_id,
+        'credit_note_number' => 'CN-'.str()->upper(str()->random(8)),
+        'credit_date' => '2026-09-05',
+        'amount' => 85_000,
+        'currency' => $company->base_currency,
+        'base_currency' => $company->base_currency,
+        'base_amount' => 85_000,
+        'reason' => 'Ticket cancellation',
+        'status' => 'draft',
+    ]);
+
+    $vendorCredit = VendorCredit::create([
+        'company_id' => $company->id,
+        'vendor_id' => $booking->supplier_vendor_id,
+        'credit_number' => 'VC-'.str()->upper(str()->random(8)),
+        'credit_date' => '2026-09-05',
+        'amount' => 80_000,
+        'currency' => $company->base_currency,
+        'base_currency' => $company->base_currency,
+        'base_amount' => 80_000,
+        'reason' => 'Ticket cancellation',
+        'status' => 'draft',
+    ]);
+
+    return TicketCancellation::create(array_merge([
+        'company_id' => $company->id,
+        'ticket_id' => $ticket->id,
+        'cancellation_date' => '2026-09-05',
+        'supplier_returns_currency' => $company->base_currency,
+        'supplier_returns_exchange_rate' => null,
+        'supplier_returns_amount' => 80_000,
+        'supplier_returns_base' => 80_000,
+        'buyer_returns_currency' => $company->base_currency,
+        'buyer_returns_exchange_rate' => null,
+        'buyer_returns_amount' => 85_000,
+        'buyer_returns_base' => 85_000,
+        'base_currency' => $company->base_currency,
+        'buyer_credit_note_id' => $creditNote->id,
+        'supplier_vendor_credit_id' => $vendorCredit->id,
+        'idempotency_key' => 'cancel-'.str()->lower(str()->random(10)),
+        'reason' => 'Passenger withdrew',
     ], $overrides));
 }

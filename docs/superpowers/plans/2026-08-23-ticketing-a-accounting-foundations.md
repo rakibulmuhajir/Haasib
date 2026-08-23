@@ -24,10 +24,27 @@
   `tests/Feature/Accounting/BillPaymentPostingTest.php` or
   `tests/Feature/Umrah/RefundLifecycleTest.php`. Any `::factory()` call written
   in this plan is a mistake in the plan; replace it.
-- **Company creation does not seed a chart of accounts.** The COA arrives only
-  through `CompanyOnboardingService::setupCompanyIdentity()`; there is no model
-  observer. A test that needs accounts must either run onboarding or insert the
-  accounts it needs.
+- **Company creation seeds nothing** — no chart of accounts, no currency row, no
+  fiscal year, no accounting period. The COA arrives only through
+  `CompanyOnboardingService::setupCompanyIdentity()`; there is no model observer.
+- **A posting is refused outside an open `AccountingPeriod`.** Any test that
+  posts must create a `FiscalYear` and a period covering its dates, or it fails
+  on a locked period instead of on the thing under test. Copy
+  `billPaymentTestFixture()` in `tests/Feature/Accounting/BillPaymentPostingTest.php`
+  — it is the working reference for a company that can actually be posted to.
+- **Schema facts established while building tasks 1-3**, all contradicting
+  something this plan originally said:
+  - `acct.posting_template_lines` has **no `company_id`** column; its RLS policy
+    joins through `acct.posting_templates`.
+  - Its foreign key column is **`template_id`**, not `posting_template_id`.
+  - `2350` carries the company's **base currency**, not NULL — only "monetary"
+    subtypes may carry one, and `other_current_liability` is on that list. See
+    `CompanyOnboardingService::createIndustryChartOfAccounts()`.
+  - `4160` is `is_contra => true`, matching `4900`/`4910` in
+    `AccountTemplateSeeder.php`.
+  - Taken Pest helper names: `ticketAccountsCompany()`,
+    `runTicketAccountsBackfillMigration()`, `ticketTemplateAccount()`,
+    `billPaymentTestFixture()`. Top-level helpers are global across the suite.
 - `sed -i` silently no-ops on these files (CRLF). Use the Edit tool.
 - Pest/artisan output carries ANSI escapes. Pipe through `sed 's/\x1b\[[0-9;]*m//g'` when grepping it.
 - **Test baseline is 185 passed / 937 assertions**, about 215 seconds. Run the full suite (`php artisan test`) before every commit; it must never drop below baseline.

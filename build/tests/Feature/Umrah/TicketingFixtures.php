@@ -202,21 +202,31 @@ function ticketingBookingAttributes(object $f, array $overrides = []): array
 }
 
 /**
- * A single ticket sitting on its own company + booking. Successive
- * calls within the same test reuse that company and booking (needed
- * for the airline-ticket-number uniqueness tests, which are scoped
- * per company) but a fresh pair is built the first time a test needs
- * one, so nothing leaks across tests under RefreshDatabase.
+ * A fresh company + booking pair, created new on every call. Pass the
+ * same context object to two ticketingTicket() calls when a test wants
+ * both tickets to collide on something scoped to that company/booking
+ * (e.g. the airline-ticket-number uniqueness tests); pass none, or two
+ * distinct contexts, when a test wants isolation instead. Nothing here
+ * is shared implicitly -- the call site says what it wants.
  */
-function ticketingTicket(array $overrides = []): Ticket
+function ticketingTicketContext(): object
 {
-    static $context = null;
+    $f = ticketingBookingFixture();
+    $booking = TicketBooking::create(ticketingBookingAttributes($f));
 
-    if ($context === null || ! Company::find($context->company->id)) {
-        $f = ticketingBookingFixture();
-        $booking = TicketBooking::create(ticketingBookingAttributes($f));
-        $context = (object) ['company' => $f->company, 'booking' => $booking];
-    }
+    return (object) ['company' => $f->company, 'booking' => $booking];
+}
+
+/**
+ * A single ticket. Given no context, builds a fresh company + booking
+ * for this ticket alone. Given a context (from ticketingTicketContext()
+ * or a previous call's return), attaches to that company + booking
+ * instead -- the caller decides whether tickets share a company, not an
+ * accident of static state.
+ */
+function ticketingTicket(?object $context = null, array $overrides = []): Ticket
+{
+    $context ??= ticketingTicketContext();
 
     return Ticket::create(array_merge([
         'company_id' => $context->company->id,

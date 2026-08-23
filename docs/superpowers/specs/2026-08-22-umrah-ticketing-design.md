@@ -161,9 +161,9 @@ the next author from widening it.
 
 **Instead: a ticket posting adapter over the existing GL engine.** `PostingService`
 already resolves a `PostingTemplate` by `doc_type`, so ticketing adds
-`ticket_invoice` and `ticket_bill` templates carrying a `SUPPLIER_CLEARING` role
-alongside the existing `AR`, `AP`, `REVENUE` and `DISCOUNT_GIVEN` roles. The
-clearing leg comes from the template role, not from a line account. Ticket
+`TICKET_INVOICE` and `TICKET_BILL` templates carrying the existing `CLEARING`
+role alongside `AR`, `AP`, `REVENUE` and `DISCOUNT_GIVEN`. The clearing leg comes
+from the template role, not from a line account. Ticket
 invoices and bills stay ordinary subledger documents — aging, allocation and
 statements all work — while the clearing leg is supplied by a posting strategy
 that knows what a ticket is.
@@ -200,12 +200,27 @@ The net debit left in `4160` is `buyer return − supplier return` — **the
 cancellation cost, falling out of the ledger rather than being computed beside
 it**. That is the figure the cancellations report reads.
 
-These post through the same adapter as the sale: `ticket_credit_note` and
-`ticket_vendor_credit` templates with a `CANCELLATION_ADJUSTMENT` role. The
+These post through the same adapter as the sale: `TICKET_CREDIT_NOTE` and
+`TICKET_VENDOR_CREDIT` templates with a `CANCELLATION_ADJUSTMENT` role. The
 existing credit documents cannot carry it themselves — `CreditNoteItem` has no
 account field at all, and `CreditNote` stores only `base_currency` with no
 `currency` or `exchange_rate`. Both are additions this work must make, not
 assumptions it may lean on.
+
+### A zero leg creates nothing
+
+Both credit links are **nullable**, because either side can return nothing:
+
+```
+buyer return    > 0  →  buyer credit note      ;  otherwise null
+supplier return > 0  →  supplier vendor credit ;  otherwise null
+```
+
+The command creates each document, and its application, only when the amount is
+above zero. A supplier that withholds the whole fare produces a cancellation with
+a buyer credit note and no vendor credit, and that is a complete record, not a
+half-written one. An earlier draft marked both links required while also saying a
+zero leg raises nothing — the two could not both be true.
 
 ### Applying a credit
 
@@ -241,8 +256,10 @@ be invented.
 
 ### What the cancellation cost
 
-`supplier_returns_base - buyer_returns_base`. In base, for the same reason
-commission is: the two sides may be in different currencies. Reported on the
+`buyer_returns_base - supplier_returns_base` — the net debit left in `4160`. In
+base, for the same reason commission is: the two sides may be in different
+currencies. The company loses when it hands back more than it gets back, so the
+buyer leg is the one that comes first. Reported on the
 cancellation and in the cancellations report. It is the number a manager asks
 about and it exists nowhere today.
 
@@ -437,8 +454,8 @@ holds it for anyone who needs it.
 | `supplier_returns_amount` | supplier currency, entered not computed |
 | `buyer_returns_amount` | sale currency, entered not computed |
 | `supplier_returns_base`, `buyer_returns_base` | at the credit documents' rates |
-| `buyer_credit_note_id` | uuid → `acct.credit_notes`, **unique** |
-| `supplier_vendor_credit_id` | uuid → `acct.vendor_credits`, **unique** |
+| `buyer_credit_note_id` | uuid → `acct.credit_notes`, nullable, **unique** |
+| `supplier_vendor_credit_id` | uuid → `acct.vendor_credits`, nullable, **unique** |
 | `buyer_refund_id` | nullable — `acct.customer_refunds`, see below |
 | `supplier_refund_receipt_id` | nullable — `acct.vendor_refund_receipts`, see below |
 
@@ -473,8 +490,9 @@ Both amounts are entered. What the supplier withholds is the supplier's decision
 and what the company passes on is the company's; the app records an agreement, it
 does not compute one. This follows `refunds.md`: *"It is not computed."*
 
-A **void** — same-day cancellation before the supplier bills — is this record
-with nothing withheld. Not a separate concept, not a separate screen.
+A **void** — a same-day full cancellation before either side has settled — is
+this record with nothing withheld. It cannot be "before the supplier bills": §3
+makes the bill simultaneous with the sale. Not a separate concept, not a separate screen.
 
 ## 5. Atomicity and immutability
 
@@ -518,7 +536,7 @@ reason, not posted.
 - **Tickets** — reached through the booking. Own show page, because cancellation
   acts on one ticket.
 - **Cancellation** — a dialog on the ticket. Two amounts and a reason.
-- **Suppliers** — `acct.vendors`, with the ticketing profile on the vendor page.
+- **Suppliers** — `acct.vendors`, unchanged. Ticketing adds no screen here.
 
 All following `docs/ledger-design-system.md`: Shadcn components, Inertia forms,
 `useLexicon()` for terminology, Sonner for server errors, inline errors for
@@ -566,11 +584,28 @@ Added via the four-step RBAC process in `CLAUDE.md`.
    `ROUNDING` account added to the umrah COA pack **and backfilled into existing
    companies**. The pack applies at company creation, so a template-only
    migration leaves every live company without them.
-3. **Posting templates and the ticket adapter** — `ticket_invoice`,
-   `ticket_bill`, `ticket_credit_note`, `ticket_vendor_credit`, carrying the
-   `SUPPLIER_CLEARING`, `CANCELLATION_ADJUSTMENT` and `ROUNDING` roles. **This is
-   the load-bearing step; §2 and §3 are unbuildable without it**, and it comes
-   before any ticket table so the posting shape is proven first.
+3. **Posting templates and the ticket adapter.** **The load-bearing step; §2 and
+   §3 are unbuildable without it**, and it comes before any ticket table so the
+   posting shape is proven first.
+
+   Doc types follow the existing enum style — `TICKET_INVOICE`, `TICKET_BILL`,
+   `TICKET_CREDIT_NOTE`, `TICKET_VENDOR_CREDIT`, not the lowercase names an
+   earlier draft used. Adding them means touching four places, all of which
+   reject these templates today:
+
+   - `posting_templates_doc_type_chk` — currently nine values, none of them ours.
+   - `posting_template_lines_role_chk` — needs `CANCELLATION_ADJUSTMENT` and
+     `ROUNDING`.
+   - `StorePostingTemplateRequest`.
+   - `PostingTemplateValidator::requiredRoles()` — add the four doc types, which
+     otherwise fall to `default => []` and require nothing at all.
+
+   **Two things do not need changing, and the spec should not pretend they do.**
+   `CLEARING` is already an allowed role and already falls through
+   `validateRoleAccountCompatibility` to `default => true`, so `2350` works as a
+   liability with no widening — there is no need to invent `SUPPLIER_CLEARING`.
+   And `DISCOUNT_GIVEN` already accepts `type = revenue`, so `4150` as
+   contra-revenue validates as it stands.
 4. **Credit-note currency fields** — `currency` and `exchange_rate` on
    `acct.credit_notes`, and an account field on credit-note and vendor-credit
    items. Existing rows are base-currency by definition, so the backfill is

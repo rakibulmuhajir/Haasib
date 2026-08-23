@@ -72,8 +72,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('tickets', [TicketBookingController::class, 'index'])->name('umrah.tickets.index');
         Route::get('tickets/create', [TicketBookingController::class, 'create'])->name('umrah.tickets.create');
         Route::post('tickets', [TicketBookingController::class, 'store'])->name('umrah.tickets.store');
-        Route::get('tickets/{booking}', [TicketBookingController::class, 'show'])->name('umrah.tickets.show');
-        Route::post('tickets/{ticket}/cancel', [TicketBookingController::class, 'cancel'])->name('umrah.tickets.cancel');
+        Route::get('tickets/{booking}', [TicketBookingController::class, 'show'])->whereUuid('booking')->name('umrah.tickets.show');
+        Route::post('tickets/{ticket}/cancel', [TicketBookingController::class, 'cancel'])->whereUuid('ticket')->name('umrah.tickets.cancel');
 
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('umrah.expenses.create');

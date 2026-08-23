@@ -39,7 +39,7 @@ statement.
 | Money lines | Full trade anatomy — gross fare, taxes, supplier cost, discount, service fee. |
 | Record shape | A booking holds tickets. |
 | Where the money lives | **`acct.invoices` and `acct.bills`.** The booking is operational only. |
-| Supplier record | **`acct.vendors`**, with an optional ticketing profile. No rename. |
+| Supplier record | **`acct.vendors`**, unchanged. No rename, no profile table. |
 | Cancellation | **Credit note + vendor credit.** Refunds only for residual cash. |
 | Atomicity | Booking, invoice, bill and postings created by **one command, idempotently**. |
 
@@ -92,8 +92,8 @@ that passes through a clearing account, never an expense.
 Worked example: gross fare 85,000, taxes 12,400, supplier cost 91,000, discount
 2,000, service fee 1,500. The buyer pays 96,900.
 
-**Buyer invoice** — `acct.invoices`, four lines, each carrying its own
-`income_account_id`:
+**Buyer invoice** — `acct.invoices`, three lines plus an invoice-level discount
+(the mechanism is spelled out below):
 
 ```
 Dr  Accounts Receivable                    96,900
@@ -110,8 +110,7 @@ Dr  Ticket Supplier Clearing   (2350)      91,000
     Cr  Accounts Payable                            91,000
 ```
 
-Clearing nets to zero — always, because §5 creates both documents in one
-transaction at one rate. Reported revenue is net and correct:
+Clearing nets to zero — see §3 for why. Reported revenue is net and correct:
 
 ```
 Commission        6,400
@@ -121,13 +120,56 @@ Discount         (2,000)
 Net revenue       5,900
 ```
 
-`InvoiceLineItem.income_account_id` already exists, so this is four ordinary
-invoice lines — no bespoke journal entry and no new posting engine.
+### How this posts, precisely
 
-**To verify in step 4:** whether the invoice posting path accepts a negative
-line (the discount) or whether the discount must use the invoice-level
-`discount_amount` field, and if so which account that posts to. This decides
-whether `4150` is reachable as a line account or needs a different mechanism.
+An earlier draft called this "four ordinary invoice lines." **That was wrong,
+and the wrongness is worth being specific about**, because the shape it implies
+is unbuildable against the current code and would have been discovered mid-build.
+
+What the existing engine actually does, verified in `PostingService`:
+
+| Mechanism | Behaviour |
+|---|---|
+| Invoice line | **Always credited** to `income_account_id` (`buildInvoiceEntries`) |
+| Bill line | **Always debited** to `expense_account_id` (`buildBillEntries`) |
+| Invoice-level `discount_amount` | **Debited** to the template's `DISCOUNT_GIVEN` role |
+| AR debit | `total_amount`, i.e. subtotal + tax − discount |
+
+So the mechanics fit the posting above exactly — a credited clearing line and a
+debited discount are both native behaviour. **The discount is not a line.** It is
+the invoice's `discount_amount`, with `DISCOUNT_GIVEN` mapped to `4150`:
+
+```
+Three lines            98,900   (91,000 clearing + 6,400 commission + 1,500 fee)
+Invoice discount_amount 2,000   → Dr 4150
+AR                     96,900   = 98,900 − 2,000        ✓ balances
+```
+
+**What genuinely blocks it is validation, not arithmetic:**
+
+- `StoreInvoiceRequest` requires `income_account_id` to be `type = revenue`.
+  `2350` is a liability.
+- `StoreBillRequest` allows `expense_account_id` in `expense | cogs | asset`.
+  `2350` is a liability.
+- `unit_price` has `min:0` on both, so no negative line is possible anyway.
+
+A service-layer command bypasses FormRequests entirely, so ticketing *could*
+simply write the models. **It must not.** A liability that is legal in a field
+called `income_account_id` when Umrah writes it and illegal when a person writes
+it is not a rule, it is a loophole, and nothing at the database level would stop
+the next author from widening it.
+
+**Instead: a ticket posting adapter over the existing GL engine.** `PostingService`
+already resolves a `PostingTemplate` by `doc_type`, so ticketing adds
+`ticket_invoice` and `ticket_bill` templates carrying a `SUPPLIER_CLEARING` role
+alongside the existing `AR`, `AP`, `REVENUE` and `DISCOUNT_GIVEN` roles. The
+clearing leg comes from the template role, not from a line account. Ticket
+invoices and bills stay ordinary subledger documents — aging, allocation and
+statements all work — while the clearing leg is supplied by a posting strategy
+that knows what a ticket is.
+
+This is a specialised template, not a second ledger. The account-type validators
+stay exactly as strict as they are.
 
 ### Cancelling a ticket
 
@@ -141,6 +183,44 @@ Buyer side     acct.credit_notes    for buyer_returns_amount
 Supplier side  acct.vendor_credits  for supplier_returns_amount
                applied to the supplier bill
 ```
+
+**The GL entries, which the first draft left undefined:**
+
+```
+Buyer credit note
+Dr  Ticket Cancellation Adjustments (4160)    buyer return
+    Cr  Accounts Receivable                              buyer return
+
+Supplier vendor credit
+Dr  Accounts Payable                          supplier return
+    Cr  Ticket Cancellation Adjustments (4160)           supplier return
+```
+
+The net debit left in `4160` is `buyer return − supplier return` — **the
+cancellation cost, falling out of the ledger rather than being computed beside
+it**. That is the figure the cancellations report reads.
+
+These post through the same adapter as the sale: `ticket_credit_note` and
+`ticket_vendor_credit` templates with a `CANCELLATION_ADJUSTMENT` role. The
+existing credit documents cannot carry it themselves — `CreditNoteItem` has no
+account field at all, and `CreditNote` stores only `base_currency` with no
+`currency` or `exchange_rate`. Both are additions this work must make, not
+assumptions it may lean on.
+
+### Applying a credit
+
+```
+amount applied  = min(return amount, current document balance)
+residual credit = return amount − amount applied
+```
+
+**A fully paid invoice applies zero and leaves the whole amount as available
+credit. That is the correct outcome, not an error.** `CreditNote\ApplyAction`
+currently throws on a `paid` invoice and on `amount > balance`, which is right
+for a person applying a credit by hand and wrong for a cancellation, where the
+amount is set by what the supplier returned. The cancellation command computes
+the applied amount from the formula above and applies only that; the residual
+stays on the credit note.
 
 This handles every payment state without branching:
 
@@ -172,8 +252,8 @@ about and it exists nowhere today.
 it; it does not amend it.
 
 - Revenue and contra-revenue accounts are **base-currency only** — the contract
-  forbids foreign currency on revenue, COGS and expense accounts. `4130`, `4140`
-  and `4150` are therefore base-only.
+  forbids foreign currency on revenue, COGS and expense accounts. `4130`, `4140`,
+  `4150` and `4160` are therefore base-only.
 - `2350 Ticket Supplier Clearing` is an **Other Current Liability**, so the
   contract permits it to hold foreign currency.
 - The buyer invoice and the supplier bill carry **independent currencies and
@@ -197,12 +277,26 @@ Buyer invoice    PKR  96,900.00 (base)    →  clearing line PKR 91,000.00
 Clearing balance                             PKR      0.00
 ```
 
-**The two sides net to zero because the design converts them at the same rate in
-the same transaction.** That is not an accident and it is not an assumption to be
-monitored — it is why §5 requires the invoice and the bill to be created by one
-atomic command. Supplier cost is known at the instant of issue: the consolidator
-portal charges it, or the card is debited. There is no window in which the
-company has sold a ticket but does not yet know what it cost.
+**They net to zero because both legs are written from the same immutable
+`supplier_cost_base`** — not because the two documents share a rate. They do not
+share a rate: the invoice and the bill each carry their own, and saying otherwise
+was a real error in an earlier draft.
+
+Four rules make it exact:
+
+1. `2350` is a **base-denominated** clearing account. It is not a USD account or
+   a SAR account, and no foreign-currency balance is ever parked in it.
+2. The invoice clearing leg is booked at exactly `supplier_cost_base`.
+3. The bill clearing leg is booked at exactly `supplier_cost_base`.
+4. `supplier_cost_base` is computed once, in the §5 command, and is immutable
+   thereafter.
+
+Clearing therefore closes at **exactly zero**, per ticket, by construction.
+
+This is also why §5 requires the invoice and the bill to be created by one atomic
+command. Supplier cost is known at the instant of issue — the consolidator portal
+charges it, or the card is debited. There is no window in which the company has
+sold a ticket but does not yet know what it cost.
 
 **An earlier draft made `bill_id` nullable "until the supplier bills". That was
 the flaw.** An invoice posted today at 280 and a bill posted next week at 284
@@ -220,11 +314,18 @@ this and changes nothing about it.
 
 ### Rounding
 
-When the buyer invoice is in a **third** currency — buyer billed SAR, supplier
-charging USD, base PKR — both convert to base independently and rounding to two
-decimals can leave a sub-unit residual in clearing. That is rounding, not FX.
-Tolerance is one base-currency unit per booking; anything larger is a defect and
-should fail a test, not be written off.
+Because both clearing legs use the same `supplier_cost_base`, they cannot
+disagree — the rounding happens once, before either leg is written.
+
+Where rounding can still bite is the **invoice as a whole** when the buyer is
+billed in a third currency: subtotal, discount and total each round to two
+decimals in the sale currency and again into base, and the sum of the parts can
+miss the whole by `0.01`. That difference goes to a designated **rounding
+account**, named in the posting template as a `ROUNDING` role, in the same entry.
+
+**Tolerance in clearing is zero, not "under one unit."** A per-ticket tolerance of
+PKR 0.99 is real money at volume and hides the failure it was meant to absorb. A
+non-zero clearing balance is a defect and fails a test.
 
 ## 4. Tables
 
@@ -237,25 +338,46 @@ Accounting owns all of that.
 |---|---|
 | `id`, `company_id` | uuid, RLS scoped |
 | `booking_number` | `TKB-00001`, company-sequential |
+| `customer_id` | uuid → `acct.customers`, **not null** |
 | `agent_id` | uuid → `umrah.agents`, nullable |
-| `customer_id` | uuid → `acct.customers`, nullable |
 | `supplier_vendor_id` | uuid → `acct.vendors` |
 | `invoice_id` | uuid → `acct.invoices` |
 | `bill_id` | uuid → `acct.bills`, **not null** — see §3 |
+| `idempotency_key` | text, **unique per company** — see §5 |
 | `pnr` | supplier booking reference, nullable |
 | `booking_date` | |
 | `status` | `issued` \| `partially_cancelled` \| `cancelled` |
 | `created_by_user_id`, `updated_by_user_id` | |
 
-**Real foreign keys, no polymorphism.** `agent_id` and `customer_id` are both
-nullable with `CHECK (num_nonnulls(agent_id, customer_id) = 1)`. A
-`buyer_type`/`buyer_id` pair cannot be constrained by the database and was a
-mistake in the first draft.
+`invoice_id` and `bill_id` are each **unique** — one booking per document, both
+ways. Without that, a retry that slipped past the key could attach a second
+booking to the same invoice and no constraint would notice.
 
-**Every agent is linked to an `acct.customer`** for ticket billing. That link is
-added to `umrah.agents` as a nullable `customer_id`, created on demand the first
-time an agent is billed for a ticket. Without it an agent has two identities and
-two statements.
+**Real foreign keys, no polymorphism.** A `buyer_type`/`buyer_id` pair cannot be
+constrained by the database and was a mistake in the first draft.
+
+**The two columns are not alternatives.** An earlier draft had
+`CHECK (num_nonnulls(agent_id, customer_id) = 1)`, which contradicted this
+spec's own decision that every buyer is an `acct.customer`. They answer different
+questions:
+
+- `customer_id` — **who is billed.** Always present. The accounting party.
+- `agent_id` — **who sold it**, when an agent did. The operational relationship,
+  and what scopes an agent's own view.
+
+A walk-in booking has a customer and no agent. An agent booking has both, and the
+command enforces `booking.customer_id === agent.customer_id`; a mismatch is a bug,
+not a configuration.
+
+**Every agent is linked to an `acct.customer`** for ticket billing — a nullable
+`customer_id` on `umrah.agents`, created on demand the first time an agent is
+billed for a ticket.
+
+**That link does not by itself produce one statement, and this spec does not
+claim it does.** Visa balances stay in the Umrah subledger while ticket balances
+live in Accounting, so an agent has two balances in two places until visas move
+to `acct`. A combined agent statement is **out of scope here and named in "Not
+built"** — the split is temporary and documented rather than papered over.
 
 ### `umrah.tickets`
 
@@ -266,7 +388,7 @@ two statements.
 | `airline_ticket_number` | supplier stock number, nullable. **Unique per company when set.** |
 | `passenger_id` | uuid → `umrah.passengers`, nullable |
 | `passenger_name`, `passenger_type` | **name is a snapshot**, always stored |
-| `passport_number`, `date_of_birth` | nullable |
+| `passport_number` | nullable — see below |
 | `airline`, `origin`, `destination` | IATA codes |
 | `departure_at`, `return_at` | `return_at` nullable |
 | `route_description` | free text for multi-sector, nullable |
@@ -297,20 +419,55 @@ other five.
 cannot say which pilgrim holds the ticket. The snapshot survives the passenger
 record being corrected or the group being restructured.
 
+**`date_of_birth` is dropped and `passport_number` is kept, narrowly.** This
+scope is accounting; neither figure appears in a posting. But a ticket is matched
+to a supplier statement and to a visa by passport number, and staff read it off
+the ticket every day — it earns its place. A date of birth does not: it is
+personal data with no reconciliation use here, and the passenger record already
+holds it for anyone who needs it.
+
 ### `umrah.ticket_cancellations`
 
 | Column | Notes |
 |---|---|
 | `id`, `company_id`, `ticket_id` | **Unique on `ticket_id`** — one cancellation per ticket |
 | `cancellation_number` | `TCX-00001` |
+| `idempotency_key` | text, **unique per company** |
 | `cancelled_at`, `cancelled_by_user_id`, `reason` | reason required |
 | `supplier_returns_amount` | supplier currency, entered not computed |
 | `buyer_returns_amount` | sale currency, entered not computed |
 | `supplier_returns_base`, `buyer_returns_base` | at the credit documents' rates |
-| `buyer_credit_note_id` | uuid → `acct.credit_notes` |
-| `supplier_vendor_credit_id` | uuid → `acct.vendor_credits` |
-| `buyer_refund_id` | nullable — only if residual settled in cash |
-| `supplier_refund_receipt_id` | nullable — same, other direction |
+| `buyer_credit_note_id` | uuid → `acct.credit_notes`, **unique** |
+| `supplier_vendor_credit_id` | uuid → `acct.vendor_credits`, **unique** |
+| `buyer_refund_id` | nullable — `acct.customer_refunds`, see below |
+| `supplier_refund_receipt_id` | nullable — `acct.vendor_refund_receipts`, see below |
+
+### Residual settlement lives in Accounting, and does not exist yet
+
+The first draft named these two columns as if they pointed at something. **They
+did not.** `umrah.refunds` is built around agents and Umrah vendors, with credit
+ceilings and party types that know nothing about `acct.customers`,
+`acct.vendors`, or foreign currency. Pointing a ticket cancellation at it would
+mean either a walk-in customer that the refund table cannot represent, or a
+second refund concept wearing the first one's name.
+
+**Decision: extend Accounting, not `umrah.refunds`.** Two small documents,
+`acct.customer_refunds` and `acct.vendor_refund_receipts`, settling a residual
+credit balance in cash:
+
+```
+Customer refund       Dr Credit balance / AR      Cr bank
+Vendor refund receipt Dr bank                     Cr Credit balance / AP
+```
+
+This keeps financial ownership inside `acct`, where the credit balance being
+settled already lives. Extending `umrah.refunds` instead would drag the Umrah
+subledger into `acct` parties — the exact coupling this design spent §1 and §2
+avoiding.
+
+**These are build steps, not existing machinery**, and they are sized as such in
+§8. Umrah's own visa and hotel refunds are untouched and keep `refunds.md`
+exactly as it stands.
 
 Both amounts are entered. What the supplier withholds is the supplier's decision
 and what the company passes on is the company's; the app records an agreement, it
@@ -322,9 +479,20 @@ with nothing withheld. Not a separate concept, not a separate screen.
 ## 5. Atomicity and immutability
 
 **One command creates a booking.** Booking, tickets, invoice, bill and postings
-are created inside one transaction, keyed by an idempotency token so a retried
-submit cannot produce two invoices. Half a booking is a reconciliation problem
+are created inside one transaction. Half a booking is a reconciliation problem
 that outlives whoever created it.
+
+**Idempotency is a unique column, not a cache.** The existing command
+idempotency cache expires after 24 hours, which makes it a duplicate-submit
+guard rather than a guarantee. `idempotency_key` is a real unique constraint on
+the booking and cancellation rows, so a replay at any distance in time fails at
+the database and returns the original record.
+
+**Numbering is serialised.** `TKB-`, `TKT-` and `TCX-` sequences are allocated
+under a row lock on the company's counter, with the unique constraint as the
+backstop and a bounded retry on collision. Two people creating bookings in the
+same second is the ordinary case in an office, not a race worth discovering in
+production.
 
 **One command cancels a ticket.** Cancellation, credit note, vendor credit, both
 applications and the ticket status change are one atomic, idempotent unit.
@@ -389,39 +557,56 @@ Added via the four-step RBAC process in `CLAUDE.md`.
 
 **Contracts before migrations**, per `CLAUDE.md`.
 
-1. **Contracts.** `umrah-schema.md` (three new tables), `refunds.md` (refunds are
-   now residual-only for tickets), `accounting-invoicing-contract.md` (ticket
-   invoices and their line accounts), `coa-schema.md` (four new accounts).
-2. **Chart of accounts** — `4130`, `4140`, `4150`, `2350` added to the umrah COA
-   pack **and backfilled into existing companies**. The pack applies at company
-   creation, so a template-only migration leaves every live company without them.
-3. **Agent → customer link.** Nullable `customer_id` on `umrah.agents`, plus
+1. **Contracts.** `umrah-schema.md` (three new tables), `refunds.md` (ticket
+   residuals settle in `acct`, and Umrah's own refunds are unchanged),
+   `accounting-invoicing-contract.md` (ticket posting templates, credit-note
+   currency fields, the two new settlement documents), `coa-schema.md` (the new
+   accounts).
+2. **Chart of accounts** — `4130`, `4140`, `4150`, `4160`, `2350` and a
+   `ROUNDING` account added to the umrah COA pack **and backfilled into existing
+   companies**. The pack applies at company creation, so a template-only
+   migration leaves every live company without them.
+3. **Posting templates and the ticket adapter** — `ticket_invoice`,
+   `ticket_bill`, `ticket_credit_note`, `ticket_vendor_credit`, carrying the
+   `SUPPLIER_CLEARING`, `CANCELLATION_ADJUSTMENT` and `ROUNDING` roles. **This is
+   the load-bearing step; §2 and §3 are unbuildable without it**, and it comes
+   before any ticket table so the posting shape is proven first.
+4. **Credit-note currency fields** — `currency` and `exchange_rate` on
+   `acct.credit_notes`, and an account field on credit-note and vendor-credit
+   items. Existing rows are base-currency by definition, so the backfill is
+   `currency = base_currency, exchange_rate = NULL`.
+5. **Agent → customer link.** Nullable `customer_id` on `umrah.agents`, plus
    on-demand creation.
-4. **Tables and models**, with RLS policies, audit triggers, and the unique and
-   CHECK constraints named above. Verify the discount line question from §2.
-5. **The booking command** — atomic, idempotent, creates invoice and bill.
-6. **The cancellation command** — atomic, idempotent, credit note and vendor
-   credit with applications.
-7. **Residual refunds** — only the remainder after offsets, through the existing
-   refund lifecycle.
-8. **Reports and permissions.**
+6. **Tables and models**, with RLS policies, audit triggers, and every unique and
+   CHECK constraint named above.
+7. **The booking command** — atomic, idempotent on a unique key, creates invoice
+   and bill.
+8. **The cancellation command** — atomic, idempotent, credit note and vendor
+   credit with applications, using the `min(return, balance)` rule.
+9. **Residual settlement** — `acct.customer_refunds` and
+   `acct.vendor_refund_receipts`, built here, not assumed.
+10. **Reports and permissions.**
 
 ## Testing
 
 - The buyer invoice balances and the clearing account nets to **exactly** zero
   for every combination of discount and service fee, including both zero.
-- Clearing nets to zero when the supplier bill is in a foreign currency —
-  PKR invoice, USD bill — because both convert at the same rate in one
-  transaction.
-- Buyer in SAR, supplier in USD, base PKR: the clearing residual is under one
-  base unit. Larger fails.
+- Clearing closes at **exactly zero** with a foreign-currency supplier bill —
+  PKR invoice, USD bill — because both legs use one `supplier_cost_base`.
+- Buyer in SAR, supplier in USD, base PKR: clearing still closes at exactly zero,
+  and any `0.01` invoice-level difference lands in the rounding account.
 - Net revenue equals commission + fee − discount, always, in base.
 - Commission derives in base and is never stored.
 - A cancellation against an unpaid, a part-paid and a fully-paid invoice each
-  produce the right AR and the right residual credit.
-- A zero-value leg raises no refund record.
-- Retrying the booking command with the same idempotency token creates one
-  invoice, not two.
+  produce the right AR and the right residual credit. **The fully-paid case
+  applies zero and succeeds** — it is not an error.
+- `4160` nets to the cancellation cost, and the report figure equals the ledger
+  balance.
+- The account-type validators still reject a liability on a manual invoice or
+  bill line — the adapter widens nothing.
+- Retrying the booking command with the same idempotency key creates one
+  invoice, not two — including after 24 hours, when a cache would have expired.
+- Two concurrent bookings get distinct numbers.
 - Paying a foreign-currency supplier bill at a moved rate recognises realized FX
   through the existing path, and does not touch clearing.
 - A closed period refuses the posting with a reason.
@@ -437,12 +622,20 @@ Added via the four-step RBAC process in `CLAUDE.md`.
   rule.
 - **Multi-sector fare breakdown.** One fare per ticket; route is text.
 - **BSP / IATA settlement files.**
+- **A ticketing supplier profile.** An earlier draft mentioned one as "optional"
+  without defining it, which is the same as not having designed it.
+  `acct.vendors` carries everything ticketing needs today — name, AP account,
+  currency, contact. **Dropped.** When a real ticketing-only attribute appears
+  (IATA code, BSP participation), it gets a table and a reason then.
+- **A combined agent statement.** Visa balances stay in the Umrah subledger and
+  ticket balances in Accounting, so an agent has two balances until visas move to
+  `acct`. Named in §4 as a known, temporary split.
 - **Moving visa groups onto `acct`.** The right long-term direction, and
   explicitly not in this blast radius. Ticketing is built the way visas should
   eventually be, which makes that migration easier rather than harder.
 
 ## Open
 
-Nothing blocking. Two things to settle during the build, both named above: the
-discount-line mechanism in step 4, and confirming the customer selector honours
-company scope the first time Umrah reaches into `acct.customers`.
+Nothing blocking. One thing to confirm during the build: that the customer
+selector honours company scope the first time Umrah reaches into
+`acct.customers`.

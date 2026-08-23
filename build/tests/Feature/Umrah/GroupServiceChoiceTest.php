@@ -59,3 +59,21 @@ it('refuses a group that is neither visa nor transport', function () {
         'transport_mode' => VisaGroup::TRANSPORT_NONE,
     ]))->toThrow(\Illuminate\Database\QueryException::class);
 });
+
+it('refuses to park a transport-only group in a visa status', function () {
+    [$company, $agent] = makeVisaGroupCompany('c');
+
+    // statusesAvailable() decides what the UI offers; this is the half that
+    // decides what the record may hold. Without it a transport-only group
+    // could still be written straight to 'submitted' by any path that
+    // bypasses the picker -- an import, a console command, a later feature.
+    expect(fn () => VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'group_number' => 'UGR-GSC-C',
+        'name' => 'Transport-only group in a visa status',
+        'includes_visa' => false,
+        'transport_mode' => VisaGroup::TRANSPORT_SPECIALIZED,
+        'status' => VisaGroup::STATUS_SUBMITTED,
+    ]))->toThrow(\Illuminate\Database\QueryException::class);
+});

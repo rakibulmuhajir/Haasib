@@ -3,8 +3,11 @@
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Umrah\Models\Agent;
 use Illuminate\Support\Facades\DB;
 
@@ -82,4 +85,116 @@ function ticketingAgent(Company $company, array $overrides = []): Agent
         'agent_number' => 'AGT-'.str()->upper(str()->random(8)),
         'name' => 'Test Agent',
     ], $overrides));
+}
+
+function ticketingVendor(Company $company, array $overrides = []): Vendor
+{
+    return Vendor::create(array_merge([
+        'company_id' => $company->id,
+        'vendor_number' => 'VEND-'.str()->upper(str()->random(8)),
+        'name' => 'Test Airline',
+        'base_currency' => $company->base_currency,
+        'is_active' => true,
+    ], $overrides));
+}
+
+/**
+ * A bare, unposted invoice -- just enough to satisfy the booking
+ * table's foreign key and its own NOT NULL columns. Tasks 5 and 6
+ * post real amounts through TicketPostingService; here we only need
+ * a row that exists.
+ */
+function ticketingInvoice(Company $company, Customer $customer, array $overrides = []): Invoice
+{
+    return Invoice::create(array_merge([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'invoice_number' => 'TICK-'.str()->upper(str()->random(8)),
+        'invoice_date' => '2026-09-01',
+        'due_date' => '2026-09-15',
+        'status' => 'draft',
+        'currency' => $company->base_currency,
+        'base_currency' => $company->base_currency,
+        'exchange_rate' => 1,
+        'subtotal' => 0,
+        'tax_amount' => 0,
+        'discount_amount' => 0,
+        'total_amount' => 0,
+        'paid_amount' => 0,
+        'balance' => 0,
+        'base_amount' => 0,
+    ], $overrides));
+}
+
+/**
+ * A bare, unposted bill -- see ticketingInvoice().
+ */
+function ticketingBill(Company $company, Vendor $vendor, array $overrides = []): Bill
+{
+    return Bill::create(array_merge([
+        'company_id' => $company->id,
+        'vendor_id' => $vendor->id,
+        'bill_number' => 'TICKBILL-'.str()->upper(str()->random(8)),
+        'bill_date' => '2026-09-01',
+        'due_date' => '2026-09-15',
+        'status' => 'received',
+        'currency' => $company->base_currency,
+        'base_currency' => $company->base_currency,
+        'exchange_rate' => 1,
+        'subtotal' => 0,
+        'tax_amount' => 0,
+        'discount_amount' => 0,
+        'total_amount' => 0,
+        'paid_amount' => 0,
+        'balance' => 0,
+        'base_amount' => 0,
+    ], $overrides));
+}
+
+/**
+ * Everything TicketBookingTableTest needs: a company with an open
+ * period, a buyer, an agent linked to that buyer, a supplier vendor,
+ * and two independent invoice/bill pairs so tests can prove the
+ * unique-per-document constraints without reusing a row that is
+ * already claimed.
+ */
+function ticketingBookingFixture(array $overrides = []): object
+{
+    $f = ticketingCompany();
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id]);
+    $vendor = ticketingVendor($f->company);
+
+    return (object) array_merge([
+        'company' => $f->company,
+        'user' => $f->user,
+        'customer' => $customer,
+        'agent' => $agent,
+        'vendor' => $vendor,
+        'invoice' => ticketingInvoice($f->company, $customer),
+        'bill' => ticketingBill($f->company, $vendor),
+        'secondInvoice' => ticketingInvoice($f->company, $customer),
+        'secondBill' => ticketingBill($f->company, $vendor),
+    ], $overrides);
+}
+
+/**
+ * The full attribute array for TicketBooking::create(), so each test
+ * only needs to override the one column it is exercising.
+ */
+function ticketingBookingAttributes(object $f, array $overrides = []): array
+{
+    return array_merge([
+        'company_id' => $f->company->id,
+        'customer_id' => $f->customer->id,
+        'agent_id' => $f->agent->id,
+        'supplier_vendor_id' => $f->vendor->id,
+        'invoice_id' => $f->invoice->id,
+        'bill_id' => $f->bill->id,
+        'booking_reference' => 'TB-00001',
+        'pnr' => 'X4K9QZ',
+        'booking_date' => '2026-09-01',
+        'status' => 'confirmed',
+        'idempotency_key' => 'test-key-1',
+    ], $overrides);
 }

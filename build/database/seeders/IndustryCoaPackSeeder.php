@@ -724,6 +724,7 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '2100', 'name' => 'Visa Vendor Payables', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control'],
             ['code' => '2200', 'name' => 'Agent Advances / Unearned Visa Revenue', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit'],
             ['code' => '2300', 'name' => 'Refunds Payable', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit'],
+            ['code' => '2350', 'name' => 'Ticket Supplier Clearing', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit'],
             ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
             ['code' => '4100', 'name' => 'Visa Service Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
             ['code' => '4110', 'name' => 'Transport Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
@@ -732,6 +733,10 @@ class IndustryCoaPackSeeder extends Seeder
             // code" and "first cogs by code", silently merging every hotel booking
             // into Visa Service Revenue and Visa Cost.
             ['code' => '4120', 'name' => 'Hotel Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            ['code' => '4130', 'name' => 'Ticket Commission Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            ['code' => '4140', 'name' => 'Ticket Service Fee Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            ['code' => '4150', 'name' => 'Ticket Discount', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true],
+            ['code' => '4160', 'name' => 'Ticket Cancellation Adjustments', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit'],
             ['code' => '5100', 'name' => 'Visa Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
             ['code' => '5110', 'name' => 'Transport Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
             ['code' => '5120', 'name' => 'Hotel Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
@@ -739,6 +744,7 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '6200', 'name' => 'Salaries', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6300', 'name' => 'Office Rent', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6400', 'name' => 'Communication & Courier', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '9900', 'name' => 'Rounding Differences', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
         ];
 
         $this->insertAccounts($industryId, $accounts, $now);

@@ -34,6 +34,7 @@ class Agent extends Model
 
     protected $fillable = [
         'company_id',
+        'customer_id',
         'user_id',
         'agent_number',
         'name',
@@ -56,6 +57,7 @@ class Agent extends Model
 
     protected $casts = [
         'company_id' => 'string',
+        'customer_id' => 'string',
         'user_id' => 'string',
         'total_receivable' => 'decimal:2',
         'total_paid' => 'decimal:2',
@@ -74,6 +76,17 @@ class Agent extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * The acct.customer that carries this agent's balance, so one
+     * statement covers everything the agent owes -- tickets, Umrah
+     * packages, anything else. Nullable: an agent that predates this
+     * column has no customer record to point at.
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Customer::class);
     }
 
     public function user(): BelongsTo

@@ -406,6 +406,17 @@ class Permissions
 
     public const UMRAH_REPORT_OWN_VIEW = 'umrah.report.own.view';
 
+    // Umrah - Ticketing
+    public const UMRAH_TICKET_VIEW = 'umrah.ticket.view';
+
+    public const UMRAH_TICKET_CREATE = 'umrah.ticket.create';
+
+    public const UMRAH_TICKET_UPDATE = 'umrah.ticket.update';
+
+    public const UMRAH_TICKET_CANCEL = 'umrah.ticket.cancel';
+
+    public const UMRAH_TICKET_OWN_VIEW = 'umrah.ticket.own.view';
+
     public static function all(): array
     {
         $reflection = new \ReflectionClass(self::class);

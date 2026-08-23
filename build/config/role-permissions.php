@@ -254,6 +254,13 @@ return [
         'umrah.settings.update',
         'umrah.settings.delete',
         'umrah.report.view',
+
+        // Ticketing: a manager runs the desk end to end, including
+        // cancellations, which move money on both sides of the book.
+        'umrah.ticket.view',
+        'umrah.ticket.create',
+        'umrah.ticket.update',
+        'umrah.ticket.cancel',
     ],
 
     'accountant' => [
@@ -446,6 +453,14 @@ return [
         'umrah.voucher.cancel',
         'umrah.vendor.view',
         'umrah.report.view',
+
+        // Ticketing: an accountant reads the register and reconciles it,
+        // but never books one -- booking is an operational act, not a
+        // financial one. Cancellation is theirs because it is a credit
+        // note / vendor credit posting, the same kind of ledger event
+        // as the rest of this role's remit.
+        'umrah.ticket.view',
+        'umrah.ticket.cancel',
     ],
 
     'operations' => [
@@ -461,6 +476,14 @@ return [
         'umrah.voucher.update',
         'umrah.refund.view',
         'umrah.refund.create',
+
+        // Ticketing: the booking clerk's job -- raise and amend a
+        // booking -- but cancellation is deliberately withheld here too,
+        // for the same reason the rest of this role excludes accounts
+        // and approvals: it moves money.
+        'umrah.ticket.view',
+        'umrah.ticket.create',
+        'umrah.ticket.update',
     ],
 
     'agent' => [
@@ -477,6 +500,11 @@ return [
         'umrah.report.own.view',
         'umrah.refund.view',
         'umrah.refund.create',
+
+        // Ticketing: an agent sees only the bookings sold under their own
+        // name -- never the full register, never a supplier cost, and
+        // never able to create, edit or cancel one directly.
+        'umrah.ticket.own.view',
     ],
 
 ];

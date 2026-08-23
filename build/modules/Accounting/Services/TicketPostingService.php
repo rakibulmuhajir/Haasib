@@ -4,8 +4,10 @@ namespace App\Modules\Accounting\Services;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Models\VendorCredit;
 
 /**
  * Ticket postings take every account from a template role. No ticket
@@ -167,6 +169,134 @@ final class TicketPostingService
             'reference_type' => 'acct.bills',
             'reference_id' => $bill->id,
             'description' => "Ticket bill {$bill->bill_number}",
+        ], $entries);
+    }
+
+    /**
+     * A cancellation raises one credit note and one vendor credit, never
+     * both zero. The buyer leg debits CANCELLATION_ADJUSTMENT and credits
+     * AR; the supplier leg (below) does the opposite. Posted separately,
+     * so the net balance left in the role account -- buyer return minus
+     * supplier return -- is the cancellation cost, falling out of the
+     * ledger rather than being computed beside it.
+     */
+    public function postTicketCreditNote(CreditNote $note, float $buyerReturnBase): Transaction
+    {
+        if ($buyerReturnBase <= 0.0) {
+            throw new \RuntimeException('Buyer return must be greater than zero; a zero leg raises no document.');
+        }
+
+        $note->loadMissing(['customer', 'company']);
+
+        $company = $note->company;
+        if (! $company instanceof Company) {
+            throw new \RuntimeException('Credit note company missing.');
+        }
+
+        $transactionDate = $note->credit_date ?? now();
+        $template = $this->resolveTemplate($company->id, 'TICKET_CREDIT_NOTE', $transactionDate);
+        $roleAccounts = $this->roleAccounts($template);
+
+        foreach (['AR', 'CANCELLATION_ADJUSTMENT'] as $role) {
+            if (empty($roleAccounts[$role])) {
+                throw new \RuntimeException("Ticket credit note posting template is missing the {$role} role mapping.");
+            }
+        }
+
+        $period = $this->resolveOpenPeriod($company->id, $transactionDate);
+        $amount = round($buyerReturnBase, 2);
+
+        $entries = [
+            [
+                'account_id' => $roleAccounts['CANCELLATION_ADJUSTMENT'],
+                'type' => 'debit',
+                'amount' => $amount,
+                'description' => 'Ticket cancellation adjustment',
+            ],
+            [
+                'account_id' => $roleAccounts['AR'],
+                'type' => 'credit',
+                'amount' => $amount,
+                'description' => 'Accounts Receivable',
+            ],
+        ];
+
+        $this->assertBalanced($entries);
+
+        return $this->createTransaction([
+            'company_id' => $company->id,
+            'transaction_number' => $note->credit_note_number,
+            'transaction_type' => 'ticket_credit_note',
+            'transaction_date' => $transactionDate,
+            'posting_date' => $transactionDate,
+            'fiscal_year_id' => $period->fiscal_year_id,
+            'period_id' => $period->id,
+            'currency' => $note->base_currency ?? $company->base_currency,
+            'base_currency' => $note->base_currency ?? $company->base_currency,
+            'exchange_rate' => null,
+            'reference_type' => 'acct.credit_notes',
+            'reference_id' => $note->id,
+            'description' => "Ticket credit note {$note->credit_note_number}",
+        ], $entries);
+    }
+
+    public function postTicketVendorCredit(VendorCredit $credit, float $supplierReturnBase): Transaction
+    {
+        if ($supplierReturnBase <= 0.0) {
+            throw new \RuntimeException('Supplier return must be greater than zero; a zero leg raises no document.');
+        }
+
+        $credit->loadMissing(['vendor', 'company']);
+
+        $company = $credit->company;
+        if (! $company instanceof Company) {
+            throw new \RuntimeException('Vendor credit company missing.');
+        }
+
+        $transactionDate = $credit->credit_date ?? now();
+        $template = $this->resolveTemplate($company->id, 'TICKET_VENDOR_CREDIT', $transactionDate);
+        $roleAccounts = $this->roleAccounts($template);
+
+        foreach (['AP', 'CANCELLATION_ADJUSTMENT'] as $role) {
+            if (empty($roleAccounts[$role])) {
+                throw new \RuntimeException("Ticket vendor credit posting template is missing the {$role} role mapping.");
+            }
+        }
+
+        $period = $this->resolveOpenPeriod($company->id, $transactionDate);
+        $amount = round($supplierReturnBase, 2);
+
+        $entries = [
+            [
+                'account_id' => $roleAccounts['AP'],
+                'type' => 'debit',
+                'amount' => $amount,
+                'description' => 'Accounts Payable',
+            ],
+            [
+                'account_id' => $roleAccounts['CANCELLATION_ADJUSTMENT'],
+                'type' => 'credit',
+                'amount' => $amount,
+                'description' => 'Ticket cancellation adjustment',
+            ],
+        ];
+
+        $this->assertBalanced($entries);
+
+        return $this->createTransaction([
+            'company_id' => $company->id,
+            'transaction_number' => $credit->credit_number,
+            'transaction_type' => 'ticket_vendor_credit',
+            'transaction_date' => $transactionDate,
+            'posting_date' => $transactionDate,
+            'fiscal_year_id' => $period->fiscal_year_id,
+            'period_id' => $period->id,
+            'currency' => $credit->base_currency ?? $company->base_currency,
+            'base_currency' => $credit->base_currency ?? $company->base_currency,
+            'exchange_rate' => null,
+            'reference_type' => 'acct.vendor_credits',
+            'reference_id' => $credit->id,
+            'description' => "Ticket vendor credit {$credit->credit_number}",
         ], $entries);
     }
 

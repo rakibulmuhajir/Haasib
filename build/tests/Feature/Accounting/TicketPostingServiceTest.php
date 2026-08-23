@@ -87,6 +87,15 @@ function ticketPostingServiceAccount(Company $company, string $code): Account
                 'subtype' => 'expense',
                 'normal_balance' => 'debit',
             ]),
+            '4160' => Account::create([
+                'company_id' => $company->id,
+                'code' => '4160',
+                'name' => 'Ticket Cancellation Adjustments',
+                'type' => 'revenue',
+                'subtype' => 'revenue',
+                'normal_balance' => 'debit',
+                'is_contra' => true,
+            ]),
             default => throw new \RuntimeException("no fixture for account {$code}"),
         };
 }

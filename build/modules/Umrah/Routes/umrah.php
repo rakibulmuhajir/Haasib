@@ -9,6 +9,7 @@ use App\Modules\Umrah\Http\Controllers\HotelController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\RefundController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
+use App\Modules\Umrah\Http\Controllers\TicketBookingController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\TransportProviderController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
@@ -67,6 +68,12 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('refunds/{refund}/cancel', [RefundController::class, 'cancel'])->whereUuid('refund')->name('umrah.refunds.cancel');
         Route::post('refunds/{refund}/settle', [RefundController::class, 'settle'])->whereUuid('refund')->name('umrah.refunds.settle');
         Route::get('refunds/{refund}', [RefundController::class, 'show'])->whereUuid('refund')->name('umrah.refunds.show');
+
+        Route::get('tickets', [TicketBookingController::class, 'index'])->name('umrah.tickets.index');
+        Route::get('tickets/create', [TicketBookingController::class, 'create'])->name('umrah.tickets.create');
+        Route::post('tickets', [TicketBookingController::class, 'store'])->name('umrah.tickets.store');
+        Route::get('tickets/{booking}', [TicketBookingController::class, 'show'])->name('umrah.tickets.show');
+        Route::post('tickets/{ticket}/cancel', [TicketBookingController::class, 'cancel'])->name('umrah.tickets.cancel');
 
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('umrah.expenses.create');

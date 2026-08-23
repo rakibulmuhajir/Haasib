@@ -30,6 +30,7 @@
       "Receivable Aging",
       "Refunds",
       "Salaries",
+      "Tickets",
       "Transport Dispatch",
       "Transport Services",
       "Transport Vendors",
@@ -67,6 +68,7 @@
       "/${slug}/umrah/settings/drivers",
       "/${slug}/umrah/settings/hotels",
       "/${slug}/umrah/settings/transport-services",
+      "/${slug}/umrah/tickets",
       "/${slug}/umrah/transport-providers",
       "/${slug}/umrah/vendors",
       "/${slug}/umrah/vouchers"

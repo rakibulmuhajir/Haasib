@@ -18,6 +18,9 @@ use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
 use App\Modules\Umrah\Models\TicketCancellation;
+use App\Services\CompanyContextService;
+use App\Services\CompanyRbacBootstrapper;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -649,4 +652,124 @@ function ticketingAccountBalance(Company $company, string $code): float
     $credit = (float) DB::table('acct.journal_entries')->where('account_id', $account->id)->sum('credit_amount');
 
     return round($debit - $credit, 2);
+}
+
+/**
+ * Adds a user to the company with a real RBAC role, following the
+ * pattern in tests/Feature/CompanyRoleAccessTest.php: an
+ * `auth.company_user` row plus a Spatie role assignment scoped to the
+ * company via CompanyContextService.
+ */
+function ticketingAddCompanyMember(Company $company, User $user, string $role): void
+{
+    DB::table('auth.company_user')->insert([
+        'company_id' => $company->id,
+        'user_id' => $user->id,
+        'role' => $role,
+        'joined_at' => now(),
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    app(CompanyContextService::class)->withContext(
+        $company,
+        fn () => app(CompanyContextService::class)->assignRole($user, $role),
+    );
+}
+
+/**
+ * A company wired for the HTTP layer (industry_code + modules.umrah,
+ * RBAC bootstrapped and synced from config/role-permissions.php) with
+ * two agents, each with their own logged-in user, each with one sold
+ * booking -- so a test can assert a manager sees both and an agent sees
+ * only their own. Also returns an `outsider`: a user who is not a member
+ * of the company at all, so hasCompanyPermission() has nothing to grant.
+ */
+function ticketingTwoBookingsForDifferentAgents(): object
+{
+    $f = ticketingCompany([
+        'industry_code' => 'umrah',
+        'settings' => ['modules' => ['umrah' => true]],
+    ]);
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$f->user->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$f->company->id]);
+
+    $manager = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $manager, 'manager');
+
+    $agentUser = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $agentUser, 'agent');
+
+    $otherAgentUser = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $otherAgentUser, 'agent');
+
+    // Not a member of the company at all. `auth.company_user.role` is
+    // constrained to owner/manager/accountant/operations/agent, and
+    // every one of those five carries at least
+    // Permissions::UMRAH_TICKET_OWN_VIEW (Task 1's whole point was that
+    // an agent gets that one), so there is no membership row that would
+    // leave a user with zero ticket access -- "no ticket permission at
+    // all" can only mean "not on this company".
+    $outsider = User::factory()->withoutTwoFactor()->create();
+
+    $customerOne = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customerOne->id, 'user_id' => $agentUser->id]);
+
+    $customerTwo = ticketingCustomer($f->company);
+    $otherAgent = ticketingAgent($f->company, ['customer_id' => $customerTwo->id, 'user_id' => $otherAgentUser->id]);
+
+    $vendor = ticketingVendor($f->company);
+
+    ticketingPostingTemplate($f->company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_BILL', [
+        'AP' => '2000',
+        'CLEARING' => '2350',
+    ]);
+
+    $bookingOne = Bus::dispatch(new CreateTicketBooking(
+        companyId: $f->company->id,
+        customerId: $customerOne->id,
+        supplierVendorId: $vendor->id,
+        bookingDate: '2026-09-01',
+        pnr: 'AAA111',
+        tickets: [ticketingWorkedExampleTicket()],
+        idempotencyKey: 'booking-one-'.str()->lower(str()->random(8)),
+        agentId: $agent->id,
+    ));
+
+    $bookingTwo = Bus::dispatch(new CreateTicketBooking(
+        companyId: $f->company->id,
+        customerId: $customerTwo->id,
+        supplierVendorId: $vendor->id,
+        bookingDate: '2026-09-02',
+        pnr: 'BBB222',
+        tickets: [ticketingWorkedExampleTicket()],
+        idempotencyKey: 'booking-two-'.str()->lower(str()->random(8)),
+        agentId: $otherAgent->id,
+    ));
+
+    return (object) [
+        'company' => $f->company,
+        'manager' => $manager,
+        'agentUser' => $agentUser,
+        'agent' => $agent,
+        'otherAgentUser' => $otherAgentUser,
+        'otherAgent' => $otherAgent,
+        'bookingOne' => $bookingOne,
+        'bookingTwo' => $bookingTwo,
+        'outsider' => $outsider,
+    ];
 }

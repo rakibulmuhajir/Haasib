@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Accounting\Models\CreditNote;
+use App\Modules\Accounting\Models\CreditNoteApplication;
+use App\Modules\Accounting\Models\VendorCreditApplication;
 use App\Modules\Umrah\Commands\CancelTicket;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
@@ -127,4 +130,63 @@ it('writes nothing at all when the supplier side cannot be posted', function () 
         ->and($f->booking->fresh()->status)->toBe('confirmed')
         ->and($f->invoice->fresh()->balance)->toEqual($f->invoice->total_amount)
         ->and(ticketingAccountBalance($f->company, '4160'))->toBe(0.0);
+});
+
+it('advances a fully-applied cancellation credit to applied, on both sides', function () {
+    $f = ticketingSoldTicket();
+
+    // Neither the invoice nor the bill has any prior balance eaten into,
+    // so the whole buyer return and the whole supplier return are each
+    // applied in full -- both credits should read fully consumed.
+    $cancellation = Bus::dispatch(new CancelTicket(
+        ticketId: $f->ticket->id,
+        cancellationDate: '2026-09-05',
+        buyerReturnsAmount: 80_000,
+        supplierReturnsAmount: 85_000,
+        reason: 'Passenger withdrew',
+        idempotencyKey: 'cancel-status-1',
+    ));
+
+    expect($cancellation->buyerCreditNote->status)->toBe('applied')
+        ->and($cancellation->buyerCreditNote->balance)->toEqual(0.0)
+        ->and($cancellation->supplierVendorCredit->status)->toBe('applied');
+});
+
+it('leaves a partially-applied cancellation credit at issued', function () {
+    $f = ticketingSoldTicket();
+    ticketingPayPartial($f->invoice, 90_000);      // 6,900 left outstanding
+
+    $cancellation = Bus::dispatch(new CancelTicket(
+        ticketId: $f->ticket->id,
+        cancellationDate: '2026-09-05',
+        buyerReturnsAmount: 80_000,
+        supplierReturnsAmount: 85_000,
+        reason: 'Cancelled part-paid',
+        idempotencyKey: 'cancel-status-2',
+    ));
+
+    expect($cancellation->buyerCreditNote->status)->toBe('issued')
+        ->and($cancellation->buyerCreditNote->balance)->toEqual(73_100.00);
+});
+
+it('stamps the acting user on both cancellation application rows', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $f = ticketingSoldTicket();
+
+    $cancellation = Bus::dispatch(new CancelTicket(
+        ticketId: $f->ticket->id,
+        cancellationDate: '2026-09-05',
+        buyerReturnsAmount: 80_000,
+        supplierReturnsAmount: 85_000,
+        reason: 'Passenger withdrew',
+        idempotencyKey: 'cancel-status-3',
+    ));
+
+    $creditNoteApplication = CreditNoteApplication::where('credit_note_id', $cancellation->buyerCreditNote->id)->firstOrFail();
+    $vendorCreditApplication = VendorCreditApplication::where('vendor_credit_id', $cancellation->supplierVendorCredit->id)->firstOrFail();
+
+    expect($creditNoteApplication->user_id)->toBe($user->id)
+        ->and($vendorCreditApplication->user_id)->toBe($user->id);
 });

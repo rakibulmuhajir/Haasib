@@ -14,6 +14,7 @@ use App\Modules\Umrah\Commands\CancelTicket;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
 use App\Modules\Umrah\Models\TicketCancellation;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -186,6 +187,7 @@ final class CancelTicketHandler
                 'invoice_balance_before' => $before,
                 'invoice_balance_after' => $after,
                 'applied_at' => $command->cancellationDate,
+                'user_id' => Auth::id(),
                 'notes' => 'Applied from ticket cancellation',
             ]);
 
@@ -195,6 +197,16 @@ final class CancelTicketHandler
                 'status' => $after <= 0 ? 'paid' : 'partial',
                 'paid_at' => $after <= 0 ? now() : null,
             ]);
+
+            // Mirrors CreditNote\ApplyAction's status transition, which the
+            // direct write below bypasses otherwise -- a fully-consumed
+            // credit must read 'applied', not sit at 'issued' forever.
+            $totalApplied = (float) CreditNoteApplication::where('credit_note_id', $creditNote->id)->sum('amount_applied');
+            if ($totalApplied >= (float) $creditNote->amount) {
+                $creditNote->update(['status' => 'applied']);
+            } elseif ($creditNote->status === 'draft') {
+                $creditNote->update(['status' => 'issued']);
+            }
         }
 
         return $creditNote->id;
@@ -245,6 +257,7 @@ final class CancelTicketHandler
                 'bill_balance_before' => $before,
                 'bill_balance_after' => $after,
                 'applied_at' => $command->cancellationDate,
+                'user_id' => Auth::id(),
             ]);
 
             $bill->update([
@@ -252,6 +265,15 @@ final class CancelTicketHandler
                 'balance' => $after,
                 'status' => $after <= 0 ? 'paid' : 'partial',
             ]);
+
+            // Mirrors VendorCredit\ApplyAction's status transition -- unlike
+            // the credit-note action, it has no draft-to-issued branch, so
+            // neither does this: the vendor credit is created 'issued'
+            // already and only ever advances to 'applied' from here.
+            $totalApplied = (float) VendorCreditApplication::where('vendor_credit_id', $vendorCredit->id)->sum('amount_applied');
+            if ($totalApplied >= (float) $vendorCredit->amount) {
+                $vendorCredit->update(['status' => 'applied']);
+            }
         }
 
         return $vendorCredit->id;

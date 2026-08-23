@@ -92,6 +92,16 @@ class CreditNote extends Model
     }
 
     /**
+     * Amount not yet applied to any invoice. Derived, never stored, so
+     * an application recorded elsewhere can never leave a stale balance
+     * behind -- the same reasoning as Ticket::commissionBase().
+     */
+    public function getBalanceAttribute(): float
+    {
+        return round((float) $this->amount - (float) $this->applications()->sum('amount_applied'), 2);
+    }
+
+    /**
      * Generate a credit note number scoped per company (simple incremental suffix).
      */
     public static function generateCreditNoteNumber(string $companyId): string

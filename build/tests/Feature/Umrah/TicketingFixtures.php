@@ -545,6 +545,94 @@ function ticketingBreakTheSupplierVendor(object $f): void
 }
 
 /**
+ * A fully wired-up, already-sold ticket: a booking context carrying
+ * every posting template a sale and a cancellation both need
+ * (TICKET_INVOICE, TICKET_BILL, TICKET_CREDIT_NOTE, TICKET_VENDOR_CREDIT),
+ * with the worked-example booking already dispatched. Returns the
+ * company, the booking, its one ticket, and its invoice and bill.
+ */
+function ticketingSoldTicket(): object
+{
+    $f = ticketingBookingContext();
+
+    ticketingPostingTemplate($f->company, 'TICKET_CREDIT_NOTE', [
+        'AR' => '1100',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+
+    ticketingPostingTemplate($f->company, 'TICKET_VENDOR_CREDIT', [
+        'AP' => '2000',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+
+    $booking = \Illuminate\Support\Facades\Bus::dispatch(ticketingBookingCommand($f));
+
+    return (object) [
+        'company' => $f->company,
+        'booking' => $booking,
+        'ticket' => $booking->tickets->first(),
+        'invoice' => $booking->invoice,
+        'bill' => $booking->bill,
+    ];
+}
+
+/**
+ * A sold ticket exactly like ticketingSoldTicket(), except the
+ * TICKET_VENDOR_CREDIT posting template is deliberately left
+ * unconfigured -- so a cancellation with a supplier return fails partway
+ * through, after the buyer credit note has already posted, exercising
+ * the all-or-nothing rollback.
+ */
+function ticketingSoldTicketWithoutVendorCreditTemplate(): object
+{
+    $f = ticketingBookingContext();
+
+    ticketingPostingTemplate($f->company, 'TICKET_CREDIT_NOTE', [
+        'AR' => '1100',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+
+    $booking = \Illuminate\Support\Facades\Bus::dispatch(ticketingBookingCommand($f));
+
+    return (object) [
+        'company' => $f->company,
+        'booking' => $booking,
+        'ticket' => $booking->tickets->first(),
+        'invoice' => $booking->invoice,
+        'bill' => $booking->bill,
+    ];
+}
+
+/**
+ * Marks an invoice fully paid without posting a real payment
+ * transaction -- CancelTicketTest only needs the invoice's own balance
+ * to read zero, not a balanced payment journal entry alongside it.
+ */
+function ticketingPayInFull(Invoice $invoice): void
+{
+    $invoice->update([
+        'paid_amount' => $invoice->total_amount,
+        'balance' => 0,
+        'status' => 'paid',
+        'paid_at' => now(),
+    ]);
+}
+
+/**
+ * Marks an invoice partly paid, the same shortcut as ticketingPayInFull().
+ */
+function ticketingPayPartial(Invoice $invoice, float $amountPaid): void
+{
+    $balance = round((float) $invoice->total_amount - $amountPaid, 6);
+
+    $invoice->update([
+        'paid_amount' => $amountPaid,
+        'balance' => max(0, $balance),
+        'status' => $balance <= 0 ? 'paid' : 'partial',
+    ]);
+}
+
+/**
  * Debit minus credit for an account across every transaction for the
  * company. Named `ticketing` (not `ticketAccountBalance`, already
  * taken by TicketPostingServiceTest.php) per the plan's global naming

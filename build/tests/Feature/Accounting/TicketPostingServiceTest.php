@@ -358,6 +358,89 @@ it('posts no discount entry when nothing was given away', function () {
     expect(ticketBalance($transaction, '4150'))->toBe(0.0);
 });
 
+it('posts a foreign-currency ticket sale with the AR leg at the base amount', function () {
+    $company = ticketPostingServiceCompany();
+
+    ticketPostingTemplate($company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'customer_number' => 'CUST-'.strtoupper(str()->random(6)),
+        'name' => 'Foreign Buyer',
+        'base_currency' => 'USD',
+    ]);
+
+    if (! DB::table('public.currencies')->where('code', 'EUR')->exists()) {
+        DB::table('public.currencies')->insert(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€']);
+    }
+
+    // Sale total is 96,900 USD (base) but the invoice is denominated in EUR
+    // at an exchange rate of 1.15 USD/EUR, so total_amount (transaction
+    // currency) and base_amount (base currency) deliberately differ.
+    $exchangeRate = 1.15;
+    $saleTotalBase = 96_900.0;
+    $discountBase = 2_000.0;
+    $saleTotalForeign = round($saleTotalBase / $exchangeRate, 6);
+    $discountForeign = round($discountBase / $exchangeRate, 6);
+    $lineTotalForeign = round($saleTotalForeign + $discountForeign, 6);
+
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'invoice_number' => 'TICK-'.strtoupper(str()->random(6)),
+        'invoice_date' => '2026-09-05',
+        'due_date' => '2026-09-20',
+        'status' => 'draft',
+        'currency' => 'EUR',
+        'base_currency' => 'USD',
+        'exchange_rate' => $exchangeRate,
+        'subtotal' => $lineTotalForeign,
+        'tax_amount' => 0,
+        'discount_amount' => $discountForeign,
+        'total_amount' => $saleTotalForeign,
+        'paid_amount' => 0,
+        'balance' => $saleTotalForeign,
+        'base_amount' => $saleTotalBase,
+    ]);
+
+    InvoiceLineItem::create([
+        'company_id' => $company->id,
+        'invoice_id' => $invoice->id,
+        'line_number' => 1,
+        'description' => 'Air ticket',
+        'quantity' => 1,
+        'unit_price' => $lineTotalForeign,
+        'tax_rate' => 0,
+        'discount_rate' => 0,
+        'line_total' => $lineTotalForeign,
+        'tax_amount' => 0,
+        'total' => $lineTotalForeign,
+    ]);
+
+    $transaction = app(TicketPostingService::class)->postTicketInvoice(
+        $invoice->fresh(),
+        new TicketSaleAmounts(
+            supplierCostBase: 91_000,
+            commissionBase: 6_400,
+            serviceFeeBase: 1_500,
+            discountBase: 2_000,
+        ),
+    );
+
+    expect(ticketBalance($transaction, '1100'))->toBe(96_900.0)   // Dr AR at the base amount, not the EUR total
+        ->and(ticketBalance($transaction, '4150'))->toBe(2_000.0)
+        ->and(ticketBalance($transaction, '2350'))->toBe(-91_000.0)
+        ->and(ticketBalance($transaction, '4130'))->toBe(-6_400.0)
+        ->and(ticketBalance($transaction, '4140'))->toBe(-1_500.0);
+});
+
 it('refuses to post when the amounts do not balance', function () {
     [$company, $invoice] = ticketInvoiceFixture(saleTotal: 96_900, discount: 2_000);
 

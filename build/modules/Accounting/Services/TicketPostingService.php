@@ -44,7 +44,7 @@ final class TicketPostingService
 
         $period = $this->resolveOpenPeriod($company->id, $transactionDate);
 
-        $arAmount = round((float) $invoice->total_amount, 2);
+        $arAmount = round((float) ($invoice->base_amount ?? $invoice->total_amount), 2);
         $discountAmount = round($amounts->discountBase, 2);
         $supplierCostAmount = round($amounts->supplierCostBase, 2);
         $commissionAmount = round($amounts->commissionBase, 2);

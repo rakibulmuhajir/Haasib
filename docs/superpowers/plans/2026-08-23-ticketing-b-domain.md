@@ -20,6 +20,16 @@
 - Copy the migration pattern from `modules/Umrah/Database/Migrations/2026_08_21_000001_create_umrah_refunds.php` exactly: UUID default, `char(3)` currency with an FK to `public.currencies`, CHECK constraints via `DB::statement`, RLS enabled + forced + a company-isolation policy.
 - Money columns: `decimal(18, 6)` for transaction amounts, `decimal(15, 2)` for base amounts, `decimal(18, 8)` for rates. `docs/contracts/multicurrency-rules.md` is **LOCKED**.
 - Never instantiate a service directly. Commands go through `Bus::dispatch()`.
+- **This codebase has no model factories.** There is no `CompanyFactory`,
+  `CustomerFactory`, `AgentFactory` or anything like them — `Model::factory()`
+  will fatal. Build fixtures with `Model::create([...])`, following
+  `tests/Feature/Umrah/RefundLifecycleTest.php`. Every `::factory()` call written
+  in this plan is a mistake in the plan; replace it. Task 1's instruction to
+  "write a factory if none exists" is withdrawn — put the fixture builders in
+  `TicketingFixtures.php` instead, where Tasks 2-6 already expect them.
+- **Company creation does not seed a chart of accounts.** The COA arrives only
+  through `CompanyOnboardingService::setupCompanyIdentity()`. Any test that posts
+  to an account must arrange for that account to exist.
 - Never use `$request->validate()`. Use a FormRequest.
 - Pest helper functions declared at file top-level are **global across the whole suite** — redefining a name collides rather than shadows. Prefix every helper in this plan with `ticketing`.
 - **Test baseline is 185 passed / 937 assertions.** Run `php artisan test` before every commit; never let it drop.

@@ -21,7 +21,11 @@
 - Every money figure goes through `MoneyText`. Every status through `StatusBadge`. Every footer is `CardFooter`. The linter enforces all of this.
 - Routes are `/{company}/...` with `->middleware(['auth', 'identify.company'])`.
 - Company context is `app(CurrentCompany::class)->get()`. **Never `session('active_company_id')`.**
-- Authorisation is `$this->hasCompanyPermission(Permissions::TICKET_...)`.
+- Authorisation is `$this->hasCompanyPermission(Permissions::UMRAH_TICKET_...)`.
+- **This codebase has no model factories.** `Model::factory()` will fatal. Build
+  fixtures with `Model::create([...])`, following
+  `tests/Feature/CompanyRoleAccessTest.php` for the user-and-role setup this
+  plan's permission tests need.
 - **Menu freeze:** do not rename, move, remove or repoint any existing nav item. Adding a new one is fine.
 - Currency display: the base currency is not announced beside every amount. Non-base amounts show the **symbol**, not the ISO code. Documents state `Currency: SAR` once, on export.
 - **Verification quad**, from `build/`:

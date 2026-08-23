@@ -18,6 +18,16 @@
 - Money columns: `decimal(15, 2)` for base amounts, `decimal(18, 6)` for currency amounts, `decimal(18, 8)` for exchange rates. From `docs/contracts/multicurrency-rules.md`, which is **LOCKED** — comply, never amend.
 - Revenue, COGS and expense accounts are **base-currency only** (`currency` NULL). Only balance-sheet accounts may carry a foreign currency.
 - Never use `$request->validate()`. Use a FormRequest.
+- **This codebase has no model factories.** There is no `CompanyFactory`,
+  `CustomerFactory` or anything like them — `Model::factory()` will fatal.
+  Build fixtures with `Model::create([...])`, following
+  `tests/Feature/Accounting/BillPaymentPostingTest.php` or
+  `tests/Feature/Umrah/RefundLifecycleTest.php`. Any `::factory()` call written
+  in this plan is a mistake in the plan; replace it.
+- **Company creation does not seed a chart of accounts.** The COA arrives only
+  through `CompanyOnboardingService::setupCompanyIdentity()`; there is no model
+  observer. A test that needs accounts must either run onboarding or insert the
+  accounts it needs.
 - `sed -i` silently no-ops on these files (CRLF). Use the Edit tool.
 - Pest/artisan output carries ANSI escapes. Pipe through `sed 's/\x1b\[[0-9;]*m//g'` when grepping it.
 - **Test baseline is 185 passed / 937 assertions**, about 215 seconds. Run the full suite (`php artisan test`) before every commit; it must never drop below baseline.
@@ -43,13 +53,16 @@ In `docs/contracts/coa-schema.md`, add to the Umrah/travel pack section:
 | `4130` | Ticket Commission Revenue | revenue | revenue | credit |
 | `4140` | Ticket Service Fee Revenue | revenue | revenue | credit |
 | `4150` | Ticket Discount | revenue | revenue | debit (contra) |
-| `4160` | Ticket Cancellation Adjustments | revenue | revenue | debit |
+| `4160` | Ticket Cancellation Adjustments | revenue | revenue | debit (contra) |
 | `9900` | Rounding Differences | expense | expense | debit |
 
-Note under the table, in prose: `2350` is base-denominated and must return to
-exactly zero per booking; `4150` is a contra-revenue account (`is_contra = true`,
-`normal_balance = 'debit'`); `4130`, `4140`, `4150` and `4160` carry `currency = NULL`
-because the multicurrency contract forbids foreign currency on revenue accounts.
+Note under the table, in prose: `2350` is base-denominated and carries the
+company's base currency, and must return to exactly zero per booking; `4150` and
+`4160` are both contra-revenue accounts (`is_contra = true`,
+`normal_balance = 'debit'`), matching `4900` and `4910` in
+`AccountTemplateSeeder.php`; `4130`, `4140`, `4150` and `4160` carry
+`currency = NULL` because the multicurrency contract forbids foreign currency on
+revenue accounts.
 
 - [ ] **Step 2: Document the ticket posting doc types**
 
@@ -159,6 +172,17 @@ not carry the key through, add it there too, defaulting to `false`.
 
 - [ ] **Step 4: Write the backfill migration**
 
+**Two inserts, not one.** `CompanyOnboardingService::createIndustryChartOfAccounts()`
+reads `IndustryCoaTemplate` rows out of `acct.industry_coa_templates`, and that
+table is only ever populated by running `IndustryCoaPackSeeder`. Production's
+`deploy.sh` runs `migrate --force` and **never `db:seed`**, so the seeder change
+in Step 3 reaches nobody live and a company onboarded after the deploy would get
+no ticket accounts. The migration must insert the six **template** rows as well
+as backfilling the six **company account** rows. Follow
+`database/migrations/2026_08_21_000003_add_umrah_refund_accounts.php`, which does
+exactly this — read its comment about `umrah` vs `travel` industry codes before
+scoping the template insert, and match what it concluded.
+
 Create `database/migrations/2026_08_23_000001_add_ticket_accounts_to_existing_companies.php`:
 
 ```php
@@ -202,10 +226,15 @@ return new class extends Migration
                     continue;
                 }
 
+                // Only "monetary" subtypes may carry a currency, and it is
+                // the company's base currency -- follow the MONETARY_SUBTYPES
+                // list in CompanyOnboardingService::createIndustryChartOfAccounts()
+                // rather than nulling every account. Of these six, only 2350
+                // qualifies, and it must carry the base currency.
                 DB::table('acct.accounts')->insert(array_merge($account, [
                     'id' => DB::raw('public.gen_random_uuid()'),
                     'company_id' => $companyId,
-                    'currency' => null,
+                    'currency' => $currency,
                     'is_active' => true,
                     'is_system' => false,
                     'created_at' => $now,

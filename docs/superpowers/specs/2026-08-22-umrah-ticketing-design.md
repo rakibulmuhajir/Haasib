@@ -92,8 +92,8 @@ that passes through a clearing account, never an expense.
 Worked example: gross fare 85,000, taxes 12,400, supplier cost 91,000, discount
 2,000, service fee 1,500. The buyer pays 96,900.
 
-**Buyer invoice** — `acct.invoices`, three lines plus an invoice-level discount
-(the mechanism is spelled out below):
+**Buyer invoice** — `acct.invoices`. **One line, and the buyer sees only that
+line** (the mechanism is spelled out below):
 
 ```
 Dr  Accounts Receivable                    96,900
@@ -135,15 +135,29 @@ What the existing engine actually does, verified in `PostingService`:
 | Invoice-level `discount_amount` | **Debited** to the template's `DISCOUNT_GIVEN` role |
 | AR debit | `total_amount`, i.e. subtotal + tax − discount |
 
-So the mechanics fit the posting above exactly — a credited clearing line and a
-debited discount are both native behaviour. **The discount is not a line.** It is
-the invoice's `discount_amount`, with `DISCOUNT_GIVEN` mapped to `4150`:
+**The three credits are not three invoice lines.** Two reasons, and the first is
+the serious one:
+
+1. **An invoice line prints.** A line reading "Ticket Supplier Clearing 91,000"
+   puts the supplier cost on the document the buyer receives — and this spec
+   requires elsewhere that an agent never sees supplier cost. A three-line
+   invoice hands it to them in the PDF.
+2. The split is a property of **the ticket**, not of a line. Commission is
+   derived; nobody types it.
+
+So the invoice carries **one line** — "Air ticket, PK-309, 12 Sep" at 98,900 —
+plus the invoice-level discount. The buyer sees a fare and a discount, which is
+what they are owed:
 
 ```
-Three lines            98,900   (91,000 clearing + 6,400 commission + 1,500 fee)
+One line               98,900   ← what the buyer sees
 Invoice discount_amount 2,000   → Dr 4150
 AR                     96,900   = 98,900 − 2,000        ✓ balances
 ```
+
+The three-way credit split comes from the **ticket rows** at posting time, not
+from the document. `4150` needs no change either way: `DISCOUNT_GIVEN` already
+accepts a `type = revenue` account.
 
 **What genuinely blocks it is validation, not arithmetic:**
 
@@ -161,9 +175,20 @@ the next author from widening it.
 
 **Instead: a ticket posting adapter over the existing GL engine.** `PostingService`
 already resolves a `PostingTemplate` by `doc_type`, so ticketing adds
-`TICKET_INVOICE` and `TICKET_BILL` templates carrying the existing `CLEARING`
-role alongside `AR`, `AP`, `REVENUE` and `DISCOUNT_GIVEN`. The clearing leg comes
-from the template role, not from a line account. Ticket
+`TICKET_INVOICE` and `TICKET_BILL` templates. **Every account comes from a
+template role; no ticket posting reads `income_account_id` or
+`expense_account_id` at all.**
+
+| Doc type | Roles |
+|---|---|
+| `TICKET_INVOICE` | `AR`, `CLEARING`, `REVENUE` (commission), `SERVICE_FEE`, `DISCOUNT_GIVEN`, `ROUNDING` |
+| `TICKET_BILL` | `AP`, `CLEARING` |
+| `TICKET_CREDIT_NOTE` | `AR`, `CANCELLATION_ADJUSTMENT` |
+| `TICKET_VENDOR_CREDIT` | `AP`, `CANCELLATION_ADJUSTMENT` |
+
+The amounts come from the booking's ticket rows — `gross_fare_base + taxes_base`,
+`supplier_cost_base`, `service_fee_base`, `discount_base` — summed across the
+tickets on the booking. Ticket
 invoices and bills stay ordinary subledger documents — aging, allocation and
 statements all work — while the clearing leg is supplied by a posting strategy
 that knows what a ticket is.
@@ -594,8 +619,8 @@ Added via the four-step RBAC process in `CLAUDE.md`.
    reject these templates today:
 
    - `posting_templates_doc_type_chk` — currently nine values, none of them ours.
-   - `posting_template_lines_role_chk` — needs `CANCELLATION_ADJUSTMENT` and
-     `ROUNDING`.
+   - `posting_template_lines_role_chk` — needs `SERVICE_FEE`,
+     `CANCELLATION_ADJUSTMENT` and `ROUNDING`.
    - `StorePostingTemplateRequest`.
    - `PostingTemplateValidator::requiredRoles()` — add the four doc types, which
      otherwise fall to `default => []` and require nothing at all.
@@ -606,6 +631,10 @@ Added via the four-step RBAC process in `CLAUDE.md`.
    liability with no widening — there is no need to invent `SUPPLIER_CLEARING`.
    And `DISCOUNT_GIVEN` already accepts `type = revenue`, so `4150` as
    contra-revenue validates as it stands.
+
+   Because every account is a template role, the account-type validators on
+   invoice and bill **lines** are never involved in a ticket posting, and stay
+   exactly as strict as they are today.
 4. **Credit-note currency fields** — `currency` and `exchange_rate` on
    `acct.credit_notes`, and an account field on credit-note and vendor-credit
    items. Existing rows are base-currency by definition, so the backfill is
@@ -639,6 +668,9 @@ Added via the four-step RBAC process in `CLAUDE.md`.
   balance.
 - The account-type validators still reject a liability on a manual invoice or
   bill line — the adapter widens nothing.
+- **A rendered ticket invoice contains no supplier cost and no commission**,
+  in the line items, the PDF, or the Inertia props. This is a regression test,
+  not a review item.
 - Retrying the booking command with the same idempotency key creates one
   invoice, not two — including after 24 hours, when a cache would have expired.
 - Two concurrent bookings get distinct numbers.

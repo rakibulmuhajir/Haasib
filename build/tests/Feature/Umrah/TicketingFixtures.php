@@ -9,6 +9,8 @@ use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\Ticket;
+use App\Modules\Umrah\Models\TicketBooking;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -197,4 +199,47 @@ function ticketingBookingAttributes(object $f, array $overrides = []): array
         'status' => 'confirmed',
         'idempotency_key' => 'test-key-1',
     ], $overrides);
+}
+
+/**
+ * A single ticket sitting on its own company + booking. Successive
+ * calls within the same test reuse that company and booking (needed
+ * for the airline-ticket-number uniqueness tests, which are scoped
+ * per company) but a fresh pair is built the first time a test needs
+ * one, so nothing leaks across tests under RefreshDatabase.
+ */
+function ticketingTicket(array $overrides = []): Ticket
+{
+    static $context = null;
+
+    if ($context === null || ! Company::find($context->company->id)) {
+        $f = ticketingBookingFixture();
+        $booking = TicketBooking::create(ticketingBookingAttributes($f));
+        $context = (object) ['company' => $f->company, 'booking' => $booking];
+    }
+
+    return Ticket::create(array_merge([
+        'company_id' => $context->company->id,
+        'ticket_booking_id' => $context->booking->id,
+        'ticket_number' => 'TKT-'.str()->upper(str()->random(10)),
+        'airline_ticket_number' => '214-'.random_int(1000000000, 9999999999),
+        'passenger_name' => 'Test Passenger',
+        'airline' => 'PIA',
+        'route' => 'KHI-JED',
+        'travel_date' => '2026-09-10',
+        'sale_currency' => $context->company->base_currency,
+        'gross_fare' => 85_000,
+        'taxes' => 0,
+        'discount' => 0,
+        'service_fee' => 0,
+        'gross_fare_base' => 85_000,
+        'taxes_base' => 0,
+        'discount_base' => 0,
+        'service_fee_base' => 0,
+        'supplier_currency' => $context->company->base_currency,
+        'supplier_cost' => 91_000,
+        'supplier_cost_base' => 91_000,
+        'base_currency' => $context->company->base_currency,
+        'status' => 'issued',
+    ], $overrides));
 }

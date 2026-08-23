@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\PostingTemplate;
 use App\Modules\Accounting\Models\PostingTemplateLine;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Models\VendorCredit;
+use App\Modules\Umrah\Commands\CancelTicket;
 use App\Modules\Umrah\Commands\CreateTicketBooking;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
@@ -940,4 +941,110 @@ function ticketingSoldTicketWithUsers(): object
         'invoice' => $booking->invoice,
         'bill' => $booking->bill,
     ];
+}
+
+/**
+ * Everything TicketReportTest needs: an HTTP-wired company with a manager
+ * (holds UMRAH_REPORT_VIEW) and an agent user (holds only
+ * UMRAH_REPORT_OWN_VIEW), one buyer/agent/supplier, and three bookings --
+ * each the worked-example ticket -- dated across September 2026 so a
+ * `start=2026-09-01&end=2026-09-30` report window catches all three. Every
+ * posting template a sale and a cancellation both need is wired up, so
+ * ticketingCancelOneOf() can cancel one of the three afterwards.
+ */
+function ticketingSeveralSoldTickets(): object
+{
+    $f = ticketingCompany([
+        'industry_code' => 'umrah',
+        'settings' => ['modules' => ['umrah' => true]],
+    ]);
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$f->user->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$f->company->id]);
+
+    $manager = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $manager, 'manager');
+
+    $agentUser = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $agentUser, 'agent');
+
+    ticketingPostingTemplate($f->company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_BILL', [
+        'AP' => '2000',
+        'CLEARING' => '2350',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_CREDIT_NOTE', [
+        'AR' => '1100',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_VENDOR_CREDIT', [
+        'AP' => '2000',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id, 'user_id' => $agentUser->id]);
+    $vendor = ticketingVendor($f->company);
+
+    // Invoice::generateInvoiceNumber() picks "last" by created_at, and
+    // acct.invoices.created_at is a timestamp(0) column -- whole seconds.
+    // Bookings dispatched back-to-back land in the same second, tie, and
+    // Postgres makes no order guarantee for ties, so two dispatches can both
+    // compute the same "next" invoice number. A full-second gap between
+    // dispatches keeps each created_at distinct.
+    $bookings = collect([1, 2, 3])->map(function (int $day) use ($f, $customer, $agent, $vendor) {
+        $booking = Bus::dispatch(new CreateTicketBooking(
+            companyId: $f->company->id,
+            customerId: $customer->id,
+            supplierVendorId: $vendor->id,
+            bookingDate: sprintf('2026-09-0%d', $day),
+            pnr: sprintf('PNR00%d', $day),
+            tickets: [ticketingWorkedExampleTicket()],
+            idempotencyKey: 'several-'.$day.'-'.str()->lower(str()->random(8)),
+            agentId: $agent->id,
+        ));
+        sleep(1);
+
+        return $booking;
+    })->values();
+
+    return (object) [
+        'company' => $f->company,
+        'manager' => $manager,
+        'agentUser' => $agentUser,
+        'agent' => $agent,
+        'vendor' => $vendor,
+        'bookings' => $bookings,
+    ];
+}
+
+/**
+ * Cancels the ticket on the first of ticketingSeveralSoldTickets()'s three
+ * bookings. `costBase()` on the result is `$buyerBack - $supplierBack`,
+ * signed -- a supplier return larger than the buyer's is a gain and comes
+ * back negative, on purpose.
+ */
+function ticketingCancelOneOf(object $f, float $buyerBack, float $supplierBack): TicketCancellation
+{
+    $ticket = $f->bookings->first()->tickets->first();
+
+    return Bus::dispatch(new CancelTicket(
+        ticketId: $ticket->id,
+        cancellationDate: '2026-09-05',
+        buyerReturnsAmount: $buyerBack,
+        supplierReturnsAmount: $supplierBack,
+        reason: 'Passenger withdrew',
+        idempotencyKey: 'cancel-one-'.str()->lower(str()->random(8)),
+    ));
 }

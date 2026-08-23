@@ -22,6 +22,9 @@ class TravelReportRequest extends BaseFormRequest
         'vendor-aging',
         'advances',
         'transport-dispatch',
+        'ticket-sales',
+        'ticket-supplier-reconciliation',
+        'ticket-cancellations',
     ];
 
     public const SELF_REPORTS = [

@@ -4,17 +4,22 @@ namespace App\Modules\Umrah\Services;
 
 use App\Models\Company;
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\GroupTransportItem;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\PaymentAllocation;
+use App\Modules\Umrah\Models\Ticket;
+use App\Modules\Umrah\Models\TicketBooking;
+use App\Modules\Umrah\Models\TicketCancellation;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Models\Voucher;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class TravelReportService
 {
@@ -29,6 +34,9 @@ class TravelReportService
         'hotel-rooming' => ['title' => 'Hotel Rooming List', 'description' => 'Hotel stays, room requirements, and passenger names.', 'date_basis' => 'Check-in date'],
         'transport-dispatch' => ['title' => 'Transport Dispatch', 'description' => 'Scheduled vehicles, routes, passenger loads, and drivers.', 'date_basis' => 'Transport schedule'],
         'voucher-control' => ['title' => 'Voucher Control', 'description' => 'Drafts, approvals, cancellations, and approaching service deadlines.', 'date_basis' => 'Departure or first check-in'],
+        'ticket-sales' => ['title' => 'Ticket Sales', 'description' => 'Revenue per ticket sold: gross fare, supplier cost, commission, service fee, discount and net revenue.', 'date_basis' => 'Booking date'],
+        'ticket-supplier-reconciliation' => ['title' => 'Ticket Supplier Reconciliation', 'description' => 'Bills raised, vendor credits, payments and outstanding per supplier, with the 2350 clearing balance as a control figure that must read zero.', 'date_basis' => 'Booking date'],
+        'ticket-cancellations' => ['title' => 'Ticket Cancellations', 'description' => 'Every cancellation in the period: what the buyer got back, what the supplier returned, and the resulting cost or gain.', 'date_basis' => 'Cancellation date'],
     ];
 
     public function __construct(private TravelAccessService $access) {}
@@ -52,6 +60,9 @@ class TravelReportService
             'hotel-rooming' => $this->hotelRooming($company, $filters, $isAgent),
             'transport-dispatch' => $this->transportDispatch($company, $filters),
             'voucher-control' => $this->voucherControl($company, $filters),
+            'ticket-sales' => $this->ticketSales($company, $filters),
+            'ticket-supplier-reconciliation' => $this->ticketSupplierReconciliation($company, $filters),
+            'ticket-cancellations' => $this->ticketCancellations($company, $filters),
         };
 
         $rows = collect($result['rows'])->values();
@@ -643,6 +654,201 @@ class TravelReportService
         return match (true) {
             $age <= 0 => 'Current', $age <= 30 => '1-30', $age <= 60 => '31-60', $age <= 90 => '61-90', default => '90+'
         };
+    }
+
+    /**
+     * A row per ticket sold in the period. Gated on the full
+     * `UMRAH_REPORT_VIEW` permission (see TravelReportRequest::COMPANY_REPORTS)
+     * -- an agent's `UMRAH_REPORT_OWN_VIEW` never reaches this report, because
+     * a margin report is meaningless once supplier cost and commission are
+     * scoped away the way TicketBookingController scopes them for an
+     * own-view-only agent. Commission is never read from a column -- it is
+     * Ticket::commissionBase(), the same derivation the booking screens use.
+     */
+    private function ticketSales(Company $company, array $filters): array
+    {
+        $bookings = TicketBooking::where('company_id', $company->id)
+            ->whereBetween('booking_date', [$filters['start'], $filters['end']])
+            ->when(! empty($filters['agent_id']), fn ($query) => $query->where('agent_id', $filters['agent_id']))
+            ->with(['customer:id,name', 'tickets'])
+            ->get();
+
+        $rows = $bookings->flatMap(function (TicketBooking $booking) {
+            return $booking->tickets->map(function (Ticket $ticket) use ($booking): array {
+                $commission = $ticket->commissionBase();
+                $serviceFee = (float) $ticket->service_fee_base;
+                $discount = (float) $ticket->discount_base;
+
+                return [
+                    'booking' => $booking->booking_reference,
+                    'buyer' => $booking->customer?->name,
+                    'passenger' => $ticket->passenger_name,
+                    'route' => $ticket->route,
+                    'gross' => round((float) $ticket->gross_fare_base + (float) $ticket->taxes_base, 2),
+                    'supplier_cost' => round((float) $ticket->supplier_cost_base, 2),
+                    'commission' => round($commission, 2),
+                    'service_fee' => round($serviceFee, 2),
+                    'discount' => round($discount, 2),
+                    'net_revenue' => round($commission + $serviceFee - $discount, 2),
+                ];
+            });
+        })->values();
+
+        return [
+            'summary' => $this->moneySummary($company, [
+                'Tickets' => $rows->count(),
+                'Gross fare' => $rows->sum('gross'),
+                'Supplier cost' => $rows->sum('supplier_cost'),
+                'Commission' => $rows->sum('commission'),
+                'Service fee' => $rows->sum('service_fee'),
+                'Discount' => $rows->sum('discount'),
+                'Net revenue' => $rows->sum('net_revenue'),
+            ], ['Tickets']),
+            'columns' => [
+                $this->column('booking', 'Booking'),
+                $this->column('buyer', 'Buyer'),
+                $this->column('passenger', 'Passenger'),
+                $this->column('route', 'Route'),
+                $this->column('gross', 'Gross Fare', 'money'),
+                $this->column('supplier_cost', 'Supplier Cost', 'money'),
+                $this->column('commission', 'Commission', 'money'),
+                $this->column('service_fee', 'Service Fee', 'money'),
+                $this->column('discount', 'Discount', 'money'),
+                $this->column('net_revenue', 'Net Revenue', 'money'),
+            ],
+            'rows' => $rows->all(),
+        ];
+    }
+
+    /**
+     * A row per supplier: bills raised, vendor credits raised against
+     * cancellations, amounts paid, and what is left outstanding. The
+     * `clearing_balance` figure sits outside the row set on purpose -- it is
+     * the 2350 account's own debit-minus-credit balance across the whole
+     * company, not a per-supplier or per-period sum, so it is unaffected by
+     * the date filter the rows use. It is the control figure the report
+     * exists for: every ticket invoice credits 2350 for the supplier cost and
+     * every ticket bill debits it for the same amount, so a fully reconciled
+     * book leaves it at zero. Anything else is a defect to investigate, not a
+     * number to interpret -- also surfaced as a labelled summary card so it
+     * reads as a control figure on the screen, not just another total.
+     */
+    private function ticketSupplierReconciliation(Company $company, array $filters): array
+    {
+        $bookings = TicketBooking::where('company_id', $company->id)
+            ->whereBetween('booking_date', [$filters['start'], $filters['end']])
+            ->when(! empty($filters['agent_id']), fn ($query) => $query->where('agent_id', $filters['agent_id']))
+            ->with(['supplierVendor:id,name', 'bill:id,total_amount,paid_amount', 'tickets:id,ticket_booking_id'])
+            ->get();
+
+        $ticketToBooking = [];
+        foreach ($bookings as $booking) {
+            foreach ($booking->tickets as $ticket) {
+                $ticketToBooking[$ticket->id] = $booking->id;
+            }
+        }
+
+        $vendorCreditsByBooking = TicketCancellation::where('company_id', $company->id)
+            ->whereIn('ticket_id', array_keys($ticketToBooking))
+            ->with('supplierVendorCredit:id,amount')
+            ->get()
+            ->groupBy(fn (TicketCancellation $cancellation) => $ticketToBooking[$cancellation->ticket_id] ?? null)
+            ->map(fn (Collection $group) => (float) $group->sum(fn (TicketCancellation $cancellation) => (float) ($cancellation->supplierVendorCredit->amount ?? 0)));
+
+        $rows = $bookings->groupBy('supplier_vendor_id')->map(function (Collection $group) use ($vendorCreditsByBooking): array {
+            $billsRaised = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->total_amount ?? 0)), 2);
+            $paid = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->paid_amount ?? 0)), 2);
+            $vendorCredits = round((float) $group->sum(fn (TicketBooking $booking) => $vendorCreditsByBooking[$booking->id] ?? 0), 2);
+
+            return [
+                'supplier' => $group->first()->supplierVendor?->name,
+                'bills_raised' => $billsRaised,
+                'vendor_credits' => $vendorCredits,
+                'paid' => $paid,
+                'outstanding' => round($billsRaised - $vendorCredits - $paid, 2),
+            ];
+        })->values();
+
+        $clearingAccountId = Account::where('company_id', $company->id)->where('code', '2350')->value('id');
+        $clearingBalance = 0.0;
+        if ($clearingAccountId) {
+            $debit = (float) DB::table('acct.journal_entries')->where('account_id', $clearingAccountId)->sum('debit_amount');
+            $credit = (float) DB::table('acct.journal_entries')->where('account_id', $clearingAccountId)->sum('credit_amount');
+            $clearingBalance = round($debit - $credit, 2);
+        }
+
+        return [
+            'clearing_balance' => $clearingBalance,
+            'summary' => $this->moneySummary($company, [
+                'Suppliers' => $rows->count(),
+                'Bills raised' => $rows->sum('bills_raised'),
+                'Vendor credits' => $rows->sum('vendor_credits'),
+                'Paid' => $rows->sum('paid'),
+                'Outstanding' => $rows->sum('outstanding'),
+                'Clearing balance (control -- should read zero)' => $clearingBalance,
+            ], ['Suppliers']),
+            'columns' => [
+                $this->column('supplier', 'Supplier'),
+                $this->column('bills_raised', 'Bills Raised', 'money'),
+                $this->column('vendor_credits', 'Vendor Credits', 'money'),
+                $this->column('paid', 'Paid', 'money'),
+                $this->column('outstanding', 'Outstanding', 'money'),
+            ],
+            'rows' => $rows->all(),
+        ];
+    }
+
+    /**
+     * A row per cancellation. `cost` is TicketCancellation::costBase() --
+     * buyer returned minus supplier returned -- and is deliberately left
+     * signed: a cancellation where the supplier returned more than the buyer
+     * got back is a gain and renders negative, not clamped or abs()'d. The
+     * money column renders it through MoneyText's default tone, which is ink
+     * with a minus sign, never red -- direction is not severity here.
+     */
+    private function ticketCancellations(Company $company, array $filters): array
+    {
+        $cancellations = TicketCancellation::where('company_id', $company->id)
+            ->whereBetween('cancellation_date', [$filters['start'], $filters['end']])
+            ->with(['ticket:id,ticket_number,ticket_booking_id'])
+            ->get()
+            ->filter(function (TicketCancellation $cancellation) use ($filters): bool {
+                if (empty($filters['agent_id'])) {
+                    return true;
+                }
+
+                $bookingId = $cancellation->ticket?->ticket_booking_id;
+
+                return $bookingId && TicketBooking::where('id', $bookingId)->where('agent_id', $filters['agent_id'])->exists();
+            })
+            ->values();
+
+        $rows = $cancellations->map(fn (TicketCancellation $cancellation): array => [
+            'ticket' => $cancellation->ticket?->ticket_number,
+            'date' => $cancellation->cancellation_date?->toDateString(),
+            'buyer_returned' => round((float) $cancellation->buyer_returns_base, 2),
+            'supplier_returned' => round((float) $cancellation->supplier_returns_base, 2),
+            'cost' => round($cancellation->costBase(), 2),
+            'reason' => $cancellation->reason,
+        ]);
+
+        return [
+            'summary' => $this->moneySummary($company, [
+                'Cancellations' => $rows->count(),
+                'Buyer returned' => $rows->sum('buyer_returned'),
+                'Supplier returned' => $rows->sum('supplier_returned'),
+                'Net cost' => $rows->sum('cost'),
+            ], ['Cancellations']),
+            'columns' => [
+                $this->column('ticket', 'Ticket'),
+                $this->column('date', 'Date', 'date'),
+                $this->column('buyer_returned', 'Buyer Returned', 'money'),
+                $this->column('supplier_returned', 'Supplier Returned', 'money'),
+                $this->column('cost', 'Cost', 'money'),
+                $this->column('reason', 'Reason'),
+            ],
+            'rows' => $rows->all(),
+        ];
     }
 
     private function filterDefinitions(Company $company, string $report, bool $isAgent): array

@@ -15,7 +15,7 @@ rawTable 0, uiTable 0, dataTableShim 0, directionAsSeverity 6, moneyAsText 0,
 moneyAsFixed 0, statusAsText 0, statusSlotAsText 0, handRolledMoney 0, deadSlot 0
 ```
 
-Those prove every page *imports the right primitives*. They prove nothing about whether the result *looks* right. A page can use `MoneyText`, `StatusBadge` and the shared table on every element and still be unreadable — columns colliding at 1280px, a header wrapping onto three lines, a card that runs under the sidebar, two panels with different padding sitting side by side.
+Those prove every page *imports the right primitives*. They prove nothing about whether the result *looks* right. A page can use `MoneyText`, `StatusBadge` and the shared table on every element and still be unreadable — columns colliding at desktop width, a header wrapping onto three lines, a card that runs under the sidebar, two panels with different padding sitting side by side.
 
 **That gap is the whole job.** Do not re-check what lint already covers. Look at what lint cannot see.
 
@@ -44,21 +44,20 @@ Six defect classes, in the order they are worth your time:
 | 2 | **Overflow** | Horizontal scrollbar on the whole page (a table may scroll inside its own container — the page body may not), a figure wrapping mid-number, a long buyer name pushing a column off-screen |
 | 3 | **Inconsistency between sibling pages** | Invoices and Bills are the same kind of page — do they align amounts the same way, use the same status treatment, the same column order, the same empty state? Same for the four `*/Show.vue` detail pages |
 | 4 | **Wrong style for the role** | Serif on a button or table cell · shadow on a static card · red on an ordinary negative · a status as bare lowercase text instead of a chip |
-| 5 | **Cramped or unbalanced layout** | Mismatched padding between adjacent panels, a two-column grid that collapses badly, a heading with no breathing room, a lone control stranded in whitespace |
+| 5 | **Cramped or unbalanced layout** | Mismatched padding between adjacent panels, a grid whose columns are visibly uneven, a heading with no breathing room, a lone control stranded in whitespace |
 | 6 | **Empty and long states** | What does the page look like with zero rows? With a 40-character customer name? With a 10-digit amount? |
 
 ---
 
-## Viewports
+## Viewport — desktop only
 
-Check each page at **1280px** first (the common case). Then for anything on the priority list, also:
+**Desktop is the only target for this pass. Work at a normal desktop width (~1440px) and ignore every other screen size.**
 
-- **375px** — phone. Tables should become cards or scroll inside themselves.
-- **768px** — tablet, the width where two-column grids usually break.
-- **1920px** — does the content stretch absurdly wide or stay in a sensible measure?
-- **200% zoom at 1280px** — the accessibility case, and where overlap shows up first.
+Do **not** test phone widths, tablet widths, or zoom levels. If a page looks broken at 375px or 768px, that is out of scope right now — do not report it, do not spend time on it. Responsive behaviour is deliberately deferred.
 
-Also check **dark theme** on anything you flag, and give **Urdu / RTL** a smoke test on two or three pages — mirrored layout is where alignment assumptions break.
+Do still check **dark theme** on anything you flag. It renders at the same width and costs you seconds.
+
+RTL / Urdu is also out of scope for this pass.
 
 ---
 
@@ -102,7 +101,7 @@ Specific things to check here:
 
 ### Tier 4 — flagged in code review, visual state unknown
 
-- `bills/Index.vue` — the `#mobile-card` slot hand-rolls its own Badge instead of using `StatusBadge`. **Check at 375px specifically.**
+- ~~`bills/Index.vue` — the `#mobile-card` slot hand-rolls its own Badge.~~ **Out of scope this pass** — that slot only renders at phone width.
 - `Periods/Show.vue` — a period-level Badge sits outside a cell slot; may be misplaced.
 - `FuelStation/Sales/Form.vue` — error display indexes `[0]` into a string, so a validation error may render as a single character.
 - `FuelStation/FuelReceipts/Index.vue` — believed dead/unreachable. If you can reach it, that is itself the finding.
@@ -128,7 +127,7 @@ One finding per entry. Keep it short:
 
 ```
 PAGE:      Umrah/Tickets/Show.vue
-VIEWPORT:  768px, light theme
+THEME:     light
 WHAT:      The passenger name column runs under the fare column
 EXPECTED:  Columns stay separate; long names truncate or wrap within their cell
 SCREENSHOT: <attach>

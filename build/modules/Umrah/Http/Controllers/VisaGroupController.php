@@ -310,6 +310,7 @@ class VisaGroupController extends Controller
         $changes = [
             'name' => $data['name'],
             'transport_mode' => $data['transport_mode'],
+            'includes_visa' => $data['includes_visa'] ?? $record->includes_visa,
             'transport_required' => $data['transport_mode'] !== VisaGroup::TRANSPORT_NONE,
             'travel_date' => $data['travel_date'] ?? null,
             'flight_info' => ['airline' => $data['flight_airline'] ?? null, 'number' => $data['flight_number'] ?? null, 'notes' => $data['flight_notes'] ?? null],

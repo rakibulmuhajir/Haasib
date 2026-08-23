@@ -137,6 +137,7 @@ class UmrahCoreService
                 ],
                 'transport_required' => (bool) ($data['transport_required'] ?? false),
                 'transport_mode' => $data['transport_mode'] ?? VisaGroup::TRANSPORT_STANDARD_BUS,
+                'includes_visa' => $data['includes_visa'] ?? true,
                 'included_bus_cost_per_passenger' => 0,
                 'included_bus_cost_deduction' => $data['included_bus_cost_deduction'] ?? 0,
                 'standard_bus_retail_amount' => $data['standard_bus_retail_amount'] ?? 0,

@@ -773,3 +773,93 @@ function ticketingTwoBookingsForDifferentAgents(): object
         'outsider' => $outsider,
     ];
 }
+
+/**
+ * Everything TicketBookingStoreTest needs to POST the form: an
+ * HTTP-wired company (industry_code + modules.umrah, RBAC bootstrapped
+ * and synced) with a manager who can create bookings, an agent who
+ * cannot, a buyer, an agent linked to that buyer, an active supplier
+ * vendor, and both posting templates the command posts through.
+ */
+function ticketingFormContext(): object
+{
+    $f = ticketingCompany([
+        'industry_code' => 'umrah',
+        'settings' => ['modules' => ['umrah' => true]],
+    ]);
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$f->user->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$f->company->id]);
+
+    $manager = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $manager, 'manager');
+
+    $agentUser = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $agentUser, 'agent');
+
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id, 'user_id' => $agentUser->id]);
+    $vendor = ticketingVendor($f->company);
+
+    ticketingPostingTemplate($f->company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_BILL', [
+        'AP' => '2000',
+        'CLEARING' => '2350',
+    ]);
+
+    return (object) [
+        'company' => $f->company,
+        'manager' => $manager,
+        'agentUser' => $agentUser,
+        'customer' => $customer,
+        'agent' => $agent,
+        'vendor' => $vendor,
+    ];
+}
+
+/**
+ * A ready-to-POST payload for umrah.tickets.store, built from
+ * ticketingFormContext(). One ticket, everything in the company base
+ * currency so no exchange rate is needed on either leg, and a fresh
+ * idempotency key by default -- pass one explicitly to test the replay
+ * path.
+ */
+function ticketingFormPayload(object $f, array $overrides = []): array
+{
+    return array_merge([
+        'customer_id' => $f->customer->id,
+        'agent_id' => $f->agent->id,
+        'supplier_vendor_id' => $f->vendor->id,
+        'booking_date' => '2026-09-01',
+        'pnr' => 'X4K9QZ',
+        'idempotency_key' => 'form-'.str()->lower(str()->random(12)),
+        'tickets' => [
+            [
+                'passenger_name' => 'Test Passenger',
+                'airline' => 'PIA',
+                'route' => 'KHI-JED',
+                'travel_date' => '2026-09-10',
+                'gross_fare' => 85_000,
+                'taxes' => 12_400,
+                'discount' => 2_000,
+                'service_fee' => 1_500,
+                'supplier_cost' => 91_000,
+                'sale_currency' => $f->company->base_currency,
+                'sale_exchange_rate' => null,
+                'supplier_currency' => $f->company->base_currency,
+                'supplier_exchange_rate' => null,
+            ],
+        ],
+    ], $overrides);
+}

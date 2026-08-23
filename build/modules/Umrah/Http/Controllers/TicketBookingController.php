@@ -4,21 +4,28 @@ namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Umrah\Commands\CreateTicketBooking;
+use App\Modules\Umrah\Http\Requests\StoreTicketBookingRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
+use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 /**
- * The bookings register and, eventually, the form and cancellation
- * flows around it. `index()` is the only method this task builds --
- * `create`, `store`, `show` and `cancel` are routed here already
+ * The bookings register, the booking form, and eventually the
+ * cancellation flow around it. `index()`, `create()` and `store()` are
+ * built by this task -- `show` and `cancel` are routed here already
  * because the plan wants the route names settled now, but each is
- * filled in by a later task and until then simply 404s.
+ * filled in by Task 4 and until then simply 404s.
  */
 class TicketBookingController extends Controller
 {
@@ -61,14 +68,71 @@ class TicketBookingController extends Controller
         ]);
     }
 
+    /**
+     * Everything the form needs to build a valid booking client-side:
+     * customers and vendors to pick from, agents carrying their linked
+     * `customer_id` so the page can derive the buyer from the agent
+     * rather than let the two be chosen independently, and the
+     * company's configured currencies for the supplier leg. The sale
+     * leg is not offered a currency choice at all -- the invoice always
+     * posts in the company's base currency, so the form never asks.
+     */
     public function create(Request $request): Response
     {
-        abort(404);
+        $company = app(CurrentCompany::class)->get();
+        $user = $request->user();
+
+        abort_unless((bool) $user?->hasCompanyPermission(Permissions::UMRAH_TICKET_CREATE), 403);
+
+        return Inertia::render('Umrah/Tickets/Create', [
+            'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'customers' => Customer::where('company_id', $company->id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'agents' => Agent::where('company_id', $company->id)
+                ->orderBy('name')
+                ->get(['id', 'name', 'customer_id']),
+            'vendors' => Vendor::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * No arithmetic happens here -- every figure on the booking comes
+     * back from CreateTicketBooking. The command's own invariants
+     * (agent/customer match, supplier vendor active) are checked by
+     * StoreTicketBookingRequest before this runs; anything that still
+     * throws is an unexpected failure, not a validation shape the form
+     * could have caught, so it becomes a flash error rather than a 500.
+     */
+    public function store(StoreTicketBookingRequest $request): RedirectResponse
     {
-        abort(404);
+        $company = app(CurrentCompany::class)->get();
+        $data = $request->validated();
+
+        try {
+            $booking = Bus::dispatch(new CreateTicketBooking(
+                companyId: $company->id,
+                customerId: $data['customer_id'],
+                supplierVendorId: $data['supplier_vendor_id'],
+                bookingDate: $data['booking_date'],
+                pnr: $data['pnr'] ?? null,
+                tickets: $data['tickets'],
+                idempotencyKey: $data['idempotency_key'],
+                agentId: $data['agent_id'] ?? null,
+            ));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->with('error', 'Ticket booking could not be created. Check the details and try again.');
+        }
+
+        return redirect()
+            ->route('umrah.tickets.show', ['company' => $company->slug, 'booking' => $booking->id])
+            ->with('success', 'Ticket booking created.');
     }
 
     public function show(Request $request, string $booking): Response

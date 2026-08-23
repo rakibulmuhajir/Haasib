@@ -296,11 +296,13 @@ alongside the refund accounts (`1170`, `2300`) already documented in `docs/contr
 | `4130` | Ticket Commission Revenue | revenue | revenue | credit |
 | `4140` | Ticket Service Fee Revenue | revenue | revenue | credit |
 | `4150` | Ticket Discount | revenue | revenue | debit (contra) |
-| `4160` | Ticket Cancellation Adjustments | revenue | revenue | debit |
+| `4160` | Ticket Cancellation Adjustments | revenue | revenue | debit (contra) |
 | `9900` | Rounding Differences | expense | expense | debit |
 
-`2350` is base-denominated and must return to exactly zero per booking; `4150`
-is a contra-revenue account (`is_contra = true`, `normal_balance = 'debit'`);
+`2350` is base-denominated and must return to exactly zero per booking;
+`4150` and `4160` are contra-revenue accounts (`is_contra = true`,
+`normal_balance = 'debit'`), the same shape as `4900 Sales Returns &
+Allowances` / `4910 Sales Discounts` elsewhere in the catalog;
 `4130`, `4140`, `4150` and `4160` carry `currency = NULL` because the
 multicurrency contract forbids foreign currency on revenue accounts.
 

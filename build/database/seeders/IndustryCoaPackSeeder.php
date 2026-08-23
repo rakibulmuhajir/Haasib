@@ -736,7 +736,7 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '4130', 'name' => 'Ticket Commission Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
             ['code' => '4140', 'name' => 'Ticket Service Fee Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
             ['code' => '4150', 'name' => 'Ticket Discount', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true],
-            ['code' => '4160', 'name' => 'Ticket Cancellation Adjustments', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit'],
+            ['code' => '4160', 'name' => 'Ticket Cancellation Adjustments', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true],
             ['code' => '5100', 'name' => 'Visa Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
             ['code' => '5110', 'name' => 'Transport Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
             ['code' => '5120', 'name' => 'Hotel Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],

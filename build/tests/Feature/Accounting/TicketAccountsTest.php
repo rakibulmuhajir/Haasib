@@ -2,6 +2,7 @@
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The COA pack applies at company creation, so a template-only change
@@ -61,5 +62,35 @@ it('leaves ticket revenue accounts on the base currency', function () {
     foreach (['4130', '4140', '4150', '4160'] as $code) {
         $account = Account::where('company_id', $company->id)->where('code', $code)->first();
         expect($account->currency)->toBeNull("account {$code} must be base-currency only");
+    }
+});
+
+/**
+ * The account backfill alone is not enough: CompanyOnboardingService reads
+ * acct.industry_coa_templates, a table only IndustryCoaPackSeeder populates,
+ * and production's deploy.sh runs migrate --force but never db:seed. A
+ * migration that only backfills existing companies' acct.accounts rows
+ * would leave every company onboarded AFTER this deploy with no ticket
+ * accounts at all, because the template it copies from was never updated.
+ */
+it('inserts the six ticket accounts into the umrah and travel COA pack templates', function () {
+    ticketAccountsCompany();
+    runTicketAccountsBackfillMigration();
+
+    $industryIds = DB::table('acct.industry_coa_packs')
+        ->whereIn('code', ['umrah', 'travel'])
+        ->pluck('id');
+
+    expect($industryIds)->toHaveCount(2);
+
+    foreach ($industryIds as $industryId) {
+        foreach (['2350', '4130', '4140', '4150', '4160', '9900'] as $code) {
+            expect(
+                DB::table('acct.industry_coa_templates')
+                    ->where('industry_pack_id', $industryId)
+                    ->where('code', $code)
+                    ->exists()
+            )->toBeTrue("template code {$code} is missing for industry pack {$industryId}");
+        }
     }
 });

@@ -127,16 +127,27 @@ return new class extends Migration
 
     public function down(): void
     {
-        $codes = array_column($this->accounts(), 'code');
-
+        // Codes 4130/4140/4150 are not unique to this migration -- they are
+        // reused with different names by other industry packs (e.g. retail's
+        // "Shipping & Delivery Revenue" also sits on 4140), and this
+        // migration's up() backfilled every company, not only umrah/travel
+        // ones, so scoping by industry_code the way the refund-accounts
+        // precedent does would still risk another pack's same-numbered
+        // account. Matching on name as well as code ensures a rollback only
+        // ever removes a row this migration itself could have inserted.
         // Only drop a company account that has never been posted to.
-        DB::table('acct.accounts')
-            ->whereIn('code', $codes)
-            ->where('is_system', false)
-            ->whereNotIn('id', function ($query) {
-                $query->select('account_id')->from('acct.journal_entries');
-            })
-            ->delete();
+        foreach ($this->accounts() as $account) {
+            DB::table('acct.accounts')
+                ->where('code', $account['code'])
+                ->where('name', $account['name'])
+                ->where('is_system', false)
+                ->whereNotIn('id', function ($query) {
+                    $query->select('account_id')->from('acct.journal_entries');
+                })
+                ->delete();
+        }
+
+        $codes = array_column($this->accounts(), 'code');
 
         $industryIds = DB::table('acct.industry_coa_packs')
             ->whereIn('code', self::PACK_CODES)

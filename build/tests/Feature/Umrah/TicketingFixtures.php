@@ -2,14 +2,18 @@
 
 use App\Models\Company;
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\PostingTemplate;
+use App\Modules\Accounting\Models\PostingTemplateLine;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Models\VendorCredit;
+use App\Modules\Umrah\Commands\CreateTicketBooking;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
@@ -315,4 +319,246 @@ function ticketingCancellation(array $overrides = []): TicketCancellation
         'idempotency_key' => 'cancel-'.str()->lower(str()->random(10)),
         'reason' => 'Passenger withdrew',
     ], $overrides));
+}
+
+/**
+ * The ticket accounts a booking posts to, built by hand because a bare
+ * company gets no chart of accounts. Mirrors
+ * ticketPostingServiceAccount() in TicketPostingServiceTest.php.
+ */
+function ticketingPostingServiceAccount(Company $company, string $code): Account
+{
+    return Account::where('company_id', $company->id)->where('code', $code)->first()
+        ?? match ($code) {
+            '1100' => Account::create([
+                'company_id' => $company->id,
+                'code' => '1100',
+                'name' => 'Accounts Receivable',
+                'type' => 'asset',
+                'subtype' => 'accounts_receivable',
+                'normal_balance' => 'debit',
+            ]),
+            '2000' => Account::create([
+                'company_id' => $company->id,
+                'code' => '2000',
+                'name' => 'Accounts Payable',
+                'type' => 'liability',
+                'subtype' => 'accounts_payable',
+                'normal_balance' => 'credit',
+            ]),
+            '2350' => Account::create([
+                'company_id' => $company->id,
+                'code' => '2350',
+                'name' => 'Ticket Supplier Clearing',
+                'type' => 'liability',
+                'subtype' => 'other_current_liability',
+                'normal_balance' => 'credit',
+                'currency' => $company->base_currency,
+            ]),
+            '4130' => Account::create([
+                'company_id' => $company->id,
+                'code' => '4130',
+                'name' => 'Ticket Commission Revenue',
+                'type' => 'revenue',
+                'subtype' => 'revenue',
+                'normal_balance' => 'credit',
+            ]),
+            '4140' => Account::create([
+                'company_id' => $company->id,
+                'code' => '4140',
+                'name' => 'Ticket Service Fee Revenue',
+                'type' => 'revenue',
+                'subtype' => 'revenue',
+                'normal_balance' => 'credit',
+            ]),
+            '4150' => Account::create([
+                'company_id' => $company->id,
+                'code' => '4150',
+                'name' => 'Ticket Discount',
+                'type' => 'revenue',
+                'subtype' => 'revenue',
+                'normal_balance' => 'debit',
+                'is_contra' => true,
+            ]),
+            '4160' => Account::create([
+                'company_id' => $company->id,
+                'code' => '4160',
+                'name' => 'Ticket Cancellation Adjustments',
+                'type' => 'revenue',
+                'subtype' => 'revenue',
+                'normal_balance' => 'debit',
+                'is_contra' => true,
+            ]),
+            '9900' => Account::create([
+                'company_id' => $company->id,
+                'code' => '9900',
+                'name' => 'Rounding Differences',
+                'type' => 'expense',
+                'subtype' => 'expense',
+                'normal_balance' => 'debit',
+            ]),
+            default => throw new \RuntimeException("no fixture for account {$code}"),
+        };
+}
+
+/**
+ * A posting template with role => account-code mappings, built once per
+ * (company, doc type). Mirrors ticketPostingTemplate() in
+ * TicketPostingServiceTest.php.
+ */
+function ticketingPostingTemplate(Company $company, string $docType, array $roles): PostingTemplate
+{
+    $existing = PostingTemplate::where('company_id', $company->id)->where('doc_type', $docType)->first();
+    if ($existing) {
+        return $existing;
+    }
+
+    $template = PostingTemplate::create([
+        'company_id' => $company->id,
+        'doc_type' => $docType,
+        'name' => $docType,
+        'is_active' => true,
+        'is_default' => true,
+        'effective_from' => '2026-01-01',
+        'version' => 1,
+    ]);
+
+    foreach ($roles as $role => $code) {
+        PostingTemplateLine::create([
+            'template_id' => $template->id,
+            'role' => $role,
+            'account_id' => ticketingPostingServiceAccount($company, $code)->id,
+        ]);
+    }
+
+    return $template->fresh(['lines']);
+}
+
+/**
+ * Everything CreateTicketBookingTest needs to actually post: a company
+ * with an open period and the ticket accounts, TICKET_INVOICE and
+ * TICKET_BILL posting templates, a buyer, an agent linked to that
+ * buyer, and an active supplier vendor. `idempotencyKey` is fixed on
+ * the context object so two calls to ticketingBookingCommand() against
+ * the same context replay the same key.
+ */
+function ticketingBookingContext(): object
+{
+    $f = ticketingCompany();
+
+    ticketingPostingTemplate($f->company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+
+    ticketingPostingTemplate($f->company, 'TICKET_BILL', [
+        'AP' => '2000',
+        'CLEARING' => '2350',
+    ]);
+
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id]);
+    $vendor = ticketingVendor($f->company);
+
+    return (object) [
+        'company' => $f->company,
+        'user' => $f->user,
+        'customer' => $customer,
+        'agent' => $agent,
+        'vendor' => $vendor,
+        'idempotencyKey' => 'booking-'.str()->lower(str()->random(12)),
+    ];
+}
+
+/**
+ * The spec's worked example as a single command-ready ticket array:
+ * gross fare 85,000, taxes 12,400, supplier cost 91,000, discount
+ * 2,000, service fee 1,500 -- all in the company base currency, so
+ * every *_exchange_rate is null.
+ */
+function ticketingWorkedExampleTicket(array $overrides = []): array
+{
+    return array_merge([
+        'passenger_name' => 'Test Passenger',
+        'airline' => 'PIA',
+        'route' => 'KHI-JED',
+        'travel_date' => '2026-09-10',
+        'gross_fare' => 85_000,
+        'taxes' => 12_400,
+        'discount' => 2_000,
+        'service_fee' => 1_500,
+        'sale_currency' => 'PKR',
+        'sale_exchange_rate' => null,
+        'supplier_cost' => 91_000,
+        'supplier_currency' => 'PKR',
+        'supplier_exchange_rate' => null,
+    ], $overrides);
+}
+
+/**
+ * The same ticket, but billed to the supplier in USD at 280 -- 325.00
+ * USD converts to exactly 91,000.00 base, so a test built on this
+ * ticket can still lean on the worked example's numbers.
+ */
+function ticketingUsdSupplierTicket(array $overrides = []): array
+{
+    return ticketingWorkedExampleTicket(array_merge([
+        'supplier_cost' => 325.00,
+        'supplier_currency' => 'USD',
+        'supplier_exchange_rate' => 280.00000000,
+    ], $overrides));
+}
+
+/**
+ * A ready-to-dispatch CreateTicketBooking built from a
+ * ticketingBookingContext(). Every field can be overridden by (command
+ * constructor) argument name, camelCase, matching the command's own
+ * parameter names rather than the database's snake_case columns.
+ */
+function ticketingBookingCommand(object $f, array $overrides = []): CreateTicketBooking
+{
+    $args = array_merge([
+        'companyId' => $f->company->id,
+        'customerId' => $f->customer->id,
+        'agentId' => $f->agent->id,
+        'supplierVendorId' => $f->vendor->id,
+        'bookingDate' => '2026-09-01',
+        'pnr' => 'X4K9QZ',
+        'tickets' => [ticketingWorkedExampleTicket()],
+        'idempotencyKey' => $f->idempotencyKey,
+    ], $overrides);
+
+    return new CreateTicketBooking(...$args);
+}
+
+/**
+ * Deactivates the context's supplier vendor, so a booking against it
+ * cannot raise a bill.
+ */
+function ticketingBreakTheSupplierVendor(object $f): void
+{
+    $f->vendor->update(['is_active' => false]);
+}
+
+/**
+ * Debit minus credit for an account across every transaction for the
+ * company. Named `ticketing` (not `ticketAccountBalance`, already
+ * taken by TicketPostingServiceTest.php) per the plan's global naming
+ * rule.
+ */
+function ticketingAccountBalance(Company $company, string $code): float
+{
+    $account = Account::where('company_id', $company->id)->where('code', $code)->first();
+    if (! $account) {
+        return 0.0;
+    }
+
+    $debit = (float) DB::table('acct.journal_entries')->where('account_id', $account->id)->sum('debit_amount');
+    $credit = (float) DB::table('acct.journal_entries')->where('account_id', $account->id)->sum('credit_amount');
+
+    return round($debit - $credit, 2);
 }

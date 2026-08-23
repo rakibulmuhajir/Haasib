@@ -558,6 +558,25 @@ public function incomeAccount(): BelongsTo
 
 ---
 
+## Ticket postings
+
+Ticket invoices and bills are ordinary subledger documents for AR, AP, aging
+and allocation, but they are **not** posted by `postInvoice()` / `postBill()`.
+They are posted by `TicketPostingService`, which takes every account from a
+`PostingTemplate` role and reads no line account (never `income_account_id` or
+`expense_account_id`). See `docs/superpowers/specs/2026-08-22-umrah-ticketing-design.md`.
+
+| Doc type | Roles |
+|---|---|
+| `TICKET_INVOICE` | `AR`, `CLEARING`, `REVENUE`, `SERVICE_FEE`, `DISCOUNT_GIVEN`, `ROUNDING` |
+| `TICKET_BILL` | `AP`, `CLEARING` |
+| `TICKET_CREDIT_NOTE` | `AR`, `CANCELLATION_ADJUSTMENT` |
+| `TICKET_VENDOR_CREDIT` | `AP`, `CANCELLATION_ADJUSTMENT` |
+
+A ticket invoice carries **one** line item. Supplier cost and commission must
+never appear on it — they are template-role postings derived from the ticket
+rows at posting time, not invoice lines.
+
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.
 - Keep enums and validation snippets in sync across requests, DTOs, Vue components, and tests.

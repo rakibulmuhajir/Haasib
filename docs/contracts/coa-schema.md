@@ -283,6 +283,27 @@ COA is required by:
 
 ---
 
+## Umrah / travel pack — ticket accounts
+
+Added for ticket postings (`docs/superpowers/specs/2026-08-22-umrah-ticketing-design.md`).
+These accounts are added to the `umrah` and `travel` industry COA pack templates
+(`IndustryCoaPackSeeder::seedUmrah()`) and backfilled onto every existing company,
+alongside the refund accounts (`1170`, `2300`) already documented in `docs/contracts/refunds.md`.
+
+| Code | Name | Type | Subtype | Normal balance |
+|---|---|---|---|---|
+| `2350` | Ticket Supplier Clearing | liability | other_current_liability | credit |
+| `4130` | Ticket Commission Revenue | revenue | revenue | credit |
+| `4140` | Ticket Service Fee Revenue | revenue | revenue | credit |
+| `4150` | Ticket Discount | revenue | revenue | debit (contra) |
+| `4160` | Ticket Cancellation Adjustments | revenue | revenue | debit |
+| `9900` | Rounding Differences | expense | expense | debit |
+
+`2350` is base-denominated and must return to exactly zero per booking; `4150`
+is a contra-revenue account (`is_contra = true`, `normal_balance = 'debit'`);
+`4130`, `4140`, `4150` and `4160` carry `currency = NULL` because the
+multicurrency contract forbids foreign currency on revenue accounts.
+
 ## Extending
 - Add new type/subtype values here first.
 - Consider `acct.account_templates` for chart of accounts templates.

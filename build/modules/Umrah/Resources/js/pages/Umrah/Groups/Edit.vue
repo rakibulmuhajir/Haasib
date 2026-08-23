@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
     Select,
     SelectContent,
@@ -15,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Plane, Save } from 'lucide-vue-next';
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -44,6 +45,7 @@ const form = useForm({
     name: props.group.name || '',
     vendor_id: props.group.vendor_id || 'none',
     mandatory_transport_vendor_id: props.group.mandatory_transport_vendor_id || 'none',
+    includes_visa: props.group.includes_visa,
     transport_mode: props.group.transport_mode,
     travel_date: String(props.group.travel_date || '').slice(0, 10),
     flight_airline: props.group.flight_info?.airline || '',
@@ -68,11 +70,40 @@ watch(
     },
 );
 
+// Same one-question treatment as Create.vue, with one restriction Create
+// does not have: this form must never be able to switch a group TO
+// specialized transport. A specialized group's vehicles are collected only
+// on create -- there is no route here to add them -- so landing a group in
+// specialized mode with none would strand it. Picking "Transport only"
+// therefore keeps a mode that already carries transport, rather than
+// forcing 'specialized' the way Create.vue's setter does.
+//
+// A group that was selling a visa and no transport is the one case where
+// there is nothing to keep. Transport only has to mean some transport, and
+// the standard bus is the only kind this page can arrange -- so it names
+// that one and shows the provider field, instead of submitting a group
+// that sells nothing for the server to reject with no way back.
+const groupService = computed({
+    get: () => {
+        if (!form.includes_visa) return 'transport_only';
+        if (form.transport_mode === 'none') return 'visa_only';
+        if (form.transport_mode === 'standard_bus') return 'visa_bus';
+        return 'visa_specialized';
+    },
+    set: (value: string) => {
+        form.includes_visa = value !== 'transport_only';
+        if (value === 'visa_only') form.transport_mode = 'none';
+        else if (value === 'visa_bus') form.transport_mode = 'standard_bus';
+        else if (value === 'visa_specialized') form.transport_mode = 'specialized';
+        else if (form.transport_mode === 'none') form.transport_mode = 'standard_bus';
+    },
+});
+
 const submit = () =>
     form
         .transform((data) => ({
             ...data,
-            vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
+            vendor_id: data.includes_visa && data.vendor_id !== 'none' ? data.vendor_id : null,
             mandatory_transport_vendor_id:
                 data.transport_mode === 'none' || data.mandatory_transport_vendor_id === 'none'
                     ? null
@@ -105,23 +136,78 @@ const submit = () =>
                             {{ form.errors.name }}
                         </p>
                     </div>
-                    <div v-if="canManageVendors" class="space-y-2">
+                    <div v-if="canManageVendors && form.includes_visa" class="space-y-2">
                         <Label>Visa vendor</Label>
                         <Select v-model="form.vendor_id">
                             <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
                             <SelectContent><SelectItem v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}{{ vendor.is_default ? ' · Default' : '' }}</SelectItem></SelectContent>
                         </Select>
                     </div>
-                    <div v-if="canManageVendors" class="space-y-2">
-                        <Label>Transport</Label>
-                        <Select v-model="form.transport_mode">
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Self-arranged transport</SelectItem>
-                                <SelectItem value="standard_bus">Standard bus</SelectItem>
-                                <SelectItem v-if="group.transport_mode === 'specialized'" value="specialized">Specialized transport</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div v-if="canManageVendors" class="space-y-2 md:col-span-2">
+                        <Label>What this group includes</Label>
+                        <RadioGroup v-model="groupService" class="grid gap-3 md:grid-cols-2">
+                            <Label
+                                for="group-service-visa-only"
+                                class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                            >
+                                <RadioGroupItem id="group-service-visa-only" value="visa_only" />
+                                <span
+                                    ><span class="block font-medium">Visa only (self transport)</span
+                                    ><span class="mt-1 block text-xs text-muted-foreground"
+                                        >Passengers arrange their own transport. No vehicle, driver or fare is recorded.</span
+                                    ></span
+                                >
+                            </Label>
+                            <Label
+                                for="group-service-visa-bus"
+                                class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                            >
+                                <RadioGroupItem id="group-service-visa-bus" value="visa_bus" />
+                                <span
+                                    ><span class="block font-medium">Visa and standard bus</span
+                                    ><span class="mt-1 block text-xs text-muted-foreground"
+                                        >One per-head bus rate from the transport provider, alongside the visa.</span
+                                    ></span
+                                >
+                            </Label>
+                            <Label
+                                v-if="group.transport_mode === 'specialized'"
+                                for="group-service-visa-specialized"
+                                class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                            >
+                                <RadioGroupItem id="group-service-visa-specialized" value="visa_specialized" />
+                                <span
+                                    ><span class="block font-medium">Visa and specialized transport</span
+                                    ><span class="mt-1 block text-xs text-muted-foreground"
+                                        >Chartered vehicles priced per vehicle, alongside the visa.</span
+                                    ></span
+                                >
+                            </Label>
+                            <Label
+                                for="group-service-transport-only"
+                                class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                            >
+                                <RadioGroupItem id="group-service-transport-only" value="transport_only" />
+                                <span
+                                    ><span class="block font-medium">Transport only</span
+                                    ><span class="mt-1 block text-xs text-muted-foreground"
+                                        >Everyone already holds a visa. No visa vendor, no visa charge.</span
+                                    ></span
+                                >
+                            </Label>
+                        </RadioGroup>
+                        <p
+                            v-if="form.errors.transport_mode"
+                            class="text-xs text-destructive"
+                        >
+                            {{ form.errors.transport_mode }}
+                        </p>
+                        <p
+                            v-if="form.errors.includes_visa"
+                            class="text-xs text-destructive"
+                        >
+                            {{ form.errors.includes_visa }}
+                        </p>
                         <p class="text-xs text-muted-foreground">Choosing self-arranged transport removes all saved transport details and charges.</p>
                     </div>
                     <!-- Picking an existing transport provider is not vendor

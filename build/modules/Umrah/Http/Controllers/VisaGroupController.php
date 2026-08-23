@@ -309,7 +309,7 @@ class VisaGroupController extends Controller
         $changes = [
             'name' => $data['name'],
             'transport_mode' => $data['transport_mode'],
-            'includes_visa' => $data['includes_visa'] ?? $record->includes_visa,
+            'includes_visa' => (bool) ($data['includes_visa'] ?? $record->includes_visa),
             'transport_required' => $data['transport_mode'] !== VisaGroup::TRANSPORT_NONE,
             'travel_date' => $data['travel_date'] ?? null,
             'flight_info' => ['airline' => $data['flight_airline'] ?? null, 'number' => $data['flight_number'] ?? null, 'notes' => $data['flight_notes'] ?? null],
@@ -322,8 +322,25 @@ class VisaGroupController extends Controller
                 'mandatory_transport_vendor_id' => $data['mandatory_transport_vendor_id'] ?? null,
                 'transport_mode' => $data['transport_mode'],
             ], false);
-            $changes['vendor_id'] = $vendorData['vendor_id'];
+            // A group that no longer sells a visa keeps no visa vendor.
+            // resolveGroupVendors always resolves one (falling back to the
+            // record's previous vendor) because it also carries the
+            // mandatory-transport lookup for standard_bus -- so the visa
+            // vendor half of its answer is only trusted when includes_visa
+            // is still true.
+            $changes['vendor_id'] = $changes['includes_visa'] ? $vendorData['vendor_id'] : null;
             $changes['mandatory_transport_vendor_id'] = $vendorData['mandatory_transport_vendor_id'];
+        }
+        // Flipping includes_visa is the whole point of this edit path, and a
+        // group that no longer sells a visa cannot be left holding what it
+        // charged for one -- recalculateGroup() below folds visa_sale_amount
+        // and visa_cost_amount straight into total_receivable/balance/profit
+        // regardless of includes_visa, unlike summary()'s display line which
+        // already gates on it.
+        $includesVisaChanged = $changes['includes_visa'] !== $record->includes_visa;
+        if ($includesVisaChanged && ! $changes['includes_visa']) {
+            $changes['visa_sale_amount'] = 0;
+            $changes['visa_cost_amount'] = 0;
         }
         $oldValues = $record->only(array_keys($changes));
         $oldVendorIds = array_filter([
@@ -333,7 +350,19 @@ class VisaGroupController extends Controller
         ]);
 
         $financialBefore = $record->only(['visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'visa_cost_amount', 'transport_cost_amount']);
-        DB::transaction(function () use ($request, $record, &$changes, $oldValues, $data, $hadStarted, $financialBefore) {
+        DB::transaction(function () use ($request, $record, &$changes, $oldValues, $data, $hadStarted, $financialBefore, $includesVisaChanged) {
+            if ($includesVisaChanged) {
+                // The group decided once what it sells; every passenger already
+                // in it was created agreeing with the old answer. Leaving their
+                // service_type behind after the group's answer changes is
+                // exactly the group/passenger mismatch that once billed a
+                // self-arranged group for a bus it never bought.
+                $record->passengers()->update([
+                    'service_type' => $changes['includes_visa']
+                        ? Passenger::SERVICE_VISA_TRANSPORT
+                        : Passenger::SERVICE_TRANSPORT_ONLY,
+                ]);
+            }
             if ($data['transport_mode'] === VisaGroup::TRANSPORT_NONE) {
                 $this->service->removeGroupTransport($record);
                 $changes = [...$changes, ...$record->fresh()->only([

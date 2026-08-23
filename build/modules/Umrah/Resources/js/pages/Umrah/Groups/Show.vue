@@ -85,8 +85,6 @@ const passengerForm = useForm({
     nationality: '',
     date_of_birth: '',
     imported_age: '',
-    service_type: 'visa_transport',
-    transport_charge_amount: '0',
     visa_status: 'received',
     notes: '',
     override_reason: '',
@@ -116,7 +114,20 @@ const addPassengerOpen = ref(false);
 const recordPaymentOpen = ref(false);
 const editingPassenger = ref<any>(null);
 const removePassengerTarget = ref<any>(null);
-const editPassengerForm = useForm({ full_name: '', passport_number: '', nationality: '', date_of_birth: '', imported_age: '' as string | number, service_type: 'visa_transport', transport_charge_amount: '0', visa_status: 'received', notes: '', override_reason: '' });
+const editPassengerForm = useForm({ full_name: '', passport_number: '', nationality: '', date_of_birth: '', imported_age: '' as string | number, visa_status: 'received', notes: '', override_reason: '' });
+
+/*
+ * The group answers this once, for everyone in it. A passenger has no
+ * service of its own to state or to edit; the server derives one from
+ * the group and ignores anything a passenger row claims.
+ */
+const groupService = computed(() =>
+    props.group.includes_visa === false
+        ? 'Transport only'
+        : props.group.transport_mode === 'none'
+          ? 'Visa only'
+          : 'Visa included',
+);
 const removeForm = useForm({ reason: '' });
 
 const selectedPayee = computed(() => {
@@ -339,8 +350,6 @@ const addPassenger = () =>
                 onSuccess: () => {
                     passengerForm.reset();
                     passengerForm.visa_status = 'received';
-                    passengerForm.service_type = 'visa_transport';
-                    passengerForm.transport_charge_amount = '0';
                     addPassengerOpen.value = false;
                 },
                 onError: () => toast.error('Failed to add passenger'),
@@ -373,8 +382,6 @@ const openPassenger = (passenger: any) => {
     editPassengerForm.nationality = passenger.nationality || '';
     editPassengerForm.date_of_birth = normalizeDate(passenger.date_of_birth);
     editPassengerForm.imported_age = passenger.imported_age ?? '';
-    editPassengerForm.service_type = passenger.service_type;
-    editPassengerForm.transport_charge_amount = String(passenger.transport_charge_amount || 0);
     editPassengerForm.visa_status = passenger.visa_status;
     editPassengerForm.notes = passenger.notes || '';
     editPassengerForm.override_reason = statusOverrideReason.value;
@@ -382,7 +389,7 @@ const openPassenger = (passenger: any) => {
 };
 const updatePassenger = () => {
     if (!editingPassenger.value) return;
-    editPassengerForm.transform((data) => ({ ...data, imported_age: data.imported_age === '' ? null : Number(data.imported_age), transport_charge_amount: Number(data.transport_charge_amount || 0) }))
+    editPassengerForm.transform((data) => ({ ...data, imported_age: data.imported_age === '' ? null : Number(data.imported_age) }))
         .put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${editingPassenger.value.id}`, { preserveScroll: true, onSuccess: () => { passengerOpen.value = false; }, onError: () => toast.error('Failed to correct passenger') });
 };
 const removePassenger = (passenger: any) => {
@@ -649,15 +656,18 @@ const addPayment = () => {
                         </div>
                         <div>
                             <div class="text-sm text-muted-foreground">
-                                Transport
+                                Includes
                             </div>
                             <div class="font-medium">
                                 {{
-                                    group.transport_mode === 'none'
-                                        ? 'Self-arranged transport'
-                                        : group.transport_mode === 'specialized'
-                                        ? 'Specialized transport'
-                                        : 'Standard bus included'
+                                    group.includes_visa === false
+                                        ? 'Transport only'
+                                        : group.transport_mode === 'none'
+                                          ? 'Visa only (self transport)'
+                                          : group.transport_mode ===
+                                              'specialized'
+                                            ? 'Visa and specialized transport'
+                                            : 'Visa and standard bus'
                                 }}
                             </div>
                             <div
@@ -1018,20 +1028,18 @@ const addPayment = () => {
                                 }}
                             </div>
                             <div>
-                                <div>
-                                    {{
-                                        passenger.service_type ===
-                                        'transport_only'
-                                            ? 'Transport only'
-                                            : group.transport_mode === 'none'
-                                              ? 'Visa only'
-                                              : 'Visa included'
-                                    }}
-                                </div>
+                                <div>{{ groupService }}</div>
+                                <!-- Zero on every passenger entered since the
+                                     group started answering this for everyone.
+                                     Rows that predate it kept a charge of
+                                     their own, and hiding it would understate
+                                     what those groups billed. -->
                                 <div
                                     v-if="
-                                        passenger.service_type ===
-                                        'transport_only'
+                                        Number(
+                                            passenger.transport_charge_amount ||
+                                                0,
+                                        ) > 0
                                     "
                                     class="text-xs text-muted-foreground"
                                 >
@@ -1237,38 +1245,13 @@ const addPayment = () => {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <!-- Stated, not asked. Whoever joins this group
+                                 takes what the group sells. -->
                             <div class="space-y-2">
                                 <Label>Service</Label>
-                                <Select v-model="passengerForm.service_type">
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent
-                                        ><SelectItem value="visa_transport"
-                                            >{{ group.transport_mode === 'none' ? 'Visa only' : 'Visa included' }}</SelectItem
-                                        ><SelectItem v-if="group.transport_mode !== 'none'" value="transport_only"
-                                            >Already has visa - transport
-                                            only</SelectItem
-                                        ></SelectContent
-                                    >
-                                </Select>
-                            </div>
-                            <div
-                                v-if="
-                                    passengerForm.service_type ===
-                                    'transport_only'
-                                "
-                                class="space-y-2"
-                            >
-                                <Label>Transport Charge</Label
-                                ><Input
-                                    v-model="
-                                        passengerForm.transport_charge_amount
-                                    "
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                />
+                                <p class="text-sm text-muted-foreground">
+                                    {{ groupService }} — set by the group.
+                                </p>
                             </div>
                             <div class="space-y-2">
                                 <Label>Notes</Label
@@ -1547,8 +1530,7 @@ const addPayment = () => {
                 <div class="space-y-2"><Label>Date of birth</Label><Input v-model="editPassengerForm.date_of_birth" type="date" /></div>
                 <div class="space-y-2"><Label>Imported age</Label><Input v-model="editPassengerForm.imported_age" type="number" /></div>
                 <div class="space-y-2"><Label>Nationality</Label><Input v-model="editPassengerForm.nationality" /></div>
-                <div class="space-y-2"><Label>Service</Label><Select v-model="editPassengerForm.service_type"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="visa_transport">{{ group.transport_mode === 'none' ? 'Visa only' : 'Visa included' }}</SelectItem><SelectItem v-if="group.transport_mode !== 'none'" value="transport_only">Transport only</SelectItem></SelectContent></Select></div>
-                <div v-if="editPassengerForm.service_type === 'transport_only'" class="space-y-2"><Label>Transport charge</Label><Input v-model="editPassengerForm.transport_charge_amount" type="number" min="0" step="0.01" /></div>
+                <div class="space-y-2"><Label>Service</Label><p class="text-sm text-muted-foreground">{{ groupService }} — set by the group.</p></div>
                 <div class="space-y-2"><Label>Visa status</Label><Select v-model="editPassengerForm.visa_status"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem v-for="(label, value) in passengerStatuses" :key="value" :value="value">{{ label }}</SelectItem></SelectContent></Select></div>
                 <div class="space-y-2 md:col-span-2"><Label>Notes</Label><Textarea v-model="editPassengerForm.notes" /></div>
                 <div v-if="groupCapabilities.requires_override_reason" class="space-y-2 md:col-span-2"><Label>Reason for post-travel correction</Label><Textarea v-model="editPassengerForm.override_reason" required /></div>

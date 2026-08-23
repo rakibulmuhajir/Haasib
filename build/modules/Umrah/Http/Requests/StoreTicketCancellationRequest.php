@@ -3,7 +3,9 @@
 namespace App\Modules\Umrah\Http\Requests;
 
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Umrah\Models\Ticket;
 use App\Services\CompanyContextService;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
@@ -11,12 +13,28 @@ use Illuminate\Validation\Validator;
  * StoreTicketBookingRequest for the split this follows: this request
  * only guards RLS context and payload shape/ownership, not permissions
  * (Plan C's concern).
+ *
+ * The ticket being cancelled is a route parameter
+ * (`tickets/{ticket}/cancel`), not a body field -- prepareForValidation()
+ * copies it into `ticket_id` so it can be validated the same way the
+ * rest of the payload is, following StoreTicketBookingRequest's own
+ * note: `Rule::exists()` splits its first argument on "." to pick a
+ * *connection*, not a schema, and there is no `umrah` connection
+ * configured at all, so a schema-qualified string here would fail
+ * outright rather than merely leak past RLS. Passing the model class
+ * instead resolves the table and connection off the model, sharing the
+ * RLS context this request already established.
  */
 class StoreTicketCancellationRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
         return $this->validateRlsContext();
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['ticket_id' => $this->route('ticket')]);
     }
 
     public function rules(): array
@@ -26,7 +44,7 @@ class StoreTicketCancellationRequest extends BaseFormRequest
         return [
             'ticket_id' => [
                 'required', 'uuid',
-                \Illuminate\Validation\Rule::exists('umrah.tickets', 'id')->where(fn ($q) => $q->where('company_id', $companyId)),
+                Rule::exists(Ticket::class, 'id')->where(fn ($q) => $q->where('company_id', $companyId)),
             ],
             'cancellation_date' => ['required', 'date'],
             'buyer_returns_amount' => ['required', 'numeric', 'min:0'],

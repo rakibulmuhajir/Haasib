@@ -863,3 +863,81 @@ function ticketingFormPayload(object $f, array $overrides = []): array
         ],
     ], $overrides);
 }
+
+/**
+ * Everything TicketCancelRequestTest needs: an HTTP-wired company
+ * (industry_code + modules.umrah, RBAC bootstrapped and synced) with a
+ * manager (holds UMRAH_TICKET_CANCEL) and an agent user (does not),
+ * one already-sold booking with one ticket, and every posting template
+ * both the sale and a cancellation post through -- TICKET_INVOICE and
+ * TICKET_BILL for the sale, TICKET_CREDIT_NOTE and TICKET_VENDOR_CREDIT
+ * for the cancellation, following ticketingSoldTicket()'s shape.
+ */
+function ticketingSoldTicketWithUsers(): object
+{
+    $f = ticketingCompany([
+        'industry_code' => 'umrah',
+        'settings' => ['modules' => ['umrah' => true]],
+    ]);
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$f->user->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$f->company->id]);
+
+    $manager = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $manager, 'manager');
+
+    $agentUser = User::factory()->withoutTwoFactor()->create();
+    ticketingAddCompanyMember($f->company, $agentUser, 'agent');
+
+    ticketingPostingTemplate($f->company, 'TICKET_INVOICE', [
+        'AR' => '1100',
+        'CLEARING' => '2350',
+        'REVENUE' => '4130',
+        'SERVICE_FEE' => '4140',
+        'DISCOUNT_GIVEN' => '4150',
+        'ROUNDING' => '9900',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_BILL', [
+        'AP' => '2000',
+        'CLEARING' => '2350',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_CREDIT_NOTE', [
+        'AR' => '1100',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+    ticketingPostingTemplate($f->company, 'TICKET_VENDOR_CREDIT', [
+        'AP' => '2000',
+        'CANCELLATION_ADJUSTMENT' => '4160',
+    ]);
+
+    $customer = ticketingCustomer($f->company);
+    $agent = ticketingAgent($f->company, ['customer_id' => $customer->id, 'user_id' => $agentUser->id]);
+    $vendor = ticketingVendor($f->company);
+
+    $booking = Bus::dispatch(new CreateTicketBooking(
+        companyId: $f->company->id,
+        customerId: $customer->id,
+        supplierVendorId: $vendor->id,
+        bookingDate: '2026-09-01',
+        pnr: 'X4K9QZ',
+        tickets: [ticketingWorkedExampleTicket()],
+        idempotencyKey: 'sold-'.str()->lower(str()->random(12)),
+        agentId: $agent->id,
+    ));
+
+    return (object) [
+        'company' => $f->company,
+        'manager' => $manager,
+        'agentUser' => $agentUser,
+        'agent' => $agent,
+        'customer' => $customer,
+        'booking' => $booking,
+        'ticket' => $booking->tickets->first(),
+        'invoice' => $booking->invoice,
+        'bill' => $booking->bill,
+    ];
+}

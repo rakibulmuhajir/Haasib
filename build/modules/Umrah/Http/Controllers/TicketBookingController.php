@@ -6,8 +6,10 @@ use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Umrah\Commands\CancelTicket;
 use App\Modules\Umrah\Commands\CreateTicketBooking;
 use App\Modules\Umrah\Http\Requests\StoreTicketBookingRequest;
+use App\Modules\Umrah\Http\Requests\StoreTicketCancellationRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
@@ -18,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -135,14 +138,83 @@ class TicketBookingController extends Controller
             ->with('success', 'Ticket booking created.');
     }
 
-    public function show(Request $request, string $booking): Response
+    /**
+     * The same own-view scoping as index(): a viewer holding only
+     * UMRAH_TICKET_OWN_VIEW may open a booking made under their own
+     * agent record and no other, and the payload never carries
+     * supplier_cost_base/commission_base or the bill for them -- not
+     * hidden client-side, absent from the response, same as the register.
+     */
+    public function show(Request $request, string $companySlug, string $booking): Response
     {
-        abort(404);
+        $company = app(CurrentCompany::class)->get();
+        $user = $request->user();
+
+        $canViewAll = (bool) $user?->hasCompanyPermission(Permissions::UMRAH_TICKET_VIEW);
+        $canViewOwn = (bool) $user?->hasCompanyPermission(Permissions::UMRAH_TICKET_OWN_VIEW);
+
+        abort_unless($canViewAll || $canViewOwn, 403);
+
+        $record = TicketBooking::where('company_id', $company->id)
+            ->with(['customer:id,name', 'agent:id,name', 'supplierVendor:id,name', 'invoice:id,invoice_number', 'bill:id,bill_number', 'tickets'])
+            ->findOrFail($booking);
+
+        if (! $canViewAll) {
+            $ownAgentId = Agent::where('company_id', $company->id)
+                ->where('user_id', $user->id)
+                ->value('id');
+
+            abort_if(! $ownAgentId || $record->agent_id !== $ownAgentId, 403);
+        }
+
+        return Inertia::render('Umrah/Tickets/Show', [
+            'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'booking' => $this->presentBooking($record, $canViewAll, $company->base_currency),
+            'canCancel' => (bool) $user?->hasCompanyPermission(Permissions::UMRAH_TICKET_CANCEL),
+        ]);
     }
 
-    public function cancel(Request $request, string $ticket): RedirectResponse
+    /**
+     * The ticket is a route parameter, not a body field --
+     * StoreTicketCancellationRequest copies it into `ticket_id` for
+     * validation. No arithmetic happens here either: the cancellation's
+     * cost is CancelTicketHandler's to compute, this only relays what
+     * comes back. An already-cancelled ticket throws a RuntimeException
+     * with a message meant to be read, not a 500 -- it is shown as-is.
+     */
+    public function cancel(StoreTicketCancellationRequest $request, string $companySlug, string $ticket): RedirectResponse
     {
-        abort(404);
+        abort_unless((bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_TICKET_CANCEL), 403);
+
+        $data = $request->validated();
+
+        try {
+            $cancellation = Bus::dispatch(new CancelTicket(
+                ticketId: $ticket,
+                cancellationDate: $data['cancellation_date'],
+                buyerReturnsAmount: (float) $data['buyer_returns_amount'],
+                supplierReturnsAmount: (float) $data['supplier_returns_amount'],
+                reason: $data['reason'] ?? null,
+                idempotencyKey: $data['idempotency_key'],
+            ));
+        } catch (RuntimeException $exception) {
+            return back()->withInput()->with('error', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->with('error', 'Ticket cancellation could not be completed. Check the details and try again.');
+        }
+
+        return back()->with(
+            'success',
+            sprintf(
+                'Ticket cancelled. Buyer returned %s %s, supplier returned %s %s.',
+                $cancellation->buyer_returns_currency,
+                number_format((float) $cancellation->buyer_returns_amount, 2),
+                $cancellation->supplier_returns_currency,
+                number_format((float) $cancellation->supplier_returns_amount, 2),
+            )
+        );
     }
 
     /**
@@ -175,6 +247,75 @@ class TicketBookingController extends Controller
         if ($withCosts) {
             $row['supplier_cost_base'] = round((float) $tickets->sum('supplier_cost_base'), 2);
             $row['commission_base'] = round($tickets->sum(fn (Ticket $ticket) => $ticket->commissionBase()), 2);
+        }
+
+        return $row;
+    }
+
+    /**
+     * A booking's own show payload. `supplier`, `bill` and each ticket's
+     * `supplier_cost_base`/`commission_base` are only present for a
+     * viewer holding the full VIEW permission -- absent entirely for an
+     * own-view-only agent, the same rule present() applies to the
+     * register.
+     */
+    private function presentBooking(TicketBooking $booking, bool $withCosts, string $baseCurrency): array
+    {
+        $data = [
+            'id' => $booking->id,
+            'booking_reference' => $booking->booking_reference,
+            'booking_date' => $booking->booking_date?->toDateString(),
+            'pnr' => $booking->pnr,
+            'status' => $booking->status,
+            'buyer' => $booking->customer?->name,
+            'agent' => $booking->agent?->name,
+            'currency' => $baseCurrency,
+            'invoice' => $booking->invoice ? [
+                'id' => $booking->invoice->id,
+                'invoice_number' => $booking->invoice->invoice_number,
+            ] : null,
+            'tickets' => $booking->tickets
+                ->map(fn (Ticket $ticket) => $this->presentTicket($ticket, $withCosts, $baseCurrency))
+                ->values()
+                ->all(),
+        ];
+
+        if ($withCosts) {
+            $data['supplier'] = $booking->supplierVendor?->name;
+            $data['bill'] = $booking->bill ? [
+                'id' => $booking->bill->id,
+                'bill_number' => $booking->bill->bill_number,
+            ] : null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * One ticket row on the show page. Same cost/commission omission
+     * rule as presentBooking() and present().
+     */
+    private function presentTicket(Ticket $ticket, bool $withCosts, string $baseCurrency): array
+    {
+        $amountBase = (float) $ticket->gross_fare_base
+            + (float) $ticket->taxes_base
+            + (float) $ticket->service_fee_base
+            - (float) $ticket->discount_base;
+
+        $row = [
+            'id' => $ticket->id,
+            'passenger_name' => $ticket->passenger_name,
+            'airline' => $ticket->airline,
+            'route' => $ticket->route,
+            'travel_date' => $ticket->travel_date?->toDateString(),
+            'amount_base' => round($amountBase, 2),
+            'currency' => $baseCurrency,
+            'status' => $ticket->status,
+        ];
+
+        if ($withCosts) {
+            $row['supplier_cost_base'] = round((float) $ticket->supplier_cost_base, 2);
+            $row['commission_base'] = round($ticket->commissionBase(), 2);
         }
 
         return $row;

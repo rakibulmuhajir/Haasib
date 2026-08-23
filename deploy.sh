@@ -13,6 +13,18 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/haasib-deploy.lock}"
 APP_WAS_PUT_DOWN=0
 
+# Vite empties its output directory before it writes anything, so a build that
+# dies partway -- out of memory, syntax error, full disk -- leaves the live
+# release with no assets and no manifest, and every page answers 500. That is
+# not hypothetical: it took the site down for four minutes on 22 August 2026.
+# So the build writes to a directory nothing is serving, and only a build that
+# finished is moved into place. A snapshot taken before anything is touched
+# covers the rest of the window, including the merge itself.
+BUILD_DIR="${APP_DIR}/public/build"
+STAGING_DIR="${APP_DIR}/public/build-staging"
+PREVIOUS_DIR="${APP_DIR}/public/build-previous"
+ASSETS_NEED_RESTORING=0
+
 log() {
     printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1"
 }
@@ -29,7 +41,24 @@ bring_application_up() {
     fi
 }
 
-trap bring_application_up EXIT
+# Runs before the application is brought back up, so whatever is served is
+# either the new release or the one that was working before this ran.
+restore_previous_assets() {
+    rm -rf "${STAGING_DIR}"
+
+    if [[ "${ASSETS_NEED_RESTORING}" -eq 1 && -d "${PREVIOUS_DIR}" ]]; then
+        log "Deployment did not complete; restoring the previous frontend assets"
+        rm -rf "${BUILD_DIR}"
+        mv "${PREVIOUS_DIR}" "${BUILD_DIR}"
+    fi
+}
+
+on_exit() {
+    restore_previous_assets
+    bring_application_up
+}
+
+trap on_exit EXIT
 
 for command in git php composer npm flock; do
     command -v "${command}" >/dev/null 2>&1 || fail "Required command not found: ${command}"
@@ -45,8 +74,20 @@ cd "${ROOT_DIR}"
 CURRENT_BRANCH="$(git branch --show-current)"
 [[ "${CURRENT_BRANCH}" == "${BRANCH}" ]] || fail "Expected branch ${BRANCH}, found ${CURRENT_BRANCH}"
 
-# Vite output is generated during deployment. Restore any tracked generated files
-# from the previous build before checking whether server-side source files changed.
+# Taken before anything else touches the worktree, so it holds the assets the
+# site is actually serving right now rather than whatever git has an opinion
+# about. Everything from here to the swap is covered by it.
+if [[ -d "${BUILD_DIR}" ]]; then
+    log "Snapshotting the frontend assets currently being served"
+    rm -rf "${PREVIOUS_DIR}"
+    cp -a "${BUILD_DIR}" "${PREVIOUS_DIR}"
+    ASSETS_NEED_RESTORING=1
+fi
+
+# build/public/build is ignored, yet a handful of files inside it were committed
+# anyway, so the worktree reads as dirty and the merge below refuses to run.
+# Discarding them is safe because the snapshot above already holds the real
+# ones. The commit this deploys untracks them, after which this is a no-op.
 git restore --worktree -- build/public/build 2>/dev/null || true
 
 DIRTY_FILES="$(git status --porcelain=v1 --untracked-files=no)"
@@ -88,7 +129,21 @@ log "Installing locked frontend dependencies"
 npm ci --no-audit --no-fund
 
 log "Building frontend assets"
-npm run build
+rm -rf "${STAGING_DIR}"
+npm run build -- --outDir public/build-staging --emptyOutDir
+
+[[ -f "${STAGING_DIR}/manifest.json" ]] || fail "The build produced no manifest; the previous assets have been kept"
+
+log "Swapping the new frontend assets into place"
+rm -rf "${BUILD_DIR}"
+mv "${STAGING_DIR}" "${BUILD_DIR}"
+
+# Past this point the assets are complete and belong to the code that was just
+# merged. A later step failing is a reason to look at that step, not to put the
+# previous release's assets back under the new code and guarantee a manifest
+# that names files nothing built. The snapshot stays on disk until the end so a
+# rollback by hand is still one mv away.
+ASSETS_NEED_RESTORING=0
 
 log "Clearing stale Laravel caches"
 php artisan optimize:clear
@@ -110,6 +165,8 @@ php artisan queue:restart
 log "Bringing the application online"
 php artisan up
 APP_WAS_PUT_DOWN=0
+ASSETS_NEED_RESTORING=0
+rm -rf "${PREVIOUS_DIR}"
 trap - EXIT
 
 log "Deployment complete: $(git -C "${ROOT_DIR}" rev-parse --short HEAD)"

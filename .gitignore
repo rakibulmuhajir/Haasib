@@ -14,9 +14,13 @@ AGENTS.md
 CLAUDE.md
 GEMINI.md
 
-build/public/build/*
+# Compiled frontend assets, built on the server during deployment. Three rules
+# said this already; a handful of files were committed under them anyway, so
+# the deploy kept restoring a stale manifest over a good one.
 build/public/build
-build/public/build/manifest.json
+# Where a deployment builds before it swaps, and what it keeps to fall back on.
+build/public/build-staging
+build/public/build-previous
 
 # Agent credentials and session transcripts. This repository is public, so
 # anything committed here is world-readable the moment it is pushed. auth.json

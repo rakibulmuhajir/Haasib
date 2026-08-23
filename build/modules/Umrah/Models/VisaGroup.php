@@ -103,6 +103,16 @@ class VisaGroup extends Model
         'cost_transaction_id',
     ];
 
+    /*
+     * The column defaults to true, but a default only reaches an instance
+     * that has been read back. Accounting asks a group whether it sells a
+     * visa, and a group just created in memory would otherwise answer null
+     * -- which reads as "no visa" and bills nothing.
+     */
+    protected $attributes = [
+        'includes_visa' => true,
+    ];
+
     protected $casts = [
         'company_id' => 'string',
         'agent_id' => 'string',

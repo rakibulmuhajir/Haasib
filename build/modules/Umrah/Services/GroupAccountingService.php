@@ -31,15 +31,28 @@ class GroupAccountingService
         ]);
         $passengers = Passenger::where('company_id', $group->company_id)
             ->where('visa_group_id', $group->id)
-            ->get(['date_of_birth', 'imported_age', 'service_type', 'transport_charge_amount']);
+            ->get(['date_of_birth', 'imported_age', 'transport_charge_amount']);
         $referenceDate = $group->travel_date?->copy()->startOfDay() ?? now()->startOfDay();
         $ageCounts = $this->ageCounts($passengers, $referenceDate);
 
-        $visaPax = $passengers->where('service_type', Passenger::SERVICE_VISA_TRANSPORT)->count();
-        $transportOnlyPax = $passengers->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)->count();
-        $transportOnlyCharge = (float) $passengers
-            ->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)
-            ->sum('transport_charge_amount');
+        /*
+         * includes_visa is the group's own answer. A passenger's service_type
+         * is only ever a copy of it, written by the request that created the
+         * group, so counting rows asks the copy what the original already
+         * says -- and gets nothing at all from a group whose passengers have
+         * not been entered yet.
+         */
+        $paxCount = $passengers->count();
+        $visaPax = $group->includes_visa ? $paxCount : 0;
+        $transportOnlyPax = $group->includes_visa ? 0 : $paxCount;
+
+        /*
+         * Zero on every group created since the group-level choice replaced
+         * it. Groups that predate it recorded a per-passenger transport
+         * charge, and dropping the line would under-report what they billed.
+         */
+        $legacyTransportPax = $passengers->where('transport_charge_amount', '>', 0)->count();
+        $legacyTransportCharge = (float) $passengers->sum('transport_charge_amount');
         $chargeableVouchers = $group->vouchers
             ->where('status', Voucher::STATUS_APPROVED)
             ->whereNull('billing_voucher_id');
@@ -56,6 +69,9 @@ class GroupAccountingService
              * billed self-arranged groups for mandatory transport they never
              * bought. Only standard_bus carries transport on the visa line;
              * specialized transport is itemised separately below.
+             *
+             * The same reasoning now guards the line itself: a transport-only
+             * group never bought a visa, so it is never charged for one.
              */
             $services->push([
                 'stage' => 'group',
@@ -66,8 +82,8 @@ class GroupAccountingService
                 'charge' => (float) $group->visa_sale_amount,
             ]);
         }
-        if ($transportOnlyPax > 0) {
-            $services->push(['stage' => 'group', 'service' => 'Transport only', 'quantity' => $transportOnlyPax, 'charge' => $transportOnlyCharge]);
+        if ($legacyTransportCharge > 0) {
+            $services->push(['stage' => 'group', 'service' => 'Transport only', 'quantity' => $legacyTransportPax, 'charge' => $legacyTransportCharge]);
         }
         foreach ($group->transportItems as $item) {
             $services->push([

@@ -88,8 +88,12 @@ test('group accounting exposes anonymous age and service aggregates', function (
         'adults' => 1,
         'children' => 1,
         'infants' => 1,
-        'visa' => 2,
-        'transport_only' => 1,
+        // The group includes a visa, so all three passengers take it. The
+        // third row still says transport_only -- written before the group
+        // level choice existed -- and is no longer allowed to disagree with
+        // the group it sits in.
+        'visa' => 3,
+        'transport_only' => 0,
     ])->and($summary['voucherBreakdown'][0])->toMatchArray([
         'voucher_number' => 'UVR-ACC',
         'passengers' => 3,
@@ -106,4 +110,57 @@ test('group accounting exposes anonymous age and service aggregates', function (
         ->and($encoded)->not->toContain('PA-1')
         ->and($encodedVoucher)->not->toContain('Adult Person')
         ->and($encodedVoucher)->not->toContain('PA-1');
+});
+
+test('a transport-only group is charged no visa', function () {
+    $user = User::factory()->create();
+    $company = Company::create(['name' => 'Transport Only Accounting', 'slug' => 'transport-only-accounting', 'owner_id' => $user->id, 'base_currency' => 'SAR']);
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+    $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-TON', 'name' => 'Transport Only Agent']);
+
+    // visa_sale_amount carries a figure the group must not be billed for.
+    // Everyone here already holds a visa; the group sells them a coach.
+    $group = VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'group_number' => 'UGR-TON',
+        'name' => 'Already holds a visa',
+        'includes_visa' => false,
+        'transport_mode' => VisaGroup::TRANSPORT_SPECIALIZED,
+        'visa_sale_amount' => 300,
+    ]);
+
+    Passenger::create([
+        'company_id' => $company->id,
+        'visa_group_id' => $group->id,
+        'full_name' => 'Coach Rider',
+        'passport_number' => 'TON-1',
+        'imported_age' => 30,
+        'service_type' => Passenger::SERVICE_TRANSPORT_ONLY,
+    ]);
+
+    $summary = app(GroupAccountingService::class)->summary($group);
+
+    expect(collect($summary['services'])->pluck('service')->all())->toBe([])
+        ->and($summary['passengerSummary'])->toMatchArray(['visa' => 0, 'transport_only' => 1]);
+});
+
+test('a visa group with no passengers entered yet is charged no visa', function () {
+    $user = User::factory()->create();
+    $company = Company::create(['name' => 'Empty Group Accounting', 'slug' => 'empty-group-accounting', 'owner_id' => $user->id, 'base_currency' => 'SAR']);
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+    $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-EMP', 'name' => 'Empty Group Agent']);
+
+    $group = VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'group_number' => 'UGR-EMP',
+        'name' => 'Nobody entered yet',
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+        'visa_sale_amount' => 300,
+    ]);
+
+    // The visa line is priced per head. No heads, no line -- a group that
+    // has been named but not filled bills nothing.
+    expect(app(GroupAccountingService::class)->summary($group)["services"]->all())->toBe([]);
 });

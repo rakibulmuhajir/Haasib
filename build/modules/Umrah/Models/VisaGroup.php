@@ -76,6 +76,7 @@ class VisaGroup extends Model
         'hotel_info',
         'transport_required',
         'transport_mode',
+        'includes_visa',
         'included_bus_cost_per_passenger',
         'included_bus_cost_deduction',
         'standard_bus_retail_amount',
@@ -114,6 +115,7 @@ class VisaGroup extends Model
         'flight_info' => 'array',
         'hotel_info' => 'array',
         'transport_required' => 'boolean',
+        'includes_visa' => 'boolean',
         'included_bus_cost_per_passenger' => 'decimal:2',
         'included_bus_cost_deduction' => 'decimal:2',
         'standard_bus_retail_amount' => 'decimal:2',
@@ -141,6 +143,27 @@ class VisaGroup extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * The three middle statuses track a visa application. A transport-only
+     * group never has one, so it is offered a shorter lifecycle -- draft,
+     * delivered, closed -- with cancelled reachable throughout. The database
+     * enforces the same rule, so this method decides what the UI offers, not
+     * what the record may hold.
+     */
+    public static function statusesAvailable(bool $includesVisa): array
+    {
+        if ($includesVisa) {
+            return self::STATUSES;
+        }
+
+        return array_intersect_key(self::STATUSES, array_flip([
+            self::STATUS_DRAFT,
+            self::STATUS_DELIVERED,
+            self::STATUS_CLOSED,
+            self::STATUS_CANCELLED,
+        ]));
+    }
 
     public function company(): BelongsTo
     {

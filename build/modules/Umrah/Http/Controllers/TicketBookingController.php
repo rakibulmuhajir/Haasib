@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
@@ -197,7 +198,7 @@ class TicketBookingController extends Controller
                 reason: $data['reason'] ?? null,
                 idempotencyKey: $data['idempotency_key'],
             ));
-        } catch (RuntimeException $exception) {
+        } catch (RuntimeException|InvalidArgumentException $exception) {
             return back()->withInput()->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
             report($exception);
@@ -205,16 +206,33 @@ class TicketBookingController extends Controller
             return back()->withInput()->with('error', 'Ticket cancellation could not be completed. Check the details and try again.');
         }
 
+        $baseCurrency = app(CurrentCompany::class)->get()->base_currency;
+
         return back()->with(
             'success',
             sprintf(
-                'Ticket cancelled. Buyer returned %s %s, supplier returned %s %s.',
-                $cancellation->buyer_returns_currency,
-                number_format((float) $cancellation->buyer_returns_amount, 2),
-                $cancellation->supplier_returns_currency,
-                number_format((float) $cancellation->supplier_returns_amount, 2),
+                'Ticket cancelled. Buyer returned %s, supplier returned %s.',
+                $this->amountForFlash((float) $cancellation->buyer_returns_amount, $cancellation->buyer_returns_currency, $baseCurrency),
+                $this->amountForFlash((float) $cancellation->supplier_returns_amount, $cancellation->supplier_returns_currency, $baseCurrency),
             )
         );
+    }
+
+    /**
+     * The company's own currency is the unit every figure is read in
+     * already, so naming it on each amount is noise -- only a foreign
+     * amount says what it is. public.currencies.symbol is not consulted
+     * because it is seeded equal to the code for every currency this
+     * app currently handles; a lookup would cost a query and return the
+     * same string. Worth revisiting if real symbols are ever seeded.
+     */
+    private function amountForFlash(float $amount, ?string $currency, string $baseCurrency): string
+    {
+        $formatted = number_format($amount, 2);
+
+        return $currency === null || $currency === $baseCurrency
+            ? $formatted
+            : $currency.' '.$formatted;
     }
 
     /**

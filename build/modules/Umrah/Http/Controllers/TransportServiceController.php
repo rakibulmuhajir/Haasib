@@ -47,12 +47,12 @@ class TransportServiceController extends Controller
                 ->get(['id', 'name', 'phone']),
             'sectors' => TransportSector::where('company_id', $company->id)->orderBy('sort_order')->get(),
             'packages' => TransportPackage::where('company_id', $company->id)->with('sectors:id,code,name,origin,destination,is_active')->orderBy('name')->get(),
-            'fares' => TransportFare::where('company_id', $company->id)->with(['transportVendor:id,name,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get(),
+            'fares' => TransportFare::where('company_id', $company->id)->with(['transportVendor:id,vendor_id,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get(),
             'transportVendors' => VisaVendor::where('company_id', $company->id)
                 ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
                 ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'is_company_owned']),
+                ->orderByName()
+                ->get(['id', 'vendor_id', 'is_company_owned']),
             'chargingBases' => TransportFare::BASES,
         ]);
     }

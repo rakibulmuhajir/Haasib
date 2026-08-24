@@ -75,7 +75,7 @@ class TransportReadinessWidget implements DashboardWidget
             ->unique()
             ->values();
 
-        $vendorNames = VisaVendor::whereIn('id', $vendorIds)->pluck('name', 'id');
+        $vendorNames = VisaVendor::whereIn('id', $vendorIds)->get(['id', 'vendor_id'])->pluck('name', 'id');
 
         $rows = $groups->map(function (VisaGroup $group) use ($vendorNames, $company) {
             $vendorId = $this->assignedVendorId($group);

@@ -61,7 +61,7 @@ class CashBookWidget implements DashboardWidget
         $totalOut = (float) (clone $base)->where('direction', GroupPayment::DIRECTION_SENT)->sum('base_amount');
 
         $payments = (clone $base)
-            ->with(['agent:id,customer_id', 'group:id,group_number', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name'])
+            ->with(['agent:id,customer_id', 'group:id,group_number', 'visaVendor:id,vendor_id', 'transportVendor:id,vendor_id', 'hotelVendor:id,name'])
             ->orderByDesc('payment_date')
             ->limit($limit)
             ->get();

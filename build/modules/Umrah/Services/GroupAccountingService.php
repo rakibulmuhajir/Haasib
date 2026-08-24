@@ -18,11 +18,11 @@ class GroupAccountingService
     {
         $group->load([
             'agent:id,customer_id',
-            'vendor:id,name',
-            'mandatoryTransportVendor:id,name',
+            'vendor:id,vendor_id',
+            'mandatoryTransportVendor:id,vendor_id',
             'transportItems:id,visa_group_id,transport_vendor_id,transport_service_id,description,quantity,passenger_count,total_sale_amount,total_cost_amount',
             'transportItems.service:id,name,vehicle_type',
-            'transportItems.transportVendor:id,name',
+            'transportItems.transportVendor:id,vendor_id',
             'vouchers' => fn ($query) => $query
                 ->whereNull('superseded_at')
                 ->withCount(['allPassengers as passengers_count'])
@@ -129,10 +129,10 @@ class GroupAccountingService
             'agent:id,customer_id',
             'billingVoucher:id,voucher_number',
             'group' => fn ($query) => $query->with([
-                'vendor:id,name',
-                'mandatoryTransportVendor:id,name',
+                'vendor:id,vendor_id',
+                'mandatoryTransportVendor:id,vendor_id',
                 'transportItems:id,visa_group_id,transport_vendor_id,description,quantity,total_sale_amount,total_cost_amount',
-                'transportItems.transportVendor:id,name',
+                'transportItems.transportVendor:id,vendor_id',
             ]),
         ]);
 

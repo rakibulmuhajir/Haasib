@@ -29,7 +29,7 @@ class TransportProviderController extends Controller
 
         return Inertia::render('Umrah/TransportProviders/Index', [
             'company' => $this->companyPayload($company),
-            'providers' => VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->paginate(20),
+            'providers' => VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->paginate(20),
             'nextProviderNumber' => $this->service->nextTransportProviderNumber($company->id),
             'canManageProviders' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VENDOR_UPDATE),
         ]);

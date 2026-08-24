@@ -56,7 +56,7 @@ class VendorBalancesWidget implements DashboardWidget
 
         $visaVendors = VisaVendor::where('company_id', $company->id)
             ->where('balance', '<>', 0)
-            ->get(['id', 'vendor_number', 'name', 'vendor_type', 'balance'])
+            ->get(['id', 'vendor_number', 'vendor_id', 'vendor_type', 'balance'])
             ->map(fn (VisaVendor $vendor): array => [
                 'id' => $vendor->id,
                 'vendor_number' => $vendor->vendor_number,

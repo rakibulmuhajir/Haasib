@@ -337,7 +337,7 @@ class TravelReportService
         $payments = GroupPayment::where('company_id', $company->id)
             ->where('status', GroupPayment::STATUS_POSTED)
             ->whereBetween('payment_date', [$filters['start'], $filters['end']])
-            ->with(['agent:id,customer_id', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'allocations:id,group_payment_id,visa_group_id,refund_id,base_amount'])
+            ->with(['agent:id,customer_id', 'visaVendor:id,vendor_id', 'transportVendor:id,vendor_id', 'hotelVendor:id,name', 'allocations:id,group_payment_id,visa_group_id,refund_id,base_amount'])
             ->get();
 
         $rows = $payments->map(function (GroupPayment $payment): array {
@@ -577,9 +577,9 @@ class TravelReportService
 
     private function filteredGroups(Company $company, array $filters, bool $withFinancialRelations): Collection
     {
-        $relations = ['agent:id,customer_id', 'vendor:id,name', 'mandatoryTransportVendor:id,name', 'vouchers'];
+        $relations = ['agent:id,customer_id', 'vendor:id,vendor_id', 'mandatoryTransportVendor:id,vendor_id', 'vouchers'];
         if ($withFinancialRelations) {
-            $relations = [...$relations, 'transportItems.transportVendor:id,name', 'paymentAllocations.payment'];
+            $relations = [...$relations, 'transportItems.transportVendor:id,vendor_id', 'paymentAllocations.payment'];
         }
 
         return VisaGroup::where('company_id', $company->id)
@@ -858,8 +858,8 @@ class TravelReportService
             $definitions[] = $this->selectFilter('agent_id', 'Agent', Agent::where('company_id', $company->id)->orderByName()->get(['id', 'customer_id'])->pluck('name', 'id')->all());
         }
         if ($report === 'group-profitability') {
-            $definitions[] = $this->selectFilter('visa_vendor_id', 'Visa Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->pluck('name', 'id')->all());
-            $definitions[] = $this->selectFilter('transport_vendor_id', 'Transport Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->pluck('name', 'id')->all());
+            $definitions[] = $this->selectFilter('visa_vendor_id', 'Visa Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
+            $definitions[] = $this->selectFilter('transport_vendor_id', 'Transport Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
             $definitions[] = $this->selectFilter('payment_status', 'Payment', ['paid' => 'Paid', 'partially_paid' => 'Partially paid', 'unpaid' => 'Unpaid']);
         }
         if ($report === 'agent-statement') {

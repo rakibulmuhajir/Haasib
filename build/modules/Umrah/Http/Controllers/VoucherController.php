@@ -521,8 +521,8 @@ class VoucherController extends Controller
                 'group' => fn ($query) => $query
                     ->select(['id', 'group_number', 'name', 'travel_date', 'passenger_count', 'transport_mode', 'transport_service_id', 'driver_id', 'transport_pax_capacity', 'vendor_id', 'mandatory_transport_vendor_id'])
                     ->with([
-                        'vendor:id,name,phone,city,logo_url',
-                        'mandatoryTransportVendor:id,name,phone,city,logo_url',
+                        'vendor:id,vendor_id,city',
+                        'mandatoryTransportVendor:id,vendor_id,city',
                         'transportService:id,name,vehicle_type,number_plate,driver_name,driver_contact',
                         'driver:id,name,phone',
                         'transportItems' => fn ($items) => $items
@@ -623,8 +623,8 @@ class VoucherController extends Controller
             ->with([
                 'agent:id,customer_id,city,country',
                 'group' => fn ($query) => $query->with([
-                    'vendor:id,name,phone,city,logo_url',
-                    'mandatoryTransportVendor:id,name,phone,city,logo_url',
+                    'vendor:id,vendor_id,city',
+                    'mandatoryTransportVendor:id,vendor_id,city',
                     'transportService:id,name,vehicle_type,number_plate,driver_name,driver_contact',
                     'driver:id,name,phone',
                     'transportItems' => fn ($items) => $items

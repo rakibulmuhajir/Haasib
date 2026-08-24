@@ -147,7 +147,7 @@ class NeedsAttentionWidget implements DashboardWidget
         $payments = GroupPayment::where('company_id', $company->id)
             ->where('status', GroupPayment::STATUS_SUBMITTED)
             ->when($isAgent, fn ($q) => $q->where('agent_id', $agentId))
-            ->with('agent:id,name')
+            ->with('agent:id,customer_id')
             ->orderBy('submitted_at')
             ->get(['id', 'agent_id', 'payment_number', 'amount', 'currency', 'submitted_at']);
 

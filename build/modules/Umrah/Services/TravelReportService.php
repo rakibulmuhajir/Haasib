@@ -147,7 +147,7 @@ class TravelReportService
         $groups = VisaGroup::where('company_id', $company->id)
             ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
-            ->with(['agent:id,name', 'saleTransaction:id,transaction_date,posting_date'])
+            ->with(['agent:id,customer_id', 'saleTransaction:id,transaction_date,posting_date'])
             ->get();
 
         $events = collect();
@@ -164,7 +164,7 @@ class TravelReportService
             ->where('direction', GroupPayment::DIRECTION_RECEIVED)
             ->whereIn('status', [GroupPayment::STATUS_POSTED, GroupPayment::STATUS_REVERSED])
             ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))
-            ->with(['agent:id,name', 'allocations.group:id,group_number'])
+            ->with(['agent:id,customer_id', 'allocations.group:id,group_number'])
             ->get();
         foreach ($payments as $payment) {
             // Both halves are payment_allocations rows; what separates them
@@ -337,7 +337,7 @@ class TravelReportService
         $payments = GroupPayment::where('company_id', $company->id)
             ->where('status', GroupPayment::STATUS_POSTED)
             ->whereBetween('payment_date', [$filters['start'], $filters['end']])
-            ->with(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'allocations:id,group_payment_id,visa_group_id,refund_id,base_amount'])
+            ->with(['agent:id,customer_id', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'allocations:id,group_payment_id,visa_group_id,refund_id,base_amount'])
             ->get();
 
         $rows = $payments->map(function (GroupPayment $payment): array {
@@ -383,7 +383,7 @@ class TravelReportService
         $query = Passenger::where('company_id', $company->id)
             ->whereHas('group', fn ($group) => $group->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                 ->when($filters['agent_id'] ?? null, fn ($agent) => $agent->where('agent_id', $filters['agent_id'])))
-            ->with(['group.agent:id,name', 'group.vendor:id,name']);
+            ->with(['group.agent:id,customer_id', 'group.vendor:id,name']);
         $passengers = $query->get()->filter(function (Passenger $passenger) use ($filters): bool {
             $date = $passenger->group?->travel_date;
 
@@ -424,7 +424,7 @@ class TravelReportService
             ->whereBetween('onward_departure_at', [CarbonImmutable::parse($filters['start'])->startOfDay(), CarbonImmutable::parse($filters['end'])->endOfDay()])
             ->when($filters['airline'] ?? null, fn ($query, $airline) => $query->where('onward_airline', $airline))
             ->when($filters['flight_number'] ?? null, fn ($query, $flight) => $query->where('onward_flight_number', 'ilike', '%'.$flight.'%'))
-            ->with(['agent:id,name', 'group:id,group_number,transport_required', 'passengers:id,full_name,passport_number,nationality'])
+            ->with(['agent:id,customer_id', 'group:id,group_number,transport_required', 'passengers:id,full_name,passport_number,nationality'])
             ->get();
         $rows = $vouchers->flatMap(fn (Voucher $voucher) => $voucher->passengers->map(fn (Passenger $passenger) => [
             'departure' => $voucher->onward_departure_at?->toIso8601String(), 'airline' => $voucher->onward_airline,
@@ -453,7 +453,7 @@ class TravelReportService
         $vouchers = Voucher::where('company_id', $company->id)
             ->where('status', '!=', Voucher::STATUS_CANCELLED)->whereNull('superseded_at')
             ->when($filters['agent_id'] ?? null, fn ($query) => $query->where('agent_id', $filters['agent_id']))
-            ->with(['agent:id,name', 'group:id,group_number', 'passengers:id,full_name'])
+            ->with(['agent:id,customer_id', 'group:id,group_number', 'passengers:id,full_name'])
             ->get();
         $rows = collect();
         foreach ($vouchers as $voucher) {
@@ -511,7 +511,7 @@ class TravelReportService
             ->whereBetween('scheduled_at', [CarbonImmutable::parse($filters['start'])->startOfDay(), CarbonImmutable::parse($filters['end'])->endOfDay()])
             ->whereHas('group', fn ($query) => $query->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                 ->when($filters['agent_id'] ?? null, fn ($agent) => $agent->where('agent_id', $filters['agent_id'])))
-            ->with(['group.agent:id,name', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,name', 'package:id,name', 'driver:id,name,phone'])
+            ->with(['group.agent:id,customer_id', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,name', 'package:id,name', 'driver:id,name,phone'])
             ->get();
         $rows = $items->map(fn (GroupTransportItem $item) => [
             'schedule' => $item->scheduled_at?->toIso8601String(), 'route' => $item->sector?->name ?? $item->package?->name ?? $item->description,
@@ -541,7 +541,7 @@ class TravelReportService
         $vouchers = Voucher::where('company_id', $company->id)->whereNull('superseded_at')
             ->when($filters['agent_id'] ?? null, fn ($query) => $query->where('agent_id', $filters['agent_id']))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->with(['agent:id,name,voucher_cutoff_hours', 'group:id,group_number', 'createdBy:id,name'])
+            ->with(['agent:id,customer_id,voucher_cutoff_hours', 'group:id,group_number', 'createdBy:id,name'])
             ->get();
         $rows = $vouchers->map(function (Voucher $voucher): array {
             $starts = $this->access->voucherTravelStartsAt($voucher);
@@ -577,7 +577,7 @@ class TravelReportService
 
     private function filteredGroups(Company $company, array $filters, bool $withFinancialRelations): Collection
     {
-        $relations = ['agent:id,name', 'vendor:id,name', 'mandatoryTransportVendor:id,name', 'vouchers'];
+        $relations = ['agent:id,customer_id', 'vendor:id,name', 'mandatoryTransportVendor:id,name', 'vouchers'];
         if ($withFinancialRelations) {
             $relations = [...$relations, 'transportItems.transportVendor:id,name', 'paymentAllocations.payment'];
         }
@@ -855,7 +855,7 @@ class TravelReportService
     {
         $definitions = [];
         if (! $isAgent && in_array($report, ['group-profitability', 'agent-statement', 'receivable-aging', 'passenger-status', 'departure-manifest', 'hotel-rooming', 'transport-dispatch', 'voucher-control'], true)) {
-            $definitions[] = $this->selectFilter('agent_id', 'Agent', Agent::where('company_id', $company->id)->orderBy('name')->pluck('name', 'id')->all());
+            $definitions[] = $this->selectFilter('agent_id', 'Agent', Agent::where('company_id', $company->id)->orderByName()->get(['id', 'customer_id'])->pluck('name', 'id')->all());
         }
         if ($report === 'group-profitability') {
             $definitions[] = $this->selectFilter('visa_vendor_id', 'Visa Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->pluck('name', 'id')->all());

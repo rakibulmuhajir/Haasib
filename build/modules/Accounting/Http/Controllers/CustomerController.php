@@ -189,6 +189,7 @@ class CustomerController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
+            'customerTypes' => Customer::TYPES,
         ]);
     }
 
@@ -370,6 +371,7 @@ class CustomerController extends Controller
             'customer' => $customer,
             'currencies' => $currencies,
             'arAccounts' => $arAccounts,
+            'customerTypes' => Customer::TYPES,
         ]);
     }
 

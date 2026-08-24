@@ -17,6 +17,7 @@ class CreateAction implements PaletteAction
     {
         return [
             'name' => 'required|string|min:1|max:255',
+            'customer_type' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(Customer::TYPES))],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'base_currency' => 'nullable|string|size:3|uppercase',
@@ -64,6 +65,7 @@ class CreateAction implements PaletteAction
             'company_id' => $company->id,
             'customer_number' => $this->generateCustomerNumber($company->id),
             'name' => trim($params['name']),
+            'customer_type' => $params['customer_type'] ?? Customer::TYPE_WALK_IN,
             'email' => $params['email'] ?? null,
             'phone' => $params['phone'] ?? null,
             'billing_address' => $params['billing_address'] ?? null,

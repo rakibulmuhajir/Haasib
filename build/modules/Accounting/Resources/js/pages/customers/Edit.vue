@@ -32,6 +32,7 @@ interface CustomerRef {
   id: string
   customer_number: string
   name: string
+  customer_type: string
   email: string | null
   phone: string | null
   base_currency: string | null
@@ -62,6 +63,7 @@ const props = defineProps<{
   customer: CustomerRef
   currencies: CurrencyOption[]
   arAccounts?: AccountOption[]
+  customerTypes: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -77,6 +79,7 @@ const currencyOptions = computed(() =>
 
 const form = useForm({
   name: props.customer.name ?? '',
+  customer_type: props.customer.customer_type ?? 'walk_in',
   email: props.customer.email ?? '',
   phone: props.customer.phone ?? '',
   base_currency: props.customer.base_currency ?? props.company.base_currency,
@@ -121,6 +124,7 @@ const handleSubmit = () => {
 
       return {
         name: data.name,
+        customer_type: data.customer_type,
         email: data.email || null,
         phone: data.phone || null,
         base_currency: data.base_currency || props.company.base_currency,
@@ -151,6 +155,20 @@ const handleSubmit = () => {
           <Label for="name">Name</Label>
           <Input id="name" v-model="form.name" required />
           <InputError :message="form.errors.name" />
+        </div>
+        <div>
+          <Label for="customer_type">Type</Label>
+          <Select v-model="form.customer_type">
+            <SelectTrigger id="customer_type">
+              <SelectValue placeholder="Select customer type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="(label, value) in customerTypes" :key="value" :value="value">
+                {{ label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <InputError :message="form.errors.customer_type" />
         </div>
         <div>
           <Label for="email">Email</Label>

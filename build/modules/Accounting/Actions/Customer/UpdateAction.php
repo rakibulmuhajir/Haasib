@@ -15,6 +15,7 @@ class UpdateAction implements PaletteAction
         return [
             'id' => 'required|string|max:255',
             'name' => 'nullable|string|min:1|max:255',
+            'customer_type' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(Customer::TYPES))],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'base_currency' => 'nullable|string|size:3|uppercase',
@@ -56,6 +57,11 @@ class UpdateAction implements PaletteAction
         if (isset($params['name']) && $params['name'] !== $customer->name) {
             $updates['name'] = trim($params['name']);
             $changes[] = "name → {$params['name']}";
+        }
+
+        if (isset($params['customer_type']) && $params['customer_type'] !== $customer->customer_type) {
+            $updates['customer_type'] = $params['customer_type'];
+            $changes[] = 'type → '.Customer::TYPES[$params['customer_type']];
         }
 
         if (isset($params['email']) && $params['email'] !== $customer->email) {

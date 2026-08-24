@@ -12,6 +12,7 @@ use App\Modules\Umrah\Http\Requests\StoreAgentRequest;
 use App\Modules\Umrah\Http\Requests\UpdateAgentRequest;
 use App\Modules\Umrah\Http\Requests\UpdateAgentVoucherAccessRequest;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Services\AgentParty;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +24,10 @@ use Inertia\Response;
 
 class AgentController extends Controller
 {
-    public function __construct(private UmrahCoreService $service) {}
+    public function __construct(
+        private UmrahCoreService $service,
+        private AgentParty $party,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -32,11 +36,14 @@ class AgentController extends Controller
         $search = trim((string) $request->input('search', ''));
 
         $agents = Agent::where('company_id', $company->id)
+            // name and phone are the customer's, so the search reaches through
+            // the relation rather than at columns this table no longer has.
             ->when($search !== '', fn ($q) => $q->where(fn ($inner) => $inner
-                ->where('name', 'ilike', "%{$search}%")
-                ->orWhere('phone', 'ilike', "%{$search}%")
+                ->whereHas('customer', fn ($c) => $c
+                    ->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%"))
                 ->orWhere('agent_number', 'ilike', "%{$search}%")))
-            ->orderBy('name')
+            ->orderByName()
             ->paginate(20)
             ->withQueryString();
 
@@ -72,12 +79,15 @@ class AgentController extends Controller
                 $userId = $this->createAgentLogin($company->id, $data['name'], $data['login_username'], $data['password'], $request)->id;
             }
 
+            // The party first: an agent is a customer, and the name, email,
+            // phone and logo on this form are that customer's.
+            $customer = $this->party->createFor($company, $data);
+
             Agent::create([
                 'company_id' => $company->id, 'user_id' => $userId,
+                'customer_id' => $customer->id,
                 'agent_number' => $data['agent_number'] ?: $this->service->nextAgentNumber($company->id),
-                'name' => $data['name'], 'phone' => $data['phone'] ?? null, 'email' => $data['email'] ?? null,
                 'city' => $data['city'] ?? null, 'country' => $data['country'] ?? null, 'notes' => $data['notes'] ?? null,
-                'logo_url' => $data['logo_url'] ?? null,
                 'can_create_voucher' => (bool) ($data['can_create_voucher'] ?? true), 'can_approve_voucher' => (bool) ($data['can_approve_voucher'] ?? false),
                 'can_edit_group' => (bool) ($data['can_edit_group'] ?? false),
                 'can_edit_voucher' => (bool) ($data['can_edit_voucher'] ?? false), 'voucher_cutoff_hours' => (int) ($data['voucher_cutoff_hours'] ?? 6), 'is_active' => true,
@@ -93,16 +103,15 @@ class AgentController extends Controller
         $company = app(CurrentCompany::class)->get();
         $data = $request->validated();
 
+        $customer = $this->party->createFor($company, $data);
+
         $agent = Agent::create([
             'company_id' => $company->id,
             'user_id' => $data['user_id'] ?? null,
+            'customer_id' => $customer->id,
             'agent_number' => $data['agent_number'] ?: $this->service->nextAgentNumber($company->id),
-            'name' => $data['name'],
-            'phone' => $data['phone'] ?? null,
-            'email' => $data['email'] ?? null,
             'city' => $data['city'] ?? null,
             'country' => $data['country'] ?? null,
-            'logo_url' => $data['logo_url'] ?? null,
             'notes' => $data['notes'] ?? null,
             'is_active' => true,
         ]);
@@ -163,15 +172,15 @@ class AgentController extends Controller
                 $user = $this->createAgentLogin($company->id, $data['name'], $data['login_username'], $data['password'], $request);
             }
 
+            // The edited name, email, phone and logo go to the customer,
+            // which is where they live. Nothing is copied back.
+            $this->party->updateFrom($record, $data);
+
             $record->update([
                 'user_id' => $user?->id,
                 'agent_number' => $data['agent_number'] ?: $record->agent_number,
-                'name' => $data['name'],
-                'phone' => $data['phone'] ?? null,
-                'email' => $data['email'] ?? null,
                 'city' => $data['city'] ?? null,
                 'country' => $data['country'] ?? null,
-                'logo_url' => $data['logo_url'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
         });

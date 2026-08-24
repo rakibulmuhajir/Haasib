@@ -94,8 +94,8 @@ class TicketBookingController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'agents' => Agent::where('company_id', $company->id)
-                ->orderBy('name')
-                ->get(['id', 'name', 'customer_id']),
+                ->orderByName()
+                ->get(['id', 'customer_id']),
             'vendors' => Vendor::where('company_id', $company->id)
                 ->where('is_active', true)
                 ->orderBy('name')
@@ -157,7 +157,7 @@ class TicketBookingController extends Controller
         abort_unless($canViewAll || $canViewOwn, 403);
 
         $record = TicketBooking::where('company_id', $company->id)
-            ->with(['customer:id,name', 'agent:id,name', 'supplierVendor:id,name', 'invoice:id,invoice_number', 'bill:id,bill_number', 'tickets'])
+            ->with(['customer:id,name', 'agent:id,customer_id', 'supplierVendor:id,name', 'invoice:id,invoice_number', 'bill:id,bill_number', 'tickets'])
             ->findOrFail($booking);
 
         if (! $canViewAll) {

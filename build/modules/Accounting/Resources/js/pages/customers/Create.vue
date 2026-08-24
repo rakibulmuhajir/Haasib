@@ -4,6 +4,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
@@ -19,6 +20,7 @@ interface CompanyRef {
 
 const props = defineProps<{
   company: CompanyRef
+  customerTypes: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -29,6 +31,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm({
   name: '',
+  customer_type: 'walk_in',
   email: '',
   phone: '',
   logo_url: '',
@@ -38,6 +41,7 @@ const handleSubmit = () => {
   form
     .transform((data) => ({
       name: data.name,
+      customer_type: data.customer_type,
       email: data.email || null,
       phone: data.phone || null,
       logo_url: data.logo_url || null,
@@ -84,6 +88,25 @@ const handleSubmit = () => {
                 class="border-rule-default"
               />
               <InputError :message="form.errors.name" />
+            </div>
+
+            <div class="space-y-2">
+              <Label for="customer_type" class="flex items-center gap-2 text-text-primary">
+                <Building2 class="h-4 w-4 text-text-tertiary" />
+                Customer Type
+              </Label>
+              <Select v-model="form.customer_type">
+                <SelectTrigger id="customer_type" class="border-rule-default">
+                  <SelectValue placeholder="Select customer type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="(label, value) in customerTypes" :key="value" :value="value">
+                    {{ label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-text-secondary">An Umrah agent is a customer of this type with a travel profile attached.</p>
+              <InputError :message="form.errors.customer_type" />
             </div>
 
             <div class="space-y-2">

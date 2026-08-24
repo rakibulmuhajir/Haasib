@@ -16,10 +16,29 @@ class Customer extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
+    public const TYPE_WALK_IN = 'walk_in';
+    public const TYPE_AGENT = 'agent';
+    public const TYPE_B2B = 'b2b';
+
+    /**
+     * What kind of buyer this is, in the same spirit as Vendor::TYPES.
+     *
+     * Nothing branches on the value. An agent is invoiced, aged and posted
+     * exactly like a walk-in; the type is what lets a register be filtered and
+     * what gives a module-specific profile something to hang off. umrah.agents
+     * extends the agent-typed customer rather than duplicating it.
+     */
+    public const TYPES = [
+        self::TYPE_WALK_IN => 'Walk-in customer',
+        self::TYPE_AGENT => 'Agent',
+        self::TYPE_B2B => 'Business account',
+    ];
+
     protected $fillable = [
         'company_id',
         'customer_number',
         'name',
+        'customer_type',
         'email',
         'phone',
         'billing_address',

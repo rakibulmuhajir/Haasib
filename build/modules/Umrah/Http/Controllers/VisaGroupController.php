@@ -52,7 +52,7 @@ class VisaGroupController extends Controller
         $memberAgentId = $this->memberAgentId($company->id, $request);
 
         $groups = VisaGroup::where('company_id', $company->id)
-            ->with(['agent:id,name', 'vendor:id,name', 'visaService:id,name', 'transportService:id,name,vehicle_type,pax_capacity', 'driver:id,name,phone'])
+            ->with(['agent:id,customer_id', 'vendor:id,name', 'visaService:id,name', 'transportService:id,name,vehicle_type,pax_capacity', 'driver:id,name,phone'])
             ->when($this->isMember($company->id, $request), fn ($q) => $memberAgentId ? $q->where('agent_id', $memberAgentId) : $q->whereRaw('1 = 0'))
             ->when($search !== '', fn ($q) => $q->where(fn ($inner) => $inner
                 ->where('name', 'ilike', "%{$search}%")
@@ -116,7 +116,7 @@ class VisaGroupController extends Controller
         return Inertia::render('Umrah/Groups/Create', [
             'company' => $this->companyPayload($company),
             'nextGroupNumber' => $this->service->nextGroupNumber($company->id),
-            'agents' => Agent::where('company_id', $company->id)->where('is_active', true)->when($isMember, fn ($q) => $memberAgentId ? $q->whereKey($memberAgentId) : $q->whereRaw('1 = 0'))->orderBy('name')->get(['id', 'name', 'agent_number', 'country']),
+            'agents' => Agent::where('company_id', $company->id)->where('is_active', true)->when($isMember, fn ($q) => $memberAgentId ? $q->whereKey($memberAgentId) : $q->whereRaw('1 = 0'))->orderByName()->get(['id', 'customer_id', 'agent_number', 'country']),
             'vendors' => $vendors,
             'transportVendors' => $transportVendors,
             'defaultVendorId' => $isMember ? null : $defaultVendor?->id,

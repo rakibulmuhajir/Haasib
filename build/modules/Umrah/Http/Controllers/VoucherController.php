@@ -55,7 +55,7 @@ class VoucherController extends Controller
         $memberAgentId = $isMember ? $this->linkedAgentId($company->id, $request) : null;
 
         $vouchers = Voucher::where('company_id', $company->id)
-            ->with(['agent:id,name', 'group:id,group_number,name,travel_date'])
+            ->with(['agent:id,customer_id', 'group:id,group_number,name,travel_date'])
             ->withCount(['allPassengers as passengers_count'])
             ->when($isMember, fn ($query) => $memberAgentId
                 ? $query->where('agent_id', $memberAgentId)
@@ -92,7 +92,7 @@ class VoucherController extends Controller
         $memberAgentId = $isMember ? $this->linkedAgentId($company->id, $request) : null;
 
         $groups = VisaGroup::where('company_id', $company->id)
-            ->with('agent:id,name')
+            ->with('agent:id,customer_id')
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
             ->when($isMember, fn ($query) => $memberAgentId
                 ? $query->where('agent_id', $memberAgentId)
@@ -106,7 +106,7 @@ class VoucherController extends Controller
 
         if ($groupId) {
             $selectedGroup = VisaGroup::where('company_id', $company->id)
-                ->with('agent:id,name')
+                ->with('agent:id,customer_id')
                 ->when($isMember, fn ($query) => $memberAgentId
                     ? $query->where('agent_id', $memberAgentId)
                     : $query->whereRaw('1 = 0'))
@@ -265,7 +265,7 @@ class VoucherController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_UPDATE), 403);
         $capabilities = $this->voucherCapabilities($company->id, $request);
         abort_unless($capabilities['can_edit'], 403);
-        $record = Voucher::where('company_id', $company->id)->with(['group.agent:id,name', 'passengers'])
+        $record = Voucher::where('company_id', $company->id)->with(['group.agent:id,customer_id', 'passengers'])
             ->when($this->currentCompanyRole($company->id, $request) === 'agent', fn ($q) => ($agentId = $this->linkedAgentId($company->id, $request)) ? $q->where('agent_id', $agentId) : $q->whereRaw('1 = 0'))
             ->findOrFail($voucher);
         if ($this->access->isAgentMember($company->id, $request->user())) {
@@ -517,7 +517,7 @@ class VoucherController extends Controller
         abort_unless(request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_VIEW), 403);
         $record = Voucher::where('company_id', $company->id)
             ->with([
-                'agent:id,name,phone,email,city,country,logo_url',
+                'agent:id,customer_id,city,country',
                 'group' => fn ($query) => $query
                     ->select(['id', 'group_number', 'name', 'travel_date', 'passenger_count', 'transport_mode', 'transport_service_id', 'driver_id', 'transport_pax_capacity', 'vendor_id', 'mandatory_transport_vendor_id'])
                     ->with([
@@ -621,7 +621,7 @@ class VoucherController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_VIEW), 403);
         $record = Voucher::where('company_id', $company->id)
             ->with([
-                'agent:id,name,phone,email,city,country,logo_url',
+                'agent:id,customer_id,city,country',
                 'group' => fn ($query) => $query->with([
                     'vendor:id,name,phone,city,logo_url',
                     'mandatoryTransportVendor:id,name,phone,city,logo_url',

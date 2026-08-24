@@ -49,7 +49,7 @@ class PaymentController extends Controller
                 // with something to name it, or the register shows a
                 // consumed advance with a blank destination.
                 'allocations.refund:id,refund_number',
-                'agent:id,name',
+                'agent:id,customer_id',
                 'visaVendor:id,name',
                 'transportVendor:id,name',
                 'hotelVendor:id,name',
@@ -107,7 +107,7 @@ class PaymentController extends Controller
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
-                ->orderBy('name')->get(['id', 'name']),
+                ->orderByName()->get(['id', 'customer_id']),
             'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_active']),
             'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned', 'is_active']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->orderBy('name')->get(['id', 'name', 'is_active']),
@@ -205,7 +205,7 @@ class PaymentController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
         $record = $this->paymentForUser($company->id, $request, $payment)
-            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number', 'submittedBy:id,name', 'reviewedBy:id,name']);
+            ->load(['agent:id,customer_id', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number', 'submittedBy:id,name', 'reviewedBy:id,name']);
 
         return Inertia::render('Umrah/Payments/Show', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
@@ -229,7 +229,7 @@ class PaymentController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
         $record = $this->paymentForUser($company->id, $request, $payment)
-            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'allAllocations.group:id,group_number,name']);
+            ->load(['agent:id,customer_id', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'allAllocations.group:id,group_number,name']);
 
         return Pdf::loadView('umrah::payments.receipt', ['company' => $company, 'payment' => $record])
             ->setPaper('a4')->download($record->payment_number.'.pdf');

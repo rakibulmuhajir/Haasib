@@ -62,7 +62,7 @@ class AgentBalancesWidget implements DashboardWidget
         $agents = $query
             ->orderByDesc('balance')
             ->limit($limit)
-            ->get(['id', 'agent_number', 'name', 'balance', 'total_receivable', 'total_paid']);
+            ->get(['id', 'customer_id', 'agent_number', 'balance', 'total_receivable', 'total_paid']);
 
         return [
             'rows' => $agents->map(fn (Agent $agent): array => [

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Customer;
 use Illuminate\Validation\Rule;
 
 class StoreCustomerRequest extends BaseFormRequest
@@ -18,6 +19,7 @@ class StoreCustomerRequest extends BaseFormRequest
     {
         return [
             'name' => ['required', 'string', 'min:1', 'max:255'],
+            'customer_type' => ['nullable', Rule::in(array_keys(Customer::TYPES))],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'base_currency' => ['nullable', 'string', 'size:3', 'uppercase'],

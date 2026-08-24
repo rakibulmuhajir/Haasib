@@ -94,7 +94,7 @@ class DeparturesWidget implements DashboardWidget
             $company->id,
             $user,
         )
-            ->with('agent:id,name')
+            ->with('agent:id,customer_id')
             ->orderByRaw('CASE WHEN travel_date >= ? THEN 0 ELSE 1 END', [$today->toDateString()])
             ->orderByRaw('CASE WHEN travel_date >= ? THEN travel_date END ASC NULLS LAST', [$today->toDateString()])
             ->orderByRaw('CASE WHEN travel_date <  ? THEN travel_date END DESC NULLS LAST', [$today->toDateString()])

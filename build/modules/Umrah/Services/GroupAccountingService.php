@@ -17,7 +17,7 @@ class GroupAccountingService
     public function summary(VisaGroup $group): array
     {
         $group->load([
-            'agent:id,name',
+            'agent:id,customer_id',
             'vendor:id,name',
             'mandatoryTransportVendor:id,name',
             'transportItems:id,visa_group_id,transport_vendor_id,transport_service_id,description,quantity,passenger_count,total_sale_amount,total_cost_amount',
@@ -126,7 +126,7 @@ class GroupAccountingService
     public function voucherSummary(Voucher $voucher): array
     {
         $voucher->load([
-            'agent:id,name',
+            'agent:id,customer_id',
             'billingVoucher:id,voucher_number',
             'group' => fn ($query) => $query->with([
                 'vendor:id,name',

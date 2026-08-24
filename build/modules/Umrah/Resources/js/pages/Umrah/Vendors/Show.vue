@@ -33,7 +33,7 @@ const props = defineProps<{
 // TransportProviderController::show, which reuses it) -- the refund's
 // party_type has to follow whichever the record actually is.
 const refundPartyType = computed(() =>
-    props.vendor.vendor_type === 'transport_provider' ? 'transport_vendor' : 'visa_vendor',
+    props.vendor.service_type === 'transport_provider' ? 'transport_vendor' : 'visa_vendor',
 );
 
 const filter = reactive({

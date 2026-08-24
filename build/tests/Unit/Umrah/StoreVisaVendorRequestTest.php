@@ -17,7 +17,7 @@ function visaVendorRateValidator(array $data): Illuminate\Contracts\Validation\V
     $request = StoreVisaVendorRequest::create('/travel/umrah/vendors', 'POST', $data);
     $allRules = $request->rules();
     $rules = array_intersect_key($allRules, array_flip([
-        'vendor_type',
+        'service_type',
         'adult_retail_amount',
         'adult_cost_amount',
         'child_retail_amount',
@@ -30,7 +30,7 @@ function visaVendorRateValidator(array $data): Illuminate\Contracts\Validation\V
 
 it('requires positive adult and child rates for a visa vendor', function () {
     $validator = visaVendorRateValidator([
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'adult_retail_amount' => 0,
         'adult_cost_amount' => 0,
         'child_retail_amount' => 0,
@@ -46,7 +46,7 @@ it('requires positive adult and child rates for a visa vendor', function () {
 
 it('accepts positive adult and child rates for a visa vendor', function () {
     $validator = visaVendorRateValidator([
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'adult_retail_amount' => 500,
         'adult_cost_amount' => 400,
         'child_retail_amount' => 300,
@@ -58,7 +58,7 @@ it('accepts positive adult and child rates for a visa vendor', function () {
 
 it('rejects transport providers from the visa vendor CRUD', function () {
     $validator = visaVendorRateValidator([
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
         'adult_retail_amount' => 0,
         'adult_cost_amount' => 0,
         'child_retail_amount' => 0,
@@ -66,7 +66,7 @@ it('rejects transport providers from the visa vendor CRUD', function () {
     ]);
 
     expect($validator->fails())->toBeTrue()
-        ->and($validator->errors()->has('vendor_type'))->toBeTrue();
+        ->and($validator->errors()->has('service_type'))->toBeTrue();
 });
 
 it('validates independent transport rates and the child fare checkbox', function () {

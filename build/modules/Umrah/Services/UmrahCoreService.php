@@ -70,7 +70,7 @@ class UmrahCoreService
     public function resolveGroupVendors(string $companyId, array $data, bool $forceDefaults): array
     {
         $vendorQuery = VisaVendor::where('company_id', $companyId)
-            ->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+            ->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
             ->where('is_active', true);
         $vendor = ! $forceDefaults && ! empty($data['vendor_id'])
             ? (clone $vendorQuery)->find($data['vendor_id'])
@@ -89,13 +89,13 @@ class UmrahCoreService
         $providerId = ! $forceDefaults && ! empty($data['mandatory_transport_vendor_id'])
             ? $data['mandatory_transport_vendor_id']
             : ($vendor->resolvedMandatoryTransportVendorId() ?: VisaVendor::where('company_id', $companyId)
-                ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                 ->where('is_active', true)
                 ->orderBy('created_at')
                 ->value('id'));
         $provider = VisaVendor::where('company_id', $companyId)
             ->where('is_active', true)
-            ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+            ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
             ->find($providerId);
         if (! $provider) {
             throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select an active standard bus transport provider.']);
@@ -340,7 +340,7 @@ class UmrahCoreService
                 $vendor = ! empty($data['visa_vendor_id'])
                     ? VisaVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['visa_vendor_id'])
                     : (! empty($data['transport_vendor_id'])
-                        ? VisaVendor::where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->lockForUpdate()->findOrFail($data['transport_vendor_id'])
+                        ? VisaVendor::where('company_id', $companyId)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->lockForUpdate()->findOrFail($data['transport_vendor_id'])
                         : HotelVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['hotel_vendor_id']));
             }
 
@@ -1278,7 +1278,7 @@ class UmrahCoreService
                 if ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
                     $transportVendor = VisaVendor::where('company_id', $companyId)
                         ->where('is_active', true)
-                        ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                        ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                         ->find($data['mandatory_transport_vendor_id'] ?? null);
                     if (! $transportVendor) {
                         throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select the standard bus transport provider.']);
@@ -1376,7 +1376,7 @@ class UmrahCoreService
                 ->with(['transportVendor', 'service', 'sector', 'package'])
                 ->find($item['transport_fare_id']);
 
-            if (! $fare || ! $fare->service || ! $fare->transportVendor || $fare->transportVendor->vendor_type !== VisaVendor::TYPE_TRANSPORT_PROVIDER) {
+            if (! $fare || ! $fare->service || ! $fare->transportVendor || $fare->transportVendor->service_type !== VisaVendor::SERVICE_TRANSPORT_PROVIDER) {
                 throw ValidationException::withMessages(['transport_items' => 'A selected transport fare is no longer available.']);
             }
 

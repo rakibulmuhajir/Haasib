@@ -25,22 +25,32 @@ class VisaVendor extends Model
 
     public $incrementing = false;
 
-    public const TYPE_GOVERNMENT = 'government';
+    /*
+     * What this supplier provides to a group. Not the same question as the
+     * vendor_type on the acct.vendors row this one extends, which says how a
+     * supplier is bought from and posted -- a transport provider and a visa
+     * desk are both service_provider there, and differ only here.
+     *
+     * The column was itself called vendor_type until 2026_08_24_000012, which
+     * was survivable while the two tables were strangers and stopped being so
+     * when one became an extension of the other.
+     */
+    public const SERVICE_GOVERNMENT = 'government';
 
-    public const TYPE_VISA_PROVIDER = 'visa_provider';
+    public const SERVICE_VISA_PROVIDER = 'visa_provider';
 
-    public const TYPE_TRANSPORT_PROVIDER = 'transport_provider';
+    public const SERVICE_TRANSPORT_PROVIDER = 'transport_provider';
 
-    public const TYPE_HOTEL = 'hotel';
+    public const SERVICE_HOTEL = 'hotel';
 
-    public const TYPE_OTHER = 'other';
+    public const SERVICE_OTHER = 'other';
 
-    public const TYPES = [
-        self::TYPE_GOVERNMENT => 'Government',
-        self::TYPE_VISA_PROVIDER => 'Visa provider',
-        self::TYPE_TRANSPORT_PROVIDER => 'Transport provider',
-        self::TYPE_HOTEL => 'Hotel',
-        self::TYPE_OTHER => 'Other',
+    public const SERVICE_TYPES = [
+        self::SERVICE_GOVERNMENT => 'Government',
+        self::SERVICE_VISA_PROVIDER => 'Visa provider',
+        self::SERVICE_TRANSPORT_PROVIDER => 'Transport provider',
+        self::SERVICE_HOTEL => 'Hotel',
+        self::SERVICE_OTHER => 'Other',
     ];
 
     /**
@@ -55,7 +65,7 @@ class VisaVendor extends Model
         'vendor_id',
         'vendor_number',
         'name',
-        'vendor_type',
+        'service_type',
         'is_company_owned',
         'is_default',
         'provides_mandatory_transport',

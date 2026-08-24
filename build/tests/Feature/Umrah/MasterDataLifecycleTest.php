@@ -94,13 +94,13 @@ test('package edits restore links and fare edits preserve historical group snaps
         'company_id' => $company->id,
         'vendor_number' => 'VIS-MD',
         'name' => 'Visa Vendor',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
     ]);
     $transportVendor = VisaVendor::create([
         'company_id' => $company->id,
         'vendor_number' => 'TRN-MD',
         'name' => 'Transport Vendor',
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
     ]);
     $service = TransportService::create([
         'company_id' => $company->id,

@@ -44,14 +44,14 @@ class UpdateVisaGroupRequest extends UmrahFormRequest
             && $access->groupHasStarted($group);
 
         return [
-            'vendor_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'vendor_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
             'includes_visa' => ['sometimes', 'boolean'],
             'transport_mode' => [
                 'required',
                 Rule::in(array_unique([VisaGroup::TRANSPORT_NONE, VisaGroup::TRANSPORT_STANDARD_BUS, $group?->transport_mode ?? VisaGroup::TRANSPORT_STANDARD_BUS])),
                 $this->transportSellsSomethingRule($group?->includes_visa),
             ],
-            'mandatory_transport_vendor_id' => [Rule::requiredIf($this->input('transport_mode') === VisaGroup::TRANSPORT_STANDARD_BUS), 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
+            'mandatory_transport_vendor_id' => [Rule::requiredIf($this->input('transport_mode') === VisaGroup::TRANSPORT_STANDARD_BUS), 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
             'name' => ['required', 'string', 'max:255'],
             'travel_date' => ['nullable', 'date'],
             'flight_airline' => ['nullable', 'string', 'max:255'],

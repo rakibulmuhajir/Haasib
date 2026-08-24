@@ -215,7 +215,7 @@ class GroupAccountingService
             $transportSnapshot = [];
             if ($group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS && $vendors['mandatory_transport_vendor_id']) {
                 $provider = VisaVendor::where('company_id', $group->company_id)
-                    ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                    ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                     ->findOrFail($vendors['mandatory_transport_vendor_id']);
                 $pricing = $this->core->standardBusPricingForGroup($group, $provider);
                 $transportOnlySale = (float) $group->passengers()

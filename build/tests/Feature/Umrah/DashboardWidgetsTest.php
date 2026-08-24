@@ -408,7 +408,7 @@ test('cash_book widget puts a received payment in the in column and a paid payme
         'company_id' => $company->id,
         'vendor_number' => 'VIS-CB',
         'name' => 'Cash Book Vendor',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
     ]);
 
     GroupPayment::create([

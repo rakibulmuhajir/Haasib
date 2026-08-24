@@ -29,7 +29,7 @@ class TransportProviderController extends Controller
 
         return Inertia::render('Umrah/TransportProviders/Index', [
             'company' => $this->companyPayload($company),
-            'providers' => VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->paginate(20),
+            'providers' => VisaVendor::where('company_id', $company->id)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->paginate(20),
             'nextProviderNumber' => $this->service->nextTransportProviderNumber($company->id),
             'canManageProviders' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VENDOR_UPDATE),
         ]);
@@ -95,7 +95,7 @@ class TransportProviderController extends Controller
 
     private function provider(string $companyId, string $id): VisaVendor
     {
-        return VisaVendor::where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($id);
+        return VisaVendor::where('company_id', $companyId)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->findOrFail($id);
     }
 
     private function payload(string $companyId, array $data, ?VisaVendor $record = null): array
@@ -104,7 +104,7 @@ class TransportProviderController extends Controller
             'company_id' => $companyId,
             'vendor_number' => $data['vendor_number'] ?: ($record?->vendor_number ?? $this->service->nextTransportProviderNumber($companyId)),
             'name' => $data['name'],
-            'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+            'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
             'is_company_owned' => (bool) ($data['is_company_owned'] ?? false),
             'is_default' => false,
             'provides_mandatory_transport' => false,

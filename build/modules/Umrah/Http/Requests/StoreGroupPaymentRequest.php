@@ -51,7 +51,7 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
             'agent_id' => ['nullable', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
             'visa_group_id' => ['nullable', 'uuid', $this->existsForCompany(VisaGroup::class, 'Selected group was not found.')],
             'visa_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
-            'transport_vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->whereNull('deleted_at'))],
+            'transport_vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->whereNull('deleted_at'))],
             'hotel_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(HotelVendor::class, 'Selected hotel vendor was not found.')],
             'allocations' => ['sometimes', 'array', 'max:100'],
             'allocations.*.visa_group_id' => [

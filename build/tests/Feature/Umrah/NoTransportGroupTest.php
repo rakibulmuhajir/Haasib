@@ -15,8 +15,8 @@ test('removing group transport clears stale persistence and recalculates totals'
     $company = Company::create(['name' => 'No Transport Test', 'slug' => 'no-transport-test', 'owner_id' => $user->id, 'base_currency' => 'SAR']);
     DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
     $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-NT', 'name' => 'No Transport Agent']);
-    $visaVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'VIS-NT', 'name' => 'Visa Vendor', 'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER]);
-    $transportVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'TRN-NT', 'name' => 'Transport Vendor', 'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER]);
+    $visaVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'VIS-NT', 'name' => 'Visa Vendor', 'service_type' => VisaVendor::SERVICE_VISA_PROVIDER]);
+    $transportVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'TRN-NT', 'name' => 'Transport Vendor', 'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER]);
     $group = VisaGroup::create([
         'company_id' => $company->id, 'agent_id' => $agent->id, 'vendor_id' => $visaVendor->id,
         'mandatory_transport_vendor_id' => $transportVendor->id, 'group_number' => 'UGR-NT', 'name' => 'Visa only group',

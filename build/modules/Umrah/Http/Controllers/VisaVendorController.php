@@ -29,8 +29,8 @@ class VisaVendorController extends Controller
 
         return Inertia::render('Umrah/Vendors/Index', [
             'company' => $this->companyPayload($company),
-            'vendors' => VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->paginate(20),
-            'vendorTypes' => collect(VisaVendor::TYPES)->except(VisaVendor::TYPE_TRANSPORT_PROVIDER),
+            'vendors' => VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->paginate(20),
+            'serviceTypes' => collect(VisaVendor::SERVICE_TYPES)->except(VisaVendor::SERVICE_TRANSPORT_PROVIDER),
             'nextVendorNumber' => $this->service->nextVendorNumber($company->id),
             'canManageVendors' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VENDOR_UPDATE),
         ]);
@@ -42,7 +42,7 @@ class VisaVendorController extends Controller
         $data = $request->validated();
 
         DB::transaction(function () use ($company, $data): void {
-            $makeDefault = $data['vendor_type'] !== VisaVendor::TYPE_TRANSPORT_PROVIDER
+            $makeDefault = $data['service_type'] !== VisaVendor::SERVICE_TRANSPORT_PROVIDER
                 && ((bool) ($data['is_default'] ?? false) || ! VisaVendor::where('company_id', $company->id)->where('is_default', true)->exists());
             if ($makeDefault) {
                 VisaVendor::where('company_id', $company->id)->update(['is_default' => false]);
@@ -56,7 +56,7 @@ class VisaVendorController extends Controller
     public function show(VendorStatementRequest $request, string $companySlug, string $vendor): Response
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $this->service->recalculateVendor($record->id);
 
         return Inertia::render('Umrah/Vendors/Show', [
@@ -71,7 +71,7 @@ class VisaVendorController extends Controller
     public function statementPdf(VendorStatementRequest $request, string $companySlug, string $vendor)
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $this->service->recalculateVendor($record->id);
         $statement = $this->service->vendorStatement($record->fresh(), $request->validated('date_from'), $request->validated('date_to'));
 
@@ -89,7 +89,7 @@ class VisaVendorController extends Controller
         $data = $request->validated();
 
         $vendor = DB::transaction(function () use ($company, $data): VisaVendor {
-            $makeDefault = $data['vendor_type'] !== VisaVendor::TYPE_TRANSPORT_PROVIDER
+            $makeDefault = $data['service_type'] !== VisaVendor::SERVICE_TRANSPORT_PROVIDER
                 && ((bool) ($data['is_default'] ?? false) || ! VisaVendor::where('company_id', $company->id)->where('is_default', true)->exists());
             if ($makeDefault) {
                 VisaVendor::where('company_id', $company->id)->update(['is_default' => false]);
@@ -106,11 +106,11 @@ class VisaVendorController extends Controller
     public function update(UpdateVisaVendorRequest $request, string $companySlug, string $vendor): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $data = $request->validated();
 
         DB::transaction(function () use ($company, $data, $record): void {
-            $makeDefault = $data['vendor_type'] !== VisaVendor::TYPE_TRANSPORT_PROVIDER
+            $makeDefault = $data['service_type'] !== VisaVendor::SERVICE_TRANSPORT_PROVIDER
                 && ((bool) ($data['is_default'] ?? false) || $record->is_default);
             if ($makeDefault) {
                 VisaVendor::where('company_id', $company->id)->where('id', '!=', $record->id)->update(['is_default' => false]);
@@ -124,7 +124,7 @@ class VisaVendorController extends Controller
     public function updateStatus(UpdateVisaVendorStatusRequest $request, string $companySlug, string $vendor): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $active = (bool) $request->validated('is_active');
         if (! $active && $record->is_default) {
             throw ValidationException::withMessages(['vendor' => 'Choose another default visa vendor before deactivating this one.']);
@@ -169,7 +169,7 @@ class VisaVendorController extends Controller
             'company_id' => $companyId,
             'vendor_number' => $data['vendor_number'] ?: ($record?->vendor_number ?? $this->service->nextVendorNumber($companyId)),
             'name' => $data['name'],
-            'vendor_type' => $data['vendor_type'],
+            'service_type' => $data['service_type'],
             'is_company_owned' => false,
             'is_default' => $isDefault,
             'provides_mandatory_transport' => false,

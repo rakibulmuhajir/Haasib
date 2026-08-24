@@ -13,8 +13,8 @@ use App\Modules\Umrah\Models\VisaVendor;
  * "Vendors we owe" — visa, hotel and transport vendors with an open balance.
  *
  * Transport vendors are not a separate model: a "transport vendor" is a
- * umrah.visa_vendors row with vendor_type = transport_provider (see
- * VisaVendor::TYPE_TRANSPORT_PROVIDER, and how GroupTransportItem /
+ * umrah.visa_vendors row with service_type = transport_provider (see
+ * VisaVendor::SERVICE_TRANSPORT_PROVIDER, and how GroupTransportItem /
  * VisaGroup::mandatoryTransportVendor() both point transport_vendor_id at
  * this same table).
  */
@@ -56,12 +56,12 @@ class VendorBalancesWidget implements DashboardWidget
 
         $visaVendors = VisaVendor::where('company_id', $company->id)
             ->where('balance', '<>', 0)
-            ->get(['id', 'vendor_number', 'vendor_id', 'vendor_type', 'balance'])
+            ->get(['id', 'vendor_number', 'vendor_id', 'service_type', 'balance'])
             ->map(fn (VisaVendor $vendor): array => [
                 'id' => $vendor->id,
                 'vendor_number' => $vendor->vendor_number,
                 'name' => $vendor->name,
-                'kind' => $vendor->vendor_type === VisaVendor::TYPE_TRANSPORT_PROVIDER ? 'transport' : 'visa',
+                'kind' => $vendor->service_type === VisaVendor::SERVICE_TRANSPORT_PROVIDER ? 'transport' : 'visa',
                 'balance' => (float) $vendor->balance,
             ]);
 

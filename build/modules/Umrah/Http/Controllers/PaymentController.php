@@ -108,8 +108,8 @@ class PaymentController extends Controller
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderByName()->get(['id', 'customer_id']),
-            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id', 'is_active']),
-            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id', 'is_company_owned', 'is_active']),
+            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id', 'is_active']),
+            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id', 'is_company_owned', 'is_active']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->orderBy('name')->get(['id', 'name', 'is_active']),
             'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,

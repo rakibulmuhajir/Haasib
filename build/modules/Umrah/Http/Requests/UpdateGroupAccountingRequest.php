@@ -21,8 +21,8 @@ class UpdateGroupAccountingRequest extends UmrahFormRequest
         $companyId = app(CompanyContextService::class)->getCompanyId();
 
         return [
-            'vendor_id' => ['required', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
-            'mandatory_transport_vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
+            'vendor_id' => ['required', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'mandatory_transport_vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
             'visa_sale_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'transport_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'discount_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],

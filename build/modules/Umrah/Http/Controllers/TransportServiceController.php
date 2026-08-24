@@ -49,7 +49,7 @@ class TransportServiceController extends Controller
             'packages' => TransportPackage::where('company_id', $company->id)->with('sectors:id,code,name,origin,destination,is_active')->orderBy('name')->get(),
             'fares' => TransportFare::where('company_id', $company->id)->with(['transportVendor:id,vendor_id,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get(),
             'transportVendors' => VisaVendor::where('company_id', $company->id)
-                ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                 ->where('is_active', true)
                 ->orderByName()
                 ->get(['id', 'vendor_id', 'is_company_owned']),

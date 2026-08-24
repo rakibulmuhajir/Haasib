@@ -35,7 +35,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'agent_id' => ['required', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
             'vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query
                 ->where('company_id', $companyId)
-                ->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                ->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                 ->where('is_active', true)
                 ->where('adult_retail_amount', '>', 0)
                 ->where('adult_cost_amount', '>', 0)
@@ -46,7 +46,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
                 Rule::requiredIf($this->input('transport_mode', VisaGroup::TRANSPORT_STANDARD_BUS) === VisaGroup::TRANSPORT_STANDARD_BUS),
                 'nullable',
                 'uuid',
-                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))),
+                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))),
             ],
             'transport_service_id' => ['nullable', 'uuid', $this->existsForCompany(TransportService::class, 'Selected transport service was not found.')],
             'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],

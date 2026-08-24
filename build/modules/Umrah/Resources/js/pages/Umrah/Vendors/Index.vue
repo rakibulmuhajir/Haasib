@@ -45,7 +45,7 @@ const props = defineProps<{
         prev_page_url: string | null;
         next_page_url: string | null;
     };
-    vendorTypes: Record<string, string>;
+    serviceTypes: Record<string, string>;
     nextVendorNumber: string;
     canManageVendors: boolean;
 }>();
@@ -67,7 +67,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const columns = [
     { key: 'vendor_number', label: 'Vendor #', kind: 'ref' as const },
     { key: 'name', label: 'Vendor', kind: 'text' as const },
-    { key: 'vendor_type', label: 'Type', kind: 'text' as const },
+    { key: 'service_type', label: 'Type', kind: 'text' as const },
     { key: 'adult_retail_amount', label: 'Adult retail', kind: 'amount' as const },
     { key: 'adult_cost_amount', label: 'Adult cost', kind: 'amount' as const },
     { key: 'child_retail_amount', label: 'Child retail', kind: 'amount' as const },
@@ -80,7 +80,7 @@ const columns = [
 const form = useForm({
     vendor_number: props.nextVendorNumber,
     name: '',
-    vendor_type: 'government',
+    service_type: 'government',
     is_default: false,
     phone: '',
     email: '',
@@ -146,7 +146,7 @@ const resetForm = () => {
     form.clearErrors();
     form.vendor_number = props.nextVendorNumber;
     form.name = '';
-    form.vendor_type = 'government';
+    form.service_type = 'government';
     form.is_default = false;
     form.phone = '';
     form.email = '';
@@ -169,7 +169,7 @@ const startEdit = (vendor: any) => {
     form.clearErrors();
     form.vendor_number = vendor.vendor_number || '';
     form.name = vendor.name || '';
-    form.vendor_type = vendor.vendor_type || 'government';
+    form.service_type = vendor.service_type || 'government';
     form.is_default = Boolean(vendor.is_default);
     form.phone = vendor.phone || '';
     form.email = vendor.email || '';
@@ -268,11 +268,11 @@ const submit = () => {
                         </div>
                         <div class="space-y-2">
                             <Label>Type</Label>
-                            <Select v-model="form.vendor_type">
+                            <Select v-model="form.service_type">
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
-                                        v-for="(label, value) in vendorTypes"
+                                        v-for="(label, value) in serviceTypes"
                                         :key="value"
                                         :value="value"
                                         >{{ label }}</SelectItem
@@ -320,7 +320,7 @@ const submit = () => {
                             </p>
                         </div>
                         <div
-                            v-if="form.vendor_type !== 'transport_provider'"
+                            v-if="form.service_type !== 'transport_provider'"
                             class="space-y-3 rounded-md border p-3"
                         >
                             <div class="font-medium">Adult Visa Rate</div>
@@ -358,7 +358,7 @@ const submit = () => {
                             </div>
                         </div>
                         <div
-                            v-if="form.vendor_type !== 'transport_provider'"
+                            v-if="form.service_type !== 'transport_provider'"
                             class="space-y-3 rounded-md border p-3"
                         >
                             <div class="font-medium">Child Visa Rate</div>
@@ -436,9 +436,9 @@ const submit = () => {
                             <MetaChip v-if="row.is_default" tone="neutral" class="mt-1">Default</MetaChip>
                         </template>
 
-                        <template #cell-vendor_type="{ row }">
+                        <template #cell-service_type="{ row }">
                             <MetaChip tone="neutral" bare>{{
-                                vendorTypes[row.vendor_type] || row.vendor_type
+                                serviceTypes[row.service_type] || row.service_type
                             }}</MetaChip>
                         </template>
 

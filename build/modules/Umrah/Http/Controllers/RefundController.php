@@ -76,8 +76,8 @@ class RefundController extends Controller
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderByName()->get(['id', 'customer_id']),
-            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
-            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
+            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
+            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'allocationGroups' => collect($this->coreService->paymentAllocationOptions($company->id))
                 ->when($isMember, fn ($options) => $memberAgentId ? $options->where('party_key', 'agent:'.$memberAgentId) : collect())
@@ -118,8 +118,8 @@ class RefundController extends Controller
             if (is_string($partyType) && $this->isUuid($partyId) && array_key_exists($partyType, Refund::PARTY_TYPES)) {
                 $exists = match ($partyType) {
                     Refund::PARTY_AGENT => Agent::where('company_id', $companyId)->whereKey($partyId)->exists(),
-                    Refund::PARTY_VISA_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->exists(),
-                    Refund::PARTY_TRANSPORT_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->exists(),
+                    Refund::PARTY_VISA_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->exists(),
+                    Refund::PARTY_TRANSPORT_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($partyId)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->exists(),
                     Refund::PARTY_HOTEL_VENDOR => HotelVendor::where('company_id', $companyId)->whereKey($partyId)->exists(),
                     default => false,
                 };

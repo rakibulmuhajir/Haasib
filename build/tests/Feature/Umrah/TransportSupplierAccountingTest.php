@@ -45,13 +45,13 @@ test('mandatory and specialized transport costs belong to their transport provid
         'company_id' => $company->id,
         'vendor_number' => 'VIS-TEST',
         'name' => 'Visa Supplier',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
     ]);
     $transportVendor = VisaVendor::create([
         'company_id' => $company->id,
         'vendor_number' => 'TRN-TEST',
         'name' => 'Company Transport',
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
         'is_company_owned' => true,
     ]);
     $group = VisaGroup::create([
@@ -120,13 +120,13 @@ test('group vendors resolve visa and transport suppliers independently', functio
         'company_id' => $company->id,
         'vendor_number' => 'TRN-DEFAULT',
         'name' => 'Default Transport',
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
     ]);
     $visaVendor = VisaVendor::create([
         'company_id' => $company->id,
         'vendor_number' => 'VIS-DEFAULT',
         'name' => 'Default Visa',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'is_default' => true,
     ]);
 
@@ -148,7 +148,7 @@ test('standard bus requires an independent transport provider regardless of visa
         'company_id' => $company->id,
         'vendor_number' => 'VIS-ZERO-BUS',
         'name' => 'Visa Without Included Bus',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'is_default' => true,
         'included_bus_cost_amount' => 0,
     ]);
@@ -161,12 +161,12 @@ test('standard bus requires an independent transport provider regardless of visa
 test('standard bus pricing excludes children when the provider does not charge child fare', function () {
     $company = transportSupplierCompany('transport-child-fare');
     $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-CHILD', 'name' => 'Child Fare Agent']);
-    $visaVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'VIS-CHILD', 'name' => 'Visa Supplier', 'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER]);
+    $visaVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'VIS-CHILD', 'name' => 'Visa Supplier', 'service_type' => VisaVendor::SERVICE_VISA_PROVIDER]);
     $provider = VisaVendor::create([
         'company_id' => $company->id,
         'vendor_number' => 'TRN-CHILD',
         'name' => 'Bus Supplier',
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
         'standard_bus_retail_amount' => 100,
         'standard_bus_cost_amount' => 80,
         'charge_child_fare' => false,

@@ -93,7 +93,7 @@ function fareSeating(Company $company, ?int $capacity, string $suffix): Transpor
         'company_id' => $company->id,
         'vendor_number' => "TRN-GSC-{$suffix}",
         'name' => "Seat Test Provider {$suffix}",
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
     ]);
 
     $service = TransportService::create([

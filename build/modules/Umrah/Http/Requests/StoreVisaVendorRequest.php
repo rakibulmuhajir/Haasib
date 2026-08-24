@@ -23,7 +23,7 @@ class StoreVisaVendorRequest extends UmrahFormRequest
                 $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This vendor number is already used.'),
             ],
             'name' => ['required', 'string', 'max:255'],
-            'vendor_type' => ['required', Rule::in([VisaVendor::TYPE_GOVERNMENT, VisaVendor::TYPE_VISA_PROVIDER, VisaVendor::TYPE_OTHER])],
+            'service_type' => ['required', Rule::in([VisaVendor::SERVICE_GOVERNMENT, VisaVendor::SERVICE_VISA_PROVIDER, VisaVendor::SERVICE_OTHER])],
             'is_default' => ['sometimes', 'boolean'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],

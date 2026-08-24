@@ -27,11 +27,11 @@ function reportFixture(): array
     $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-RPT', 'name' => 'Reporting Agent']);
     $visaVendor = VisaVendor::create([
         'company_id' => $company->id, 'vendor_number' => 'VIS-RPT', 'name' => 'Visa Supplier',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
     ]);
     $transportVendor = VisaVendor::create([
         'company_id' => $company->id, 'vendor_number' => 'TRN-RPT', 'name' => 'Transport Supplier',
-        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
     ]);
     $group = VisaGroup::create([
         'company_id' => $company->id, 'agent_id' => $agent->id, 'vendor_id' => $visaVendor->id,

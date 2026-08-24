@@ -451,11 +451,11 @@ function resolve_route_params(?string $name, ?Company $company, array $companies
             ['report' => 'group-profitability'], null,
         ],
         'umrah.transport-providers.show', 'umrah.transport-providers.statement.pdf' => id_or_skip(
-            VisaVendor::where('company_id', $umrah->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->first(),
+            VisaVendor::where('company_id', $umrah->id)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->first(),
             'transportProvider', 'No transport-provider vendor found for the travel demo company.'
         ),
         'umrah.vendors.show', 'umrah.vendors.statement.pdf' => id_or_skip(
-            VisaVendor::where('company_id', $umrah->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->first(),
+            VisaVendor::where('company_id', $umrah->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->first(),
             'vendor', 'No non-transport vendor found for the travel demo company.'
         ),
         'umrah.vouchers.show', 'umrah.vouchers.edit', 'umrah.vouchers.accounting.show', 'umrah.vouchers.pdf' => id_or_skip(

@@ -48,8 +48,8 @@ class StoreRefundRequest extends UmrahFormRequest
                 function (string $attribute, mixed $value, Closure $fail) use ($companyId, $partyType): void {
                     $exists = match ($partyType) {
                         Refund::PARTY_AGENT => Agent::where('company_id', $companyId)->whereKey($value)->whereNull('deleted_at')->exists(),
-                        Refund::PARTY_VISA_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($value)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->whereNull('deleted_at')->exists(),
-                        Refund::PARTY_TRANSPORT_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($value)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->whereNull('deleted_at')->exists(),
+                        Refund::PARTY_VISA_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($value)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->whereNull('deleted_at')->exists(),
+                        Refund::PARTY_TRANSPORT_VENDOR => VisaVendor::where('company_id', $companyId)->whereKey($value)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->whereNull('deleted_at')->exists(),
                         Refund::PARTY_HOTEL_VENDOR => HotelVendor::where('company_id', $companyId)->whereKey($value)->whereNull('deleted_at')->exists(),
                         default => false,
                     };

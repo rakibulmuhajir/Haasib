@@ -20,7 +20,7 @@ test('group accounting exposes anonymous age and service aggregates', function (
         'company_id' => $company->id,
         'vendor_number' => 'VIS-ACC',
         'name' => 'Accounting Vendor',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'is_default' => true,
         'provides_mandatory_transport' => true,
     ]);

@@ -94,7 +94,7 @@ function serviceChoiceGroup(Company $company, string $transportMode, bool $inclu
         'company_id' => $company->id,
         'vendor_number' => 'VIS-'.strtoupper(str()->random(5)),
         'name' => 'Service Choice Visa Vendor',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER,
         'is_active' => true,
         'is_default' => true,
     ]);

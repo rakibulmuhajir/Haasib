@@ -163,7 +163,7 @@ const agentForm = useForm({
 const vendorForm = useForm({
     vendor_number: '',
     name: '',
-    vendor_type: 'visa_provider',
+    service_type: 'visa_provider',
     is_default: false,
     phone: '',
     email: '',
@@ -593,7 +593,7 @@ const createVendor = () => {
         preserveScroll: true,
         onSuccess: () => {
             vendorForm.reset();
-            vendorForm.vendor_type = 'visa_provider';
+            vendorForm.service_type = 'visa_provider';
             vendorForm.is_default = false;
             vendorForm.adult_retail_amount = '0';
             vendorForm.adult_cost_amount = '0';
@@ -955,7 +955,7 @@ const submit = () => {
                                     <div class="space-y-2">
                                         <Label>Type</Label>
                                         <Select
-                                            v-model="vendorForm.vendor_type"
+                                            v-model="vendorForm.service_type"
                                         >
                                             <SelectTrigger
                                                 ><SelectValue

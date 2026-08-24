@@ -867,8 +867,8 @@ class TravelReportService
             $definitions[] = $this->selectFilter('agent_id', 'Agent', Agent::where('company_id', $company->id)->orderByName()->get(['id', 'customer_id'])->pluck('name', 'id')->all());
         }
         if ($report === 'group-profitability') {
-            $definitions[] = $this->selectFilter('visa_vendor_id', 'Visa Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
-            $definitions[] = $this->selectFilter('transport_vendor_id', 'Transport Vendor', VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
+            $definitions[] = $this->selectFilter('visa_vendor_id', 'Visa Vendor', VisaVendor::where('company_id', $company->id)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
+            $definitions[] = $this->selectFilter('transport_vendor_id', 'Transport Vendor', VisaVendor::where('company_id', $company->id)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id'])->pluck('name', 'id')->all());
             $definitions[] = $this->selectFilter('payment_status', 'Payment', ['paid' => 'Paid', 'partially_paid' => 'Partially paid', 'unpaid' => 'Unpaid']);
         }
         if ($report === 'agent-statement') {

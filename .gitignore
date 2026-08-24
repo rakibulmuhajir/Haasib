@@ -1,6 +1,13 @@
-# Dependency directories
-node_modules/
-vendor/
+# Dependency directories.
+#
+# Anchored, because an unanchored "vendor/" matches a directory of that name at
+# any depth -- and on a case-insensitive checkout, any capitalisation of it. That
+# silently swallowed modules/Accounting/Actions/Vendor, so the five vendor
+# command handlers could never be committed and vendor creation answered 500 in
+# production against a class that existed on every developer's disk. Composer's
+# own directory is covered here and again by build/.gitignore.
+/node_modules
+/vendor
 
 # Environment files
 *.env

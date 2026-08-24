@@ -21,10 +21,23 @@ class StoreVendorRequest extends BaseFormRequest
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $companyBaseCurrency = app(CompanyContextService::class)->getCompany()?->base_currency;
 
-        $vendorNumberRule = Rule::unique('acct.vendors', 'vendor_number')
+        /*
+         * The table has to name the connection as well as the schema. Laravel
+         * splits a dotted table on its FIRST dot into connection and table, and
+         * config/database.php happens to define a connection called "acct" -- so
+         * "acct.vendors" was read as connection "acct", table "vendors", and the
+         * check ran on a second Postgres session. That session carries neither
+         * the request's RLS context nor, under test, the open transaction, so it
+         * saw no rows and the rule passed on every duplicate. Naming the default
+         * connection first leaves "acct.vendors" as the table, which is what was
+         * meant all along.
+         */
+        $vendors = config('database.default').'.acct.vendors';
+
+        $vendorNumberRule = Rule::unique($vendors, 'vendor_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
-        $emailRule = Rule::unique('acct.vendors', 'email')
+        $emailRule = Rule::unique($vendors, 'email')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         $baseCurrencyRule = $companyBaseCurrency
@@ -53,7 +66,7 @@ class StoreVendorRequest extends BaseFormRequest
             'ap_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(config('database.default').'.acct.accounts', 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],

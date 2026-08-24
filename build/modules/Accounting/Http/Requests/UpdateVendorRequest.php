@@ -21,11 +21,17 @@ class UpdateVendorRequest extends BaseFormRequest
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $vendorId = $this->route('vendor');
 
-        $vendorNumberRule = Rule::unique('acct.vendors', 'vendor_number')
+        // Named with the connection in front for the reason spelled out in
+        // StoreVendorRequest: a bare "acct.vendors" is read as the "acct"
+        // connection, and the check silently runs against a session that cannot
+        // see the row it is looking for.
+        $vendors = config('database.default').'.acct.vendors';
+
+        $vendorNumberRule = Rule::unique($vendors, 'vendor_number')
             ->ignore($vendorId)
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
-        $emailRule = Rule::unique('acct.vendors', 'email')
+        $emailRule = Rule::unique($vendors, 'email')
             ->ignore($vendorId)
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
@@ -53,7 +59,7 @@ class UpdateVendorRequest extends BaseFormRequest
                 'sometimes',
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(config('database.default').'.acct.accounts', 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],

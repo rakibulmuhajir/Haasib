@@ -284,6 +284,9 @@ class VisaGroupController extends Controller
         }
         $canManageVendors = ! $this->access->isAgentMember($company->id, $request->user());
         $record->makeHidden('status');
+        // The edit form seeds its vehicle rows from these, so an untouched
+        // save writes back what the group already has rather than clearing it.
+        $record->load('transportItems');
 
         return Inertia::render('Umrah/Groups/Edit', [
             'company' => $this->companyPayload($company),
@@ -292,6 +295,14 @@ class VisaGroupController extends Controller
             'canManageVendors' => $canManageVendors,
             'vendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderByName()->get(['id', 'vendor_id', 'is_default']) : [],
             'transportVendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id', 'is_company_owned', 'standard_bus_retail_amount', 'standard_bus_cost_amount', 'charge_child_fare']) : [],
+            // Only a specialized group can edit vehicles, and only a
+            // non-agent prices them -- an agent member gets an empty list
+            // and no transport section, the same way they get no vendors.
+            'transportFares' => $canManageVendors && $record->transport_mode === VisaGroup::TRANSPORT_SPECIALIZED
+                ? TransportFare::where('company_id', $company->id)->where('is_active', true)
+                    ->with(['transportVendor:id,vendor_id', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])
+                    ->orderBy('name')->get()
+                : [],
         ]);
     }
 
@@ -350,7 +361,7 @@ class VisaGroupController extends Controller
         ]);
 
         $financialBefore = $record->only(['visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'visa_cost_amount', 'transport_cost_amount']);
-        DB::transaction(function () use ($request, $record, &$changes, $oldValues, $data, $hadStarted, $financialBefore, $includesVisaChanged) {
+        DB::transaction(function () use ($request, $record, &$changes, $oldValues, $data, $hadStarted, $financialBefore, $includesVisaChanged, $isAgent) {
             if ($includesVisaChanged) {
                 // The group decided once what it sells; every passenger already
                 // in it was created agreeing with the old answer. Leaving their
@@ -383,6 +394,13 @@ class VisaGroupController extends Controller
                     'transport_amount' => round($pricing['sale'] + (float) $record->passengers()->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)->sum('transport_charge_amount'), 2),
                     'transport_cost_amount' => $pricing['cost'],
                 ];
+            } elseif ($data['transport_mode'] === VisaGroup::TRANSPORT_SPECIALIZED && ! $isAgent && array_key_exists('transport_items', $data)) {
+                // An agent member reaches this route for their own groups but
+                // never prices the work -- the vendor block above is skipped
+                // for the same reason, and the edit page hides the vehicles
+                // from them. An absent list means the operator changed
+                // something else and the vehicles stand as they are.
+                $changes = [...$changes, ...$this->service->syncGroupTransportItems($record, $data['transport_items'])];
             }
             $record->update($changes);
             $this->service->recalculateGroup($record->fresh());
@@ -391,7 +409,12 @@ class VisaGroupController extends Controller
                 'after_travel_start' => $hadStarted,
             ]);
         });
-        foreach (array_unique([...$oldVendorIds, $record->fresh()->vendor_id, $record->fresh()->mandatory_transport_vendor_id]) as $vendorId) {
+        // $oldVendorIds already carries the transport suppliers the group had
+        // before this save. Re-reading them afterwards is what balances a
+        // vehicle moved from one supplier to another: without it the supplier
+        // that gained the work keeps a payable that never rose.
+        $after = $record->fresh();
+        foreach (array_unique([...$oldVendorIds, $after->vendor_id, $after->mandatory_transport_vendor_id, ...$after->transportItems()->pluck('transport_vendor_id')->all()]) as $vendorId) {
             if ($vendorId) {
                 $this->service->recalculateVendor($vendorId);
             }

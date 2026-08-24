@@ -3,6 +3,8 @@
 namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
+use App\Modules\Umrah\Models\Driver;
+use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\TravelAccessService;
@@ -34,6 +36,25 @@ class UpdateVisaGroupRequest extends UmrahFormRequest
             || $access->agentCanEditGroup($companyId, $this->user(), $group);
     }
 
+    /**
+     * Only transport_items is derived here, unlike StoreVisaGroupRequest which
+     * runs the whole of deriveGroupServiceFields(). This route accepts no
+     * passengers, and merging an empty passenger list would tell the request
+     * a group had none.
+     *
+     * The guard matters as much as the merge: merging an absent key would make
+     * it present, and a present-but-empty list is how this request is told to
+     * clear the group's vehicles. Renaming a group must not delete its buses.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('transport_items')) {
+            return;
+        }
+
+        $this->merge(['transport_items' => $this->withSeatedVehicleCounts($this->input('transport_items', []))]);
+    }
+
     public function rules(): array
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
@@ -61,7 +82,27 @@ class UpdateVisaGroupRequest extends UmrahFormRequest
             'hotel_madinah' => ['nullable', 'string', 'max:255'],
             'hotel_notes' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
+            // Absent means unchanged; present means "these are the group's
+            // vehicles now". Present and empty is refused rather than obeyed --
+            // a specialized group with no vehicles sells transport it cannot
+            // provide. Removing transport is what self-arranged mode is for,
+            // and that path resets the passengers too.
+            'transport_items' => ['sometimes', 'array', 'min:1'],
+            'transport_items.*.transport_fare_id' => ['required', 'uuid', 'distinct', $this->existsForCompany(TransportFare::class, 'Selected transport fare was not found.')],
+            'transport_items.*.driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
+            'transport_items.*.scheduled_at' => ['nullable', 'date'],
+            'transport_items.*.terminal' => ['required', Rule::in(['standard', 'hajj'])],
+            'transport_items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
+            'transport_items.*.passenger_count' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'transport_items.*.notes' => ['nullable', 'string', 'max:500'],
             'override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'transport_items.min' => 'A specialized transport group must keep at least one vehicle. Choose self-arranged transport to remove transport entirely.',
         ];
     }
 }

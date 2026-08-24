@@ -526,6 +526,62 @@ class UmrahCoreService
         return $group->fresh();
     }
 
+    /**
+     * Replaces a specialized group's vehicles with the set the operator just
+     * submitted, and reports back the group columns that follow from them.
+     *
+     * Every item is repriced through resolveTransportItems() rather than
+     * trusting the amounts on the payload, so a vehicle corrected on the edit
+     * page costs exactly what the same vehicle would have cost had it been
+     * entered correctly on the create page -- hajj-terminal surcharges and
+     * charging basis included.
+     *
+     * The existing items are replaced wholesale rather than reconciled row by
+     * row. Nothing outside this module holds a transport item's id: no payment
+     * allocates to one, no ledger line references one. The replaced rows are
+     * soft-deleted, so what the group once charged for stays readable.
+     *
+     * The caller merges the returned columns into the same update() that
+     * carries the rest of its changes, so one save produces one pair of UGA
+     * and UGC adjustments rather than one per vehicle.
+     *
+     * @return array<string, mixed>
+     */
+    public function syncGroupTransportItems(VisaGroup $group, array $items): array
+    {
+        $resolved = $this->resolveTransportItems($group->company_id, $items, [], (int) $group->passenger_count);
+
+        $group->transportItems()->delete();
+
+        foreach ($resolved as $item) {
+            unset($item['pax_capacity']);
+            GroupTransportItem::create([
+                ...$item,
+                'company_id' => $group->company_id,
+                'visa_group_id' => $group->id,
+            ]);
+        }
+
+        $primary = $resolved[0] ?? null;
+
+        return [
+            'transport_service_id' => $primary['transport_service_id'] ?? null,
+            'driver_id' => $primary['driver_id'] ?? null,
+            'transport_quantity' => (int) ($primary['quantity'] ?? 0),
+            'transport_pax_capacity' => $primary['pax_capacity'] ?? null,
+            // Transport-only passengers are charged for their seat directly,
+            // and applyServiceDefaults() folds that into transport_amount
+            // alongside the vehicles at create time. Recomputing the vehicles
+            // without it would quietly drop those charges off the group.
+            'transport_amount' => round(
+                (float) $group->passengers()->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)->sum('transport_charge_amount')
+                + array_sum(array_column($resolved, 'total_sale_amount')),
+                2,
+            ),
+            'transport_cost_amount' => round(array_sum(array_column($resolved, 'total_cost_amount')), 2),
+        ];
+    }
+
     public function removeGroupTransport(VisaGroup $group): VisaGroup
     {
         $group->transportItems()->delete();

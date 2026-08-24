@@ -5,6 +5,7 @@ namespace App\Modules\Umrah\Services;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\VendorCreditApplication;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\GroupTransportItem;
@@ -721,8 +722,24 @@ class TravelReportService
     }
 
     /**
-     * A row per supplier: bills raised, vendor credits raised against
-     * cancellations, amounts paid, and what is left outstanding. The
+     * A row per supplier: bills raised, credits applied against them, cash
+     * paid, and what is left outstanding.
+     *
+     * The three settlement columns are read the way the ledger records them,
+     * not recomputed. A bill's paid_amount counts everything that settled it,
+     * cash and applied credit alike -- CancelTicketHandler writes
+     * `total_amount - balance` when it applies a cancellation credit -- so
+     * cash paid is that figure less the credit, and outstanding is the bill's
+     * own balance. Subtracting the credit from a paid_amount that already
+     * contains it billed the supplier twice for the same return and drove
+     * outstanding below zero once the credits outgrew the cash.
+     *
+     * Credits are counted as applied rather than as raised, because a credit
+     * raised against an already-settled bill reduces a future payable and has
+     * not settled this one. That keeps the row arithmetic legible: bills
+     * raised, less credits applied, less cash paid, is outstanding.
+     *
+     * The
      * `clearing_balance` figure sits outside the row set on purpose -- it is
      * the 2350 account's own debit-minus-credit balance across the whole
      * company, not a per-supplier or per-period sum, so it is unaffected by
@@ -738,34 +755,26 @@ class TravelReportService
         $bookings = TicketBooking::where('company_id', $company->id)
             ->whereBetween('booking_date', [$filters['start'], $filters['end']])
             ->when(! empty($filters['agent_id']), fn ($query) => $query->where('agent_id', $filters['agent_id']))
-            ->with(['supplierVendor:id,name', 'bill:id,total_amount,paid_amount', 'tickets:id,ticket_booking_id'])
+            ->with(['supplierVendor:id,name', 'bill:id,total_amount,paid_amount,balance'])
             ->get();
 
-        $ticketToBooking = [];
-        foreach ($bookings as $booking) {
-            foreach ($booking->tickets as $ticket) {
-                $ticketToBooking[$ticket->id] = $booking->id;
-            }
-        }
+        $creditsByBill = VendorCreditApplication::whereIn('bill_id', $bookings->pluck('bill.id')->filter()->all())
+            ->groupBy('bill_id')
+            ->selectRaw('bill_id, sum(amount_applied) as applied')
+            ->pluck('applied', 'bill_id');
 
-        $vendorCreditsByBooking = TicketCancellation::where('company_id', $company->id)
-            ->whereIn('ticket_id', array_keys($ticketToBooking))
-            ->with('supplierVendorCredit:id,amount')
-            ->get()
-            ->groupBy(fn (TicketCancellation $cancellation) => $ticketToBooking[$cancellation->ticket_id] ?? null)
-            ->map(fn (Collection $group) => (float) $group->sum(fn (TicketCancellation $cancellation) => (float) ($cancellation->supplierVendorCredit->amount ?? 0)));
-
-        $rows = $bookings->groupBy('supplier_vendor_id')->map(function (Collection $group) use ($vendorCreditsByBooking): array {
+        $rows = $bookings->groupBy('supplier_vendor_id')->map(function (Collection $group) use ($creditsByBill): array {
             $billsRaised = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->total_amount ?? 0)), 2);
-            $paid = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->paid_amount ?? 0)), 2);
-            $vendorCredits = round((float) $group->sum(fn (TicketBooking $booking) => $vendorCreditsByBooking[$booking->id] ?? 0), 2);
+            $settled = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->paid_amount ?? 0)), 2);
+            $credits = round((float) $group->sum(fn (TicketBooking $booking) => (float) ($creditsByBill[$booking->bill?->id] ?? 0)), 2);
 
             return [
                 'supplier' => $group->first()->supplierVendor?->name,
                 'bills_raised' => $billsRaised,
-                'vendor_credits' => $vendorCredits,
-                'paid' => $paid,
-                'outstanding' => round($billsRaised - $vendorCredits - $paid, 2),
+                'vendor_credits' => $credits,
+                // What settled the bill, less the part of it that was credit.
+                'paid' => round($settled - $credits, 2),
+                'outstanding' => round((float) $group->sum(fn (TicketBooking $booking) => (float) ($booking->bill->balance ?? 0)), 2),
             ];
         })->values();
 
@@ -782,16 +791,16 @@ class TravelReportService
             'summary' => $this->moneySummary($company, [
                 'Suppliers' => $rows->count(),
                 'Bills raised' => $rows->sum('bills_raised'),
-                'Vendor credits' => $rows->sum('vendor_credits'),
-                'Paid' => $rows->sum('paid'),
+                'Credits applied' => $rows->sum('vendor_credits'),
+                'Cash paid' => $rows->sum('paid'),
                 'Outstanding' => $rows->sum('outstanding'),
                 'Clearing balance (control -- should read zero)' => $clearingBalance,
             ], ['Suppliers']),
             'columns' => [
                 $this->column('supplier', 'Supplier'),
                 $this->column('bills_raised', 'Bills Raised', 'money'),
-                $this->column('vendor_credits', 'Vendor Credits', 'money'),
-                $this->column('paid', 'Paid', 'money'),
+                $this->column('vendor_credits', 'Credits Applied', 'money'),
+                $this->column('paid', 'Cash Paid', 'money'),
                 $this->column('outstanding', 'Outstanding', 'money'),
             ],
             'rows' => $rows->all(),

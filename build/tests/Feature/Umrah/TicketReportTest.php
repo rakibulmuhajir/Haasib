@@ -2,6 +2,8 @@
 
 use App\Modules\Umrah\Services\TravelReportService;
 
+require_once __DIR__.'/TicketingFixtures.php';
+
 /**
  * The plan's own pseudocode hits `/{company}/reports/...` with `from`/`to`
  * query params and reads `report.totals.*`. Neither exists: every Umrah
@@ -88,4 +90,52 @@ it('lets a manager reach the ticket sales report over HTTP', function () {
             ->component('Umrah/Reports/Index')
             ->where('report.key', 'ticket-sales')
             ->has('report.rows', 3));
+});
+
+it('counts a cancellation credit against the supplier bill once, not twice', function () {
+    $f = ticketingSeveralSoldTickets();
+
+    // Three bookings at 91,000 supplier cost each, then one cancelled with
+    // 85,000 returned. The credit is applied to that booking's bill, which
+    // is how CancelTicketHandler settles it -- paid_amount becomes
+    // total_amount less the remaining balance.
+    ticketingCancelOneOf($f, buyerBack: 80_000, supplierBack: 85_000);
+
+    $report = app(TravelReportService::class)->build(
+        $f->company,
+        $f->manager,
+        'ticket-supplier-reconciliation',
+        ['start' => '2026-09-01', 'end' => '2026-09-30', 'per_page' => 25],
+    );
+
+    $row = $report['rows'][0];
+
+    // 273,000 billed, 85,000 of it settled by credit, nothing paid in cash.
+    // Outstanding is the bills' own balance. Subtracting the credit from a
+    // paid figure that already contained it reported 103,000 here, and went
+    // negative once the credits outgrew the cash.
+    expect($row['bills_raised'])->toBe(273_000.00)
+        ->and($row['vendor_credits'])->toBe(85_000.00)
+        ->and($row['paid'])->toBe(0.0)
+        ->and($row['outstanding'])->toBe(188_000.00);
+});
+
+it('leaves the reconciliation row adding up', function () {
+    $f = ticketingSeveralSoldTickets();
+    ticketingCancelOneOf($f, buyerBack: 80_000, supplierBack: 85_000);
+
+    $report = app(TravelReportService::class)->build(
+        $f->company,
+        $f->manager,
+        'ticket-supplier-reconciliation',
+        ['start' => '2026-09-01', 'end' => '2026-09-30', 'per_page' => 25],
+    );
+
+    // The report is a reconciliation, so its columns have to reconcile:
+    // billed, less what credit settled, less what cash settled, is what is
+    // left. Any future column that stops obeying this is the same defect.
+    foreach ($report['rows'] as $row) {
+        expect(round($row['bills_raised'] - $row['vendor_credits'] - $row['paid'], 2))
+            ->toBe($row['outstanding']);
+    }
 });

@@ -32,7 +32,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->backfillCustomers();
+        $this->withoutRowLevelSecurity(fn () => $this->backfillCustomers());
 
         /*
          * Dropped by qualified name rather than through the Blueprint, which
@@ -54,6 +54,36 @@ return new class extends Migration
             $table->unique('customer_id');
             $table->dropColumn(['name', 'phone', 'email', 'logo_url']);
         });
+    }
+
+    /**
+     * Run a data pass that is allowed to see every company's rows.
+     *
+     * umrah.agents is one of the 39 tables carrying FORCE ROW LEVEL SECURITY,
+     * which subjects even the owning role to the isolation policy. A migration
+     * has no company in context, so without this the backfill's SELECT matches
+     * nothing, its UPDATE writes nothing, and the pass reports success having
+     * done nothing at all -- and then ALTER TABLE, which is DDL and reads every
+     * row regardless of any policy, fails on the rows the backfill never saw.
+     * That is exactly how this migration failed in production on 2026-08-24.
+     *
+     * The policy's own escape hatch is app.is_super_admin, so that is what gets
+     * set rather than dropping FORCE and restoring it: a failure here leaves a
+     * session setting behind, not a table with its isolation switched off.
+     *
+     * Set at session scope rather than SET LOCAL, because SET LOCAL outside a
+     * transaction silently does nothing; the finally is what puts it back, and
+     * it runs whether the pass returned or threw.
+     */
+    private function withoutRowLevelSecurity(callable $work): void
+    {
+        DB::statement("SELECT set_config('app.is_super_admin', 'true', false)");
+
+        try {
+            $work();
+        } finally {
+            DB::statement("SELECT set_config('app.is_super_admin', 'false', false)");
+        }
     }
 
     /**
@@ -150,15 +180,19 @@ return new class extends Migration
         });
 
         // Put the party facts back where they were, so the old code can read
-        // them, before the column stops being guaranteed.
-        DB::statement('
-            UPDATE umrah.agents a
-               SET name = c.name, phone = c.phone, email = c.email, logo_url = c.logo_url
-              FROM acct.customers c
-             WHERE c.id = a.customer_id
-        ');
+        // them, before the column stops being guaranteed. Under the same
+        // bypass as up(): a rollback that silently restored nothing would leave
+        // every agent nameless and then make the column NOT NULL.
+        $this->withoutRowLevelSecurity(function (): void {
+            DB::statement('
+                UPDATE umrah.agents a
+                   SET name = c.name, phone = c.phone, email = c.email, logo_url = c.logo_url
+                  FROM acct.customers c
+                 WHERE c.id = a.customer_id
+            ');
 
-        DB::statement("UPDATE umrah.agents SET name = '' WHERE name IS NULL");
+            DB::statement("UPDATE umrah.agents SET name = '' WHERE name IS NULL");
+        });
         DB::statement('ALTER TABLE umrah.agents ALTER COLUMN name SET NOT NULL');
         DB::statement('ALTER TABLE umrah.agents ALTER COLUMN customer_id DROP NOT NULL');
 

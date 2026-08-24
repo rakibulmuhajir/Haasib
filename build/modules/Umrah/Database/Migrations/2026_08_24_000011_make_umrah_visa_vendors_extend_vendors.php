@@ -47,7 +47,7 @@ return new class extends Migration
                 ->cascadeOnUpdate();
         });
 
-        $this->backfillVendors();
+        $this->withoutRowLevelSecurity(fn () => $this->backfillVendors());
 
         DB::statement('ALTER TABLE umrah.visa_vendors ALTER COLUMN vendor_id SET NOT NULL');
 
@@ -57,6 +57,36 @@ return new class extends Migration
             $table->unique('vendor_id');
             $table->dropColumn(['name', 'phone', 'email', 'logo_url']);
         });
+    }
+
+    /**
+     * Run a data pass that is allowed to see every company's rows.
+     *
+     * umrah.visa_vendors carries FORCE ROW LEVEL SECURITY, which subjects even
+     * the owning role to the isolation policy. A migration has no company in
+     * context, so without this the backfill's SELECT matches nothing and the
+     * pass reports success having done nothing -- and then ALTER TABLE, which
+     * is DDL and reads every row regardless of any policy, fails on the rows
+     * the backfill never saw. The sibling migration 2026_08_24_000010 failed
+     * in production this way; this one would have failed next.
+     *
+     * The policy's own escape hatch is app.is_super_admin, so that is what gets
+     * set rather than dropping FORCE and restoring it: a failure here leaves a
+     * session setting behind, not a table with its isolation switched off.
+     *
+     * Set at session scope rather than SET LOCAL, because SET LOCAL outside a
+     * transaction silently does nothing; the finally is what puts it back, and
+     * it runs whether the pass returned or threw.
+     */
+    private function withoutRowLevelSecurity(callable $work): void
+    {
+        DB::statement("SELECT set_config('app.is_super_admin', 'true', false)");
+
+        try {
+            $work();
+        } finally {
+            DB::statement("SELECT set_config('app.is_super_admin', 'false', false)");
+        }
     }
 
     /**
@@ -144,15 +174,19 @@ return new class extends Migration
         });
 
         // Put the supplier's details back where they were, so the old code can
-        // read them, before the link stops being guaranteed.
-        DB::statement('
-            UPDATE umrah.visa_vendors v
-               SET name = a.name, phone = a.phone, email = a.email, logo_url = a.logo_url
-              FROM acct.vendors a
-             WHERE a.id = v.vendor_id
-        ');
+        // read them, before the link stops being guaranteed. Under the same
+        // bypass as up(): a rollback that silently restored nothing would leave
+        // every vendor nameless and then make the column NOT NULL.
+        $this->withoutRowLevelSecurity(function (): void {
+            DB::statement('
+                UPDATE umrah.visa_vendors v
+                   SET name = a.name, phone = a.phone, email = a.email, logo_url = a.logo_url
+                  FROM acct.vendors a
+                 WHERE a.id = v.vendor_id
+            ');
 
-        DB::statement("UPDATE umrah.visa_vendors SET name = '' WHERE name IS NULL");
+            DB::statement("UPDATE umrah.visa_vendors SET name = '' WHERE name IS NULL");
+        });
         DB::statement('ALTER TABLE umrah.visa_vendors ALTER COLUMN name SET NOT NULL');
 
         Schema::table('umrah.visa_vendors', function (Blueprint $table) {

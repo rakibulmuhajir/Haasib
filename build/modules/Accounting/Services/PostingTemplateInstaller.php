@@ -64,7 +64,75 @@ class PostingTemplateInstaller
                 'EXPENSE' => $company->expense_account_id,
                 'TAX_RECEIVABLE' => $company->purchase_tax_receivable_account_id,
             ], $userId);
+
+            $this->ensureTicketTemplates($company, $userId);
         });
+    }
+
+    /**
+     * The four ticket templates, kept apart from the six above because they are
+     * conditional. Their roles are backed by dedicated accounts rather than the
+     * company's *_account_id columns, and a company whose chart of accounts has
+     * no ticket accounts is a company not running the module -- installing a
+     * template with no lines for it would replace "no template configured" with
+     * the far more confusing "template is missing the CLEARING role mapping".
+     * So when the accounts are absent, nothing is written at all.
+     */
+    private function ensureTicketTemplates(Company $company, ?string $userId): void
+    {
+        $ticket = $this->resolveTicketAccountIds($company);
+
+        // Every ticket posting needs the clearing account: it is the account the
+        // supplier side of a ticket sits in between invoice and bill.
+        if (empty($ticket['2350'])) {
+            return;
+        }
+
+        $this->ensureTemplate($company, 'TICKET_INVOICE', 'Default Ticket Invoice', [
+            'AR' => $company->ar_account_id,
+            'CLEARING' => $ticket['2350'],
+            'REVENUE' => $ticket['4130'],
+            'SERVICE_FEE' => $ticket['4140'],
+            'DISCOUNT_GIVEN' => $ticket['4150'],
+            'ROUNDING' => $ticket['9900'],
+        ], $userId);
+
+        $this->ensureTemplate($company, 'TICKET_BILL', 'Default Ticket Bill', [
+            'AP' => $company->ap_account_id,
+            'CLEARING' => $ticket['2350'],
+        ], $userId);
+
+        $this->ensureTemplate($company, 'TICKET_CREDIT_NOTE', 'Default Ticket Credit Note', [
+            'AR' => $company->ar_account_id,
+            'CANCELLATION_ADJUSTMENT' => $ticket['4160'],
+        ], $userId);
+
+        $this->ensureTemplate($company, 'TICKET_VENDOR_CREDIT', 'Default Ticket Vendor Credit', [
+            'AP' => $company->ap_account_id,
+            'CANCELLATION_ADJUSTMENT' => $ticket['4160'],
+        ], $userId);
+    }
+
+    /**
+     * The six accounts 2026_08_23_000001_add_ticket_accounts_to_existing_companies
+     * installs, by code. Codes rather than names because a company may rename an
+     * account but the code is what the COA pack keys on.
+     *
+     * @return array<string, string|null>
+     */
+    private function resolveTicketAccountIds(Company $company): array
+    {
+        $codes = ['2350', '4130', '4140', '4150', '4160', '9900'];
+
+        $found = Account::where('company_id', $company->id)
+            ->whereIn('code', $codes)
+            ->where('is_active', true)
+            ->pluck('id', 'code');
+
+        return array_combine($codes, array_map(
+            fn (string $code) => $found[$code] ?? null,
+            $codes,
+        ));
     }
 
     private function resolveDiscountReceivedAccountId(Company $company): ?string

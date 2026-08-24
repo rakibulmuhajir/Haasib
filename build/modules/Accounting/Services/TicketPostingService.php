@@ -23,6 +23,22 @@ final class TicketPostingService
 {
     use ResolvesPostingTemplates;
 
+    /*
+     * PostingService installs the default templates before every posting, so a
+     * company that has never posted a given document type gets one on first use
+     * rather than an error. This service resolved templates without doing that,
+     * which is why the first ticket booking on any company answered
+     *
+     *   No active default posting template for TICKET_INVOICE.
+     *
+     * even though the six accounts those templates map to had been installed on
+     * every company by migration. Following the same pattern here means the four
+     * ticket templates arrive the same way the other six always have.
+     */
+    public function __construct(
+        private readonly PostingTemplateInstaller $templateInstaller,
+    ) {}
+
     public function postTicketInvoice(Invoice $invoice, TicketSaleAmounts $amounts): Transaction
     {
         $invoice->loadMissing(['customer', 'company']);
@@ -33,6 +49,7 @@ final class TicketPostingService
         }
 
         $transactionDate = $invoice->invoice_date ?? now();
+        $this->templateInstaller->ensureDefaults($company);
         $template = $this->resolveTemplate($company->id, 'TICKET_INVOICE', $transactionDate);
         $roleAccounts = $this->roleAccounts($template);
 
@@ -125,6 +142,7 @@ final class TicketPostingService
         }
 
         $transactionDate = $bill->bill_date ?? now();
+        $this->templateInstaller->ensureDefaults($company);
         $template = $this->resolveTemplate($company->id, 'TICKET_BILL', $transactionDate);
         $roleAccounts = $this->roleAccounts($template);
 
@@ -194,6 +212,7 @@ final class TicketPostingService
         }
 
         $transactionDate = $note->credit_date ?? now();
+        $this->templateInstaller->ensureDefaults($company);
         $template = $this->resolveTemplate($company->id, 'TICKET_CREDIT_NOTE', $transactionDate);
         $roleAccounts = $this->roleAccounts($template);
 
@@ -254,6 +273,7 @@ final class TicketPostingService
         }
 
         $transactionDate = $credit->credit_date ?? now();
+        $this->templateInstaller->ensureDefaults($company);
         $template = $this->resolveTemplate($company->id, 'TICKET_VENDOR_CREDIT', $transactionDate);
         $roleAccounts = $this->roleAccounts($template);
 

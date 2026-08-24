@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -22,22 +23,20 @@ class StoreVendorRequest extends BaseFormRequest
         $companyBaseCurrency = app(CompanyContextService::class)->getCompany()?->base_currency;
 
         /*
-         * The table has to name the connection as well as the schema. Laravel
-         * splits a dotted table on its FIRST dot into connection and table, and
-         * config/database.php happens to define a connection called "acct" -- so
-         * "acct.vendors" was read as connection "acct", table "vendors", and the
-         * check ran on a second Postgres session. That session carries neither
-         * the request's RLS context nor, under test, the open transaction, so it
-         * saw no rows and the rule passed on every duplicate. Naming the default
-         * connection first leaves "acct.vendors" as the table, which is what was
-         * meant all along.
+         * The model class, not the string 'acct.vendors'. Laravel splits a
+         * dotted table on its FIRST dot into connection and table, and
+         * config/database.php defines a connection called "acct" -- so
+         * 'acct.vendors' was read as connection "acct", table "vendors", and the
+         * check ran on a second Postgres session carrying neither this request's
+         * RLS context nor its transaction. It saw no rows and passed every
+         * duplicate through. Passing the model makes parseTable() read the table
+         * and connection off it, which is the same pattern
+         * StoreTicketBookingRequest already uses.
          */
-        $vendors = config('database.default').'.acct.vendors';
-
-        $vendorNumberRule = Rule::unique($vendors, 'vendor_number')
+        $vendorNumberRule = Rule::unique(Vendor::class, 'vendor_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
-        $emailRule = Rule::unique($vendors, 'email')
+        $emailRule = Rule::unique(Vendor::class, 'email')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         $baseCurrencyRule = $companyBaseCurrency
@@ -66,7 +65,8 @@ class StoreVendorRequest extends BaseFormRequest
             'ap_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists(config('database.default').'.acct.accounts', 'id')->where(fn ($q) => $q
+                // Same reasoning as the unique rules above.
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],

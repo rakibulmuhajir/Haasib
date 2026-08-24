@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -21,17 +22,15 @@ class UpdateVendorRequest extends BaseFormRequest
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $vendorId = $this->route('vendor');
 
-        // Named with the connection in front for the reason spelled out in
-        // StoreVendorRequest: a bare "acct.vendors" is read as the "acct"
-        // connection, and the check silently runs against a session that cannot
-        // see the row it is looking for.
-        $vendors = config('database.default').'.acct.vendors';
-
-        $vendorNumberRule = Rule::unique($vendors, 'vendor_number')
+        // The model rather than the string 'acct.vendors', for the reason
+        // spelled out in StoreVendorRequest: the string names the "acct"
+        // connection, and the check then runs against a session that cannot see
+        // the row it is looking for.
+        $vendorNumberRule = Rule::unique(Vendor::class, 'vendor_number')
             ->ignore($vendorId)
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
-        $emailRule = Rule::unique($vendors, 'email')
+        $emailRule = Rule::unique(Vendor::class, 'email')
             ->ignore($vendorId)
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
@@ -59,7 +58,8 @@ class UpdateVendorRequest extends BaseFormRequest
                 'sometimes',
                 'nullable',
                 'uuid',
-                Rule::exists(config('database.default').'.acct.accounts', 'id')->where(fn ($q) => $q
+                // Same reasoning as the unique rules above.
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],

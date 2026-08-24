@@ -144,8 +144,16 @@ const handleInput = (event: Event) => {
   const target = event.target as HTMLInputElement
   const rawValue = target.value
 
-  // Allow typing in progress (don't parse yet)
+  // The display keeps whatever was typed -- formatting it mid-keystroke would
+  // move the caret -- but the model tracks it, because a field's value is not
+  // allowed to lag what is on screen. It did lag, and the ticket cancellation
+  // preview read the stale one: typing 1,000 buyer / 2,000 supplier showed
+  // "+1,000" while the supplier field still had focus, because the supplier
+  // model was still null. The watcher below skips while focused, so this does
+  // not write the parsed number back over a half-typed one ("1000." survives).
+  // Min/max clamping stays on blur, where it cannot fight the typist.
   displayValue.value = rawValue
+  emit('update:modelValue', parseInput(rawValue))
 }
 
 // Handle focus

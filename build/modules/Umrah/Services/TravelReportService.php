@@ -384,7 +384,7 @@ class TravelReportService
         $query = Passenger::where('company_id', $company->id)
             ->whereHas('group', fn ($group) => $group->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                 ->when($filters['agent_id'] ?? null, fn ($agent) => $agent->where('agent_id', $filters['agent_id'])))
-            ->with(['group.agent:id,customer_id', 'group.vendor:id,name']);
+            ->with(['group.agent:id,customer_id', 'group.vendor:id,vendor_id']);
         $passengers = $query->get()->filter(function (Passenger $passenger) use ($filters): bool {
             $date = $passenger->group?->travel_date;
 

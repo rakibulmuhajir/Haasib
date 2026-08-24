@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
+use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\PaymentAllocation;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
@@ -254,4 +255,40 @@ test('agent statement treats a reversed allocation as an advance, not an allocat
         ->and($afterSummary['Available advances']['value'])->toBe(900.0)
         ->and($afterSummary['Closing receivable']['value'])->toBe(900.0)
         ->and($afterSummary['Net due']['value'])->toBe(0.0);
+});
+
+/*
+ * The contract test above builds passenger-status too, and passed while this
+ * was broken: reportFixture() creates no passengers, so the parent collection
+ * is empty and Eloquent skips the eager load entirely. The narrowed load has to
+ * run against real rows for a missing column to surface.
+ *
+ * Both party fields here are appended from an extension's parent -- the agent's
+ * customer and the umrah vendor's supplier -- so a narrowed load must carry
+ * customer_id / vendor_id, or the name comes back null. Selecting the old
+ * column name is worse than null: acct holds it now, umrah does not, and
+ * Postgres refuses the query.
+ */
+test('passenger status names the agent and vendor through the parties they extend', function () {
+    $fixture = reportFixture();
+    Passenger::create([
+        'company_id' => $fixture['company']->id,
+        'visa_group_id' => $fixture['group']->id,
+        'full_name' => 'Reported Passenger',
+        'passport_number' => 'AB1234567',
+        'imported_age' => 34,
+        'service_type' => Passenger::SERVICE_VISA_TRANSPORT,
+        'visa_status' => Passenger::STATUS_APPROVED,
+    ]);
+
+    $report = app(TravelReportService::class)->build(
+        $fixture['company'], $fixture['user'], 'passenger-status',
+        ['start' => '2026-01-01', 'end' => '2026-12-31', 'per_page' => 25],
+    );
+
+    $row = collect($report['rows'])->firstWhere('passenger', 'Reported Passenger');
+
+    expect($row)->not->toBeNull()
+        ->and($row['agent'])->toBe('Reporting Agent')
+        ->and($row['vendor'])->toBe('Visa Supplier');
 });

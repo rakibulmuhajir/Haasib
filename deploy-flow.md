@@ -1,3 +1,21 @@
+# Production
+
+| | |
+|---|---|
+| Host | `ubuntu@52.76.76.243` |
+| Key | `~/.ssh/munshi.pem` |
+| App root | `/var/www/haasib` (Laravel lives in `build/`) |
+| Deploy | `ssh -i ~/.ssh/munshi.pem ubuntu@52.76.76.243 'cd /var/www/haasib && ./deploy.sh'` |
+
+`deploy.sh` runs on the server, not here: it fetches `origin/main`, takes the app
+down, installs dependencies, builds assets into a staging directory it only swaps
+in once the build finished, migrates, syncs permissions, and brings the app back
+up. It refuses to run if the server worktree is dirty or has diverged from main.
+
+---
+
+# Notes from the first build of this server
+
 You hit three separate booby traps that look related, but weren’t.
 
 1. FrankenPHP ≠ “system PHP”

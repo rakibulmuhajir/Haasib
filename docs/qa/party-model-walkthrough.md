@@ -18,12 +18,11 @@ blank where a name belongs is the failure this walkthrough is hunting.
 
 ## Before you start
 
-- The **Passenger and Visa Status** report is broken on production right now —
-  it errors as soon as the company has a passenger. It is fixed in the repo but
-  not yet deployed. Either wait for the next deploy or skip Part C's first row;
-  do not log it, it is already known.
-- Work in the client's real company, not a scratch one. The bug this hunts only
-  appears on rows that existed before yesterday.
+- Work in the client's real company — `emar-al-khair` — not the demo company
+  and not a scratch one. The bug this hunts only appears on rows that existed
+  before the migration, and only that company has them. If the agent dropdown
+  shows Al-Noor Travels, Madina Tours or Rehmat Travel Service, you are in the
+  demo company and nothing you find here counts.
 - Have two browser tabs: the app, and this page.
 
 ## How to report anything you find
@@ -82,7 +81,7 @@ required." All fourteen agents now have a customer.
 
 Then the accounting half, which is what the whole refactor was for:
 
-10. Open **Accounting → Customers**. Find the customer belonging to the agent
+10. Open **Customers** at `/<company>/customers`. Find the customer belonging to the agent
     you booked for.
     - *Expect:* the ticket you just sold appears on their account. One agent,
       one customer, one balance.
@@ -102,9 +101,9 @@ every umrah vendor name renders. Open each screen, scan for blanks, move on.
 - An agent's detail page — name, phone, email in the header
 - An agent's edit page — the same three, filled in, editable
 - Edit an agent's name, save, and reopen. The new name sticks, and the matching
-  customer in **Accounting → Customers** shows it too.
+  customer at `/<company>/customers` shows it too.
 - Create a brand-new agent. It saves, and a customer appears for it in
-  Accounting → Customers.
+  `/<company>/customers`.
 
 **Umrah vendors**
 
@@ -112,8 +111,7 @@ every umrah vendor name renders. Open each screen, scan for blanks, move on.
 - A vendor's detail page
 - A vendor's **statement PDF** (the download on the detail page)
 - Umrah → Transport Providers — list, a detail page, and a statement PDF
-- Edit a vendor's name and confirm it follows through to **Accounting →
-  Vendors**
+- Edit a vendor's name and confirm it follows through to `/<company>/vendors`
 - Create a new vendor and confirm the same
 
 **Everywhere they are named alongside something else**
@@ -141,7 +139,7 @@ comes back with no rows, widen the dates until it has some.
 
 | Report | What to check |
 |---|---|
-| Passenger and Visa Status | **Known broken on production** — skip until deployed. After that: Agent and Vendor columns populated |
+| Passenger and Visa Status | Agent and Vendor columns populated |
 | Agent Statement | Pick a specific agent; their name in the header and rows |
 | Group Profitability | Agent column |
 | Receivable Aging | Agent names |

@@ -97,17 +97,16 @@ const selectedAgent = computed(() =>
     props.agents.find((agent) => agent.id === form.agent_id) ?? null,
 );
 
-function onAgentChange(agentId: string) {
+// Assigned unconditionally, including to '': an agent with no linked
+// customer must not leave the previous agent's account sitting in the
+// field, and neither must clearing the agent. Both cases used to keep a
+// buyer nobody had chosen, and the Buyer field says who gets the bill.
+function setAgent(agentId: string) {
     form.agent_id = agentId;
-    const agent = props.agents.find((item) => item.id === agentId);
-    if (agent?.customer_id) {
-        form.customer_id = agent.customer_id;
-    }
+    form.customer_id = props.agents.find((item) => item.id === agentId)?.customer_id ?? '';
 }
 
-function clearAgent() {
-    form.agent_id = '';
-}
+const clearAgent = () => setAgent('');
 
 const addTicket = () => form.tickets.push(emptyTicket());
 const removeTicket = (index: number) => {
@@ -190,7 +189,7 @@ const submit = () => {
                         <Label>Sold via agent (optional)</Label>
                         <Select
                             :model-value="form.agent_id"
-                            @update:model-value="(v) => onAgentChange(String(v ?? ''))"
+                            @update:model-value="(v) => setAgent(String(v ?? ''))"
                         >
                             <SelectTrigger
                                 :class="{ 'border-destructive': form.errors.agent_id }"
@@ -225,7 +224,7 @@ const submit = () => {
                         <Label>Buyer</Label>
                         <Select
                             :model-value="form.customer_id"
-                            :disabled="Boolean(selectedAgent)"
+                            :disabled="Boolean(selectedAgent?.customer_id)"
                             @update:model-value="(v) => (form.customer_id = String(v ?? ''))"
                         >
                             <SelectTrigger
@@ -244,10 +243,16 @@ const submit = () => {
                             </SelectContent>
                         </Select>
                         <p
-                            v-if="selectedAgent"
+                            v-if="selectedAgent?.customer_id"
                             class="text-xs text-muted-foreground"
                         >
                             Billed to this agent's linked account.
+                        </p>
+                        <p
+                            v-else-if="selectedAgent"
+                            class="text-xs text-muted-foreground"
+                        >
+                            This agent has no linked account. Choose who to bill.
                         </p>
                         <p v-if="form.errors.customer_id" class="text-sm text-destructive">
                             {{ form.errors.customer_id }}

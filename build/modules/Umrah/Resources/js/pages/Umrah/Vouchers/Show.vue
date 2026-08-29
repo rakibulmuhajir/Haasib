@@ -987,16 +987,28 @@ const exportVoucher = () => {
                             "
                             class="text-sm text-muted-foreground"
                         >
-                            Charge
-                            <MoneyText
-                                :amount="stay.total_retail_amount"
-                                :currency="company.base_currency"
-                            /><span v-if="canViewAccounting">
-                                · Cost
+                            <!--
+                                A draft holds no amounts: hotel rates are
+                                taken at approval. Printing the zeros as
+                                money read as "this stay costs nothing",
+                                directly contradicting the figures the
+                                create form had just shown.
+                            -->
+                            <template v-if="voucher.status === 'draft'">
+                                Priced on approval
+                            </template>
+                            <template v-else>
+                                Charge
                                 <MoneyText
-                                    :amount="stay.total_cost_amount"
+                                    :amount="stay.total_retail_amount"
                                     :currency="company.base_currency"
-                            /></span>
+                                /><span v-if="canViewAccounting">
+                                    · Cost
+                                    <MoneyText
+                                        :amount="stay.total_cost_amount"
+                                        :currency="company.base_currency"
+                                /></span>
+                            </template>
                         </div>
                         <div v-else class="text-sm text-muted-foreground">
                             <template v-if="voucher.billing_voucher">

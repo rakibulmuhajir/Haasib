@@ -483,6 +483,18 @@ class VoucherController extends Controller
         return [$resolved, round($sale, 2), round($cost, 2)];
     }
 
+    /**
+     * A draft carries no money on purpose. Hotel rates are taken at
+     * approval, and the rooming report reads these stays straight out of
+     * the column, so an indicative amount stored here would appear in a
+     * sale or cost column as though somebody had agreed it.
+     *
+     * Nights are not money. They follow from the two dates, and both the
+     * rooming list and the voucher PDF print them, so zeroing them made
+     * every draft stay read as nought nights against dates that plainly
+     * said otherwise. A stay half way through being typed has no second
+     * date yet and honestly has no nights.
+     */
     private function draftHotelStays(array $stays): array
     {
         return collect($stays)
@@ -495,9 +507,21 @@ class VoucherController extends Controller
                     'unit_cost_amount' => 0,
                     'total_retail_amount' => 0,
                     'total_cost_amount' => 0,
-                    'night_count' => 0,
+                    'night_count' => $this->draftNightCount($stay),
                 ];
             })->values()->all();
+    }
+
+    private function draftNightCount(array $stay): int
+    {
+        $checkIn = $stay['check_in_date'] ?? null;
+        $checkOut = $stay['check_out_date'] ?? null;
+
+        if (blank($checkIn) || blank($checkOut)) {
+            return 0;
+        }
+
+        return $this->hotelPricing->calculate((string) $checkIn, (string) $checkOut, 1, 1, 0, 0)['night_count'];
     }
 
     private function isMeaningfulHotelStay(array $stay): bool

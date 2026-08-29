@@ -13,6 +13,27 @@ withDefaults(defineProps<{
 })
 
 defineEmits<{ 'update:modelValue': [value: string] }>()
+
+/*
+ * Typed dates used to go nowhere. Without auto-apply the picker holds a
+ * value until someone clicks its Select button, so tabbing between the
+ * four flight fields left every one of them unset and every menu still
+ * open -- four calendars stacked over the form, and an itinerary the
+ * approval check then refused as incomplete.
+ *
+ * openMenu: false keeps the calendar shut while someone is typing into
+ * the field, which is the whole point of a text input. The commits are
+ * the three ways a person actually leaves a field: Enter, Tab, or
+ * clicking away. The parse format has to be named or it is read as ISO
+ * rather than the dd/MM/yyyy the field displays.
+ */
+const textInput = {
+  enterSubmit: true,
+  tabSubmit: true,
+  applyOnBlur: true,
+  openMenu: false,
+  format: "dd/MM/yyyy HH:mm",
+}
 </script>
 
 <template>
@@ -28,7 +49,8 @@ defineEmits<{ 'update:modelValue': [value: string] }>()
     :placeholder="placeholder"
     :clearable="false"
     :required="required"
-    text-input
+    :text-input="textInput"
+    auto-apply
     teleport="body"
     @update:model-value="$emit('update:modelValue', String($event || ''))"
   />

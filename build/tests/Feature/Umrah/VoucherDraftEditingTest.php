@@ -78,3 +78,60 @@ test('draft persistence drops untouched hotel placeholders', function () {
     expect($stays)->toHaveCount(1)
         ->and($stays[0]['hotel_name'])->toBe('Meaningful Hotel');
 });
+
+/**
+ * A draft holds no prices on purpose: approval is where hotel rates are
+ * taken, and the rooming report reads these stays directly, so an
+ * unapproved indicative amount would show up in a money column as though
+ * someone had agreed it.
+ *
+ * Nights are not a price. They follow from the two dates, the rooming
+ * list and the voucher PDF both print them, and zeroing them made every
+ * draft stay read as nought nights.
+ */
+test('a draft stay counts its nights but still carries no amounts', function () {
+    $controller = app(VoucherController::class);
+    $method = new ReflectionMethod($controller, 'draftHotelStays');
+
+    $stays = $method->invoke($controller, [
+        [
+            'source' => 'company',
+            'hotel_id' => '01a04cab-89ee-7241-86c8-5263a130d53c',
+            'hotel_name' => 'Al-Haram Madinah',
+            'city' => 'Madinah',
+            'room_type' => 'quad',
+            'room_count' => 1,
+            'check_in_date' => '2026-10-04',
+            'check_out_date' => '2026-10-06',
+            'notes' => null,
+        ],
+    ]);
+
+    expect($stays)->toHaveCount(1)
+        ->and($stays[0]['night_count'])->toBe(2)
+        ->and($stays[0]['total_retail_amount'])->toBe(0)
+        ->and($stays[0]['total_cost_amount'])->toBe(0)
+        ->and($stays[0]['unit_retail_amount'])->toBe(0)
+        ->and($stays[0]['unit_cost_amount'])->toBe(0);
+});
+
+test('a draft stay half way through being typed counts no nights', function () {
+    $controller = app(VoucherController::class);
+    $method = new ReflectionMethod($controller, 'draftHotelStays');
+
+    $stays = $method->invoke($controller, [
+        [
+            'source' => 'self',
+            'hotel_id' => null,
+            'hotel_name' => 'Somewhere',
+            'city' => 'Makkah',
+            'room_type' => 'double',
+            'room_count' => 1,
+            'check_in_date' => '2026-10-06',
+            'check_out_date' => null,
+            'notes' => null,
+        ],
+    ]);
+
+    expect($stays[0]['night_count'])->toBe(0);
+});

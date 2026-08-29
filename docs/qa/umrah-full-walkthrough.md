@@ -1,6 +1,6 @@
 # Umrah module — full walkthrough on a fresh company
 
-For Luna. Written 2026-08-25.
+For Luna. Written 2026-08-25, corrected 2026-08-29 against her first run.
 
 This builds one travel company from nothing and runs the whole Umrah module
 through it: one agent, four groups covering all three transport modes, hotels,
@@ -10,14 +10,37 @@ name render", this one asks "does the money land where it should".
 **Run this on your local machine, not production.** You will create and delete
 a lot, and some of it is meant to be wrong.
 
+## What changed since the first run
+
+Every route, name and figure below has been corrected against what you actually
+found. The steps that were impossible as written — the fare negative test, the
+group-linked refund, the module toggle — are gone or rewritten. Three fixes
+also shipped, and each has a check in place where you hit it:
+
+- A group part-paid by its agent reads **Partly paid**, not Paid (Part 9).
+- Draft voucher stays read **"Priced on approval"** and count their nights
+  (Part 5).
+- Typed flight dates stay put when you move to the next field (Part 5). A date
+  typed as `01/11/2026` is 1 November — it used to be stored as 11 January.
+
+Four things you logged are known and not worth logging twice: the "3 mutamers
+imported" toast on a duplicate import, the Vehicles/Pax display on a
+per-passenger fare, the capacity hint's closing sentence, and company deletion
+leaving the record in place.
+
 ## Setup
 
 ```
-php artisan octane:start --server=frankenphp --port=9001 --watch
+php artisan serve --port=9001
 npm run dev
 ```
 
-Then http://localhost:9001. Log in as `manager@demo.haasib.app` / `demo-password`.
+Then http://localhost:9001. Log in as `demo-manager` / `demo-password` — the
+field takes a username or an email, and `manager@demo.haasib.app` works too.
+
+Octane is not available in this checkout, so `php artisan serve` is the one to
+use. `npm run dev` prints its own port (5173, 5174, whichever is free) and you
+never visit it — it only serves assets to the app on 9001.
 
 Keep a scratch file open. Every part asks you to write down a number or an id
 that a later part needs.
@@ -85,11 +108,18 @@ Each part ends at a safe stopping point. This is two or three sittings.
 
 1. Go to `/companies/create`.
    - **Name:** `Rihla Travel QA`
+   - **Industry:** the travel/umrah one — this is what turns the module on
    - **Base currency:** `SAR`
    - **Country:** Pakistan
    - **Owner:** yourself
    - Note the slug it generates — probably `rihla-travel-qa`. Everything below
      writes it as `<company>`.
+   - **Use this page, not the quick-add form on `/companies`.** The inline form
+     picks PKR for you and never offers the base-currency choice, which is the
+     one setting the rest of this document depends on.
+   - If the form fails silently on submit, look at the secondary currency: an
+     untouched one leaves an empty exchange rate that the backend rejects
+     without marking the field.
 2. Finish the onboarding wizard at `/<company>/onboarding`. All of it: company
    identity, fiscal year, bank accounts, default accounts, tax settings,
    numbering.
@@ -97,10 +127,12 @@ Each part ends at a safe stopping point. This is two or three sittings.
      ledger, and every later step fails with an error that does not say so.
    - Give yourself at least one **cash** account and one **bank** account. You
      will pay from both.
-3. Go to `/<company>/settings` and **enable the Umrah module**.
+3. Confirm **Umrah** is in the sidebar. A travel company gets the module
+   automatically — there is no module toggle under Settings to switch on.
    - *Fail:* if `/<company>/umrah` says "This module is not enabled for the
-     selected company", the toggle did not save. Nothing past here works.
-4. In `/<company>/settings`, add **PKR** as a second currency.
+     selected company", the industry on the company is wrong. Fix that before
+     going on; nothing past here works without it.
+4. In `/<company>/settings`, add **PKR** as a second currency at rate `0.0125`.
 5. Open `/<company>/umrah`.
    - *Expect:* the dashboard renders, all widgets empty, no errors.
    - Empty widgets on a brand-new company are correct. A 500 is not.
@@ -121,8 +153,9 @@ this wrong is the most common reason a later dropdown is empty.
 - **Name:** `Sahil Travel Network`
 - **Agent number:** `AG-QA-01`
 - **Phone / email / city / country:** anything; use Lahore, PK
-- Give it a **login username and password** — `sahil-agent` / `qa-password`.
-  Part 9 logs in as this.
+- Give it a **login username and password** — `sahil_agent` / `qa-password`.
+  Underscores, not hyphens: a hyphen is rejected by the username rule. Part 9
+  logs in as this.
 - Voucher access: allow create and edit, cutoff 24 hours.
 
 Then check `/<company>/customers`. **A customer should exist for the agent**,
@@ -204,6 +237,10 @@ fewer seats than passengers.
 
 `/<company>/umrah/settings/transport-services` (same page, sectors section)
 
+**Look at the list before creating anything.** A new company arrives with
+several sectors already seeded. Create only the ones missing from this list,
+and use whatever the seeded ones are called rather than making duplicates.
+
 | Code | Name | Origin | Destination |
 |---|---|---|---|
 | `JED-MAK` | Jeddah to Makkah | Jeddah | Makkah |
@@ -217,8 +254,9 @@ three sectors.
 
 ### Fares
 
-Same page, fares section. **A fare takes a sector or a package, never both** —
-the form should refuse if you try to set both.
+Same page, fares section. A fare covers **either** a sector **or** a package,
+chosen from a single control — so there is no way to set both and nothing to
+test there.
 
 | Name | Vendor | Vehicle | Sector / Package | Basis | Sale | Cost | Hajj sale | Hajj cost |
 |---|---|---|---|---|---|---|---|---|
@@ -227,8 +265,6 @@ the form should refuse if you try to set both.
 | `Full journey — Own fleet` | Own Fleet Transport | Coaster 22 | Package: Complete Umrah journey | Per vehicle | `2400` | `1500` | `300` | `200` |
 
 The third exists so Part 4 can move a vehicle to a different supplier.
-
-Try creating a fare with **both** a sector and a package. *Expect:* refusal.
 
 ### Hotels
 
@@ -288,8 +324,8 @@ edit page offers no vehicles section.
      count and visa pricing recalculated on the spot.
    - *Fail:* the count stays at 1, the pricing does not move, or the ages are
      blank.
-2. **Then add a seventh by hand** — a child, with a date of birth putting them
-   under 12 on the travel date.
+2. **Then add a seventh by hand** — a child. Passengers are entered with an
+   **age as a number**, not a date of birth, so type an age under 12.
 
 Haramain charges child fare, so all seven are billable on the bus, but the
 visa prices the child at the child rate:
@@ -321,12 +357,19 @@ Haramain before saving.
      three untouched, and the pricing recalculated to six.
    - *Fail:* the second import replaces the first, duplicates it, or leaves the
      passenger count at three.
-3. Try importing `mutamer-list-3-passengers-b.xlsx` a **second** time. It should not double the
-   same people up. Note what actually happens.
+3. Try importing `mutamer-list-3-passengers-b.xlsx` a **second** time. No rows
+   should be added.
+   - Known and cosmetic: the toast still reads "3 mutamers imported" even
+     though the passenger count does not move. Do not log it again.
 4. **Vehicle 1:** fare `Full journey — Coaster`, quantity `1`, passengers `6`,
-   terminal **Hajj**
+   terminal **Hajj**, and **set a Schedule** — any date/time near the travel
+   date
 5. **Vehicle 2:** fare `Makkah to Madinah — Hiace`, quantity `1`, passengers
-   `6`, terminal Standard
+   `6`, terminal Standard, and **set a Schedule** as well
+
+> **Give every vehicle a schedule.** The Transport Dispatch report in Part 8
+> selects on that date and shows nothing without it — an empty dispatch sheet
+> means the schedules are missing, not that the vehicles are.
 
 | | |
 |---|---|
@@ -340,9 +383,15 @@ Haramain before saving.
 | Total cost | **6,770** |
 | Margin | **1,690** |
 
-Note the seat hint under each vehicle: the Coaster seats 22 for 6 passengers,
-the Hiace 12 for 6. Now set the Hiace's quantity to 1 against 20 passengers and
-watch whether the hint warns you that you are below capacity.
+Two known display oddities here, already logged — read past them:
+
+- A per-passenger fare can show its Vehicles / Pax as `2 / 6` after you entered
+  a quantity of 1.
+- The capacity hint always ends "Booking fewer seats than passengers raises the
+  vehicle count on save", even when there is plenty of room.
+
+The money is what matters on this page; check the totals above against the
+figures on screen.
 
 ### Group D — specialized, imported, extended, then corrected
 
@@ -352,7 +401,7 @@ watch whether the hint warns you that you are below capacity.
 1. **Import** `mutamer-list-2-passengers.xlsx` (2 rows).
 2. **Add two more passengers by hand**, adults. Four in total.
 3. **One vehicle:** fare `Full journey — Coaster`, quantity `1`, passengers
-   `4`, terminal Standard.
+   `4`, terminal Standard, **with a Schedule set**.
 
 | | |
 |---|---|
@@ -372,11 +421,11 @@ Expected:
 
 - Transport sale **4,800**, transport cost **3,600**
 - Total sale **8,400**, total cost **6,600**
-- On the group's **accounting tab**: the original sale and cost postings are
-  untouched, and **two new adjustment entries** appear — +2,400 sale and +1,800
-  cost. The correction is posted as a difference, not by rewriting history.
-- *Fail:* the original entries changed, or no adjustment appeared, or the
-  adjustment is the full new amount rather than the difference.
+- The group's **accounting tab** shows rolled-up totals, not a list of journal
+  entries, so read the change rather than looking for two new rows: sale rises
+  by exactly 2,400 and cost by exactly 1,800.
+- *Fail:* the totals move by the full new amount rather than the difference, or
+  they do not move at all.
 
 Three more edits on Group D, checking the accounting tab after each:
 
@@ -408,33 +457,48 @@ If that is wrong, it is wrong for every group built from a file.
 
 Hotels reach a group through vouchers, not through the group form.
 
+The form does not have one bundle selector. **Services are chosen per
+passenger**, and whether a hotel is company-supplied or self-arranged is set
+**per stay**. It also opens with **three itinerary rows** — delete the ones you
+do not use, or a half-filled row is saved with a stray date on it.
+
 1. `/<company>/umrah/vouchers/create`, group **QA-C Specialized**.
-2. **Bundle:** Visa + Transport + Hotel.
-3. Assign **3 of the 6 passengers**.
-4. **Hotel stays:**
+2. Assign **3 of the 6 passengers**, with visa, transport and hotel services
+   against each.
+3. Two hotel stays, both **company-supplied**:
    - `Dar Al-Eiman Makkah`, Quad, 1 room, three nights
    - `Al-Haram Madinah`, Quad, 1 room, two nights
-5. Flights: fill in an onward and a return leg.
-6. Save as a draft first, reopen it, confirm everything came back.
-7. **Approve** it. Check `/<company>/umrah/vouchers/{id}/accounting` — the
-   hotel charge should now be on the ledger, and Anwar Hospitality should have
-   a payable.
-8. **Download the voucher PDF.** Passenger names, hotel names, agent name, and
-   the flight legs should all be present.
+   - **Delete the unused third row.**
+4. Fill in an onward and a return flight leg — airline, flight number, both
+   cities, takeoff and landing.
+   - Type the dates straight into the field as `dd/MM/yyyy HH:mm` and press
+     Enter or Tab. The value stays put when you move to the next field; if a
+     date you entered disappears, that is a regression and worth logging
+     immediately.
+5. Save as a **draft**, reopen it, confirm everything came back.
+   - *Expect:* each company-supplied stay reads **"Priced on approval"** and
+     shows its **night count** — 3 and 2. A draft carries no amounts on
+     purpose; rates are taken at approval.
+   - *Fail:* `0.00` where the charge should be, or a night count of 0 against
+     two real dates.
+6. **Approve** it. On `/<company>/umrah/vouchers/{id}/accounting` the hotel
+   charge should now be on the ledger and Anwar Hospitality should have a
+   payable.
+7. **Download the voucher PDF.** Passenger names, hotel names, agent name,
+   night counts and both flight legs should all be present.
 
 Then the lifecycle:
 
-9. **Amend** the approved voucher — change a room count. Expect the accounting
-   to move by the difference, the same way the group did.
-10. Create a **second voucher** for the other 3 passengers, bundle Visa +
-    Transport only, no hotel.
-11. **Move a passenger** from voucher 2 to voucher 1, then **separate** one
+8. **Amend** the approved voucher — change a room count. The accounting should
+   move by the difference, exactly as the group did.
+9. Create a **second voucher** for the other 3 passengers, no hotel stays.
+10. **Move a passenger** from voucher 2 to voucher 1, then **separate** one
     passenger out of voucher 1 into their own voucher.
-12. **Cancel** the separated voucher. Expect its charges reversed, and the
-    other vouchers untouched.
+11. **Cancel** the separated voucher. Its charges should reverse and the other
+    vouchers stay untouched.
 
-*Fail at any point:* a passenger appearing on two vouchers at once, or a
-cancelled voucher still carrying a balance.
+> **Watch for:** a passenger appearing on two vouchers at once, or a cancelled
+> voucher still carrying a balance.
 
 **Stop point.**
 
@@ -483,52 +547,51 @@ cancelled voucher still carrying a balance.
 
 ### In, from the agent
 
-1. `/<company>/umrah/payments/create`, direction **in**, party **Sahil Travel
-   Network**, amount `10000` SAR, from your bank account.
-2. **Allocate it** across groups: 3,600 to Group A, 6,000 to Group B, 400 to
-   Group C. That is exactly 10,000.
-3. Check: Group A reads fully paid, Groups B and C partly (B is owed 6,740, so
-   740 remains). The agent's customer balance drops by 10,000.
-4. Try to allocate **more than the payment** — add another 500 somewhere.
-   *Expect:* refusal.
+1. `/<company>/umrah/payments/create`, direction **in**, party Sahil Travel
+   Network, **10,500 SAR** from your bank account.
+2. **Allocate 10,000 of it:** 3,600 to Group A, 6,000 to Group B, 400 to Group
+   C. That leaves **500 unallocated on purpose** — the refund below needs it.
+3. Group A should now read fully paid; Groups B and C partly, with B owed 740
+   and C owed 8,060. The agent's customer balance drops by 10,500.
+4. Try to allocate **more than the payment** — add another 1,000 somewhere.
+   Expect a refusal, or the save button to stay disabled.
 5. **Download the payment receipt PDF.** Agent name, amount, allocations.
 
 ### Out, to vendors
 
-6. Payment **out** to **Bab Al-Salam Visa Services**, `9000` SAR from bank.
-7. Payment **out** to **Haramain Coach Company**, `2000` SAR from cash.
-8. Payment **out** to **Anwar Hospitality**, `1500` SAR from bank.
-9. Each vendor's payable should fall by what you paid. Check on their detail
-   pages, and download a **vendor statement PDF** for one of them.
-
-### A reversal
-
-10. **Reverse** the Haramain payment. Expect their payable back up by 2,000,
-    the cash account restored, and the payment marked reversed rather than
-    deleted.
+6. Out to **Bab Al-Salam Visa Services**, 9,000 SAR from bank.
+7. Out to **Haramain Coach Company**, 2,000 SAR from cash.
+8. Out to **Anwar Hospitality**, 1,500 SAR from bank.
+9. Each vendor's payable should fall by what you paid. Check their detail
+   pages, and download a **vendor statement PDF** for one.
+10. **Reverse** the Haramain payment. Their payable back up by 2,000, the cash
+    account restored, and the payment kept visible as **Reversed** with its
+    reason rather than deleted.
 
 ### A payment in a second currency
 
-11. Payment **out** to Skyline Ticketing, `100000` **PKR**, exchange rate
-    `0.0125`.
-    - Expected base amount: **1,250 SAR** (base = amount × rate).
-    - Check that the supplier's balance moved by 1,250, not by 100,000.
+11. Out to Skyline Ticketing, **100,000 PKR**, exchange rate `0.0125`. Expected
+    base amount **1,250 SAR** — base is amount × rate. Check the supplier's
+    balance moved by 1,250, not by 100,000.
 
 ### Refunds
 
+> A refund pays back money the agent has **overpaid**, so it works from the
+> unallocated part of a receipt and has no group selector. That is why step 2
+> left 500 sitting unallocated — allocate the whole receipt and there is
+> nothing to refund.
+
 12. `/<company>/umrah/refunds/create` — party **agent** Sahil Travel Network,
-    group QA-A, amount `500` SAR, a reason.
-13. **Approve** it, then **settle** it. Expect the money out and the agent's
-    balance to move only on settlement, not on approval.
-14. Create a second refund, `300` SAR, and **reject** it. Expect no ledger
-    movement at all.
-15. Create a third and **cancel** it before approval. Same — nothing posts.
+    **500 SAR**, a reason. **Approve**, then **settle**. The money and the
+    agent's balance should move only on settlement, not on approval.
+13. Try a second refund for another 500. Expect a refusal: the advance is spent.
+14. Create one more, then **cancel** it before approval. Nothing should post.
 
 ### Expenses
 
-16. `/<company>/umrah/expenses/create` — `100000` PKR at `0.0125`, payee
-    anything, paid from cash. Expect **1,250 SAR** on the ledger.
-17. **Reverse** it. Expect the cash account restored.
+15. `/<company>/umrah/expenses/create` — 100,000 PKR at 0.0125, paid from cash.
+    Expect **1,250 SAR** on the ledger.
+16. **Reverse** it. Expect the cash account restored and the record kept.
 
 **Stop point.** Every kind of money the module handles has now moved.
 
@@ -536,42 +599,43 @@ cancelled voucher still carrying a balance.
 
 ## Part 8 — reports, with data in them
 
-`/<company>/umrah/reports`. Set the date range to the whole of 2026 on each —
-the default is the current month and most of your data may sit outside it.
+**There is no `/umrah/reports` index — that URL 404s.** Open a report from the
+**Reports** section of the sidebar, which lists ten of them. The remaining
+three — Ticket Sales, Ticket Supplier Reconciliation and Ticket Cancellations —
+are not in the sidebar at all; reach them from the **Report dropdown at the top
+of any report page**, which lists every report you have permission to see.
 
-Every report should now return rows. For each one: check the names render,
-check the totals against what you built, and **download the PDF**.
+Set the date range to the whole of 2026 on each — the default is the current
+month and most of your data may sit outside it. Every report should now return
+rows. For each: check the names render, check the totals against what you
+built, and **download the PDF**.
 
-| Report | What it should show |
-|---|---|
-| Group Profitability | Four groups, margins 600 / 1,210 / 1,690 / and Group D as edited |
-| Agent Statement | Sahil Travel Network: charges from four groups and the ticket invoice, the 10,000 receipt, the 500 refund |
-| Receivable Aging | The agent's outstanding balance |
-| Vendor Payable Aging | All four suppliers, Haramain's payable restored after the reversal |
-| Advances and Allocations | The 10,000 receipt and its three allocations |
-| Passenger and Visa Status | All 21 passengers, agent and vendor columns populated |
-| Departure Manifest | Passengers by travel date |
-| Hotel Rooming List | The Group C voucher's room assignments |
-| Transport Dispatch | Vehicles from Groups B, C and D, with drivers |
-| Voucher Control | The vouchers from Part 5, including the cancelled one |
-| Ticket Sales | The booking, both tickets, agent and supplier named |
-| Ticket Supplier Reconciliation | Skyline Ticketing; the 2350 clearing balance must read **zero** |
-| Ticket Cancellations | The cancelled ticket 2, buyer 1,500 and supplier 1,400 |
+| Report | Where | What it should show |
+|---|---|---|
+| Group Profitability | sidebar | Four groups; margins 600 / 1,210 / 1,690 / Group D as edited |
+| Agent Statement | sidebar | Charges from four groups and the ticket invoice, the 10,500 receipt, the 500 refund |
+| Receivable Aging | sidebar | The agent's outstanding balance |
+| Vendor Payable Aging | sidebar | All four suppliers; Haramain's payable restored after the reversal |
+| Advances and Allocations | sidebar | The 10,500 receipt, its three allocations, and the 500 that was refunded |
+| Passenger and Visa Status | sidebar | All 21 passengers, agent and vendor columns populated |
+| Departure Manifest | sidebar | Passengers by travel date — **needs Part 5's voucher approved**, it reads flight itineraries |
+| Hotel Rooming List | sidebar | The Group C voucher's rooms, with 3 and 2 nights against them |
+| Transport Dispatch | sidebar | The scheduled vehicles from Groups C and D, with drivers — **empty unless you set schedules in Part 4** |
+| Voucher Control | sidebar | The vouchers from Part 5, including the cancelled one |
+| Ticket Sales | Report dropdown | The booking, both tickets, agent and supplier named |
+| Ticket Supplier Reconciliation | Report dropdown | Skyline Ticketing; the 2350 clearing balance must read **zero** |
+| Ticket Cancellations | Report dropdown | Cancelled ticket 2 — buyer 1,500, supplier 1,400 |
 
-Also:
-
-- Use the **agent filter** where a report has one. It should narrow to Sahil
-  Travel Network and, since there is only one agent, change nothing — but it
-  must not empty the report.
-- Check `/<company>/umrah/reports/earnings`.
-- Open each group's **accounting tab** one final time and confirm the totals
-  still match Part 4.
+Also: use the **agent filter** where a report has one — with only one agent it
+should change nothing, but it must not empty the report. Check
+`/<company>/umrah/reports/earnings`. And open each group's **accounting tab**
+one final time to confirm the totals still match Part 4.
 
 ---
 
 ## Part 9 — the agent's own view
 
-Log out. Log back in as `sahil-agent` / `qa-password`.
+Log out. Log back in as `sahil_agent` / `qa-password`.
 
 - *Expect:* the four groups, the payments and the refunds that belong to this
   agent, and nothing else.
@@ -580,6 +644,10 @@ Log out. Log back in as `sahil-agent` / `qa-password`.
   should not be offered.
 - Cost figures and margins should be **hidden** — an agent sees what they owe,
   not what the company paid.
+- Open **QA-C Specialized**. Its payment status must read **Partly paid**: 400
+  against 8,460. It used to read Paid here, because the page worked the status
+  out from a balance an agent is never sent. Receivable and balance stay hidden
+  as dashes; the status beside them must still be right.
 - *Fail:* a cost amount, a vendor cost, or another company's data visible
   anywhere.
 

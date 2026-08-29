@@ -3,6 +3,7 @@ import DateTimeText from '@/components/DateTimeText.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -217,15 +218,6 @@ const canRecordPayment = computed(
 );
 
 const passengers = computed(() => props.group.passengers || []);
-const paymentStatus = computed(() => {
-    if (Number(props.group.total_paid || 0) <= 0) {
-        return { label: 'Unpaid', variant: 'secondary' as const };
-    }
-
-    return Number(props.group.balance || 0) <= 0
-        ? { label: 'Paid', variant: 'default' as const }
-        : { label: 'Partially paid', variant: 'secondary' as const };
-});
 
 watch(
     () => paymentForm.currency,
@@ -574,9 +566,15 @@ const addPayment = () => {
             <Card>
                 <CardHeader><CardTitle>Payment Status</CardTitle></CardHeader>
                 <CardContent>
-                    <Badge :variant="paymentStatus.variant">
-                        {{ paymentStatus.label }}
-                    </Badge>
+                    <!--
+                        The server's answer, not one worked out here. This
+                        was recomputed from group.balance, which an agent
+                        is never sent: undefined became zero, zero read as
+                        settled, and a group with one small payment against
+                        it showed Paid beside a dash where its balance
+                        should be.
+                    -->
+                    <StatusBadge :status="group.payment_status || 'unpaid'" />
                 </CardContent>
             </Card>
             <Card v-if="canViewAccounting" variant="figure"

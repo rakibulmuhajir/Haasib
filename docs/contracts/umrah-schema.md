@@ -369,7 +369,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `passport_number` varchar(100) nullable.
   - `nationality` varchar(100) nullable.
   - `date_of_birth` date nullable.
-  - `imported_age` integer nullable. Age from Go VT mutamer exports or manual age entry when DOB is unavailable.
+  - `imported_age` integer nullable. Age from a mutamer list import or manual age entry when DOB is unavailable.
   - `service_type` varchar(30) default `visa_transport`. Values: `visa_transport`, `transport_only`. The historical `visa_transport` value means the passenger receives the group's visa service and, only when the group transport mode is not `none`, its group transport; user-facing labels must say `Visa only` for `none` groups. `transport_only` is invalid for a `none` group.
   - `transport_charge_amount` numeric(15,2) default 0. Passenger-specific sale for a traveller whose visa came from another provider.
   - `visa_status` varchar(30) default `pending`.
@@ -596,7 +596,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Selecting an agent defaults new passenger nationality to the agent country. Allowed nationality options in phase 1 are Pakistan, Bangladesh, India, Turkiye, United Kingdom, and United States.
 - Agent totals are recalculated from active non-cancelled groups.
 - Passenger count is recalculated from passengers unless explicitly entered on group creation.
-- Go VT mutamer workbook import reads only mutamer name, mutamer age, passport number, and nationality. Imported rows remain editable before saving the visa group.
+- The mutamer list import reads only mutamer name, mutamer age, passport number, and nationality. Imported rows remain editable before saving the visa group.
 - Visa groups are created after visa approval; their existing status value is informational and no artificial pre-approval lifecycle is enforced.
 - Passenger identity, age, service type, and transport charge may be corrected with audit history. Removing a passenger is blocked while the passenger has an active approved voucher; draft assignments are released and group sale/cost adjustments are posted atomically.
 - If group code is blank, the next sequential group number is used. If group name is blank, the service generates `{agent name} - {pax} pax - {YYYYMMDD HHMMSS}`.

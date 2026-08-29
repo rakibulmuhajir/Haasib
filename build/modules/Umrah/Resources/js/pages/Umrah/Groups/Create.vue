@@ -1529,7 +1529,7 @@ const submit = () => {
                                     class="grid gap-3 md:grid-cols-[1fr_auto] md:items-end"
                                 >
                                     <div class="space-y-2">
-                                        <Label>Go VT Mutamers Sheet</Label>
+                                        <Label>Mutamer List Import</Label>
                                         <Input
                                             type="file"
                                             accept=".xlsx"

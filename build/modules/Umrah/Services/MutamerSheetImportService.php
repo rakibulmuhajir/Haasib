@@ -48,7 +48,7 @@ class MutamerSheetImportService
 
         if ($missing !== []) {
             throw ValidationException::withMessages([
-                'mutamers_file' => 'This does not look like a Go VT mutamers export. Missing columns: '.implode(', ', $missing).'.',
+                'mutamers_file' => 'This does not look like a mutamer list export. Missing columns: '.implode(', ', $missing).'.',
             ]);
         }
 

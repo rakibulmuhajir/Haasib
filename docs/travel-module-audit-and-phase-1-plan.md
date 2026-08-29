@@ -17,7 +17,7 @@ The module currently supports:
 
 - Agents with optional login accounts and voucher capabilities.
 - Visa vendors with adult and child retail/cost pricing.
-- Go VT `.xlsx` mutamer import for name, passport number, age, and nationality.
+- Mutamer list `.xlsx` import for name, passport number, age, and nationality.
 - Visa groups with passenger pricing, standard bus inclusion, and specialized transport replacement.
 - Configurable transport vehicles, drivers, sectors, packages, fares, and Hajj Terminal surcharges.
 - Hotels, hotel vendors, per-bed room rates, sharing rates, and Company/Self-arranged stays.
@@ -318,7 +318,7 @@ Backend feature tests:
 
 - Company isolation and RLS for every Travel table.
 - Agent own-record scoping and UUID tampering attempts.
-- Go VT import success and invalid workbook handling.
+- Mutamer list import success and invalid workbook handling.
 - Group creation and exact GL sale/cost entries.
 - Standard bus deduction and specialized transport supplier payable.
 - Independent multicurrency payments and immutable conversion snapshots.

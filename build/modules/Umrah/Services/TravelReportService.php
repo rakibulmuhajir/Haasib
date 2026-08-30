@@ -12,6 +12,7 @@ use App\Modules\Umrah\Models\GroupTransportItem;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\PaymentAllocation;
+use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\Ticket;
 use App\Modules\Umrah\Models\TicketBooking;
 use App\Modules\Umrah\Models\TicketCancellation;
@@ -158,6 +159,7 @@ class TravelReportService
                 'date' => CarbonImmutable::parse($date)->toDateString(), 'sort_at' => CarbonImmutable::parse($date), 'type' => 'charge',
                 'party' => $group->agent?->name, 'reference' => $group->group_number, 'description' => $group->name,
                 'charge' => (float) $group->total_receivable, 'receipt' => 0.0, 'advance' => 0.0,
+                'refund' => 0.0,
             ]);
         }
 
@@ -187,6 +189,34 @@ class TravelReportService
                 'description' => $payment->status === GroupPayment::STATUS_REVERSED ? 'Reversed receipt' : 'Receipt'.($allocated > 0 ? ' allocated to groups' : ''),
                 'charge' => 0.0, 'receipt' => $payment->status === GroupPayment::STATUS_POSTED ? $allocated : 0.0,
                 'advance' => $payment->status === GroupPayment::STATUS_POSTED ? $advance : 0.0,
+                'refund' => 0.0,
+            ]);
+        }
+
+        // Money handed back to the agent is a movement on their account, and
+        // until now the statement showed it only as an advance that had
+        // quietly shrunk. The row carries no charge or receipt, so no total
+        // moves: what it adds is the sentence explaining where the advance
+        // went, and which part of the package was given back.
+        $refunds = Refund::where('company_id', $company->id)
+            ->where('party_type', Refund::PARTY_AGENT)
+            ->whereIn('status', [Refund::STATUS_REFUNDED, Refund::STATUS_CREDITED])
+            ->when($agentId, fn ($query) => $query->where('party_id', $agentId))
+            ->with(['group:id,group_number', 'agent:id,customer_id'])
+            ->get();
+        foreach ($refunds as $refund) {
+            $date = $refund->settled_at ?? $refund->reviewed_at ?? $refund->created_at;
+            $service = Refund::SERVICES[$refund->service] ?? $refund->service;
+            $events->push([
+                'date' => CarbonImmutable::parse($date)->toDateString(),
+                'sort_at' => CarbonImmutable::parse($date),
+                'type' => 'refund',
+                'party' => $refund->agent?->name,
+                'reference' => $refund->refund_number,
+                'description' => ($refund->status === Refund::STATUS_CREDITED ? 'Kept as credit' : 'Refunded').' -- '.$service
+                    .($refund->group?->group_number ? ' on '.$refund->group->group_number : ''),
+                'charge' => 0.0, 'receipt' => 0.0, 'advance' => 0.0,
+                'refund' => (float) $refund->base_amount,
             ]);
         }
 
@@ -218,6 +248,7 @@ class TravelReportService
                 'Opening receivable' => $opening,
                 'Charges' => $rows->sum('charge'),
                 'Allocated receipts' => $rows->sum('receipt'),
+                'Refunded to agent' => $rows->sum('refund'),
                 'Available advances' => $availableAdvances,
                 'Closing receivable' => $running,
                 'Net due' => round($running - $availableAdvances, 2),
@@ -226,7 +257,8 @@ class TravelReportService
                 $this->column('date', 'Date', 'date'), $this->column('party', 'Agent'), $this->column('reference', 'Reference'),
                 $this->column('description', 'Description'), $this->column('type', 'Type', 'status'),
                 $this->column('charge', 'Charge', 'money'), $this->column('receipt', 'Allocated Receipt', 'money'),
-                $this->column('advance', 'Advance', 'money'), $this->column('balance', 'Receivable', 'money'),
+                $this->column('advance', 'Advance', 'money'), $this->column('refund', 'Refunded', 'money'),
+                $this->column('balance', 'Receivable', 'money'),
             ],
             'rows' => $rows->all(),
         ];

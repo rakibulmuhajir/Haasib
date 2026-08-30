@@ -23,6 +23,7 @@ const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
     partyTypes: Record<string, string>;
     services: Record<string, string>;
+    agentServices: Record<string, string>;
     agents: Array<{ id: string; name: string }>;
     visaVendors: Array<{ id: string; name: string }>;
     transportVendors: Array<{ id: string; name: string }>;
@@ -98,11 +99,26 @@ const baseAmount = computed(
         ) / 100,
 );
 
+/*
+ * A visa cannot be given back to an agent -- the group was built from
+ * visas that had already come back approved, so there is none left to
+ * refund. A visa desk returning a fee to the company is a different
+ * direction entirely and keeps the full list.
+ */
+const availableServices = computed(() =>
+    isAgentRefund.value ? props.agentServices : props.services,
+);
+
 watch(
     () => form.party_type,
     () => {
         form.party_id = 'none';
         form.visa_group_id = 'none';
+        // Switching to an agent while 'visa' is selected would submit a
+        // service the agent list does not contain.
+        if (!(form.service in availableServices.value)) {
+            form.service = Object.keys(availableServices.value)[0];
+        }
     },
 );
 watch(
@@ -232,7 +248,7 @@ const submit = () =>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem
-                                    v-for="(label, value) in services"
+                                    v-for="(label, value) in availableServices"
                                     :key="value"
                                     :value="value"
                                 >

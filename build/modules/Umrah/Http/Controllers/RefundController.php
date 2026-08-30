@@ -16,8 +16,8 @@ use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\RefundService;
-use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Modules\Umrah\Services\TravelAccessService;
+use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -73,6 +73,8 @@ class RefundController extends Controller
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'partyTypes' => $isMember ? [Refund::PARTY_AGENT => Refund::PARTY_TYPES[Refund::PARTY_AGENT]] : Refund::PARTY_TYPES,
             'services' => Refund::SERVICES,
+            // The form narrows to these the moment the party is an agent.
+            'agentServices' => Refund::AGENT_SERVICES,
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderByName()->get(['id', 'customer_id']),

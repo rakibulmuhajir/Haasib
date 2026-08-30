@@ -582,10 +582,21 @@ Then the lifecycle:
 > nothing to refund.
 
 12. `/<company>/umrah/refunds/create` — party **agent** Sahil Travel Network,
-    **500 SAR**, a reason. **Approve**, then **settle**. The money and the
-    agent's balance should move only on settlement, not on approval.
-13. Try a second refund for another 500. Expect a refusal: the advance is spent.
-14. Create one more, then **cancel** it before approval. Nothing should post.
+    **500 SAR**, a reason, and a **service**: hotel, ticket or transport.
+    - The service says which part of the package came back. Refunds are
+      partial by nature — one passenger out of a group not travelling is the
+      ordinary case.
+    - **Visa is not offered, on purpose.** A group is built after the visas
+      come back approved and only the approved ones are imported, so by the
+      time a group exists there is no visa left to refund. The form says so if
+      you go looking for it.
+13. **Approve**, then **settle** it. The money and the agent's balance should
+    move only on settlement, not on approval.
+14. Try a second refund for another 500. Expect a refusal: the advance is spent.
+15. Create one more and **reject** it. Nothing should post.
+    - *There is no Cancel on a requested refund, and that is correct.*
+      Cancelling reverses posted ledger entries, so it only appears once a
+      refund has been approved. **Reject** is the action on a requested one.
 
 ### Expenses
 
@@ -613,7 +624,7 @@ built, and **download the PDF**.
 | Report | Where | What it should show |
 |---|---|---|
 | Group Profitability | sidebar | Four groups; margins 600 / 1,210 / 1,690 / Group D as edited |
-| Agent Statement | sidebar | Charges from four groups and the ticket invoice, the 10,500 receipt, the 500 refund |
+| Agent Statement | sidebar | Charges from four groups and the ticket invoice, the 10,500 receipt, and the 500 refund on its own line under **Refunded**, naming the service it paid back |
 | Receivable Aging | sidebar | The agent's outstanding balance |
 | Vendor Payable Aging | sidebar | All four suppliers; Haramain's payable restored after the reversal |
 | Advances and Allocations | sidebar | The 10,500 receipt, its three allocations, and the 500 that was refunded |

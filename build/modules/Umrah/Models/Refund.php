@@ -49,14 +49,49 @@ class Refund extends Model
 
     public const SERVICE_HOTEL = 'hotel';
 
+    public const SERVICE_TICKET = 'ticket';
+
     public const SERVICE_OTHER = 'other';
 
+    /**
+     * Every service a refund can name, including ones no longer offered.
+     * Read this when displaying an existing refund; it has to be able to
+     * label whatever is already stored.
+     */
     public const SERVICES = [
         self::SERVICE_VISA => 'Visa',
         self::SERVICE_TRANSPORT => 'Transport',
         self::SERVICE_HOTEL => 'Hotel',
+        self::SERVICE_TICKET => 'Ticket',
         self::SERVICE_OTHER => 'Other',
     ];
+
+    /**
+     * What an agent's refund may name. Visa is absent by design: a group is
+     * built after the visas come back approved and only the approved ones
+     * are imported into it, so by the time a group exists there is no visa
+     * left to give back to the buyer. The three that remain are the three a
+     * passenger can drop out of -- their hotel, their ticket, their seat.
+     *
+     * Refunds are partial by nature. One person out of a group not
+     * travelling is the ordinary case, which is why the amount is free and
+     * this says which part of their package it came from.
+     *
+     * A vendor refund is the other direction entirely -- a supplier giving
+     * money back to the company -- and a visa desk returning a fee is an
+     * ordinary thing for one to do. Those keep the full list.
+     */
+    public const AGENT_SERVICES = [
+        self::SERVICE_HOTEL => 'Hotel',
+        self::SERVICE_TICKET => 'Ticket',
+        self::SERVICE_TRANSPORT => 'Transport',
+        self::SERVICE_OTHER => 'Other',
+    ];
+
+    public static function servicesFor(?string $partyType): array
+    {
+        return $partyType === self::PARTY_AGENT ? self::AGENT_SERVICES : self::SERVICES;
+    }
 
     public const STATUS_REQUESTED = 'requested';
 

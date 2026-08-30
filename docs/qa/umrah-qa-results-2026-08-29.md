@@ -83,3 +83,36 @@ Fix the agent payment-status calculation and voucher persistence/date-time flow 
 - **EXPECTED DATA GAP:** Departure Manifest returns no rows because the draft voucher still has no committed flight itinerary.
 - **DATA/BEHAVIOR GAP:** Transport Dispatch returns no rows even though Groups B-D contain transport selections and drivers. The report appears to require scheduled transport records, while the walkthrough expects the group vehicle selections themselves to appear.
 - **PASS:** Passenger Status reports all 21 passengers.
+
+## Second pass — revision c1ba1ed7
+
+- **PASS:** The rewritten walkthrough contains the corrected server command, company-creation route, `sahil_agent` username, 10,500 receipt/refund logic, transport scheduling requirement, report-dropdown routing, and previously identified UI caveats.
+- **FAIL / recording blocker remains:** The four voucher date-time inputs still do not retain values together. After entering all four using alternating Enter and Tab commits, only the most recently committed value survives; earlier fields clear during later commits. No stacked calendar popovers appear, but the itinerary remains impossible to complete and approval remains blocked.
+- **PASS:** After adding schedules to Group C's two transport rows and Group D's row, Transport Dispatch returns three rows representing five vehicles, 16 passengers, both drivers, and the expected terminals. This confirms the revised walkthrough's scheduling explanation.
+- **PASS:** Added 500 SAR as an unallocated agent receipt (UPM-00004) to adapt the retained first-pass data to the corrected 10,500 scenario. URF-00001 then approved and settled successfully; its final status is `Refunded`.
+- **TEST-DATA NOTE:** The retained company now has two incoming records (10,000 allocated plus 500 unallocated/refunded), rather than the corrected walkthrough's single 10,500 receipt. Functionally this exercises the same 10,000 allocation plus 500 refund balance, but the report presentation differs from a clean recording run.
+- **PASS:** The Report dropdown exposes all thirteen reports. Ticket Sales shows two tickets and 3,780 gross fare; Ticket Supplier Reconciliation shows Skyline Ticketing and a zero clearing-control balance; Ticket Cancellations shows the 1,500 buyer return, 1,400 supplier return, and 100 net cost.
+
+## Asset-controlled recheck — c1ba1ed7 built bundle
+
+The flight-field failure reported in the two earlier sections was a **false app defect caused by stale Vite assets**. `public/hot` kept the Laravel page attached to an older dev-server bundle even though the repository was on c1ba1ed7. After testing with Vite stopped and the built assets served directly:
+
+- **PASS / asset fingerprint:** Typing `01/11/2026 08:00` renders exactly day-first with no comma, confirming the fixed bundle. The stale asset rendered month-first with a comma.
+- **PASS:** Alternating Enter and Tab across all four flight date-time inputs retains every value. All four also survive moving focus to another control, with no stacked calendar popovers.
+- **PASS:** UVR-00001 saved with complete onward and return flights, two company hotel stays, and the unused third stay removed.
+- **PASS:** Voucher approval priced hotels at 21,600 charge / 17,000 cost / 4,600 margin. Consolidated group position became 30,060 receivable, 29,660 balance, and 6,290 profit.
+- **PASS:** Voucher PDF export triggered successfully.
+- **PASS:** Departure Manifest now returns the three voucher passengers under flight SV101, with agent, route, passports, and transport populated.
+
+**Final correction:** the date-time picker is not a recording blocker on c1ba1ed7. Recording or QA sessions must either restart Vite after changing/pulling frontend code or remove `public/hot` and use a fresh production build. The remaining known defects are the company-deletion zombie record and silent company-creation failure when secondary currency is untouched; neither blocks the Umrah recording.
+
+## Remaining negative tests
+
+- **PASS:** Removing the final vehicle from specialized Group D is refused. The edit page remains open, totals are unchanged, and the inline message explains that specialized transport requires a vehicle and self-arranged transport should be chosen to remove transport.
+- **PASS:** Voucher passenger exclusivity is enforced in the create UI. UVR-00001's three passengers appear only under `Already Assigned`; only the other three can be selected. Clearing every passenger disables `Save Voucher`.
+- **PASS:** Approved voucher lifecycle controls are status-safe: UVR-00001 exposes Amend and Cancel, but not Edit, Delete Draft, or Approve again.
+- **PASS:** URF-00002 was rejected with a reason and remained non-posting. It does not appear in the full-year Agent Statement.
+- **WALKTHROUGH/UI MISMATCH:** A requested refund has no pre-approval Cancel action, including when opened by the manager who created it. Only Reject and Approve are offered. URF-00003 remains Requested because the documented cancel path cannot be executed.
+- **PASS:** For a past-dated group, the agent cannot edit through either the UI or a direct URL. The Edit Group action disappears and the direct edit route returns 403 with `This group cannot be modified by your agent login.` Group D's date was restored to Oct 2, 2026 afterward with an audit reason.
+- **FAIL / authorization-cutoff defect:** The same agent can still create a voucher after the group's travel date and beyond the configured 24-hour cutoff. The UI offered Create Voucher and accepted an empty hotel-only draft; UVR-00002 was created for temporarily past-dated Group D with four passengers and no hotel stays. The server did not refuse it.
+- **PASS with report caveat:** Rejected and merely requested refunds do not appear in Agent Statement. However, settled URF-00001 also has no explicit statement row; the 500 receipt UPM-00004 appears with zero remaining advance after settlement. This conflicts with the walkthrough expectation that the statement visibly lists the 500 refund.

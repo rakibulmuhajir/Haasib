@@ -131,14 +131,27 @@ class StoreVoucherRequest extends UmrahFormRequest
                         $validator->errors()->add('visa_group_id', 'Selected group is not assigned to your agent login.');
                     }
 
-                    if ($hasCompleteItinerary) {
-                        $deadlineField = $this->input('service_bundle') === Voucher::SERVICE_HOTEL ? 'hotel_stays.0.check_in_date' : 'onward_departure_at';
-                        $deadlineValue = $this->input('service_bundle') === Voucher::SERVICE_HOTEL
-                            ? $this->input('hotel_stays.0.check_in_date')
-                            : $this->input('onward_departure_at');
-                        if ($agent && Carbon::parse($deadlineValue)->lt(now()->addHours($agent->voucher_cutoff_hours))) {
-                            $validator->errors()->add($deadlineField, "Voucher must be created at least {$agent->voucher_cutoff_hours} hours before service starts.");
-                        }
+                    // The deadline used to be read only off a complete
+                    // itinerary, so a draft with no dates in it skipped the
+                    // cutoff entirely -- an agent could open one the day
+                    // after the group had flown. The group's travel date is
+                    // the fact that says when the trip is, and it is there
+                    // whether or not the voucher has been filled in yet, so
+                    // it stands in when the voucher carries no date of its
+                    // own. A group with no travel date has nothing to be
+                    // late for.
+                    $isHotelBundle = $this->input('service_bundle') === Voucher::SERVICE_HOTEL;
+                    $deadlineField = $hasCompleteItinerary
+                        ? ($isHotelBundle ? 'hotel_stays.0.check_in_date' : 'onward_departure_at')
+                        : 'visa_group_id';
+                    $deadlineValue = $hasCompleteItinerary
+                        ? ($isHotelBundle ? $this->input('hotel_stays.0.check_in_date') : $this->input('onward_departure_at'))
+                        : $group?->travel_date;
+
+                    if ($agent && filled($deadlineValue) && Carbon::parse($deadlineValue)->lt(now()->addHours($agent->voucher_cutoff_hours))) {
+                        $validator->errors()->add($deadlineField, $hasCompleteItinerary
+                            ? "Voucher must be created at least {$agent->voucher_cutoff_hours} hours before service starts."
+                            : "This group travels too soon. A voucher must be created at least {$agent->voucher_cutoff_hours} hours before the group's travel date.");
                     }
                 }
 

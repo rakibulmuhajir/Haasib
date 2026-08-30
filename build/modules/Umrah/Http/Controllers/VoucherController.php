@@ -26,8 +26,8 @@ use App\Modules\Umrah\Services\TravelChangeLogger;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Modules\Umrah\Services\VoucherPassengerAssignmentService;
 use App\Modules\Umrah\Services\VoucherWorkflowService;
-use App\Services\CurrentCompany;
 use App\Services\CompanyLetterhead;
+use App\Services\CurrentCompany;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -180,7 +180,9 @@ class VoucherController extends Controller
                 'company_id' => $company->id,
                 'visa_group_id' => $group->id,
                 'agent_id' => $group->agent_id,
-                'voucher_number' => $data['voucher_number'] ?: $this->service->nextVoucherNumber($company->id),
+                // Nullable in the rules, so absent from validated() when the
+                // caller omits it rather than sending it empty.
+                'voucher_number' => ($data['voucher_number'] ?? null) ?: $this->service->nextVoucherNumber($company->id),
                 'title' => $data['title'],
                 'service_bundle' => $data['service_bundle'],
                 'status' => $data['status'] ?? Voucher::STATUS_DRAFT,

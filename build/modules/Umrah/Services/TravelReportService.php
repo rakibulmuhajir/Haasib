@@ -193,6 +193,35 @@ class TravelReportService
             ]);
         }
 
+        // A ticket sold through an agent is billed to that agent's customer
+        // like any group is, so it belongs on the statement beside them.
+        // Only the group charges were being collected, which left the
+        // statement's total charges short by every ticket ever sold and
+        // impossible to tie back to the customer's own balance.
+        $bookings = TicketBooking::where('company_id', $company->id)
+            ->whereNotNull('agent_id')
+            ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))
+            ->with(['agent:id,customer_id', 'invoice:id,invoice_number,total_amount,base_amount'])
+            ->get();
+        foreach ($bookings as $booking) {
+            $invoice = $booking->invoice;
+            if (! $invoice) {
+                continue;
+            }
+
+            $date = $booking->booking_date ?? $booking->created_at;
+            $events->push([
+                'date' => CarbonImmutable::parse($date)->toDateString(),
+                'sort_at' => CarbonImmutable::parse($date),
+                'type' => 'charge',
+                'party' => $booking->agent?->name,
+                'reference' => $invoice->invoice_number ?? $booking->pnr,
+                'description' => 'Ticket booking',
+                'charge' => (float) ($invoice->base_amount ?? $invoice->total_amount),
+                'receipt' => 0.0, 'advance' => 0.0, 'refund' => 0.0,
+            ]);
+        }
+
         // Money handed back to the agent is a movement on their account, and
         // until now the statement showed it only as an advance that had
         // quietly shrunk. The row carries no charge or receipt, so no total

@@ -570,9 +570,13 @@ Then the lifecycle:
 
 ### A payment in a second currency
 
-11. Out to Skyline Ticketing, **100,000 PKR**, exchange rate `0.0125`. Expected
-    base amount **1,250 SAR** — base is amount × rate. Check the supplier's
-    balance moved by 1,250, not by 100,000.
+11. Out to **Anwar Hospitality**, **100,000 PKR**, exchange rate `0.0125`.
+    Expected base amount **1,250 SAR** — base is amount × rate. Check the
+    vendor's balance moved by 1,250, not by 100,000. Reverse it afterwards.
+    - **Not Skyline Ticketing.** An umrah payment pays an umrah vendor: visa,
+      transport or hotel. The ticket supplier is an accounting vendor and its
+      bill is settled through Accounting, not this screen. Its absence from
+      the picker is correct.
 
 ### Refunds
 
@@ -624,7 +628,7 @@ built, and **download the PDF**.
 | Report | Where | What it should show |
 |---|---|---|
 | Group Profitability | sidebar | Four groups; margins 600 / 1,210 / 1,690 / Group D as edited |
-| Agent Statement | sidebar | Charges from four groups and the ticket invoice, the 10,500 receipt, and the 500 refund on its own line under **Refunded**, naming the service it paid back |
+| Agent Statement | sidebar | Charges from four groups **and the ticket booking's invoice**, the 10,500 receipt, and the 500 refund on its own line under **Refunded**, naming the service it paid back |
 | Receivable Aging | sidebar | The agent's outstanding balance |
 | Vendor Payable Aging | sidebar | All four suppliers; Haramain's payable restored after the reversal |
 | Advances and Allocations | sidebar | The 10,500 receipt, its three allocations, and the 500 that was refunded |

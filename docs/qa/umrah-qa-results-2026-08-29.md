@@ -116,3 +116,56 @@ The flight-field failure reported in the two earlier sections was a **false app 
 - **PASS:** For a past-dated group, the agent cannot edit through either the UI or a direct URL. The Edit Group action disappears and the direct edit route returns 403 with `This group cannot be modified by your agent login.` Group D's date was restored to Oct 2, 2026 afterward with an audit reason.
 - **FAIL / authorization-cutoff defect:** The same agent can still create a voucher after the group's travel date and beyond the configured 24-hour cutoff. The UI offered Create Voucher and accepted an empty hotel-only draft; UVR-00002 was created for temporarily past-dated Group D with four passengers and no hotel stays. The server did not refuse it.
 - **PASS with report caveat:** Rejected and merely requested refunds do not appear in Agent Statement. However, settled URF-00001 also has no explicit statement row; the 500 receipt UPM-00004 appears with zero remaining advance after settlement. This conflicts with the walkthrough expectation that the statement visibly lists the 500 refund.
+
+## Full remaining QA — revision dbf09455
+
+Environment was deliberately asset-controlled: Laravel at `127.0.0.1:9001`, no Vite process, no `public/hot`, and the production bundle from `dbf09455`.
+
+### Fixed paths verified
+
+- **PASS:** Agent refund services are party-aware. Agent refunds offer Hotel, Ticket, Transport, and Other but not Visa. Visa-vendor refunds still offer Visa.
+- **PASS:** A new 50 SAR agent Ticket refund saves and reopens as service `ticket` rather than `other`.
+- **PASS:** Full-year Agent Statement now has a separate 500 SAR `Refunded` column/row for URF-00001, naming `Refunded -- Visa`, without changing charge or receipt totals.
+- **PASS:** The 24-hour voucher cutoff now uses the group travel date when the voucher has no itinerary. An agent was refused against a past-dated group with a visible inline message and toast; the group date was restored afterward.
+- **PASS:** Group C remains `Partly paid` for the agent while receivable, balance, sale, and transport cost stay hidden.
+
+### Group D adjustment and supplier reconciliation
+
+- **PASS:** Adding one Hiace raised transport sale/cost by exactly 240/180; removing it reversed exactly 240/180.
+- **PASS:** Switching the remaining two Coasters from Haramain to Own Fleet kept sale at 4,800, reduced cost from 3,600 to 3,000, and raised profit from 1,800 to 2,400.
+- **PASS:** Haramain payable fell from 6,500 to 2,900 and Own Fleet payable rose from 0 to 3,000. Group D is intentionally left on two Own Fleet Coasters.
+
+### Voucher lifecycle
+
+- **BLOCKER — amendment 500:** `Amend` on approved UVR-00001 fails while copying its passengers. PostgreSQL rejects the duplicate `(company_id, visa_group_id, passenger_id)` rows under `umrah_voucher_passengers_company_id_visa_group_id_passenger_id_`. The dialog remains open and provides no durable explanation to the user. No amendment is created, so room-count differential accounting cannot be tested.
+- **PASS:** UVR-00003 was created for Group C's other three passengers as a Visa + Transport draft with no hotel stays. Passenger exclusivity remained correct.
+- **BLOCKER — no-hotel approval:** UVR-00003 cannot be approved as written. `ApproveVoucherRequest::hasCompleteItinerary()` requires `hotel_stays !== []` for every service bundle, including Visa + Transport. This contradicts both the bundle and walkthrough step 9.
+- **PASS:** Separating one passenger from UVR-00003 created UVR-00004 and removed that passenger from the source; no passenger appeared twice.
+- **PASS with workaround:** UVR-00004 approved after adding a temporary self-arranged stay, then cancelled with a reason. It remains visible as Cancelled and the other vouchers remain intact.
+- **BLOCKED BY AMENDMENT:** Moving a passenger from voucher 2 into approved voucher 1 is unavailable. `Move Passengers` only has an eligible draft target; the amendment failure prevents voucher 1 from producing that draft target.
+- **FAIL — time-zone inconsistency:** Typed flight times persist, but the voucher detail adds five hours while the PDF prints the entered time. For example, 13:00/17:00 saved on UVR-00004 displays as 18:00/22:00 on the detail page. UVR-00001 likewise displays 13:00 on screen while its PDF prints 08:00.
+
+### Vendor payments and currency
+
+- **PASS:** UPM-00005 paid Anwar Hospitality 1,500 SAR and auto-allocated it to UGR-00003; its payable fell by 1,500.
+- **BLOCKER — Skyline unavailable:** The Umrah outgoing-payment vendor selector contains only the Umrah visa, transport, and hotel vendors. Accounting ticket supplier Skyline Ticketing is absent, so the documented 100,000 PKR payment to Skyline cannot be entered.
+- **PASS (isolated conversion):** A 100,000 PKR payment against Anwar previewed and posted a base amount of exactly 1,250 SAR at 0.0125. QA payment UPM-00006 and its allocation were then reversed, restoring the vendor balance while retaining the audit trail.
+
+### PDF and report verification
+
+- **PASS:** Actual PDF bytes were generated through the same controllers for the payment receipt, Haramain supplier statement, and all thirteen reports for 2026. Every output is a valid, readable one-page PDF with aligned tables, no clipping, no broken glyphs, and correct page orientation.
+- **PASS:** UVR-00001 PDF contains Sahil Travel Network, all three passenger names/passports, both hotels, 3/2 nights, both transport rows, and both flight legs.
+- **PASS:** UPM-00001 receipt contains Sahil Travel Network and allocations of 3,600 / 6,000 / 400 to Groups A/B/C. Retained data uses a separate UPM-00004 for the refundable 500, so this receipt is 10,000 rather than the clean walkthrough's single 10,500 receipt.
+- **PASS:** Haramain statement closes at 2,900 and contains Group B's 630 plus Group C's 2,000 and 270 transport costs. The reversed 2,000 payment correctly contributes zero payment for the period.
+- **PASS:** Group Profitability closes at 48,800 revenue / 38,300 direct cost / 10,500 contribution; Group D reads 8,400 / 6,000 / 2,400 and Group C reads 30,060 / 23,770 / 6,290.
+- **PASS:** Departure Manifest, Hotel Rooming, Transport Dispatch, Voucher Control, Ticket Sales, Ticket Supplier Reconciliation, and Ticket Cancellations contain the expected retained data. The ticket clearing control is zero and UVR-00004 appears as Cancelled.
+- **FAIL — ticket invoice absent from Agent Statement:** The full-year statement contains the four group charges, allocations, and the refund row, but no TB-00001 ticket invoice/charge. Total charges remain 48,800 (groups only), contradicting the walkthrough's expectation that the ticket invoice is included.
+
+### Final role/UI check
+
+- **PASS:** The agent dashboard shows only its four groups and balances. Group C shows `Partly paid`; no cost, supplier payable, margin, or profit value is exposed.
+- **UX:** Group transport schedules on the agent group detail render as raw ISO values such as `2026-10-01T06:00:00.000000Z`, unlike the human-formatted voucher schedule.
+
+## Recording verdict after dbf09455
+
+**Not recording-ready.** The fixed cutoff, refund service, refund statement row, supplier reallocation, PDFs, and role isolation are sound. Recording remains blocked by the approved-voucher amendment 500, the impossible no-hotel approval for a Visa + Transport voucher, the unavailable Skyline ticket-supplier payment, and the missing ticket invoice on Agent Statement. The five-hour screen/PDF flight-time disagreement is also visible enough to fix before filming.

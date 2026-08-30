@@ -12,6 +12,7 @@ const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})/
 const dateOnlyExactPattern = /^\d{4}-\d{2}-\d{2}$/
 const dateTimePattern = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/
 const isoFractionPattern = /(\.\d{3})\d+(Z|[+-]\d{2}:?\d{2})?$/
+const zoneSuffixPattern = /(Z|[+-]\d{2}:?\d{2})$/
 
 export function formatDateTime(value: DateInput, options: FormatOptions = {}): string {
   const fallback = options.fallback ?? '-'
@@ -98,7 +99,23 @@ export function parseDateTime(value: DateInput, mode: DateTimeMode = 'datetime')
     }
   }
 
-  const normalized = value.replace(isoFractionPattern, '$1$2')
+  /*
+   * Every datetime column in this database is `timestamp without time
+   * zone` -- 217 of them, and not one timestamptz. They hold wall-clock
+   * time: a flight leaves at 13:00 at its airport, and that is the whole
+   * of what was stored.
+   *
+   * Laravel still serialises them with a Z on the end, which is a habit of
+   * the encoder rather than a claim about zones. Taken at its word, the
+   * browser read 13:00 as UTC and redrew it in the viewer's offset, so a
+   * voucher showed 18:00 in Karachi while its own PDF -- formatted on the
+   * server, which does not convert -- printed 13:00. Dropping the suffix
+   * parses the value as the local wall clock it always was, and the screen
+   * agrees with the paper again.
+   */
+  const normalized = value
+    .replace(isoFractionPattern, '$1$2')
+    .replace(zoneSuffixPattern, '')
   const date = new Date(normalized)
 
   return Number.isNaN(date.getTime()) ? null : date

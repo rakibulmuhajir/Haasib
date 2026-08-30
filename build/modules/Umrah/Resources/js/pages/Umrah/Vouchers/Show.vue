@@ -30,6 +30,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { printBaseCss } from '@/lib/printSheet';
 import type { BreadcrumbItem } from '@/types';
+import { formatDateTime as sharedFormatDateTime } from '@/lib/datetime';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowRightLeft,
@@ -241,13 +242,12 @@ const escapeHtml = (value: unknown) =>
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
 
-const formatDateTime = (value: unknown) => {
-    if (!value) return '';
-    const date = new Date(String(value));
-    if (Number.isNaN(date.getTime())) return String(value);
-
-    return date.toLocaleString();
-};
+// Was new Date(...).toLocaleString(), which read the Z Laravel appends as
+// a real zone and redrew a 13:00 flight as 18:00 while the PDF printed
+// 13:00. The shared helper treats these columns as the wall-clock times
+// they are.
+const formatDateTime = (value: unknown) =>
+    value ? sharedFormatDateTime(value as string, { fallback: '' }) : '';
 const formatDate = (value: unknown) => {
     if (!value) return '';
     const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);

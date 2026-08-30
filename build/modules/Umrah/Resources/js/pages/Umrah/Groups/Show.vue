@@ -3,6 +3,7 @@ import DateTimeText from '@/components/DateTimeText.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTime } from '@/lib/datetime';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -889,7 +890,7 @@ const addPayment = () => {
                                     Schedule
                                 </div>
                                 <div>
-                                    {{ item.scheduled_at || 'Not scheduled' }}
+                                    {{ item.scheduled_at ? formatDateTime(item.scheduled_at) : 'Not scheduled' }}
                                 </div>
                             </div>
                             <div>

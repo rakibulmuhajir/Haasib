@@ -70,6 +70,13 @@ class ApproveVoucherRequest extends UmrahFormRequest
             }
         }
 
+        // A bundle that sells no hotel has no stay to complete. Requiring
+        // one made Visa + Transport impossible to approve at all: the
+        // form offers no stays for it, so the check could never pass.
+        if (! $voucher->includesHotel()) {
+            return true;
+        }
+
         $stays = $voucher->hotel_stays ?? [];
 
         return $stays !== [] && collect($stays)->every(function (array $stay): bool {

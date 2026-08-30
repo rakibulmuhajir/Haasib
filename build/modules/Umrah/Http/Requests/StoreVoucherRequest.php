@@ -214,6 +214,14 @@ class StoreVoucherRequest extends UmrahFormRequest
             }
         }
 
+        // Same rule as approval: only a bundle that sells a hotel has a
+        // stay to complete. Without this a Visa + Transport voucher never
+        // counted as complete, so its own flight dates were ignored and
+        // the cutoff fell back to the group's travel date.
+        if (! Voucher::bundleIncludesHotel((string) $this->input('service_bundle'))) {
+            return true;
+        }
+
         $stays = $this->input('hotel_stays', []);
         if ($stays === []) {
             return false;

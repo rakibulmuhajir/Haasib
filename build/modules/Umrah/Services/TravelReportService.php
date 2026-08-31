@@ -152,15 +152,38 @@ class TravelReportService
             ->with(['agent:id,customer_id', 'saleTransaction:id,transaction_date,posting_date'])
             ->get();
 
+        /*
+         * What each group's charge was later adjusted by, so the statement
+         * can show the original figure and every change to it as separate
+         * dated lines. A group carries only its current total, so a charge
+         * agreed in September and revised in October used to appear as one
+         * October-sized row dated September, with nothing saying it had
+         * moved -- unreadable to the agent being asked to pay it.
+         */
+        $adjustments = $this->groupSaleAdjustments($company, $groups->pluck('id')->all());
+
         $events = collect();
         foreach ($groups as $group) {
             $date = $group->saleTransaction?->posting_date ?? $group->saleTransaction?->transaction_date ?? $group->created_at;
+            $changes = $adjustments->get($group->id, collect());
+
             $events->push([
                 'date' => CarbonImmutable::parse($date)->toDateString(), 'sort_at' => CarbonImmutable::parse($date), 'type' => 'charge',
                 'party' => $group->agent?->name, 'reference' => $group->group_number, 'description' => $group->name,
-                'charge' => (float) $group->total_receivable, 'receipt' => 0.0, 'advance' => 0.0,
-                'refund' => 0.0,
+                // The original, not today's total: the adjustments below
+                // carry the rest, and the two together are the total again.
+                'charge' => round((float) $group->total_receivable - (float) $changes->sum('delta'), 2),
+                'receipt' => 0.0, 'advance' => 0.0, 'refund' => 0.0,
             ]);
+
+            foreach ($changes as $change) {
+                $events->push([
+                    'date' => $change['date']->toDateString(), 'sort_at' => $change['date'], 'type' => 'adjustment',
+                    'party' => $group->agent?->name, 'reference' => $group->group_number,
+                    'description' => $change['reason'],
+                    'charge' => $change['delta'], 'receipt' => 0.0, 'advance' => 0.0, 'refund' => 0.0,
+                ]);
+            }
         }
 
         $payments = GroupPayment::where('company_id', $company->id)
@@ -669,6 +692,50 @@ class TravelReportService
             'unpaid' => $allocated <= 0,
             default => true,
         };
+    }
+
+    /**
+     * Sale adjustments per group, as {date, reason, delta} in date order.
+     *
+     * The delta is read off the receivable line of the adjustment's own
+     * journal entry rather than recomputed, so the statement moves by the
+     * same amount the ledger did. A debit raises what the agent owes and a
+     * credit lowers it, which is the sign this returns.
+     */
+    private function groupSaleAdjustments(Company $company, array $groupIds): Collection
+    {
+        if ($groupIds === []) {
+            return collect();
+        }
+
+        $arAccountId = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_receivable')
+            ->orderBy('code')
+            ->value('id') ?? $company->ar_account_id;
+
+        if (! $arAccountId) {
+            return collect();
+        }
+
+        return DB::table('acct.transactions as t')
+            ->join('acct.journal_entries as j', 'j.transaction_id', '=', 't.id')
+            ->where('t.company_id', $company->id)
+            ->where('t.transaction_type', 'umrah_group_sale_adjustment')
+            ->where('t.reference_type', 'umrah.visa_groups')
+            ->whereIn('t.reference_id', $groupIds)
+            ->where('j.account_id', $arAccountId)
+            ->groupBy('t.id', 't.reference_id', 't.transaction_date', 't.posting_date', 't.description')
+            ->selectRaw('t.reference_id, t.description, COALESCE(t.posting_date, t.transaction_date) as moved_on, SUM(j.debit_amount) - SUM(j.credit_amount) as delta')
+            ->get()
+            ->map(fn ($row) => [
+                'group_id' => $row->reference_id,
+                'date' => CarbonImmutable::parse($row->moved_on),
+                'reason' => (string) $row->description,
+                'delta' => round((float) $row->delta, 2),
+            ])
+            ->filter(fn (array $row) => abs($row['delta']) >= 0.01)
+            ->groupBy('group_id')
+            ->map(fn (Collection $rows) => $rows->sortBy('date')->values());
     }
 
     /**

@@ -1096,6 +1096,24 @@ class UmrahCoreService
             return;
         }
 
+        /*
+         * Read the group again rather than trusting the copy handed in.
+         *
+         * Approving an amendment reverses the superseded voucher first,
+         * which writes the group's hotel figures down. The caller's
+         * instance was loaded before that and still remembered the old
+         * total, so adding the new voucher to it put the superseded
+         * amount back: 21,600 reversed to nought, then 21,600 + 36,000
+         * written over it. The group carried both vouchers' hotels at
+         * once and its receivable was overstated by the amendment.
+         *
+         * Anything that adds to a stored total has to read it at the
+         * moment it adds, under the same lock the reversal took.
+         */
+        $group = VisaGroup::where('company_id', $group->company_id)
+            ->lockForUpdate()
+            ->findOrFail($group->id);
+
         $group->update([
             'hotel_amount' => round((float) $group->hotel_amount + (float) $voucher->hotel_sale_amount, 2),
             'hotel_cost_amount' => round((float) $group->hotel_cost_amount + (float) $voucher->hotel_cost_amount, 2),

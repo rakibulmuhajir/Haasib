@@ -169,3 +169,16 @@ Environment was deliberately asset-controlled: Laravel at `127.0.0.1:9001`, no V
 ## Recording verdict after dbf09455
 
 **Not recording-ready.** The fixed cutoff, refund service, refund statement row, supplier reallocation, PDFs, and role isolation are sound. Recording remains blocked by the approved-voucher amendment 500, the impossible no-hotel approval for a Visa + Transport voucher, the unavailable Skyline ticket-supplier payment, and the missing ticket invoice on Agent Statement. The five-hour screen/PDF flight-time disagreement is also visible enough to fix before filming.
+
+## Recheck — revision 39aa8b41
+
+- **PASS:** UVR-00001 amendment now creates UVR-00005 instead of returning a 500. The amendment preserves the three passengers, complete itinerary and hotel stays.
+- **FAIL / recording blocker:** Amendment accounting double-counts the superseded voucher. UVR-00001 had hotel charge/cost of 21,600/17,000. UVR-00005 changed the first room count from 1 to 2, producing 36,000/28,400, so the group should move by exactly +14,400/+11,400 to 36,000/28,400. Instead, approving UVR-00005 produced approved hotels 57,600 and hotel cost 45,400, with Group C receivable 66,060 and profit 13,890. This is the old amount plus the new amount, not a replacement/difference. UVR-00001 correctly reads `Superseded by UVR-00005`, but the consolidated accounting still includes it.
+- **PASS:** UVR-00003 (Visa + Transport, no hotel stays) saved a complete flight itinerary and approved successfully. The approval no longer requires an irrelevant hotel stay.
+- **PASS:** Entered flight wall-clock times render consistently on the voucher detail: e.g. 09:00/13:00 and 15:00/19:00 remain those times after save. Transport schedules also render as formatted times rather than raw ISO strings.
+- **PASS:** Agent Statement now includes `INV-01001` / `Ticket booking` as a 3,980 SAR charge, as well as the existing receipt and refund rows.
+- **WALKTHROUGH DATA NOTE:** The ticket statement and amended Group C totals are necessarily inflated while the amendment accounting defect remains; do not use the retained QA company for a recording until this is corrected or rebuilt with clean data.
+
+## Recording verdict after 39aa8b41
+
+**Still not recording-ready.** Five of the six reported fixes passed in the browser. Amendment accounting is a financial-integrity failure, so it is the remaining must-fix before recording.

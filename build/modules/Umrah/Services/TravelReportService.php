@@ -26,10 +26,10 @@ use Illuminate\Support\Facades\DB;
 class TravelReportService
 {
     public const REPORTS = [
-        'group-profitability' => ['title' => 'Group Profitability', 'description' => 'Revenue, direct costs, collections, and gross contribution by trip.', 'date_basis' => 'Service date'],
+        'group-profitability' => ['title' => 'Group Profitability', 'description' => 'Revenue, direct costs, collections, and gross contribution by trip.', 'date_basis' => 'Charge date'],
         'agent-statement' => ['title' => 'Agent Statement', 'description' => 'Group charges, receipt allocations, advances, and closing receivable.', 'date_basis' => 'Posting and payment date'],
-        'receivable-aging' => ['title' => 'Receivable Aging', 'description' => 'Outstanding agent balances grouped by age.', 'date_basis' => 'Service date as of report end'],
-        'vendor-aging' => ['title' => 'Vendor Payable Aging', 'description' => 'Outstanding visa, transport, and hotel supplier costs.', 'date_basis' => 'Service date as of report end'],
+        'receivable-aging' => ['title' => 'Receivable Aging', 'description' => 'Outstanding agent balances grouped by age.', 'date_basis' => 'Charge date as of report end'],
+        'vendor-aging' => ['title' => 'Vendor Payable Aging', 'description' => 'Outstanding visa, transport, and hotel supplier costs.', 'date_basis' => 'Charge date as of report end'],
         'advances' => ['title' => 'Advances and Allocations', 'description' => 'Unallocated and partially allocated agent receipts and supplier payments.', 'date_basis' => 'Payment date'],
         'passenger-status' => ['title' => 'Passenger and Visa Status', 'description' => 'Passenger identity, visa status, service type, and travel date.', 'date_basis' => 'Travel date'],
         'departure-manifest' => ['title' => 'Departure Manifest', 'description' => 'Passenger manifest grouped by departing flight.', 'date_basis' => 'Onward departure'],
@@ -639,7 +639,7 @@ class TravelReportService
 
     private function filteredGroups(Company $company, array $filters, bool $withFinancialRelations): Collection
     {
-        $relations = ['agent:id,customer_id', 'vendor:id,vendor_id', 'mandatoryTransportVendor:id,vendor_id', 'vouchers'];
+        $relations = ['agent:id,customer_id', 'vendor:id,vendor_id', 'mandatoryTransportVendor:id,vendor_id', 'vouchers', 'saleTransaction:id,transaction_date,posting_date'];
         if ($withFinancialRelations) {
             $relations = [...$relations, 'transportItems.transportVendor:id,vendor_id', 'paymentAllocations.payment'];
         }
@@ -650,7 +650,7 @@ class TravelReportService
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['visa_vendor_id'] ?? null, fn ($query, $id) => $query->where('vendor_id', $id))
             ->with($relations)->get()
-            ->filter(fn (VisaGroup $group) => ($date = $this->groupServiceDate($group)) && $date->betweenIncluded($filters['start'], $filters['end']));
+            ->filter(fn (VisaGroup $group) => $this->groupFinancialDate($group)->betweenIncluded($filters['start'], $filters['end']));
     }
 
     private function matchesGroupFilters(VisaGroup $group, array $filters): bool
@@ -669,6 +669,33 @@ class TravelReportService
             'unpaid' => $allocated <= 0,
             default => true,
         };
+    }
+
+    /**
+     * When the group's money happened, which is when it was created.
+     *
+     * A company charges the agent up front: by the time a group exists the
+     * visas are issued and the transport is paid for, and createGroup()
+     * posts the sale and the cost to today's ledger. The financial reports
+     * used to window on the travel date instead, so a group sold in August
+     * for an October trip sat in August's books and October's profit
+     * report, and neither could be reconciled against the other.
+     *
+     * The operational reports -- manifest, dispatch, rooming, passenger
+     * status -- still key off the travel date, because that is the day the
+     * work happens. They do not come through here.
+     *
+     * The posting date is the ledger's own answer; created_at only stands
+     * in for a group whose sale never posted, which would otherwise vanish
+     * from every financial report at every date range.
+     */
+    private function groupFinancialDate(VisaGroup $group): CarbonImmutable
+    {
+        $date = $group->saleTransaction?->posting_date
+            ?? $group->saleTransaction?->transaction_date
+            ?? $group->created_at;
+
+        return CarbonImmutable::parse($date)->startOfDay();
     }
 
     private function groupServiceDate(VisaGroup $group): ?CarbonImmutable

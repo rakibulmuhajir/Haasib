@@ -42,6 +42,12 @@ function reportFixture(): array
         'visa_cost_amount' => 600, 'transport_cost_amount' => 100, 'mandatory_transport_cost_amount' => 100,
         'hotel_cost_amount' => 150, 'total_receivable' => 1450, 'total_paid' => 700, 'balance' => 750, 'profit' => 600,
     ]);
+    // The financial reports window on when the group was charged, and this
+    // fixture writes its group straight to the table rather than going
+    // through createGroup(), so nothing has set that date for it. June is
+    // the month these tests talk about.
+    $group->forceFill(['created_at' => '2026-06-05 09:00:00'])->saveQuietly();
+
     $payment = GroupPayment::create([
         'company_id' => $company->id, 'agent_id' => $agent->id, 'direction' => GroupPayment::DIRECTION_RECEIVED,
         'payment_number' => 'UPM-RPT', 'payment_date' => '2026-06-12', 'amount' => 700, 'currency' => 'USD',

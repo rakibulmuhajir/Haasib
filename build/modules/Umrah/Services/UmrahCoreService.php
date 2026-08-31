@@ -1544,9 +1544,15 @@ class UmrahCoreService
 
     private function defaultGroupName(string $companyId, string $agentId, int $passengerCount): string
     {
+        // An agent's name lives on its customer now, not on umrah.agents --
+        // value('name') asked the database for a column the party refactor
+        // dropped, so naming a group after its agent threw. Only groups
+        // saved with the name left blank ever reached here, which is why
+        // it stayed hidden.
         $agentName = Agent::where('company_id', $companyId)
+            ->with('customer:id,name')
             ->whereKey($agentId)
-            ->value('name') ?: 'Umrah Group';
+            ->first()?->name ?: 'Umrah Group';
 
         return sprintf('%s - %d pax - %s', $agentName, $passengerCount, now()->format('Ymd His'));
     }

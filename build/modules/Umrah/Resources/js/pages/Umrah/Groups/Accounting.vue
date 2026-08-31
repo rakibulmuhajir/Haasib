@@ -70,6 +70,8 @@ const form = useForm({
     visa_sale_amount: String(props.group.visa_sale_amount ?? 0),
     transport_amount: String(props.group.transport_amount ?? 0),
     discount_amount: String(props.group.discount_amount ?? 0),
+    visa_cost_amount: String(props.group.visa_cost_amount ?? 0),
+    transport_cost_amount: String(props.group.transport_cost_amount ?? 0),
     reason: '',
 });
 
@@ -138,6 +140,8 @@ const submit = () => {
             visa_sale_amount: Number(data.visa_sale_amount || 0),
             transport_amount: Number(data.transport_amount || 0),
             discount_amount: Number(data.discount_amount || 0),
+            visa_cost_amount: Number(data.visa_cost_amount || 0),
+            transport_cost_amount: Number(data.transport_cost_amount || 0),
         }))
         .put(`/${props.company.slug}/umrah/groups/${props.group.id}/accounting`, {
             preserveScroll: true,
@@ -256,6 +260,27 @@ const submit = () => {
                             <div class="space-y-2"><Label>Transport charge</Label><Input v-model="form.transport_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.transport_amount" class="text-xs text-destructive">{{ form.errors.transport_amount }}</p></div>
                             <div class="space-y-2"><Label>Hotel charge</Label><Input :model-value="String(group.hotel_amount || 0)" type="number" disabled /><p class="text-xs text-muted-foreground">Controlled by approved hotel vouchers.</p></div>
                             <div class="space-y-2"><Label>Discount</Label><Input v-model="form.discount_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.discount_amount" class="text-xs text-destructive">{{ form.errors.discount_amount }}</p></div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader><CardTitle>Supplier costs</CardTitle></CardHeader>
+                        <CardContent class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-2">
+                                <Label>Visa cost</Label>
+                                <Input v-model="form.visa_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="form.errors.visa_cost_amount" class="text-xs text-destructive">{{ form.errors.visa_cost_amount }}</p>
+                            </div>
+                            <div class="space-y-2">
+                                <Label>Transport cost</Label>
+                                <Input v-model="form.transport_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="form.errors.transport_cost_amount" class="text-xs text-destructive">{{ form.errors.transport_cost_amount }}</p>
+                            </div>
+                            <p class="text-xs text-muted-foreground sm:col-span-2">
+                                What the suppliers charge you, for when one lowers their
+                                price after the group was built. The difference is posted
+                                against their payable; the agent's charge is not affected.
+                            </p>
                             <div v-if="canUpdate" class="space-y-2 sm:col-span-2"><Label>Adjustment reason</Label><Textarea v-model="form.reason" placeholder="Reason for changing charges, discount, or suppliers" /><p v-if="form.errors.reason" class="text-xs text-destructive">{{ form.errors.reason }}</p></div>
                         </CardContent>
                     </Card>

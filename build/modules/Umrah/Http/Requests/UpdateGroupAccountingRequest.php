@@ -26,6 +26,11 @@ class UpdateGroupAccountingRequest extends UmrahFormRequest
             'visa_sale_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'transport_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'discount_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
+            // What the suppliers charge. A vendor who drops their price
+            // after a group is built used to leave no way to record it
+            // short of moving the group to a different vendor record.
+            'visa_cost_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
+            'transport_cost_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
         ];
     }

@@ -212,8 +212,22 @@ class GroupAccountingService
             ], false);
 
             $transportSale = round((float) $data['transport_amount'], 2);
+            $transportCost = round((float) $data['transport_cost_amount'], 2);
             $transportSnapshot = [];
-            if ($group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS && $vendors['mandatory_transport_vendor_id']) {
+
+            /*
+             * Re-price from the provider only when the provider changed.
+             *
+             * This used to re-run the bus pricing on every save, at the
+             * provider's rates as they stand today. So correcting a typo in
+             * a figure quietly re-costed a group at a rate agreed months
+             * after it was sold, and the amounts the page had just shown
+             * were not the amounts it saved. Naming a different provider is
+             * a deliberate act and still re-prices; nothing else does.
+             */
+            $providerChanged = $vendors['mandatory_transport_vendor_id'] !== $group->mandatory_transport_vendor_id;
+
+            if ($group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS && $vendors['mandatory_transport_vendor_id'] && $providerChanged) {
                 $provider = VisaVendor::where('company_id', $group->company_id)
                     ->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)
                     ->findOrFail($vendors['mandatory_transport_vendor_id']);
@@ -222,13 +236,13 @@ class GroupAccountingService
                     ->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)
                     ->sum('transport_charge_amount');
                 $transportSale = round($pricing['sale'] + $transportOnlySale, 2);
+                $transportCost = $pricing['cost'];
                 $transportSnapshot = [
                     'standard_bus_retail_amount' => $pricing['retail_rate'],
                     'standard_bus_cost_amount' => $pricing['cost_rate'],
                     'standard_bus_charge_child_fare' => $pricing['charge_child_fare'],
                     'standard_bus_billable_passenger_count' => $pricing['passenger_count'],
                     'mandatory_transport_cost_amount' => $pricing['cost'],
-                    'transport_cost_amount' => $pricing['cost'],
                     'included_bus_cost_per_passenger' => 0,
                     'included_bus_cost_deduction' => 0,
                 ];
@@ -240,6 +254,8 @@ class GroupAccountingService
                 'visa_sale_amount' => round((float) $data['visa_sale_amount'], 2),
                 'transport_amount' => $transportSale,
                 'discount_amount' => round((float) $data['discount_amount'], 2),
+                'visa_cost_amount' => round((float) $data['visa_cost_amount'], 2),
+                'transport_cost_amount' => $transportCost,
                 ...$transportSnapshot,
             ]);
             $group = $this->core->recalculateGroup($group->fresh());

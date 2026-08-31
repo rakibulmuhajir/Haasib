@@ -384,7 +384,11 @@ class VisaGroupController extends Controller
                 ])];
             } elseif ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
                 $provider = VisaVendor::where('company_id', $record->company_id)->findOrFail($changes['mandatory_transport_vendor_id']);
-                $pricing = $this->service->standardBusPricingForGroup($record, $provider);
+                // Keep the rate this group was sold at unless the provider
+                // itself changed. Otherwise editing a travel date re-costs
+                // the bus at whatever the provider charges today.
+                $keepStoredRates = $changes['mandatory_transport_vendor_id'] === $record->mandatory_transport_vendor_id;
+                $pricing = $this->service->standardBusPricingForGroup($record, $provider, $keepStoredRates);
                 $changes = [...$changes,
                     'standard_bus_retail_amount' => $pricing['retail_rate'],
                     'standard_bus_cost_amount' => $pricing['cost_rate'],

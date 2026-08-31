@@ -1414,8 +1414,25 @@ class UmrahCoreService
     }
 
     /** @return array{passenger_count:int, sale:float, cost:float, retail_rate:float, cost_rate:float, charge_child_fare:bool} */
-    public function standardBusPricingForGroup(VisaGroup $group, VisaVendor $provider): array
+    /**
+     * @param  bool  $keepStoredRates  price at the rate this group was sold
+     *                                 at rather than the provider's rate as
+     *                                 it stands now
+     *
+     * A group keeps the rate it was sold at. Editing it re-counts the
+     * seats, because passengers come and go, but it must not quietly
+     * import a rate agreed with the provider long after the group was
+     * priced -- renaming a group is not a renegotiation. Naming a
+     * different provider is, and that path passes false.
+     */
+    public function standardBusPricingForGroup(VisaGroup $group, VisaVendor $provider, bool $keepStoredRates = false): array
     {
+        $hasStoredRates = $keepStoredRates && $group->standard_bus_billable_passenger_count !== null;
+
+        $chargeChildFare = $hasStoredRates
+            ? (bool) $group->standard_bus_charge_child_fare
+            : (bool) $provider->charge_child_fare;
+
         $passengers = $group->passengers()->get([
             'full_name', 'date_of_birth', 'imported_age', 'service_type',
         ])->toArray();
@@ -1423,10 +1440,14 @@ class UmrahCoreService
             $passengers,
             optional($group->travel_date)->toDateString(),
             (int) $group->passenger_count,
-            (bool) $provider->charge_child_fare,
+            $chargeChildFare,
         );
-        $retailRate = (float) $provider->standard_bus_retail_amount;
-        $costRate = (float) $provider->standard_bus_cost_amount;
+        $retailRate = $hasStoredRates
+            ? (float) $group->standard_bus_retail_amount
+            : (float) $provider->standard_bus_retail_amount;
+        $costRate = $hasStoredRates
+            ? (float) $group->standard_bus_cost_amount
+            : (float) $provider->standard_bus_cost_amount;
 
         return [
             'passenger_count' => $count,
@@ -1434,7 +1455,7 @@ class UmrahCoreService
             'cost' => round($costRate * $count, 2),
             'retail_rate' => $retailRate,
             'cost_rate' => $costRate,
-            'charge_child_fare' => (bool) $provider->charge_child_fare,
+            'charge_child_fare' => $chargeChildFare,
         ];
     }
 

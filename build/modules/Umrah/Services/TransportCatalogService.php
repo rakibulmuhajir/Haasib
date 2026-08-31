@@ -12,6 +12,16 @@ use Illuminate\Validation\ValidationException;
 
 class TransportCatalogService
 {
+    /**
+     * The legs a pilgrim's coach actually drives, between the three cities
+     * a group moves through. Endpoints are named as airport or hotel
+     * rather than as bare cities, because that is the journey being sold.
+     *
+     * The last two close the Jeddah-Madinah pair. Without them a group
+     * that lands at Jeddah, goes to Makkah and Madinah, then flies home
+     * from Jeddah had no sector for its final drive, and every company
+     * had to hand-create one.
+     */
     private const DEFAULT_SECTORS = [
         ['JED-MAK', 'Jeddah Airport to Makkah Hotel', 'Jeddah Airport', 'Makkah Hotel'],
         ['MAK-MED', 'Makkah Hotel to Madinah Hotel', 'Makkah Hotel', 'Madinah Hotel'],
@@ -19,6 +29,8 @@ class TransportCatalogService
         ['MAK-JED', 'Makkah Hotel to Jeddah Airport', 'Makkah Hotel', 'Jeddah Airport'],
         ['MEDA-MED', 'Madinah Airport to Madinah Hotel', 'Madinah Airport', 'Madinah Hotel'],
         ['MED-MEDA', 'Madinah Hotel to Madinah Airport', 'Madinah Hotel', 'Madinah Airport'],
+        ['JED-MED', 'Jeddah Airport to Madinah Hotel', 'Jeddah Airport', 'Madinah Hotel'],
+        ['MED-JED', 'Madinah Hotel to Jeddah Airport', 'Madinah Hotel', 'Jeddah Airport'],
     ];
 
     public function ensureDefaultSectors(string $companyId): void

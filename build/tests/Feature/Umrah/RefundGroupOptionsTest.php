@@ -149,6 +149,35 @@ test('a group without a per head rate offers none', function () {
         ->and($row['has_transport'])->toBeTrue();
 });
 
+test('a visa desk is only offered visa refunds', function () {
+    // It has never sold anyone a hotel room, so the choice was one real
+    // answer and three wrong ones.
+    expect(array_keys(App\Modules\Umrah\Models\Refund::servicesFor(App\Modules\Umrah\Models\Refund::PARTY_VISA_VENDOR)))
+        ->toBe(['visa', 'other']);
+});
+
+test('a transport provider is only offered transport', function () {
+    expect(array_keys(App\Modules\Umrah\Models\Refund::servicesFor(App\Modules\Umrah\Models\Refund::PARTY_TRANSPORT_VENDOR)))
+        ->toBe(['transport', 'other']);
+});
+
+test('a hotel supplier is only offered hotel', function () {
+    expect(array_keys(App\Modules\Umrah\Models\Refund::servicesFor(App\Modules\Umrah\Models\Refund::PARTY_HOTEL_VENDOR)))
+        ->toBe(['hotel', 'other']);
+});
+
+test('a group says whether it bought a visa', function () {
+    // The form narrows the service list by these, so a group that bought
+    // no hotel never offers a hotel refund.
+    $f = refundOptionsFixture();
+
+    $rows = collect(refundGroupOptions($f))->keyBy('group_number');
+
+    expect($rows['UGR-SETTLED']['has_visa'])->toBeTrue()
+        ->and($rows['UGR-HOTEL']['has_hotel'])->toBeTrue()
+        ->and($rows['UGR-SETTLED']['has_hotel'])->toBeFalse();
+});
+
 test('a cancelled group is not offered', function () {
     $f = refundOptionsFixture();
     $f->owing->update(['status' => VisaGroup::STATUS_CANCELLED]);

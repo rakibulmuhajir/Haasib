@@ -23,7 +23,7 @@ const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
     partyTypes: Record<string, string>;
     services: Record<string, string>;
-    agentServices: Record<string, string>;
+    servicesByParty: Record<string, Record<string, string>>;
     agents: Array<{ id: string; name: string }>;
     visaVendors: Array<{ id: string; name: string }>;
     transportVendors: Array<{ id: string; name: string }>;
@@ -33,6 +33,7 @@ const props = defineProps<{
         agent_id: string;
         group_number: string;
         name: string;
+        has_visa: boolean;
         has_transport: boolean;
         has_hotel: boolean;
         charged: { transport: number; hotel: number };
@@ -89,23 +90,16 @@ const isAgentRefund = computed(() => form.party_type === 'agent');
  * A ticket is not attached to a group at all, so that service offers
  * none; the note under the field says so rather than leaving an empty box.
  */
-const partyGroups = computed(() => {
-    if (!isAgentRefund.value || form.party_id === 'none') return [];
-
-    const mine = props.refundGroups.filter(
-        (group) => group.agent_id === form.party_id,
-    );
-
-    if (form.service === 'transport') return mine.filter((g) => g.has_transport);
-    if (form.service === 'hotel') return mine.filter((g) => g.has_hotel);
-    if (form.service === 'ticket') return [];
-
-    return mine;
-});
-
-const selectedGroup = computed(
-    () => props.refundGroups.find((group) => group.id === form.visa_group_id) ?? null,
+// Choose the group first; the services narrow to it, not the other way
+// round. Filtering both against each other left whichever was picked
+// second unable to change the first.
+const partyGroups = computed(() =>
+    isAgentRefund.value && form.party_id !== 'none'
+        ? props.refundGroups.filter((group) => group.agent_id === form.party_id)
+        : [],
 );
+
+
 
 /*
  * What the group was charged for the service being refunded. It comes off
@@ -157,11 +151,11 @@ const overCharged = computed(
 );
 
 const groupHint = computed(() => {
-    if (form.service === 'ticket') {
-        return 'A ticket booking is not part of a group, so there is no group to attach.';
-    }
     if (!partyGroups.value.length) {
-        return 'This agent has no group that bought the selected service.';
+        return 'This agent has no groups yet.';
+    }
+    if (!form.visa_group_id || form.visa_group_id === 'none') {
+        return 'Choosing a group narrows the services below to what it bought, and takes the refund off that group\u2019s payments.';
     }
 
     return 'The refund comes off this group\u2019s payments, so its balance goes back up.';
@@ -182,14 +176,44 @@ const baseAmount = computed(
 );
 
 /*
- * A visa cannot be given back to an agent -- the group was built from
- * visas that had already come back approved, so there is none left to
- * refund. A visa desk returning a fee to the company is a different
- * direction entirely and keeps the full list.
+ * What this party can be refunding, narrowed again by what the chosen
+ * group actually bought.
+ *
+ * A visa desk only ever sold visas, so offering it hotel and transport is
+ * three wrong answers and one right one. An agent's group that bought no
+ * hotel has no hotel to give back. Without a group there is nothing to
+ * narrow by, so the party's own list stands.
+ *
+ * Visa is absent from an agent's list throughout -- the group was built
+ * from visas already approved, so there is none left to return -- which
+ * is why a visa-and-transport group offers transport alone.
  */
-const availableServices = computed(() =>
-    isAgentRefund.value ? props.agentServices : props.services,
+const selectedGroup = computed(
+    () => props.refundGroups.find((group) => group.id === form.visa_group_id) ?? null,
 );
+
+const partyServices = computed(
+    () => props.servicesByParty[form.party_type] ?? props.services,
+);
+
+const availableServices = computed(() => {
+    const group = selectedGroup.value;
+    if (!group) return partyServices.value;
+
+    const bought: Record<string, boolean> = {
+        visa: group.has_visa,
+        transport: group.has_transport,
+        hotel: group.has_hotel,
+    };
+
+    const narrowed = Object.fromEntries(
+        Object.entries(partyServices.value).filter(([key]) => bought[key]),
+    );
+
+    // A group whose services are all unrefundable leaves the party's list
+    // rather than an empty box.
+    return Object.keys(narrowed).length ? narrowed : partyServices.value;
+});
 
 watch(
     () => form.party_type,
@@ -210,12 +234,12 @@ watch(
     },
 );
 watch(
-    () => form.service,
+    () => form.visa_group_id,
     () => {
-        // Switching service renarrows the list; a group left selected from
-        // the old one would attach a refund to a group that never bought it.
-        if (!partyGroups.value.some((group) => group.id === form.visa_group_id)) {
-            form.visa_group_id = 'none';
+        // The group decides which services are on offer, so one chosen
+        // before it must still be among them.
+        if (!(form.service in availableServices.value)) {
+            form.service = Object.keys(availableServices.value)[0];
         }
     },
 );

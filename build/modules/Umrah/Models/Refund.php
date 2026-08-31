@@ -88,9 +88,32 @@ class Refund extends Model
         self::SERVICE_OTHER => 'Other',
     ];
 
+    /**
+     * What this party could possibly be refunding.
+     *
+     * A visa desk gives back visa fees. It has never sold anyone a hotel
+     * room, so offering it the choice is asking a question with one real
+     * answer and three wrong ones. Other stays on each list as the escape
+     * hatch for a fee that fits nowhere else.
+     */
     public static function servicesFor(?string $partyType): array
     {
-        return $partyType === self::PARTY_AGENT ? self::AGENT_SERVICES : self::SERVICES;
+        return match ($partyType) {
+            self::PARTY_AGENT => self::AGENT_SERVICES,
+            self::PARTY_VISA_VENDOR => [
+                self::SERVICE_VISA => self::SERVICES[self::SERVICE_VISA],
+                self::SERVICE_OTHER => self::SERVICES[self::SERVICE_OTHER],
+            ],
+            self::PARTY_TRANSPORT_VENDOR => [
+                self::SERVICE_TRANSPORT => self::SERVICES[self::SERVICE_TRANSPORT],
+                self::SERVICE_OTHER => self::SERVICES[self::SERVICE_OTHER],
+            ],
+            self::PARTY_HOTEL_VENDOR => [
+                self::SERVICE_HOTEL => self::SERVICES[self::SERVICE_HOTEL],
+                self::SERVICE_OTHER => self::SERVICES[self::SERVICE_OTHER],
+            ],
+            default => self::SERVICES,
+        };
     }
 
     public const STATUS_REQUESTED = 'requested';

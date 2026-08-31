@@ -72,9 +72,12 @@ class RefundController extends Controller
         return Inertia::render('Umrah/Refunds/Create', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'partyTypes' => $isMember ? [Refund::PARTY_AGENT => Refund::PARTY_TYPES[Refund::PARTY_AGENT]] : Refund::PARTY_TYPES,
+            // Every service, so the form can label one already stored, plus
+            // what each kind of party may actually choose from.
             'services' => Refund::SERVICES,
-            // The form narrows to these the moment the party is an agent.
-            'agentServices' => Refund::AGENT_SERVICES,
+            'servicesByParty' => collect(array_keys(Refund::PARTY_TYPES))
+                ->mapWithKeys(fn (string $party) => [$party => Refund::servicesFor($party)])
+                ->all(),
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderByName()->get(['id', 'customer_id']),
@@ -125,7 +128,7 @@ class RefundController extends Controller
             ->orderByDesc('created_at')
             ->get([
                 'id', 'agent_id', 'group_number', 'name', 'transport_mode', 'hotel_amount',
-                'transport_amount', 'standard_bus_retail_amount',
+                'transport_amount', 'visa_sale_amount', 'standard_bus_retail_amount',
                 'standard_bus_billable_passenger_count',
             ])
             ->map(fn (VisaGroup $group) => [
@@ -133,6 +136,7 @@ class RefundController extends Controller
                 'agent_id' => $group->agent_id,
                 'group_number' => $group->group_number,
                 'name' => $group->name,
+                'has_visa' => (float) $group->visa_sale_amount > 0,
                 'has_transport' => $group->transport_mode !== VisaGroup::TRANSPORT_NONE,
                 'has_hotel' => (float) $group->hotel_amount > 0,
                 // What was charged for each service, so the form can show the

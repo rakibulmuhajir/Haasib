@@ -116,6 +116,10 @@ class GroupAccountingService
                 'visa_sale_amount', 'transport_amount', 'hotel_amount', 'discount_amount', 'visa_cost_amount',
                 'transport_cost_amount', 'hotel_cost_amount', 'included_bus_cost_deduction', 'mandatory_transport_cost_amount',
                 'total_receivable', 'total_paid', 'balance', 'profit',
+                // The arithmetic behind each figure, so the screen can show
+                // its working and offer to redo it at a different rate.
+                'passenger_count', 'standard_bus_retail_amount', 'standard_bus_cost_amount',
+                'standard_bus_billable_passenger_count',
             ]) + ['agent' => $group->agent?->only(['id', 'name']), 'vendor' => $group->vendor?->only(['id', 'name']), 'mandatory_transport_vendor' => $group->mandatoryTransportVendor?->only(['id', 'name'])],
             'passengerSummary' => ['total' => $passengers->count(), ...$ageCounts, 'visa' => $visaPax, 'transport_only' => $transportOnlyPax],
             'services' => $services->values(),

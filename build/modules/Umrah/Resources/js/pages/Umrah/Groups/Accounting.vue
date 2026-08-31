@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Calculator, Save, Undo2 } from 'lucide-vue-next';
+import RateBasis from '@/components/RateBasis.vue';
 import { computed, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -63,6 +64,43 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.group.group_number, href: `/${props.company.slug}/umrah/groups/${props.group.id}` },
     { title: 'Accounting', href: `/${props.company.slug}/umrah/groups/${props.group.id}/accounting` },
 ];
+
+/*
+ * Every figure here is a rate times a count. Visa is charged per head, and
+ * a standard bus per billable seat, so the screen can show the sum behind
+ * each total and let someone re-do it at a new rate rather than working it
+ * out elsewhere and typing the answer.
+ *
+ * The visa rate is derived by division: a group stores its total, not its
+ * rate. That is exact while every passenger pays the same, which is how
+ * visas are priced -- one fee whatever the age.
+ *
+ * Transport keeps whatever the total holds beyond rate times seats, which
+ * is the charge of any passenger who bought a seat on their own.
+ */
+const paxCount = computed(() => Number(props.group.passenger_count || 0));
+
+const busSeats = computed(() =>
+    Number(props.group.standard_bus_billable_passenger_count || 0),
+);
+
+const isStandardBus = computed(() => props.group.transport_mode === 'standard_bus');
+
+const transportExtra = computed(() =>
+    Math.round(
+        (Number(props.group.transport_amount || 0) -
+            Number(props.group.standard_bus_retail_amount || 0) * busSeats.value) *
+            100,
+    ) / 100,
+);
+
+const transportCostExtra = computed(() =>
+    Math.round(
+        (Number(props.group.transport_cost_amount || 0) -
+            Number(props.group.standard_bus_cost_amount || 0) * busSeats.value) *
+            100,
+    ) / 100,
+);
 
 const form = useForm({
     vendor_id: props.group.vendor_id || 'none',
@@ -256,8 +294,33 @@ const submit = () => {
                     <Card variant="form">
                         <CardHeader><CardTitle>Charges</CardTitle></CardHeader>
                         <CardContent class="grid gap-4 sm:grid-cols-2">
-                            <div class="space-y-2"><Label>Visa charge</Label><Input v-model="form.visa_sale_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.visa_sale_amount" class="text-xs text-destructive">{{ form.errors.visa_sale_amount }}</p></div>
-                            <div class="space-y-2"><Label>Transport charge</Label><Input v-model="form.transport_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.transport_amount" class="text-xs text-destructive">{{ form.errors.transport_amount }}</p></div>
+                            <div class="space-y-2">
+                                <Label>Visa charge</Label>
+                                <Input v-model="form.visa_sale_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <RateBasis
+                                    :count="paxCount"
+                                    :total="Number(form.visa_sale_amount || 0)"
+                                    :currency="company.base_currency"
+                                    derived
+                                    :disabled="!canUpdate"
+                                    @apply="(total) => (form.visa_sale_amount = String(total))"
+                                />
+                                <p v-if="form.errors.visa_sale_amount" class="text-xs text-destructive">{{ form.errors.visa_sale_amount }}</p>
+                            </div>
+                            <div class="space-y-2">
+                                <Label>Transport charge</Label>
+                                <Input v-model="form.transport_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <RateBasis
+                                    v-if="isStandardBus"
+                                    :count="busSeats"
+                                    :total="Number(form.transport_amount || 0)"
+                                    :extra="transportExtra"
+                                    :currency="company.base_currency"
+                                    :disabled="!canUpdate"
+                                    @apply="(total) => (form.transport_amount = String(total))"
+                                />
+                                <p v-if="form.errors.transport_amount" class="text-xs text-destructive">{{ form.errors.transport_amount }}</p>
+                            </div>
                             <div class="space-y-2"><Label>Hotel charge</Label><Input :model-value="String(group.hotel_amount || 0)" type="number" disabled /><p class="text-xs text-muted-foreground">Controlled by approved hotel vouchers.</p></div>
                             <div class="space-y-2"><Label>Discount</Label><Input v-model="form.discount_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.discount_amount" class="text-xs text-destructive">{{ form.errors.discount_amount }}</p></div>
                         </CardContent>
@@ -269,11 +332,28 @@ const submit = () => {
                             <div class="space-y-2">
                                 <Label>Visa cost</Label>
                                 <Input v-model="form.visa_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <RateBasis
+                                    :count="paxCount"
+                                    :total="Number(form.visa_cost_amount || 0)"
+                                    :currency="company.base_currency"
+                                    derived
+                                    :disabled="!canUpdate"
+                                    @apply="(total) => (form.visa_cost_amount = String(total))"
+                                />
                                 <p v-if="form.errors.visa_cost_amount" class="text-xs text-destructive">{{ form.errors.visa_cost_amount }}</p>
                             </div>
                             <div class="space-y-2">
                                 <Label>Transport cost</Label>
                                 <Input v-model="form.transport_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <RateBasis
+                                    v-if="isStandardBus"
+                                    :count="busSeats"
+                                    :total="Number(form.transport_cost_amount || 0)"
+                                    :extra="transportCostExtra"
+                                    :currency="company.base_currency"
+                                    :disabled="!canUpdate"
+                                    @apply="(total) => (form.transport_cost_amount = String(total))"
+                                />
                                 <p v-if="form.errors.transport_cost_amount" class="text-xs text-destructive">{{ form.errors.transport_cost_amount }}</p>
                             </div>
                             <p class="text-xs text-muted-foreground sm:col-span-2">

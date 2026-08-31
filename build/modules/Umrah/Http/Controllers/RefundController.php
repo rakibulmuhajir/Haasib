@@ -123,7 +123,11 @@ class RefundController extends Controller
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
             ->when($isMember, fn ($query) => $memberAgentId ? $query->where('agent_id', $memberAgentId) : $query->whereRaw('1 = 0'))
             ->orderByDesc('created_at')
-            ->get(['id', 'agent_id', 'group_number', 'name', 'transport_mode', 'hotel_amount', 'balance'])
+            ->get([
+                'id', 'agent_id', 'group_number', 'name', 'transport_mode', 'hotel_amount',
+                'transport_amount', 'standard_bus_retail_amount',
+                'standard_bus_billable_passenger_count',
+            ])
             ->map(fn (VisaGroup $group) => [
                 'id' => $group->id,
                 'agent_id' => $group->agent_id,
@@ -131,6 +135,22 @@ class RefundController extends Controller
                 'name' => $group->name,
                 'has_transport' => $group->transport_mode !== VisaGroup::TRANSPORT_NONE,
                 'has_hotel' => (float) $group->hotel_amount > 0,
+                // What was charged for each service, so the form can show the
+                // sum a refund is coming out of instead of asking someone to
+                // remember it.
+                'charged' => [
+                    'transport' => round((float) $group->transport_amount, 2),
+                    'hotel' => round((float) $group->hotel_amount, 2),
+                ],
+                // Only a standard bus has a per-passenger rate to work back
+                // from. A specialized group is priced per vehicle or per
+                // journey, so there is no per-head figure to offer.
+                'per_passenger' => $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS
+                    ? [
+                        'rate' => round((float) $group->standard_bus_retail_amount, 2),
+                        'count' => (int) $group->standard_bus_billable_passenger_count,
+                    ]
+                    : null,
             ])->values()->all();
     }
 

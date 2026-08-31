@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Undo2 } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -35,6 +35,8 @@ const props = defineProps<{
         name: string;
         has_transport: boolean;
         has_hotel: boolean;
+        charged: { transport: number; hotel: number };
+        per_passenger: { rate: number; count: number } | null;
     }>;
     currencies: Array<{ currency_code: string; exchange_rate: string | number }>;
     initial?: {
@@ -100,6 +102,59 @@ const partyGroups = computed(() => {
 
     return mine;
 });
+
+const selectedGroup = computed(
+    () => props.refundGroups.find((group) => group.id === form.visa_group_id) ?? null,
+);
+
+/*
+ * What the group was charged for the service being refunded. It comes off
+ * the group's own stored figures, so it is the sum the refund is being
+ * taken out of rather than a number someone has to remember.
+ */
+const chargedForService = computed(() => {
+    const group = selectedGroup.value;
+    if (!group) return null;
+    if (form.service === 'transport') return group.charged.transport;
+    if (form.service === 'hotel') return group.charged.hotel;
+
+    return null;
+});
+
+/*
+ * A standard bus is the only transport priced per head, so it is the only
+ * one that can offer "refund this many passengers". A specialized group is
+ * priced per vehicle or per journey and has no per-person rate to work
+ * back from.
+ */
+const perPassenger = computed(() =>
+    form.service === 'transport' ? (selectedGroup.value?.per_passenger ?? null) : null,
+);
+
+const serviceLabel = computed(() =>
+    (availableServices.value[form.service] ?? form.service).toLowerCase(),
+);
+
+const refundPassengers = ref('');
+
+const passengerRefundAmount = computed(() => {
+    const rate = perPassenger.value?.rate ?? 0;
+    const count = Number(refundPassengers.value || 0);
+
+    return Number.isFinite(count) && count > 0 ? Math.round(rate * count * 100) / 100 : 0;
+});
+
+const applyPassengerAmount = () => {
+    if (passengerRefundAmount.value > 0) {
+        form.amount = String(passengerRefundAmount.value);
+    }
+};
+
+const overCharged = computed(
+    () =>
+        chargedForService.value !== null &&
+        Number(form.amount || 0) > chargedForService.value + 0.001,
+);
 
 const groupHint = computed(() => {
     if (form.service === 'ticket') {
@@ -278,6 +333,53 @@ const submit = () =>
                         <p v-if="form.errors.visa_group_id" class="text-xs text-destructive">
                             {{ form.errors.visa_group_id }}
                         </p>
+
+                        <div
+                            v-if="chargedForService !== null"
+                            class="space-y-2 rounded-md border bg-muted/40 p-3 text-sm"
+                        >
+                            <div class="flex items-baseline justify-between gap-3">
+                                <span class="text-muted-foreground">Charged for {{ serviceLabel }} on this group</span>
+                                <MoneyText
+                                    :amount="chargedForService"
+                                    :currency="company.base_currency"
+                                    class="font-medium"
+                                />
+                            </div>
+
+                            <div v-if="perPassenger" class="space-y-1">
+                                <p class="text-xs text-muted-foreground">
+                                    {{ perPassenger.count }} passengers &times;
+                                    <MoneyText :amount="perPassenger.rate" :currency="company.base_currency" />
+                                    each
+                                </p>
+                                <div class="flex items-end gap-2">
+                                    <div class="space-y-1">
+                                        <Label class="text-xs text-muted-foreground">Refund how many passengers</Label>
+                                        <Input
+                                            v-model="refundPassengers"
+                                            type="number"
+                                            min="1"
+                                            :max="perPassenger.count"
+                                            class="h-9 w-40"
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        :disabled="passengerRefundAmount <= 0"
+                                        @click="applyPassengerAmount"
+                                    >
+                                        Use
+                                        <MoneyText
+                                            :amount="passengerRefundAmount"
+                                            :currency="company.base_currency"
+                                        />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="space-y-2">

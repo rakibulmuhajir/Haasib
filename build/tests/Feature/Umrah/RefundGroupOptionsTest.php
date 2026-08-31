@@ -118,6 +118,37 @@ test('each group says which services it bought', function () {
         ->and($rows['UGR-SETTLED']['has_hotel'])->toBeFalse();
 });
 
+test('a standard bus group carries the numbers behind its transport charge', function () {
+    // The form shows "14 passengers x 80 each" and can fill the amount
+    // from a passenger count, so the rate and the count have to travel
+    // with the group rather than being retyped from memory.
+    $f = refundOptionsFixture();
+    $f->settled->update([
+        'transport_amount' => 1120,
+        'standard_bus_retail_amount' => 80,
+        'standard_bus_billable_passenger_count' => 14,
+    ]);
+
+    $row = collect(refundGroupOptions($f))->firstWhere('group_number', 'UGR-SETTLED');
+
+    // Whole amounts come back from JSON as ints, so compare by value.
+    expect((float) $row['charged']['transport'])->toBe(1120.0)
+        ->and((float) $row['per_passenger']['rate'])->toBe(80.0)
+        ->and((int) $row['per_passenger']['count'])->toBe(14);
+});
+
+test('a group without a per head rate offers none', function () {
+    // Specialized transport is priced per vehicle or per journey, so there
+    // is no per-passenger figure to work back from.
+    $f = refundOptionsFixture();
+    $f->settled->update(['transport_mode' => VisaGroup::TRANSPORT_SPECIALIZED]);
+
+    $row = collect(refundGroupOptions($f))->firstWhere('group_number', 'UGR-SETTLED');
+
+    expect($row['per_passenger'])->toBeNull()
+        ->and($row['has_transport'])->toBeTrue();
+});
+
 test('a cancelled group is not offered', function () {
     $f = refundOptionsFixture();
     $f->owing->update(['status' => VisaGroup::STATUS_CANCELLED]);

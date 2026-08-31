@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LogoPicker from '@/components/LogoPicker.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
@@ -306,10 +307,10 @@ const submit = () => {
                                     alt="Vendor logo preview"
                                     class="h-12 w-12 rounded-md border object-contain"
                                 />
-                                <Input
+                                <LogoPicker
                                     v-model="form.logo_url"
-                                    type="url"
-                                    placeholder="https://example.com/logo.png"
+                                    :company-slug="company.slug"
+                                    :error="form.errors.logo_url"
                                 />
                             </div>
                             <p

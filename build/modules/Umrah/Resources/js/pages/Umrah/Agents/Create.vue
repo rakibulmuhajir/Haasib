@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LogoPicker from '@/components/LogoPicker.vue'
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,10 +106,10 @@ const submit = () =>
                                     alt="Agent logo preview"
                                     class="h-12 w-12 rounded-md border object-contain"
                                 />
-                                <Input
+                                <LogoPicker
                                     v-model="form.logo_url"
-                                    type="url"
-                                    placeholder="https://example.com/logo.png"
+                                    :company-slug="company.slug"
+                                    :error="form.errors.logo_url"
                                 />
                             </div>
                             <p

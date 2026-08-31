@@ -6,12 +6,13 @@ use App\Modules\Umrah\Http\Controllers\DriverController;
 use App\Modules\Umrah\Http\Controllers\ExpenseController;
 use App\Modules\Umrah\Http\Controllers\GroupAccountingController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
+use App\Modules\Umrah\Http\Controllers\LogoUploadController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\RefundController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TicketBookingController;
-use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\TransportProviderController;
+use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
 use App\Modules\Umrah\Http\Controllers\VisaVendorController;
 use App\Modules\Umrah\Http\Controllers\VoucherAccountingController;
@@ -108,6 +109,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('vouchers/{voucher}/pdf', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.pdf');
         Route::get('vouchers/{voucher}', [VoucherController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.show');
         Route::post('vouchers/{voucher}/approve', [VoucherController::class, 'approve'])->whereUuid('voucher')->name('umrah.vouchers.approve');
+
+        Route::post('logos', [LogoUploadController::class, 'store'])->name('umrah.logos.store');
 
         Route::get('settings/drivers', [DriverController::class, 'index'])->name('umrah.drivers.index');
         Route::post('settings/drivers', [DriverController::class, 'store'])->name('umrah.drivers.store');

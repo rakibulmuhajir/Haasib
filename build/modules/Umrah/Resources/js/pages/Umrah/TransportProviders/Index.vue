@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import LedgerRegister from '@/components/LedgerRegister.vue';
+import LogoPicker from '@/components/LogoPicker.vue';
 import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -8,26 +9,53 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Eye, Pencil, Plus, Power, RotateCcw, Save, Truck } from 'lucide-vue-next';
+import {
+    Eye,
+    Pencil,
+    Plus,
+    Power,
+    RotateCcw,
+    Save,
+    Truck,
+} from 'lucide-vue-next';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
     company: { slug: string; base_currency: string };
-    providers: { data: any[]; total: number; current_page: number; last_page: number; from: number | null; to: number | null; prev_page_url: string | null; next_page_url: string | null };
+    providers: {
+        data: any[];
+        total: number;
+        current_page: number;
+        last_page: number;
+        from: number | null;
+        to: number | null;
+        prev_page_url: string | null;
+        next_page_url: string | null;
+    };
     nextProviderNumber: string;
     canManageProviders: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
-    { title: 'Transport Vendors', href: `/${props.company.slug}/umrah/transport-providers` },
+    {
+        title: 'Transport Vendors',
+        href: `/${props.company.slug}/umrah/transport-providers`,
+    },
 ];
 
 /**
@@ -38,12 +66,26 @@ const breadcrumbs: BreadcrumbItem[] = [
  */
 const columns = [
     { key: 'name', label: 'Vendor', kind: 'text' as const },
-    { key: 'standard_bus_retail_amount', label: 'Bus sale', kind: 'amount' as const },
-    { key: 'standard_bus_cost_amount', label: 'Bus cost', kind: 'amount' as const },
+    {
+        key: 'standard_bus_retail_amount',
+        label: 'Bus sale',
+        kind: 'amount' as const,
+    },
+    {
+        key: 'standard_bus_cost_amount',
+        label: 'Bus cost',
+        kind: 'amount' as const,
+    },
     { key: 'charge_child_fare', label: 'Child fare', kind: 'text' as const },
     { key: 'balance', label: 'Payable', kind: 'amount' as const },
     { key: 'status', label: 'Status', kind: 'status' as const },
-    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+    {
+        key: 'actions',
+        label: '',
+        kind: 'text' as const,
+        class: 'text-right',
+        headerClass: 'text-right',
+    },
 ];
 
 const editing = ref<any | null>(null);
@@ -93,8 +135,12 @@ const startEdit = (provider: any) => {
     form.email = provider.email || '';
     form.city = provider.city || '';
     form.logo_url = provider.logo_url || '';
-    form.standard_bus_retail_amount = String(provider.standard_bus_retail_amount ?? 0);
-    form.standard_bus_cost_amount = String(provider.standard_bus_cost_amount ?? 0);
+    form.standard_bus_retail_amount = String(
+        provider.standard_bus_retail_amount ?? 0,
+    );
+    form.standard_bus_cost_amount = String(
+        provider.standard_bus_cost_amount ?? 0,
+    );
     form.charge_child_fare = Boolean(provider.charge_child_fare);
     form.notes = provider.notes || '';
     vendorDialogOpen.value = true;
@@ -108,12 +154,25 @@ const closeDialog = () => {
 const submit = () => {
     form.transform((data) => ({
         ...data,
-        standard_bus_retail_amount: Number(data.standard_bus_retail_amount || 0),
+        standard_bus_retail_amount: Number(
+            data.standard_bus_retail_amount || 0,
+        ),
         standard_bus_cost_amount: Number(data.standard_bus_cost_amount || 0),
     }));
-    const options = { preserveScroll: true, onSuccess: closeDialog, onError: (errors: any) => toast.error(Object.values(errors)[0] as string || 'Check the highlighted fields') };
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeDialog,
+        onError: (errors: any) =>
+            toast.error(
+                (Object.values(errors)[0] as string) ||
+                    'Check the highlighted fields',
+            ),
+    };
     if (editing.value) {
-        form.put(`/${props.company.slug}/umrah/transport-providers/${editing.value.id}`, options);
+        form.put(
+            `/${props.company.slug}/umrah/transport-providers/${editing.value.id}`,
+            options,
+        );
         return;
     }
     form.post(`/${props.company.slug}/umrah/transport-providers`, options);
@@ -122,104 +181,313 @@ const submit = () => {
 const statusForm = useForm({ is_active: false });
 const updateStatus = (provider: any) => {
     statusForm.is_active = !provider.is_active;
-    statusForm.patch(`/${props.company.slug}/umrah/transport-providers/${provider.id}/status`, {
-        preserveScroll: true,
-        onError: () => toast.error(statusForm.errors.vendor || 'Transport vendor status could not be changed'),
-    });
+    statusForm.patch(
+        `/${props.company.slug}/umrah/transport-providers/${provider.id}/status`,
+        {
+            preserveScroll: true,
+            onError: () =>
+                toast.error(
+                    statusForm.errors.vendor ||
+                        'Transport vendor status could not be changed',
+                ),
+        },
+    );
 };
 </script>
 
 <template>
     <Head title="Transport Vendors" />
-    <PageShell title="Transport Vendors" description="Manage independent standard-bus prices, costs, and supplier balances." :breadcrumbs="breadcrumbs" :icon="Truck">
+    <PageShell
+        title="Transport Vendors"
+        description="Manage independent standard-bus prices, costs, and supplier balances."
+        :breadcrumbs="breadcrumbs"
+        :icon="Truck"
+    >
         <div class="space-y-4">
             <div v-if="canManageProviders" class="flex justify-end">
-                <Button type="button" @click="startCreate"><Plus class="mr-2 h-4 w-4" />Add Transport Vendor</Button>
+                <Button type="button" @click="startCreate"
+                    ><Plus class="mr-2 h-4 w-4" />Add Transport Vendor</Button
+                >
             </div>
             <Card class="min-w-0" variant="register">
-                <CardHeader><CardTitle>Transport Vendor List</CardTitle></CardHeader>
+                <CardHeader
+                    ><CardTitle>Transport Vendor List</CardTitle></CardHeader
+                >
                 <CardContent>
                     <LedgerRegister :data="providers.data" :columns="columns">
                         <template #empty>No transport vendors yet.</template>
 
                         <template #cell-name="{ row }">
                             <div class="font-medium">{{ row.name }}</div>
-                            <div class="text-xs text-text-secondary">{{ row.vendor_number }}</div>
+                            <div class="text-xs text-text-secondary">
+                                {{ row.vendor_number }}
+                            </div>
                         </template>
 
                         <template #cell-standard_bus_retail_amount="{ row }">
-                            <MoneyText :amount="row.standard_bus_retail_amount" :currency="company.base_currency" />
+                            <MoneyText
+                                :amount="row.standard_bus_retail_amount"
+                                :currency="company.base_currency"
+                            />
                         </template>
                         <template #cell-standard_bus_cost_amount="{ row }">
-                            <MoneyText :amount="row.standard_bus_cost_amount" :currency="company.base_currency" />
+                            <MoneyText
+                                :amount="row.standard_bus_cost_amount"
+                                :currency="company.base_currency"
+                            />
                         </template>
                         <template #cell-balance="{ row }">
-                            <MoneyText :amount="row.balance" :currency="company.base_currency" class="font-semibold" />
+                            <MoneyText
+                                :amount="row.balance"
+                                :currency="company.base_currency"
+                                class="font-semibold"
+                            />
                         </template>
 
                         <template #cell-charge_child_fare="{ row }">
-                            <MetaChip tone="neutral">{{ row.charge_child_fare ? 'Charged' : 'Free' }}</MetaChip>
+                            <MetaChip tone="neutral">{{
+                                row.charge_child_fare ? 'Charged' : 'Free'
+                            }}</MetaChip>
                         </template>
 
                         <template #cell-status="{ row }">
-                            <StatusBadge :status="row.is_active ? 'active' : 'inactive'" />
+                            <StatusBadge
+                                :status="row.is_active ? 'active' : 'inactive'"
+                            />
                         </template>
 
                         <template #cell-actions="{ row }">
                             <div class="flex justify-end gap-1">
-                                <Button type="button" variant="ghost" size="icon" :aria-label="`View ${row.name}`" @click="router.get(`/${company.slug}/umrah/transport-providers/${row.id}`)">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :aria-label="`View ${row.name}`"
+                                    @click="
+                                        router.get(
+                                            `/${company.slug}/umrah/transport-providers/${row.id}`,
+                                        )
+                                    "
+                                >
                                     <Eye class="h-4 w-4" />
                                 </Button>
-                                <Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`Edit ${row.name}`" @click="startEdit(row)">
+                                <Button
+                                    v-if="canManageProviders"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :aria-label="`Edit ${row.name}`"
+                                    @click="startEdit(row)"
+                                >
                                     <Pencil class="h-4 w-4" />
                                 </Button>
-                                <Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`${row.is_active ? 'Deactivate' : 'Reactivate'} ${row.name}`" :disabled="statusForm.processing" @click="updateStatus(row)">
-                                    <Power v-if="row.is_active" class="h-4 w-4" />
+                                <Button
+                                    v-if="canManageProviders"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :aria-label="`${row.is_active ? 'Deactivate' : 'Reactivate'} ${row.name}`"
+                                    :disabled="statusForm.processing"
+                                    @click="updateStatus(row)"
+                                >
+                                    <Power
+                                        v-if="row.is_active"
+                                        class="h-4 w-4"
+                                    />
                                     <RotateCcw v-else class="h-4 w-4" />
                                 </Button>
                             </div>
                         </template>
                     </LedgerRegister>
-                    <RecordPagination :current-page="providers.current_page" :last-page="providers.last_page" :from="providers.from" :to="providers.to" :total="providers.total" :previous-url="providers.prev_page_url" :next-url="providers.next_page_url" />
+                    <RecordPagination
+                        :current-page="providers.current_page"
+                        :last-page="providers.last_page"
+                        :from="providers.from"
+                        :to="providers.to"
+                        :total="providers.total"
+                        :previous-url="providers.prev_page_url"
+                        :next-url="providers.next_page_url"
+                    />
                 </CardContent>
             </Card>
         </div>
 
-        <Dialog v-model:open="vendorDialogOpen" @update:open="(open) => { if (!open && !form.processing) resetForm() }">
+        <Dialog
+            v-model:open="vendorDialogOpen"
+            @update:open="
+                (open) => {
+                    if (!open && !form.processing) resetForm();
+                }
+            "
+        >
             <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>{{ editing ? 'Edit Transport Vendor' : 'Add Transport Vendor' }}</DialogTitle>
-                    <DialogDescription>Keep bus selling prices and supplier costs independent from visa rates.</DialogDescription>
+                    <DialogTitle>{{
+                        editing
+                            ? 'Edit Transport Vendor'
+                            : 'Add Transport Vendor'
+                    }}</DialogTitle>
+                    <DialogDescription
+                        >Keep bus selling prices and supplier costs independent
+                        from visa rates.</DialogDescription
+                    >
                 </DialogHeader>
                 <form novalidate class="space-y-4" @submit.prevent="submit">
                     <div class="grid gap-3 sm:grid-cols-2">
-                        <div class="space-y-2"><Label for="transport-vendor-number">Vendor #</Label><Input id="transport-vendor-number" v-model="form.vendor_number" /><p v-if="form.errors.vendor_number" class="text-xs text-destructive">{{ form.errors.vendor_number }}</p></div>
-                        <div class="space-y-2"><Label for="transport-vendor-name">Name</Label><Input id="transport-vendor-name" v-model="form.name" autofocus /><p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p></div>
+                        <div class="space-y-2">
+                            <Label for="transport-vendor-number">Vendor #</Label
+                            ><Input
+                                id="transport-vendor-number"
+                                v-model="form.vendor_number"
+                            />
+                            <p
+                                v-if="form.errors.vendor_number"
+                                class="text-xs text-destructive"
+                            >
+                                {{ form.errors.vendor_number }}
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="transport-vendor-name">Name</Label
+                            ><Input
+                                id="transport-vendor-name"
+                                v-model="form.name"
+                                autofocus
+                            />
+                            <p
+                                v-if="form.errors.name"
+                                class="text-xs text-destructive"
+                            >
+                                {{ form.errors.name }}
+                            </p>
+                        </div>
                     </div>
                     <div class="flex items-center gap-3 rounded-md border p-3">
-                        <Checkbox id="transport-vendor-company-owned" v-model="form.is_company_owned" />
-                        <Label for="transport-vendor-company-owned">Company-owned transport vendor</Label>
+                        <Checkbox
+                            id="transport-vendor-company-owned"
+                            v-model="form.is_company_owned"
+                        />
+                        <Label for="transport-vendor-company-owned"
+                            >Company-owned transport vendor</Label
+                        >
                     </div>
                     <div class="rounded-md border p-3">
-                        <div class="mb-3 font-medium">Standard bus fare per passenger</div>
+                        <div class="mb-3 font-medium">
+                            Standard bus fare per passenger
+                        </div>
                         <div class="grid gap-3 sm:grid-cols-2">
-                            <div class="space-y-2"><Label for="transport-vendor-selling-price">Selling price</Label><Input id="transport-vendor-selling-price" v-model="form.standard_bus_retail_amount" type="number" min="0" step="0.01" /><p v-if="form.errors.standard_bus_retail_amount" class="text-xs text-destructive">{{ form.errors.standard_bus_retail_amount }}</p></div>
-                            <div class="space-y-2"><Label for="transport-vendor-supplier-cost">Supplier cost</Label><Input id="transport-vendor-supplier-cost" v-model="form.standard_bus_cost_amount" type="number" min="0" step="0.01" /><p v-if="form.errors.standard_bus_cost_amount" class="text-xs text-destructive">{{ form.errors.standard_bus_cost_amount }}</p></div>
+                            <div class="space-y-2">
+                                <Label for="transport-vendor-selling-price"
+                                    >Selling price</Label
+                                ><Input
+                                    id="transport-vendor-selling-price"
+                                    v-model="form.standard_bus_retail_amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                />
+                                <p
+                                    v-if="
+                                        form.errors.standard_bus_retail_amount
+                                    "
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ form.errors.standard_bus_retail_amount }}
+                                </p>
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="transport-vendor-supplier-cost"
+                                    >Supplier cost</Label
+                                ><Input
+                                    id="transport-vendor-supplier-cost"
+                                    v-model="form.standard_bus_cost_amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                />
+                                <p
+                                    v-if="form.errors.standard_bus_cost_amount"
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ form.errors.standard_bus_cost_amount }}
+                                </p>
+                            </div>
                         </div>
                         <div class="mt-3 flex items-center gap-3">
-                            <Checkbox id="transport-vendor-child-fare" v-model="form.charge_child_fare" />
-                            <Label for="transport-vendor-child-fare">Charge standard bus fare for children</Label>
+                            <Checkbox
+                                id="transport-vendor-child-fare"
+                                v-model="form.charge_child_fare"
+                            />
+                            <Label for="transport-vendor-child-fare"
+                                >Charge standard bus fare for children</Label
+                            >
                         </div>
-                        <p class="mt-1 text-xs text-muted-foreground">When off, passengers under 12 are excluded. Unnamed aggregate PAX are treated as adults.</p>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            When off, passengers under 12 are excluded. Unnamed
+                            aggregate PAX are treated as adults.
+                        </p>
                     </div>
-                    <div class="grid gap-3 sm:grid-cols-2"><div class="space-y-2"><Label for="transport-vendor-phone">Phone</Label><Input id="transport-vendor-phone" v-model="form.phone" /></div><div class="space-y-2"><Label for="transport-vendor-city">City</Label><Input id="transport-vendor-city" v-model="form.city" /></div></div>
-                    <div class="space-y-2"><Label for="transport-vendor-email">Email</Label><Input id="transport-vendor-email" v-model="form.email" type="email" /><p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p></div>
-                    <div class="space-y-2"><Label for="transport-vendor-notes">Notes</Label><Textarea id="transport-vendor-notes" v-model="form.notes" /></div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="space-y-2">
+                            <Label for="transport-vendor-phone">Phone</Label
+                            ><Input
+                                id="transport-vendor-phone"
+                                v-model="form.phone"
+                            />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="transport-vendor-city">City</Label
+                            ><Input
+                                id="transport-vendor-city"
+                                v-model="form.city"
+                            />
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <Label for="transport-vendor-email">Email</Label
+                        ><Input
+                            id="transport-vendor-email"
+                            v-model="form.email"
+                            type="email"
+                        />
+                        <p
+                            v-if="form.errors.email"
+                            class="text-xs text-destructive"
+                        >
+                            {{ form.errors.email }}
+                        </p>
+                    </div>
+                    <LogoPicker
+                        v-model="form.logo_url"
+                        :company-slug="company.slug"
+                        :error="form.errors.logo_url"
+                    />
+                    <div class="space-y-2">
+                        <Label for="transport-vendor-notes">Notes</Label
+                        ><Textarea
+                            id="transport-vendor-notes"
+                            v-model="form.notes"
+                        />
+                    </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" :disabled="form.processing" @click="closeDialog">Cancel</Button>
-                        <Button type="submit" :disabled="form.processing || !form.name.trim()">
-                            <span v-if="form.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                            <Save v-else class="mr-2 h-4 w-4" />{{ editing ? 'Save Changes' : 'Add Vendor' }}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="form.processing"
+                            @click="closeDialog"
+                            >Cancel</Button
+                        >
+                        <Button
+                            type="submit"
+                            :disabled="form.processing || !form.name.trim()"
+                        >
+                            <span
+                                v-if="form.processing"
+                                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            />
+                            <Save v-else class="mr-2 h-4 w-4" />{{
+                                editing ? 'Save Changes' : 'Add Vendor'
+                            }}
                         </Button>
                     </DialogFooter>
                 </form>

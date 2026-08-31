@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3'
+import LogoPicker from '@/components/LogoPicker.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -75,7 +76,11 @@ const submit = () => form.put(`/${props.company.slug}/umrah/agents/${props.agent
               <Label>Logo URL</Label>
               <div class="flex items-center gap-3">
                 <img v-if="form.logo_url" :src="form.logo_url" alt="Agent logo preview" class="h-12 w-12 rounded-md border object-contain" />
-                <Input v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+                <LogoPicker
+                                    v-model="form.logo_url"
+                                    :company-slug="company.slug"
+                                    :error="form.errors.logo_url"
+                                />
               </div>
               <p v-if="form.errors.logo_url" class="text-xs text-destructive">{{ form.errors.logo_url }}</p>
             </div>

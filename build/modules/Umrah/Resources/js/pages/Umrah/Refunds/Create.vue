@@ -28,12 +28,13 @@ const props = defineProps<{
     visaVendors: Array<{ id: string; name: string }>;
     transportVendors: Array<{ id: string; name: string }>;
     hotelVendors: Array<{ id: string; name: string }>;
-    allocationGroups: Array<{
+    refundGroups: Array<{
         id: string;
-        party_key: string;
+        agent_id: string;
         group_number: string;
         name: string;
-        outstanding_amount: number;
+        has_transport: boolean;
+        has_hotel: boolean;
     }>;
     currencies: Array<{ currency_code: string; exchange_rate: string | number }>;
     initial?: {
@@ -77,13 +78,39 @@ const partyOptions = computed(() => {
 
 const isAgentRefund = computed(() => form.party_type === 'agent');
 
-const partyGroups = computed(() =>
-    isAgentRefund.value && form.party_id !== 'none'
-        ? props.allocationGroups.filter(
-              (group) => group.party_key === `agent:${form.party_id}`,
-          )
-        : [],
-);
+/*
+ * The agent's groups, narrowed to the ones that bought the service being
+ * refunded. This used to read the payment allocation options, which carry
+ * a group only while it still owes money -- so the group you were
+ * refunding, which the agent had usually just paid, was the one missing.
+ *
+ * A ticket is not attached to a group at all, so that service offers
+ * none; the note under the field says so rather than leaving an empty box.
+ */
+const partyGroups = computed(() => {
+    if (!isAgentRefund.value || form.party_id === 'none') return [];
+
+    const mine = props.refundGroups.filter(
+        (group) => group.agent_id === form.party_id,
+    );
+
+    if (form.service === 'transport') return mine.filter((g) => g.has_transport);
+    if (form.service === 'hotel') return mine.filter((g) => g.has_hotel);
+    if (form.service === 'ticket') return [];
+
+    return mine;
+});
+
+const groupHint = computed(() => {
+    if (form.service === 'ticket') {
+        return 'A ticket booking is not part of a group, so there is no group to attach.';
+    }
+    if (!partyGroups.value.length) {
+        return 'This agent has no group that bought the selected service.';
+    }
+
+    return 'The refund comes off this group\u2019s payments, so its balance goes back up.';
+});
 
 const selectedCurrency = computed(() =>
     props.currencies.find(
@@ -125,6 +152,16 @@ watch(
     () => form.party_id,
     () => {
         form.visa_group_id = 'none';
+    },
+);
+watch(
+    () => form.service,
+    () => {
+        // Switching service renarrows the list; a group left selected from
+        // the old one would attach a refund to a group that never bought it.
+        if (!partyGroups.value.some((group) => group.id === form.visa_group_id)) {
+            form.visa_group_id = 'none';
+        }
     },
 );
 watch(
@@ -220,7 +257,7 @@ const submit = () =>
                         </p>
                     </div>
 
-                    <div v-if="isAgentRefund && partyGroups.length" class="space-y-2">
+                    <div v-if="isAgentRefund" class="space-y-2">
                         <Label>Group (optional)</Label>
                         <Select v-model="form.visa_group_id">
                             <SelectTrigger>
@@ -237,6 +274,7 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
+                        <p class="text-xs text-muted-foreground">{{ groupHint }}</p>
                         <p v-if="form.errors.visa_group_id" class="text-xs text-destructive">
                             {{ form.errors.visa_group_id }}
                         </p>

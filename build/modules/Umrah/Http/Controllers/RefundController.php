@@ -81,9 +81,7 @@ class RefundController extends Controller
             'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
             'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByName()->get(['id', 'vendor_id']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'allocationGroups' => collect($this->coreService->paymentAllocationOptions($company->id))
-                ->when($isMember, fn ($options) => $memberAgentId ? $options->where('party_key', 'agent:'.$memberAgentId) : collect())
-                ->values(),
+            'refundGroups' => $this->refundGroupOptions($company->id, $isMember, $memberAgentId),
             'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
             'initial' => $this->initialFromQuery($request, $company->id, $isMember, $memberAgentId),
         ]);
@@ -104,6 +102,38 @@ class RefundController extends Controller
      * enforces on submission -- this method only makes the create screen
      * agree with it before the user ever presses submit.
      */
+    /**
+     * The agent's groups a refund can be attached to.
+     *
+     * This used to borrow the payment allocation options, which only carry
+     * a group while it still owes money -- that list answers "where can
+     * this receipt be applied?". A refund asks the opposite question and is
+     * usually raised after the agent has paid, so the group being refunded
+     * was precisely the one missing from the picker.
+     *
+     * has_transport and has_hotel let the form narrow to the groups that
+     * actually bought the service being refunded. Tickets are absent on
+     * purpose: a booking is not attached to a group at all, so there is no
+     * group for a ticket refund to name.
+     */
+    private function refundGroupOptions(string $companyId, bool $isMember, ?string $memberAgentId): array
+    {
+        return VisaGroup::where('company_id', $companyId)
+            ->whereNotNull('agent_id')
+            ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
+            ->when($isMember, fn ($query) => $memberAgentId ? $query->where('agent_id', $memberAgentId) : $query->whereRaw('1 = 0'))
+            ->orderByDesc('created_at')
+            ->get(['id', 'agent_id', 'group_number', 'name', 'transport_mode', 'hotel_amount', 'balance'])
+            ->map(fn (VisaGroup $group) => [
+                'id' => $group->id,
+                'agent_id' => $group->agent_id,
+                'group_number' => $group->group_number,
+                'name' => $group->name,
+                'has_transport' => $group->transport_mode !== VisaGroup::TRANSPORT_NONE,
+                'has_hotel' => (float) $group->hotel_amount > 0,
+            ])->values()->all();
+    }
+
     private function initialFromQuery(Request $request, string $companyId, bool $isMember, string|false|null $memberAgentId): array
     {
         $initial = [];

@@ -1967,6 +1967,55 @@ class UmrahCoreService
      * all, but a vendor refund reaching this method with 'other' is turned
      * away here rather than posting against the wrong account.
      */
+    /**
+     * Moves a group's cost by a supplier credit, in whichever direction.
+     *
+     * A supplier lowering their price lowers what that trip cost, whether
+     * or not they had already been paid -- being paid first only changes
+     * which account the other half of the entry lands in. postRefundAccept()
+     * already credits the cost account in the ledger; this moves the group's
+     * own figure to match, so its margin and the ledger stop telling
+     * different stories.
+     *
+     * A credit with no group named moves nothing. That is the case Sol set
+     * aside: damages, compensation, a rebate spread across a season. Money
+     * arrives, but it is not this trip's purchase price.
+     *
+     * $sign is -1 when the credit is granted and +1 when it is cancelled.
+     */
+    public function applyVendorCreditToGroup(Refund $refund, int $sign = -1): void
+    {
+        if (! $refund->visa_group_id || $refund->party_type === Refund::PARTY_AGENT) {
+            return;
+        }
+
+        $column = match ($refund->service) {
+            Refund::SERVICE_VISA => 'visa_cost_amount',
+            Refund::SERVICE_TRANSPORT => 'transport_cost_amount',
+            Refund::SERVICE_HOTEL => 'hotel_cost_amount',
+            default => null,
+        };
+
+        if (! $column) {
+            return;
+        }
+
+        $group = VisaGroup::where('company_id', $refund->company_id)
+            ->lockForUpdate()
+            ->find($refund->visa_group_id);
+
+        if (! $group) {
+            return;
+        }
+
+        $group->update([
+            $column => max(round((float) $group->{$column} + $sign * (float) $refund->base_amount, 2), 0),
+        ]);
+
+        $this->recalculateGroup($group->fresh());
+        $this->recalculateGroupVendors($group->fresh());
+    }
+
     private function refundCostRole(string $service): string
     {
         return match ($service) {

@@ -33,6 +33,7 @@ const props = defineProps<{
         agent_id: string;
         group_number: string;
         name: string;
+        vendor_ids: string[];
         has_visa: boolean;
         has_transport: boolean;
         has_hotel: boolean;
@@ -90,14 +91,21 @@ const isAgentRefund = computed(() => form.party_type === 'agent');
  * A ticket is not attached to a group at all, so that service offers
  * none; the note under the field says so rather than leaving an empty box.
  */
-// Choose the group first; the services narrow to it, not the other way
-// round. Filtering both against each other left whichever was picked
-// second unable to change the first.
-const partyGroups = computed(() =>
-    isAgentRefund.value && form.party_id !== 'none'
+/*
+ * Choose the group first; the services narrow to it, not the other way
+ * round. Filtering both against each other left whichever was picked
+ * second unable to change the first.
+ *
+ * An agent sees the trips they sold. A supplier sees the trips they
+ * billed, because a credit from them lowers what one of those trips cost.
+ */
+const partyGroups = computed(() => {
+    if (form.party_id === 'none') return [];
+
+    return isAgentRefund.value
         ? props.refundGroups.filter((group) => group.agent_id === form.party_id)
-        : [],
-);
+        : props.refundGroups.filter((group) => group.vendor_ids.includes(form.party_id));
+});
 
 
 
@@ -152,10 +160,17 @@ const overCharged = computed(
 
 const groupHint = computed(() => {
     if (!partyGroups.value.length) {
-        return 'This agent has no groups yet.';
+        return isAgentRefund.value
+            ? 'This agent has no groups yet.'
+            : 'This supplier has not billed any group yet.';
     }
     if (!form.visa_group_id || form.visa_group_id === 'none') {
-        return 'Choosing a group narrows the services below to what it bought, and takes the refund off that group\u2019s payments.';
+        return isAgentRefund.value
+            ? 'Choosing a group narrows the services below to what it bought, and takes the refund off that group\u2019s payments.'
+            : 'Naming the group lowers what that trip cost by this amount. Leave it unset for money that is not about one trip\u2019s price \u2014 damages, or a rebate across a season.';
+    }
+    if (!isAgentRefund.value) {
+        return 'This trip\u2019s cost falls by the credit. The money itself is settled separately.';
     }
 
     return 'The refund comes off this group\u2019s payments, so its balance goes back up.';
@@ -336,7 +351,7 @@ const submit = () =>
                         </p>
                     </div>
 
-                    <div v-if="isAgentRefund" class="space-y-2">
+                    <div v-if="form.party_id !== 'none'" class="space-y-2">
                         <Label>Group (optional)</Label>
                         <Select v-model="form.visa_group_id">
                             <SelectTrigger>

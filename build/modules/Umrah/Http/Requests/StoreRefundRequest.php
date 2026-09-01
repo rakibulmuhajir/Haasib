@@ -97,9 +97,10 @@ class StoreRefundRequest extends UmrahFormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($this->input('party_type') !== Refund::PARTY_AGENT && $this->filled('visa_group_id')) {
-                $validator->errors()->add('visa_group_id', 'Only an agent refund can be linked to a group.');
-            }
+            // A supplier credit names a group too, and for a reason: the
+            // trip that supplier billed is the trip whose cost comes down.
+            // What differs is what naming it does -- an agent refund draws
+            // on that group's payments, a supplier credit lowers its cost.
         }];
     }
 

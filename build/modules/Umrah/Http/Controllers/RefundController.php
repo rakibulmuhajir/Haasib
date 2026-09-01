@@ -15,6 +15,7 @@ use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Modules\Umrah\Models\Voucher;
 use App\Modules\Umrah\Services\RefundService;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Modules\Umrah\Services\UmrahCoreService;
@@ -125,9 +126,14 @@ class RefundController extends Controller
             ->whereNotNull('agent_id')
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
             ->when($isMember, fn ($query) => $memberAgentId ? $query->where('agent_id', $memberAgentId) : $query->whereRaw('1 = 0'))
+            ->with([
+                'transportItems:id,visa_group_id,transport_vendor_id',
+                'vouchers:id,visa_group_id,status,superseded_at,hotel_stays',
+            ])
             ->orderByDesc('created_at')
             ->get([
-                'id', 'agent_id', 'group_number', 'name', 'transport_mode', 'hotel_amount',
+                'id', 'agent_id', 'vendor_id', 'mandatory_transport_vendor_id',
+                'group_number', 'name', 'transport_mode', 'hotel_amount',
                 'transport_amount', 'visa_sale_amount', 'standard_bus_retail_amount',
                 'standard_bus_billable_passenger_count',
             ])
@@ -136,6 +142,18 @@ class RefundController extends Controller
                 'agent_id' => $group->agent_id,
                 'group_number' => $group->group_number,
                 'name' => $group->name,
+                // Which suppliers billed this trip, so a credit from one of
+                // them is only offered the trips it actually charged.
+                'vendor_ids' => collect([
+                    $group->vendor_id,
+                    $group->mandatory_transport_vendor_id,
+                    ...$group->transportItems->pluck('transport_vendor_id')->all(),
+                    ...$group->vouchers
+                        ->where('status', Voucher::STATUS_APPROVED)
+                        ->whereNull('superseded_at')
+                        ->flatMap(fn (Voucher $voucher) => collect($voucher->hotel_stays)->pluck('hotel_vendor_id'))
+                        ->all(),
+                ])->filter()->unique()->values()->all(),
                 'has_visa' => (float) $group->visa_sale_amount > 0,
                 'has_transport' => $group->transport_mode !== VisaGroup::TRANSPORT_NONE,
                 'has_hotel' => (float) $group->hotel_amount > 0,

@@ -111,11 +111,20 @@ class RefundService
 
             $this->assertWithinAvailableCredit($refund);
 
-            if ($refund->visa_group_id) {
+            // Agent side only: a refund to an agent comes out of what they
+            // have already paid against that group. A supplier credit has
+            // no agent allocations to unwind, and running this for one
+            // found none and refused the whole refund.
+            if ($refund->visa_group_id && $refund->party_type === Refund::PARTY_AGENT) {
                 $this->deallocateForGroupRefund($refund, $userId);
             }
 
             $transaction = $this->coreService->postRefundAccept($refund);
+
+            // The supplier charged this trip less than first billed, so the
+            // trip cost less. The ledger's cost account was just credited;
+            // this moves the group's own figure with it.
+            $this->coreService->applyVendorCreditToGroup($refund, -1);
 
             // Mirrors the Dr agent_advances entry just posted, on the
             // GroupPayment rows themselves -- see
@@ -183,6 +192,9 @@ class RefundService
             if ($refund->party_type === Refund::PARTY_AGENT) {
                 $this->coreService->reverseAgentAdvanceDebits($refund, $reason, $userId);
             }
+
+            // Cancelling the credit puts the trip's cost back where it was.
+            $this->coreService->applyVendorCreditToGroup($refund, 1);
 
             $refund->update([
                 'status' => Refund::STATUS_CANCELLED,

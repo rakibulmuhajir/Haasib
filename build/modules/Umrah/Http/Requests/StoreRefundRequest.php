@@ -91,6 +91,9 @@ class StoreRefundRequest extends UmrahFormRequest
                 Rule::prohibitedIf(fn () => $this->input('currency') === $baseCurrency && $this->filled('exchange_rate')),
             ],
             'reason' => ['required', 'string', 'max:2000'],
+            // Countable beside the sentence, so the same question can be
+            // asked of every refund at once rather than read one by one.
+            'reason_category' => ['nullable', Rule::in(array_keys(Refund::reasonsFor($partyType)))],
         ];
     }
 

@@ -199,6 +199,42 @@ function statementRows(object $f): Illuminate\Support\Collection
     )['rows']);
 }
 
+test('an adjustment records what kind of change it was', function () {
+    // The sentence says what happened; this says what kind of thing it was,
+    // so the same question can be asked of every adjustment at once.
+    $f = costAdjustmentFixture();
+
+    adjustAccounting($f, [
+        'visa_cost_amount' => 960,
+        'reason' => 'Renegotiated with the supplier',
+        'reason_category' => 'renegotiated',
+    ]);
+
+    $adjustment = App\Modules\Accounting\Models\Transaction::where('company_id', $f->company->id)
+        ->where('transaction_type', 'umrah_group_cost_adjustment')
+        ->latest('created_at')
+        ->first();
+
+    expect($adjustment->metadata['reason_category'])->toBe('renegotiated')
+        ->and($adjustment->metadata['reason'])->toBe('Renegotiated with the supplier');
+});
+
+test('an adjustment without a category still records its reason', function () {
+    // Everything written before the categories existed has a sentence and
+    // no category, and guessing one from the words would invent a fact.
+    $f = costAdjustmentFixture();
+
+    adjustAccounting($f, ['visa_cost_amount' => 960, 'reason' => 'Something else entirely']);
+
+    $adjustment = App\Modules\Accounting\Models\Transaction::where('company_id', $f->company->id)
+        ->where('transaction_type', 'umrah_group_cost_adjustment')
+        ->latest('created_at')
+        ->first();
+
+    expect($adjustment->metadata['reason_category'])->toBeNull()
+        ->and($adjustment->metadata['reason'])->toBe('Something else entirely');
+});
+
 test('a sale adjustment shows on the agent statement as its own line', function () {
     // The agent has to see the charge they agreed and the change made
     // later, not one revised total dated the day of the original.

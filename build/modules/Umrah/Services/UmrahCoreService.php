@@ -1853,7 +1853,7 @@ class UmrahCoreService
         return [$netVisa, $netTransport];
     }
 
-    public function postGroupFinancialAdjustment(VisaGroup $group, array $before, string $reason): void
+    public function postGroupFinancialAdjustment(VisaGroup $group, array $before, string $reason, ?string $category = null): void
     {
         $company = $this->company($group->company_id);
         [$oldVisaRevenue, $oldTransportRevenue] = $this->netRevenueFromValues($before);
@@ -1863,17 +1863,17 @@ class UmrahCoreService
             ['account_id' => $this->accountId($company, 'visa_revenue'), 'delta' => $newVisaRevenue - $oldVisaRevenue, 'positive_type' => 'credit', 'description' => "Visa revenue adjustment for {$group->group_number}"],
             ['account_id' => $this->accountId($company, 'transport_revenue'), 'delta' => $newTransportRevenue - $oldTransportRevenue, 'positive_type' => 'credit', 'description' => "Transport revenue adjustment for {$group->group_number}"],
         ];
-        $this->postAdjustmentTransaction($group, 'UGA', 'umrah_group_sale_adjustment', $reason, $saleDeltas);
+        $this->postAdjustmentTransaction($group, 'UGA', 'umrah_group_sale_adjustment', $reason, $saleDeltas, $category);
 
         $costDeltas = [
             ['account_id' => $this->accountId($company, 'visa_cost'), 'delta' => (float) $group->visa_cost_amount - (float) $before['visa_cost_amount'], 'positive_type' => 'debit', 'description' => "Visa cost adjustment for {$group->group_number}"],
             ['account_id' => $this->accountId($company, 'transport_cost'), 'delta' => (float) $group->transport_cost_amount - (float) $before['transport_cost_amount'], 'positive_type' => 'debit', 'description' => "Transport cost adjustment for {$group->group_number}"],
             ['account_id' => $this->accountId($company, 'ap'), 'delta' => ((float) $group->visa_cost_amount + (float) $group->transport_cost_amount) - ((float) $before['visa_cost_amount'] + (float) $before['transport_cost_amount']), 'positive_type' => 'credit', 'description' => "Payable adjustment for {$group->group_number}"],
         ];
-        $this->postAdjustmentTransaction($group, 'UGC', 'umrah_group_cost_adjustment', $reason, $costDeltas);
+        $this->postAdjustmentTransaction($group, 'UGC', 'umrah_group_cost_adjustment', $reason, $costDeltas, $category);
     }
 
-    private function postAdjustmentTransaction(VisaGroup $group, string $prefix, string $type, string $reason, array $deltas): void
+    private function postAdjustmentTransaction(VisaGroup $group, string $prefix, string $type, string $reason, array $deltas, ?string $category = null): void
     {
         $entries = collect($deltas)
             ->filter(fn (array $line) => abs(round((float) $line['delta'], 2)) >= 0.01)
@@ -1908,7 +1908,7 @@ class UmrahCoreService
             'description' => "{$reason}: {$group->group_number}",
             'reference_type' => 'umrah.visa_groups',
             'reference_id' => $group->id,
-            'metadata' => ['group_number' => $group->group_number, 'reason' => $reason],
+            'metadata' => ['group_number' => $group->group_number, 'reason' => $reason, 'reason_category' => $category],
         ], $entries);
     }
 

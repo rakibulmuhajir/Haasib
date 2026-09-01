@@ -225,6 +225,25 @@ class VisaGroup extends Model
         return $this->hasMany(PaymentAllocation::class, 'visa_group_id')->whereNull('reversed_at');
     }
 
+    /**
+     * Why a group's figures were adjusted, in a form something can count.
+     *
+     * The first two are the pair worth separating. An error says the
+     * original figure was never right and, if it matters and the period is
+     * closed, it may have to be restated. A renegotiation says the figure
+     * was right when it was made and the terms changed afterwards, which
+     * belongs in the period it was agreed. Free text cannot be asked that
+     * question.
+     */
+    public const ADJUSTMENT_REASONS = [
+        'error' => 'Corrected an error made when the group was created',
+        'renegotiated' => 'Renegotiated with the supplier',
+        'rate_change' => 'Rate changed after the group was booked',
+        'passenger_count' => 'Passenger count changed',
+        'discount' => 'Discount agreed with the agent',
+        'other' => 'Other',
+    ];
+
     public function getPaymentStatusAttribute(): string
     {
         if ((float) $this->total_paid <= 0) {

@@ -121,6 +121,7 @@ class GroupAccountingService
                 'passenger_count', 'standard_bus_retail_amount', 'standard_bus_cost_amount',
                 'standard_bus_billable_passenger_count',
             ]) + ['agent' => $group->agent?->only(['id', 'name']), 'vendor' => $group->vendor?->only(['id', 'name']), 'mandatory_transport_vendor' => $group->mandatoryTransportVendor?->only(['id', 'name'])],
+            'adjustmentReasons' => VisaGroup::ADJUSTMENT_REASONS,
             'passengerSummary' => ['total' => $passengers->count(), ...$ageCounts, 'visa' => $visaPax, 'transport_only' => $transportOnlyPax],
             'services' => $services->values(),
             'voucherBreakdown' => $voucherBreakdown,
@@ -263,7 +264,7 @@ class GroupAccountingService
                 ...$transportSnapshot,
             ]);
             $group = $this->core->recalculateGroup($group->fresh());
-            $this->core->postGroupFinancialAdjustment($group, $before, $data['reason']);
+            $this->core->postGroupFinancialAdjustment($group, $before, $data['reason'], $data['reason_category'] ?? null);
             $this->core->recalculateAgent($group->agent_id);
             foreach (array_unique([...$oldVendorIds, $group->vendor_id, $group->mandatory_transport_vendor_id]) as $vendorId) {
                 if ($vendorId) {

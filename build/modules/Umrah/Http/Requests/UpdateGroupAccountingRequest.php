@@ -32,6 +32,9 @@ class UpdateGroupAccountingRequest extends UmrahFormRequest
             'visa_cost_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'transport_cost_amount' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
+            // Countable beside the sentence. Which kind of change this was
+            // decides whether a closed period has to be restated.
+            'reason_category' => ['nullable', Rule::in(array_keys(VisaGroup::ADJUSTMENT_REASONS))],
         ];
     }
 

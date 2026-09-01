@@ -96,6 +96,41 @@ class Refund extends Model
      * answer and three wrong ones. Other stays on each list as the escape
      * hatch for a fee that fits nowhere else.
      */
+    /**
+     * Why money went back, in a form something can count.
+     *
+     * The two sides ask different questions. An agent is refunded because
+     * of what happened to their pilgrims -- somebody did not travel, or
+     * they paid us too much. A supplier gives money back because of what
+     * happened to a bill -- they overcharged, or the price was
+     * renegotiated afterwards. One list for both would offer each of them
+     * the other's reasons.
+     *
+     * Other is on both, because a list that cannot say everything must not
+     * make someone pick the nearest wrong thing.
+     */
+    public const AGENT_REASONS = [
+        'passenger_withdrew' => 'A passenger did not travel',
+        'overpaid' => 'The agent paid more than the group came to',
+        'service_not_provided' => 'A service was not provided',
+        'error' => 'Corrected an error in what we charged',
+        'goodwill' => 'Goodwill',
+        'other' => 'Other',
+    ];
+
+    public const VENDOR_REASONS = [
+        'renegotiated' => 'Price renegotiated after we were billed',
+        'overcharged' => 'The supplier overcharged us',
+        'service_not_provided' => 'A service was not provided',
+        'error' => 'Corrected an error in their invoice',
+        'other' => 'Other',
+    ];
+
+    public static function reasonsFor(?string $partyType): array
+    {
+        return $partyType === self::PARTY_AGENT ? self::AGENT_REASONS : self::VENDOR_REASONS;
+    }
+
     public static function servicesFor(?string $partyType): array
     {
         return match ($partyType) {
@@ -159,6 +194,7 @@ class Refund extends Model
         'base_currency',
         'base_amount',
         'reason',
+        'reason_category',
         'status',
         'requested_by_user_id',
         'requested_at',

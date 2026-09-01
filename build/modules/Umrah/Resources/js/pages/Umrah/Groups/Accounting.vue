@@ -29,6 +29,7 @@ type Vendor = {
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
     group: any;
+    adjustmentReasons: Record<string, string>;
     passengerSummary: { total: number; adults: number; children: number; infants: number; visa: number; transport_only: number };
     services: Array<{ stage: 'group' | 'voucher'; service: string; quantity: number; charge: number }>;
     voucherBreakdown: Array<{
@@ -112,21 +113,16 @@ const transportCostExtra = computed(() =>
  * Other stays, because a list that cannot say everything must not force
  * someone to pick the nearest wrong thing.
  */
-const REASON_PRESETS = [
-    'Corrected an error made when the group was created',
-    'Renegotiated with the supplier',
-    'Rate changed after the group was booked',
-    'Passenger count changed',
-    'Discount agreed with the agent',
-];
-
 const reasonChoice = ref('');
 const reasonTyped = ref('');
 
 const isOtherReason = computed(() => reasonChoice.value === 'other');
 
 watch([reasonChoice, reasonTyped], () => {
-    form.reason = isOtherReason.value ? reasonTyped.value : reasonChoice.value;
+    form.reason_category = reasonChoice.value;
+    form.reason = isOtherReason.value
+        ? reasonTyped.value
+        : (props.adjustmentReasons[reasonChoice.value] ?? '');
 });
 
 const form = useForm({
@@ -138,6 +134,7 @@ const form = useForm({
     visa_cost_amount: String(props.group.visa_cost_amount ?? 0),
     transport_cost_amount: String(props.group.transport_cost_amount ?? 0),
     reason: '',
+    reason_category: '',
 });
 
 watch(
@@ -205,6 +202,7 @@ const submit = () => {
             visa_sale_amount: Number(data.visa_sale_amount || 0),
             transport_amount: Number(data.transport_amount || 0),
             discount_amount: Number(data.discount_amount || 0),
+            reason_category: data.reason_category || null,
             visa_cost_amount: Number(data.visa_cost_amount || 0),
             transport_cost_amount: Number(data.transport_cost_amount || 0),
         }))
@@ -213,6 +211,7 @@ const submit = () => {
             onSuccess: () => {
                 form.reason = '';
                 reasonChoice.value = '';
+                form.reason_category = '';
                 reasonTyped.value = '';
             },
             onError: () => toast.error('Group accounting could not be updated'),
@@ -395,10 +394,13 @@ const submit = () => {
                                 <Select v-model="reasonChoice">
                                     <SelectTrigger><SelectValue placeholder="Why is this changing?" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem v-for="preset in REASON_PRESETS" :key="preset" :value="preset">
-                                            {{ preset }}
+                                        <SelectItem
+                                            v-for="(label, value) in adjustmentReasons"
+                                            :key="value"
+                                            :value="value"
+                                        >
+                                            {{ value === 'other' ? 'Other — write it below' : label }}
                                         </SelectItem>
-                                        <SelectItem value="other">Other — write it below</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <Textarea

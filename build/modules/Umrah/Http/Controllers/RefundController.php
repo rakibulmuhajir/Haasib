@@ -79,6 +79,9 @@ class RefundController extends Controller
             'servicesByParty' => collect(array_keys(Refund::PARTY_TYPES))
                 ->mapWithKeys(fn (string $party) => [$party => Refund::servicesFor($party)])
                 ->all(),
+            'reasonsByParty' => collect(array_keys(Refund::PARTY_TYPES))
+                ->mapWithKeys(fn (string $party) => [$party => Refund::reasonsFor($party)])
+                ->all(),
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderByName()->get(['id', 'customer_id']),
@@ -133,8 +136,10 @@ class RefundController extends Controller
             ->orderByDesc('created_at')
             ->get([
                 'id', 'agent_id', 'vendor_id', 'mandatory_transport_vendor_id',
-                'group_number', 'name', 'transport_mode', 'hotel_amount',
-                'transport_amount', 'visa_sale_amount', 'standard_bus_retail_amount',
+                'group_number', 'name', 'transport_mode', 'passenger_count',
+                'visa_sale_amount', 'visa_cost_amount', 'transport_amount', 'transport_cost_amount',
+                'hotel_amount', 'hotel_cost_amount',
+                'standard_bus_retail_amount', 'standard_bus_cost_amount',
                 'standard_bus_billable_passenger_count',
             ])
             ->map(fn (VisaGroup $group) => [
@@ -157,19 +162,34 @@ class RefundController extends Controller
                 'has_visa' => (float) $group->visa_sale_amount > 0,
                 'has_transport' => $group->transport_mode !== VisaGroup::TRANSPORT_NONE,
                 'has_hotel' => (float) $group->hotel_amount > 0,
-                // What was charged for each service, so the form can show the
-                // sum a refund is coming out of instead of asking someone to
-                // remember it.
+                /*
+                 * Both sides of every service, because the two refunds are
+                 * asking about different money. An agent is refunded out of
+                 * what they were charged; a supplier credits us out of what
+                 * they charged us. Sending one figure would have made the
+                 * form right for whoever it was written for and quietly
+                 * wrong for the other.
+                 */
                 'charged' => [
-                    'transport' => round((float) $group->transport_amount, 2),
-                    'hotel' => round((float) $group->hotel_amount, 2),
+                    'sale' => [
+                        'visa' => round((float) $group->visa_sale_amount, 2),
+                        'transport' => round((float) $group->transport_amount, 2),
+                        'hotel' => round((float) $group->hotel_amount, 2),
+                    ],
+                    'cost' => [
+                        'visa' => round((float) $group->visa_cost_amount, 2),
+                        'transport' => round((float) $group->transport_cost_amount, 2),
+                        'hotel' => round((float) $group->hotel_cost_amount, 2),
+                    ],
                 ],
-                // Only a standard bus has a per-passenger rate to work back
-                // from. A specialized group is priced per vehicle or per
-                // journey, so there is no per-head figure to offer.
+                'passenger_count' => (int) $group->passenger_count,
+                // Only a standard bus has a per-seat rate to work back from.
+                // A specialized group is priced per vehicle or per journey,
+                // so there is no per-head figure to offer.
                 'per_passenger' => $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS
                     ? [
-                        'rate' => round((float) $group->standard_bus_retail_amount, 2),
+                        'sale' => round((float) $group->standard_bus_retail_amount, 2),
+                        'cost' => round((float) $group->standard_bus_cost_amount, 2),
                         'count' => (int) $group->standard_bus_billable_passenger_count,
                     ]
                     : null,

@@ -64,6 +64,7 @@ class RefundService
                 'base_currency' => $company->base_currency,
                 'base_amount' => $baseAmount,
                 'reason' => $data['reason'],
+                'reason_category' => $data['reason_category'] ?? null,
                 'status' => Refund::STATUS_REQUESTED,
                 'requested_by_user_id' => $userId,
                 'requested_at' => now(),

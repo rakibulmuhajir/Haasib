@@ -98,8 +98,16 @@ const apply = () => {
             {{ count }} <template v-if="count === 1">passenger</template><template v-else>passengers</template>
             &times; <MoneyText :amount="currentRate" :currency="currency" />
             <template v-if="derived"> each, as charged</template><template v-else> each</template>
-            <template v-if="extra">
+            <template v-if="extra > 0">
                 · plus <MoneyText :amount="extra" :currency="currency" /> charged separately
+            </template>
+            <!--
+                A negative remainder is a supplier's credit, not a charge.
+                Reading "plus -400.00 charged separately" is how a coach
+                company knocking 400 off a fare described itself.
+            -->
+            <template v-else-if="extra < 0">
+                · less <MoneyText :amount="Math.abs(extra)" :currency="currency" /> credited back
             </template>
         </p>
         <div v-if="!disabled" class="flex flex-wrap items-end gap-2">

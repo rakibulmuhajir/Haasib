@@ -2023,9 +2023,28 @@ class UmrahCoreService
             return;
         }
 
-        $group->update([
+        $columns = [
             $column => max(round((float) $group->{$column} + $sign * (float) $refund->base_amount, 2), 0),
-        ]);
+        ];
+
+        /*
+         * The mandatory bus keeps its cost in a second column, and that is
+         * the one recalculateVendor() adds up. Crediting only the group's
+         * total left the two disagreeing: the trip cost 300 and the coach
+         * company was still owed 700, so their balance did not move and
+         * vendor aging went on billing the full fare. The credit is against
+         * that bus, so both columns carry it.
+         */
+        if ($column === 'transport_cost_amount'
+            && $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS
+            && $group->mandatory_transport_vendor_id === $refund->party_id) {
+            $columns['mandatory_transport_cost_amount'] = max(
+                round((float) $group->mandatory_transport_cost_amount + $sign * (float) $refund->base_amount, 2),
+                0,
+            );
+        }
+
+        $group->update($columns);
 
         $this->recalculateGroup($group->fresh());
         $this->recalculateGroupVendors($group->fresh());

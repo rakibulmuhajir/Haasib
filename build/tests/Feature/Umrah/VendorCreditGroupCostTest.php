@@ -108,6 +108,73 @@ function grantVendorCredit(object $f, array $overrides = []): Refund
     return $service->approve($refund, ['review_remarks' => 'Agreed'], $f->user->id);
 }
 
+function busCreditFixture(): object
+{
+    $f = vendorCreditFixture();
+
+    $bus = VisaVendor::create([
+        'company_id' => $f->company->id,
+        'vendor_number' => 'TRN-'.str()->upper(str()->random(5)),
+        'name' => 'Coach Company',
+        'service_type' => VisaVendor::SERVICE_TRANSPORT_PROVIDER,
+        'standard_bus_retail_amount' => 80,
+        'standard_bus_cost_amount' => 50,
+        'charge_child_fare' => true,
+        'total_paid' => 700,
+    ]);
+
+    $f->group->update([
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+        'transport_required' => true,
+        'mandatory_transport_vendor_id' => $bus->id,
+        'transport_amount' => 1120,
+        'transport_cost_amount' => 700,
+        'mandatory_transport_cost_amount' => 700,
+        'standard_bus_retail_amount' => 80,
+        'standard_bus_cost_amount' => 50,
+        'standard_bus_billable_passenger_count' => 14,
+    ]);
+
+    App\Modules\Umrah\Models\GroupPayment::create([
+        'company_id' => $f->company->id,
+        'transport_vendor_id' => $bus->id,
+        'direction' => App\Modules\Umrah\Models\GroupPayment::DIRECTION_SENT,
+        'payment_number' => 'UPM-'.str()->upper(str()->random(5)),
+        'payment_date' => '2026-09-10',
+        'amount' => 700, 'currency' => 'SAR',
+        'base_currency' => 'SAR', 'base_amount' => 700,
+        'method' => App\Modules\Umrah\Models\GroupPayment::METHOD_CASH,
+        'status' => App\Modules\Umrah\Models\GroupPayment::STATUS_POSTED,
+    ]);
+
+    return (object) [...(array) $f, 'bus' => $bus];
+}
+
+test('a coach company crediting the fare owes that money back', function () {
+    // The bus keeps its cost in a second column, and that is the one the
+    // supplier's balance is added up from. Crediting only the group's total
+    // left the trip costing 300 while the coach company was still owed the
+    // whole 700, so their balance never moved and vendor aging went on
+    // billing the full fare.
+    $f = busCreditFixture();
+
+    grantVendorCredit($f, [
+        'party_type' => Refund::PARTY_TRANSPORT_VENDOR,
+        'party_id' => $f->bus->id,
+        'service' => Refund::SERVICE_TRANSPORT,
+        'amount' => 400,
+        'reason' => 'Children ride free',
+    ]);
+
+    $group = $f->group->fresh();
+    $bus = $f->bus->fresh();
+
+    expect((float) $group->transport_cost_amount)->toBe(300.0)
+        ->and((float) $group->mandatory_transport_cost_amount)->toBe(300.0)
+        ->and((float) $bus->total_cost)->toBe(300.0)
+        ->and((float) $bus->balance)->toBe(-400.0);
+});
+
 test('a supplier credit lowers what that trip cost', function () {
     $f = vendorCreditFixture();
 

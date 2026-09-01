@@ -229,17 +229,29 @@ class RefundController extends Controller
         if ($this->isUuid($groupId)) {
             $group = VisaGroup::where('company_id', $companyId)->find($groupId);
 
-            // Only an agent refund can be linked to a group, and only when
-            // the group's agent agrees with whatever party the block above
-            // already settled on (nothing, or that same agent).
-            if ($group
-                && $group->agent_id
-                && (! $isMember || $group->agent_id === $memberAgentId)
-                && ($initial['party_type'] ?? Refund::PARTY_AGENT) === Refund::PARTY_AGENT
-                && ($initial['party_id'] ?? $group->agent_id) === $group->agent_id
-            ) {
-                $initial['party_type'] = Refund::PARTY_AGENT;
-                $initial['party_id'] = $group->agent_id;
+            /*
+             * The group carries through for either side now. An agent
+             * refund draws on what that agent paid against the group; a
+             * supplier credit lowers what the group cost. What must hold is
+             * that the party named actually has something to do with the
+             * group -- its agent, or one of the suppliers who billed it.
+             */
+            $billedBy = $group ? collect([
+                $group->vendor_id,
+                $group->mandatory_transport_vendor_id,
+                ...$group->transportItems()->pluck('transport_vendor_id')->all(),
+            ])->filter()->all() : [];
+
+            $partyType = $initial['party_type'] ?? Refund::PARTY_AGENT;
+            $partyId = $initial['party_id'] ?? $group?->agent_id;
+
+            $belongs = $partyType === Refund::PARTY_AGENT
+                ? ($group?->agent_id && $partyId === $group->agent_id && (! $isMember || $group->agent_id === $memberAgentId))
+                : (! $isMember && in_array($partyId, $billedBy, true));
+
+            if ($group && $belongs) {
+                $initial['party_type'] = $partyType;
+                $initial['party_id'] = $partyId;
                 $initial['visa_group_id'] = $group->id;
             }
         }

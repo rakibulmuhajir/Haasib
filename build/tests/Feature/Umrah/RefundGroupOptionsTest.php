@@ -184,6 +184,48 @@ test('a group says whether it bought a visa', function () {
         ->and($rows['UGR-SETTLED']['has_hotel'])->toBeFalse();
 });
 
+test('opening a refund from a group arrives with it chosen', function () {
+    // Both refunds start from the trip, because that is where somebody is
+    // standing when they decide to make one.
+    $f = refundOptionsFixture();
+
+    test()->actingAs($f->user)
+        ->get("/{$f->company->slug}/umrah/refunds/create?party_type=agent&party_id={$f->agent->id}&visa_group_id={$f->settled->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial.party_type', 'agent')
+            ->where('initial.visa_group_id', $f->settled->id));
+});
+
+test('a supplier credit opened from a group arrives with it chosen too', function () {
+    // This used to drop the group: only an agent refund was allowed to
+    // carry one, from when naming a group did nothing for a supplier.
+    $f = refundOptionsFixture();
+    $vendorId = $f->settled->vendor_id;
+
+    test()->actingAs($f->user)
+        ->get("/{$f->company->slug}/umrah/refunds/create?party_type=visa_vendor&party_id={$vendorId}&visa_group_id={$f->settled->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('initial.party_type', 'visa_vendor')
+            ->where('initial.visa_group_id', $f->settled->id));
+});
+
+test('a party with nothing to do with the group does not carry it', function () {
+    $f = refundOptionsFixture();
+    $stranger = App\Modules\Umrah\Models\VisaVendor::create([
+        'company_id' => $f->company->id,
+        'vendor_number' => 'VIS-'.str()->upper(str()->random(5)),
+        'name' => 'Unrelated Desk',
+        'service_type' => App\Modules\Umrah\Models\VisaVendor::SERVICE_VISA_PROVIDER,
+    ]);
+
+    test()->actingAs($f->user)
+        ->get("/{$f->company->slug}/umrah/refunds/create?party_type=visa_vendor&party_id={$stranger->id}&visa_group_id={$f->settled->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->missing('initial.visa_group_id'));
+});
+
 test('a cancelled group is not offered', function () {
     $f = refundOptionsFixture();
     $f->owing->update(['status' => VisaGroup::STATUS_CANCELLED]);

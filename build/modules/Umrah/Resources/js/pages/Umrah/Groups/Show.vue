@@ -37,6 +37,7 @@ import {
     Trash2,
     WalletCards,
     Calculator,
+    Undo2,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -508,7 +509,29 @@ const addPayment = () => {
                 @click="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)"
             >
                 <Calculator class="mr-2 h-4 w-4" />
-                Accounting
+                Adjust charges
+            </Button>
+            <!--
+                Both refunds start from the trip, because that is where
+                somebody is standing when they decide to make one. The group
+                travels in the query so the form opens with it already
+                chosen rather than asking again for something the page knew.
+            -->
+            <Button
+                v-if="groupCapabilities.can_view_accounting && group.agent_id"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/refunds/create?party_type=agent&party_id=${group.agent_id}&visa_group_id=${group.id}`)"
+            >
+                <Undo2 class="mr-2 h-4 w-4" />
+                Refund agent
+            </Button>
+            <Button
+                v-if="groupCapabilities.can_view_accounting && group.vendor_id"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/refunds/create?party_type=visa_vendor&party_id=${group.vendor_id}&visa_group_id=${group.id}`)"
+            >
+                <Undo2 class="mr-2 h-4 w-4" />
+                Supplier credit
             </Button>
             <Button
                 v-if="groupCapabilities.can_modify"

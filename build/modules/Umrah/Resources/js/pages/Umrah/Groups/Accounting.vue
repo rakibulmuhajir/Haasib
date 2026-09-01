@@ -6,6 +6,12 @@ import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,11 +57,37 @@ const props = defineProps<{
     canCreateRefund: boolean;
 }>();
 
-const requestRefund = () => {
+/**
+ * Both sides of a trip's money can go wrong, so both are offered here.
+ *
+ * The button used to assume the agent, which is only half the story: the
+ * suppliers who billed this group are refunded from the same page, and
+ * picking one here saves choosing it again on a form that already knows
+ * the trip.
+ */
+const refundParties = computed(() => {
+    // The parties this page already names: the trip's agent, and the
+    // suppliers who billed it. group.agent_id is not in the payload -- only
+    // the nested party objects are -- which is why the old button silently
+    // prefilled nothing.
+    const parties: Array<{ label: string; party_type: string; party_id: string }> = [];
+    const add = (label: string, party_type: string, party?: { id: string; name: string } | null) => {
+        if (party?.id) parties.push({ label: `${label} · ${party.name}`, party_type, party_id: party.id });
+    };
+
+    add('To the agent', 'agent', props.group.agent);
+    add('From the visa vendor', 'visa_vendor', props.group.vendor);
+    add('From the transport vendor', 'transport_vendor', props.group.mandatory_transport_vendor);
+
+    return parties;
+});
+
+const requestRefund = (party?: { party_type: string; party_id: string }) => {
     const query: Record<string, string> = { visa_group_id: props.group.id };
-    if (props.group.agent_id) {
-        query.party_type = 'agent';
-        query.party_id = props.group.agent_id;
+    const chosen = party ?? refundParties.value[0];
+    if (chosen) {
+        query.party_type = chosen.party_type;
+        query.party_id = chosen.party_id;
     }
     router.get(`/${props.company.slug}/umrah/refunds/create`, query);
 };
@@ -249,7 +281,21 @@ const submit = () => {
             <Button variant="outline" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
                 <ArrowLeft class="mr-2 h-4 w-4" />Operational View
             </Button>
-            <Button v-if="canCreateRefund" variant="outline" @click="requestRefund">
+            <DropdownMenu v-if="canCreateRefund && refundParties.length > 1">
+                <DropdownMenuTrigger as-child>
+                    <Button variant="outline"><Undo2 class="mr-2 h-4 w-4" />Request a refund</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                        v-for="party in refundParties"
+                        :key="`${party.party_type}:${party.party_id}`"
+                        @select="requestRefund(party)"
+                    >
+                        {{ party.label }}
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <Button v-else-if="canCreateRefund" variant="outline" @click="requestRefund()">
                 <Undo2 class="mr-2 h-4 w-4" />Request a refund
             </Button>
         </template>

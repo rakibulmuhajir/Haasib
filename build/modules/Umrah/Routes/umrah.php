@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Umrah\Http\Controllers\AdjustmentController;
 use App\Modules\Umrah\Http\Controllers\AgentController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
@@ -75,6 +76,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('tickets', [TicketBookingController::class, 'store'])->name('umrah.tickets.store');
         Route::get('tickets/{booking}', [TicketBookingController::class, 'show'])->whereUuid('booking')->name('umrah.tickets.show');
         Route::post('tickets/{ticket}/cancel', [TicketBookingController::class, 'cancel'])->whereUuid('ticket')->name('umrah.tickets.cancel');
+
+        Route::get('adjustments', [AdjustmentController::class, 'index'])->name('umrah.adjustments.index');
 
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('umrah.expenses.create');

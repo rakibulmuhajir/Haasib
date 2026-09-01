@@ -1,5 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types';
 import {
+    Scale,
     BadgeDollarSign,
     BarChart3,
     Building2,
@@ -74,6 +75,11 @@ export const umrahNav: ModuleNavConfig = {
                   },
               ]
             : [
+                  {
+                      title: 'Adjustments',
+                      href: `/${slug}/umrah/adjustments`,
+                      icon: Scale,
+                  },
                   {
                       title: 'Group Profitability',
                       href: `/${slug}/umrah/reports/group-profitability`,

@@ -99,6 +99,7 @@ function costAdjustmentFixture(): object
 
     return (object) [
         'company' => $f->company,
+        'user' => $f->user,
         'group' => $group->fresh(),
         'visaVendor' => $visaVendor,
         'busVendor' => $busVendor,

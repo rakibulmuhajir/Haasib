@@ -15,12 +15,15 @@ require_once __DIR__.'/TicketingFixtures.php';
 /**
  * What a refund may say it paid back.
  */
-test('an agent cannot be refunded a visa', function () {
-    // A group is built after the visas come back approved, and only the
-    // approved ones are imported into it, so by the time a group exists
-    // there is no visa left to give back to the buyer.
+test('an agent can be refunded any part of their package', function () {
+    // A group is built from visas already approved, which makes returning
+    // one rare -- but a list that omits the rare case forces whoever meets
+    // it to file the thing as Other, which loses more than it saves.
     expect(array_keys(Refund::servicesFor(Refund::PARTY_AGENT)))
-        ->not->toContain(Refund::SERVICE_VISA);
+        ->toContain(Refund::SERVICE_VISA)
+        ->toContain(Refund::SERVICE_TRANSPORT)
+        ->toContain(Refund::SERVICE_HOTEL)
+        ->toContain(Refund::SERVICE_TICKET);
 });
 
 test('a visa vendor can still refund a visa fee to the company', function () {

@@ -67,24 +67,23 @@ class Refund extends Model
     ];
 
     /**
-     * What an agent's refund may name. Visa is absent by design: a group is
-     * built after the visas come back approved and only the approved ones
-     * are imported into it, so by the time a group exists there is no visa
-     * left to give back to the buyer. The three that remain are the three a
-     * passenger can drop out of -- their hotel, their ticket, their seat.
+     * What an agent's refund may name.
      *
-     * Refunds are partial by nature. One person out of a group not
-     * travelling is the ordinary case, which is why the amount is free and
-     * this says which part of their package it came from.
+     * Refunds are partial by nature -- one person out of a group not
+     * travelling is the ordinary case -- which is why the amount is free
+     * and this says which part of their package it came from.
      *
-     * A vendor refund is the other direction entirely -- a supplier giving
-     * money back to the company -- and a visa desk returning a fee is an
-     * ordinary thing for one to do. Those keep the full list.
+     * Visa is here despite a group being built only from visas already
+     * approved, which makes returning one rare. Rare is not never, and a
+     * list that omits the rare case forces whoever meets it to file the
+     * thing as Other, which loses more than the occasional visa refund it
+     * was meant to prevent.
      */
     public const AGENT_SERVICES = [
+        self::SERVICE_VISA => 'Visa',
+        self::SERVICE_TRANSPORT => 'Transport',
         self::SERVICE_HOTEL => 'Hotel',
         self::SERVICE_TICKET => 'Ticket',
-        self::SERVICE_TRANSPORT => 'Transport',
         self::SERVICE_OTHER => 'Other',
     ];
 

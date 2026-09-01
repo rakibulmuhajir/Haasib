@@ -45,7 +45,10 @@ const props = defineProps<{
         passenger_count: number;
         per_passenger: { sale: number; cost: number; count: number } | null;
     }>;
-    currencies: Array<{ currency_code: string; exchange_rate: string | number }>;
+    currencies: Array<{
+        currency_code: string;
+        exchange_rate: string | number;
+    }>;
     initial?: {
         party_type?: string;
         party_id?: string;
@@ -110,10 +113,10 @@ const partyGroups = computed(() => {
 
     return isAgentRefund.value
         ? props.refundGroups.filter((group) => group.agent_id === form.party_id)
-        : props.refundGroups.filter((group) => group.vendor_ids.includes(form.party_id));
+        : props.refundGroups.filter((group) =>
+              group.vendor_ids.includes(form.party_id),
+          );
 });
-
-
 
 /*
  * What the group was charged for the service being refunded. It comes off
@@ -145,7 +148,10 @@ const perPassenger = computed(() => {
     const rates = selectedGroup.value?.per_passenger;
     if (!rates) return null;
 
-    return { rate: isAgentRefund.value ? rates.sale : rates.cost, count: rates.count };
+    return {
+        rate: isAgentRefund.value ? rates.sale : rates.cost,
+        count: rates.count,
+    };
 });
 
 /*
@@ -195,7 +201,9 @@ const passengerRefundAmount = computed(() => {
     const rate = perPassenger.value?.rate ?? 0;
     const count = Number(refundPassengers.value || 0);
 
-    return Number.isFinite(count) && count > 0 ? Math.round(rate * count * 100) / 100 : 0;
+    return Number.isFinite(count) && count > 0
+        ? Math.round(rate * count * 100) / 100
+        : 0;
 });
 
 const percentRefundAmount = computed(() => {
@@ -253,13 +261,11 @@ const baseAmount = computed(
  * three wrong answers and one right one. An agent's group that bought no
  * hotel has no hotel to give back. Without a group there is nothing to
  * narrow by, so the party's own list stands.
- *
- * Visa is absent from an agent's list throughout -- the group was built
- * from visas already approved, so there is none left to return -- which
- * is why a visa-and-transport group offers transport alone.
  */
 const selectedGroup = computed(
-    () => props.refundGroups.find((group) => group.id === form.visa_group_id) ?? null,
+    () =>
+        props.refundGroups.find((group) => group.id === form.visa_group_id) ??
+        null,
 );
 
 const partyServices = computed(
@@ -365,7 +371,10 @@ const submit = () =>
             <Card variant="form">
                 <CardHeader><CardTitle>Refund</CardTitle></CardHeader>
                 <CardContent class="space-y-5">
-                    <div v-if="Object.keys(partyTypes).length > 1" class="space-y-2">
+                    <div
+                        v-if="Object.keys(partyTypes).length > 1"
+                        class="space-y-2"
+                    >
                         <Label>Owed to</Label>
                         <Select v-model="form.party_type">
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -379,7 +388,10 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p v-if="form.errors.party_type" class="text-xs text-destructive">
+                        <p
+                            v-if="form.errors.party_type"
+                            class="text-xs text-destructive"
+                        >
                             {{ form.errors.party_type }}
                         </p>
                     </div>
@@ -391,7 +403,9 @@ const submit = () =>
                                 <SelectValue placeholder="Select party" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">Select party</SelectItem>
+                                <SelectItem value="none"
+                                    >Select party</SelectItem
+                                >
                                 <SelectItem
                                     v-for="party in partyOptions"
                                     :key="party.id"
@@ -401,7 +415,10 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p v-if="form.errors.party_id" class="text-xs text-destructive">
+                        <p
+                            v-if="form.errors.party_id"
+                            class="text-xs text-destructive"
+                        >
                             {{ form.errors.party_id }}
                         </p>
                     </div>
@@ -410,10 +427,14 @@ const submit = () =>
                         <Label>Group (optional)</Label>
                         <Select v-model="form.visa_group_id">
                             <SelectTrigger>
-                                <SelectValue placeholder="Not tied to a group" />
+                                <SelectValue
+                                    placeholder="Not tied to a group"
+                                />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">Not tied to a group</SelectItem>
+                                <SelectItem value="none"
+                                    >Not tied to a group</SelectItem
+                                >
                                 <SelectItem
                                     v-for="group in partyGroups"
                                     :key="group.id"
@@ -423,94 +444,15 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p class="text-xs text-muted-foreground">{{ groupHint }}</p>
-                        <p v-if="form.errors.visa_group_id" class="text-xs text-destructive">
+                        <p class="text-xs text-muted-foreground">
+                            {{ groupHint }}
+                        </p>
+                        <p
+                            v-if="form.errors.visa_group_id"
+                            class="text-xs text-destructive"
+                        >
                             {{ form.errors.visa_group_id }}
                         </p>
-
-                        <div
-                            v-if="chargedForService !== null"
-                            class="space-y-3 rounded-md border bg-muted/40 p-3 text-sm"
-                        >
-                            <div class="flex items-baseline justify-between gap-3">
-                                <span class="text-muted-foreground">
-                                    {{ isAgentRefund ? 'Charged to this agent' : 'Charged by this supplier' }}
-                                    for {{ serviceLabel }}
-                                </span>
-                                <MoneyText
-                                    :amount="chargedForService"
-                                    :currency="company.base_currency"
-                                    class="font-medium"
-                                />
-                            </div>
-
-                            <div class="flex flex-wrap items-end gap-3">
-                                <div class="space-y-1">
-                                    <Label class="text-xs text-muted-foreground">Part of it</Label>
-                                    <div class="flex items-center gap-1">
-                                        <Input
-                                            v-model="refundPercent"
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            class="h-9 w-24"
-                                        />
-                                        <span class="text-xs text-muted-foreground">%</span>
-                                    </div>
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    :disabled="percentRefundAmount <= 0"
-                                    @click="setAmount(percentRefundAmount)"
-                                >
-                                    Use
-                                    <MoneyText :amount="percentRefundAmount" :currency="company.base_currency" />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="setAmount(chargedForService ?? 0)"
-                                >
-                                    All of it
-                                </Button>
-                            </div>
-
-                            <div v-if="perPassenger" class="space-y-1 border-t pt-2">
-                                <p class="text-xs text-muted-foreground">
-                                    {{ perPassenger.count }} passengers &times;
-                                    <MoneyText :amount="perPassenger.rate" :currency="company.base_currency" />
-                                    each
-                                </p>
-                                <div class="flex items-end gap-2">
-                                    <div class="space-y-1">
-                                        <Label class="text-xs text-muted-foreground">Or this many passengers</Label>
-                                        <Input
-                                            v-model="refundPassengers"
-                                            type="number"
-                                            min="1"
-                                            :max="perPassenger.count"
-                                            class="h-9 w-40"
-                                        />
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        :disabled="passengerRefundAmount <= 0"
-                                        @click="setAmount(passengerRefundAmount)"
-                                    >
-                                        Use
-                                        <MoneyText
-                                            :amount="passengerRefundAmount"
-                                            :currency="company.base_currency"
-                                        />
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="space-y-2">
@@ -527,9 +469,115 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p v-if="form.errors.service" class="text-xs text-destructive">
+                        <p
+                            v-if="form.errors.service"
+                            class="text-xs text-destructive"
+                        >
                             {{ form.errors.service }}
                         </p>
+                    </div>
+
+                    <div
+                        v-if="chargedForService !== null"
+                        class="space-y-3 rounded-md border bg-muted/40 p-3 text-sm"
+                    >
+                        <div class="flex items-baseline justify-between gap-3">
+                            <span class="text-muted-foreground">
+                                {{
+                                    isAgentRefund
+                                        ? 'Charged to this agent'
+                                        : 'Charged by this supplier'
+                                }}
+                                for {{ serviceLabel }}
+                            </span>
+                            <MoneyText
+                                :amount="chargedForService"
+                                :currency="company.base_currency"
+                                class="font-medium"
+                            />
+                        </div>
+
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div class="space-y-1">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Part of it</Label
+                                >
+                                <div class="flex items-center gap-1">
+                                    <Input
+                                        v-model="refundPercent"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        class="h-9 w-24"
+                                    />
+                                    <span class="text-xs text-muted-foreground"
+                                        >%</span
+                                    >
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                :disabled="percentRefundAmount <= 0"
+                                @click="setAmount(percentRefundAmount)"
+                            >
+                                Use
+                                <MoneyText
+                                    :amount="percentRefundAmount"
+                                    :currency="company.base_currency"
+                                />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                @click="setAmount(chargedForService ?? 0)"
+                            >
+                                All of it
+                            </Button>
+                        </div>
+
+                        <div
+                            v-if="perPassenger"
+                            class="space-y-1 border-t pt-2"
+                        >
+                            <p class="text-xs text-muted-foreground">
+                                {{ perPassenger.count }} passengers &times;
+                                <MoneyText
+                                    :amount="perPassenger.rate"
+                                    :currency="company.base_currency"
+                                />
+                                each
+                            </p>
+                            <div class="flex items-end gap-2">
+                                <div class="space-y-1">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Or this many passengers</Label
+                                    >
+                                    <Input
+                                        v-model="refundPassengers"
+                                        type="number"
+                                        min="1"
+                                        :max="perPassenger.count"
+                                        class="h-9 w-40"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    :disabled="passengerRefundAmount <= 0"
+                                    @click="setAmount(passengerRefundAmount)"
+                                >
+                                    Use
+                                    <MoneyText
+                                        :amount="passengerRefundAmount"
+                                        :currency="company.base_currency"
+                                    />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-[1fr_9rem]">
@@ -543,7 +591,10 @@ const submit = () =>
                                 autofocus
                                 required
                             />
-                            <p v-if="form.errors.amount" class="text-xs text-destructive">
+                            <p
+                                v-if="form.errors.amount"
+                                class="text-xs text-destructive"
+                            >
                                 {{ form.errors.amount }}
                             </p>
                         </div>
@@ -561,7 +612,10 @@ const submit = () =>
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p v-if="form.errors.currency" class="text-xs text-destructive">
+                            <p
+                                v-if="form.errors.currency"
+                                class="text-xs text-destructive"
+                            >
                                 {{ form.errors.currency }}
                             </p>
                         </div>
@@ -580,7 +634,8 @@ const submit = () =>
                             required
                         />
                         <p class="text-xs text-muted-foreground">
-                            1 {{ form.currency }} = {{ form.exchange_rate || 0 }}
+                            1 {{ form.currency }} =
+                            {{ form.exchange_rate || 0 }}
                             {{ company.base_currency }} ·
                             <MoneyText
                                 :amount="baseAmount"
@@ -598,7 +653,10 @@ const submit = () =>
                     <div class="space-y-2">
                         <Label>Reason</Label>
                         <Select v-model="form.reason_category">
-                            <SelectTrigger><SelectValue placeholder="Why is this going back?" /></SelectTrigger>
+                            <SelectTrigger
+                                ><SelectValue
+                                    placeholder="Why is this going back?"
+                            /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem
                                     v-for="(label, value) in partyReasons"
@@ -609,13 +667,24 @@ const submit = () =>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <Textarea v-model="form.reason" required placeholder="Say what happened" />
-                        <p v-if="form.errors.reason" class="text-xs text-destructive">
+                        <Textarea
+                            v-model="form.reason"
+                            required
+                            placeholder="Say what happened"
+                        />
+                        <p
+                            v-if="form.errors.reason"
+                            class="text-xs text-destructive"
+                        >
                             {{ form.errors.reason }}
                         </p>
                     </div>
 
-                    <Button type="submit" class="w-full" :disabled="form.processing">
+                    <Button
+                        type="submit"
+                        class="w-full"
+                        :disabled="form.processing"
+                    >
                         <Undo2 class="mr-2 h-4 w-4" />
                         {{ form.processing ? 'Requesting…' : 'Request Refund' }}
                     </Button>

@@ -60,8 +60,8 @@ class StoreRefundRequest extends UmrahFormRequest
                 },
             ],
             'visa_group_id' => ['nullable', 'uuid', $this->existsForCompany(VisaGroup::class, 'Selected group was not found.')],
-            // Party-aware: a visa cannot be given back to the agent, but a
-            // visa desk returning a fee to the company is ordinary.
+            // Party-aware: a supplier can only be refunding what it
+            // supplies, and an agent only what their package contained.
             'service' => ['required', Rule::in(array_keys(Refund::servicesFor($partyType)))],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'currency' => [
@@ -110,7 +110,7 @@ class StoreRefundRequest extends UmrahFormRequest
     public function messages(): array
     {
         return [
-            'service.in' => 'Choose the hotel, ticket or transport this refund pays back. A visa cannot be given back to an agent: the group was built from visas that had already been approved.',
+            'service.in' => 'Choose which part of the package this refund pays back.',
         ];
     }
 }

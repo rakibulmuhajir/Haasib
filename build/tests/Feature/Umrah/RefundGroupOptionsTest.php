@@ -125,15 +125,21 @@ test('a standard bus group carries the numbers behind its transport charge', fun
     $f = refundOptionsFixture();
     $f->settled->update([
         'transport_amount' => 1120,
+        'transport_cost_amount' => 700,
         'standard_bus_retail_amount' => 80,
+        'standard_bus_cost_amount' => 50,
         'standard_bus_billable_passenger_count' => 14,
     ]);
 
     $row = collect(refundGroupOptions($f))->firstWhere('group_number', 'UGR-SETTLED');
 
     // Whole amounts come back from JSON as ints, so compare by value.
-    expect((float) $row['charged']['transport'])->toBe(1120.0)
-        ->and((float) $row['per_passenger']['rate'])->toBe(80.0)
+    // Both sides travel: an agent is refunded what they were charged, a
+    // supplier credits us what they charged us.
+    expect((float) $row['charged']['sale']['transport'])->toBe(1120.0)
+        ->and((float) $row['charged']['cost']['transport'])->toBe(700.0)
+        ->and((float) $row['per_passenger']['sale'])->toBe(80.0)
+        ->and((float) $row['per_passenger']['cost'])->toBe(50.0)
         ->and((int) $row['per_passenger']['count'])->toBe(14);
 });
 

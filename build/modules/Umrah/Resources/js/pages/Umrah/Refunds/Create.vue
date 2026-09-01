@@ -24,6 +24,7 @@ const props = defineProps<{
     partyTypes: Record<string, string>;
     services: Record<string, string>;
     servicesByParty: Record<string, Record<string, string>>;
+    reasonsByParty: Record<string, Record<string, string>>;
     agents: Array<{ id: string; name: string }>;
     visaVendors: Array<{ id: string; name: string }>;
     transportVendors: Array<{ id: string; name: string }>;
@@ -37,8 +38,12 @@ const props = defineProps<{
         has_visa: boolean;
         has_transport: boolean;
         has_hotel: boolean;
-        charged: { transport: number; hotel: number };
-        per_passenger: { rate: number; count: number } | null;
+        charged: {
+            sale: Record<string, number>;
+            cost: Record<string, number>;
+        };
+        passenger_count: number;
+        per_passenger: { sale: number; cost: number; count: number } | null;
     }>;
     currencies: Array<{ currency_code: string; exchange_rate: string | number }>;
     initial?: {
@@ -61,6 +66,7 @@ const form = useForm({
     party_id: props.initial?.party_id || 'none',
     visa_group_id: props.initial?.visa_group_id || 'none',
     service: Object.keys(props.services)[0] || 'other',
+    reason_category: '',
     amount: '',
     currency: props.company.base_currency,
     exchange_rate: '',
@@ -117,10 +123,14 @@ const partyGroups = computed(() => {
 const chargedForService = computed(() => {
     const group = selectedGroup.value;
     if (!group) return null;
-    if (form.service === 'transport') return group.charged.transport;
-    if (form.service === 'hotel') return group.charged.hotel;
 
-    return null;
+    // The two sides look at different money and always did: an agent is
+    // refunded out of what they were charged, a supplier credits us out of
+    // what they charged us. Reading one figure for both is how the vendor
+    // side ended up showing nothing at all.
+    const side = isAgentRefund.value ? group.charged.sale : group.charged.cost;
+
+    return side[form.service] ?? null;
 });
 
 /*
@@ -129,8 +139,45 @@ const chargedForService = computed(() => {
  * priced per vehicle or per journey and has no per-person rate to work
  * back from.
  */
-const perPassenger = computed(() =>
-    form.service === 'transport' ? (selectedGroup.value?.per_passenger ?? null) : null,
+const perPassenger = computed(() => {
+    if (form.service !== 'transport') return null;
+
+    const rates = selectedGroup.value?.per_passenger;
+    if (!rates) return null;
+
+    return { rate: isAgentRefund.value ? rates.sale : rates.cost, count: rates.count };
+});
+
+/*
+ * Why the money went back, in a form something can count. The sentence
+ * still says what happened; this says what kind of thing it was, so the
+ * same question can be asked of a thousand refunds at once.
+ *
+ * Choosing one writes it into the reason as a starting sentence, which
+ * stays editable -- the category is the shape of the answer, not the
+ * answer.
+ */
+const partyReasons = computed(
+    () => props.reasonsByParty[form.party_type] ?? {},
+);
+
+watch(
+    () => form.reason_category,
+    (category) => {
+        const label = partyReasons.value[category];
+        if (label && category !== 'other' && !form.reason.trim()) {
+            form.reason = label;
+        }
+    },
+);
+
+watch(
+    () => form.party_type,
+    () => {
+        if (!(form.reason_category in partyReasons.value)) {
+            form.reason_category = '';
+        }
+    },
 );
 
 const serviceLabel = computed(() =>
@@ -138,6 +185,11 @@ const serviceLabel = computed(() =>
 );
 
 const refundPassengers = ref('');
+const refundPercent = ref('');
+
+const setAmount = (value: number) => {
+    if (value > 0) form.amount = String(Math.round(value * 100) / 100);
+};
 
 const passengerRefundAmount = computed(() => {
     const rate = perPassenger.value?.rate ?? 0;
@@ -146,11 +198,14 @@ const passengerRefundAmount = computed(() => {
     return Number.isFinite(count) && count > 0 ? Math.round(rate * count * 100) / 100 : 0;
 });
 
-const applyPassengerAmount = () => {
-    if (passengerRefundAmount.value > 0) {
-        form.amount = String(passengerRefundAmount.value);
-    }
-};
+const percentRefundAmount = computed(() => {
+    const charged = chargedForService.value ?? 0;
+    const percent = Number(refundPercent.value || 0);
+
+    return Number.isFinite(percent) && percent > 0 && charged > 0
+        ? Math.round(charged * (percent / 100) * 100) / 100
+        : 0;
+});
 
 const overCharged = computed(
     () =>
@@ -375,10 +430,13 @@ const submit = () =>
 
                         <div
                             v-if="chargedForService !== null"
-                            class="space-y-2 rounded-md border bg-muted/40 p-3 text-sm"
+                            class="space-y-3 rounded-md border bg-muted/40 p-3 text-sm"
                         >
                             <div class="flex items-baseline justify-between gap-3">
-                                <span class="text-muted-foreground">Charged for {{ serviceLabel }} on this group</span>
+                                <span class="text-muted-foreground">
+                                    {{ isAgentRefund ? 'Charged to this agent' : 'Charged by this supplier' }}
+                                    for {{ serviceLabel }}
+                                </span>
                                 <MoneyText
                                     :amount="chargedForService"
                                     :currency="company.base_currency"
@@ -386,7 +444,41 @@ const submit = () =>
                                 />
                             </div>
 
-                            <div v-if="perPassenger" class="space-y-1">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <div class="space-y-1">
+                                    <Label class="text-xs text-muted-foreground">Part of it</Label>
+                                    <div class="flex items-center gap-1">
+                                        <Input
+                                            v-model="refundPercent"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            class="h-9 w-24"
+                                        />
+                                        <span class="text-xs text-muted-foreground">%</span>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    :disabled="percentRefundAmount <= 0"
+                                    @click="setAmount(percentRefundAmount)"
+                                >
+                                    Use
+                                    <MoneyText :amount="percentRefundAmount" :currency="company.base_currency" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="setAmount(chargedForService ?? 0)"
+                                >
+                                    All of it
+                                </Button>
+                            </div>
+
+                            <div v-if="perPassenger" class="space-y-1 border-t pt-2">
                                 <p class="text-xs text-muted-foreground">
                                     {{ perPassenger.count }} passengers &times;
                                     <MoneyText :amount="perPassenger.rate" :currency="company.base_currency" />
@@ -394,7 +486,7 @@ const submit = () =>
                                 </p>
                                 <div class="flex items-end gap-2">
                                     <div class="space-y-1">
-                                        <Label class="text-xs text-muted-foreground">Refund how many passengers</Label>
+                                        <Label class="text-xs text-muted-foreground">Or this many passengers</Label>
                                         <Input
                                             v-model="refundPassengers"
                                             type="number"
@@ -408,7 +500,7 @@ const submit = () =>
                                         variant="outline"
                                         size="sm"
                                         :disabled="passengerRefundAmount <= 0"
-                                        @click="applyPassengerAmount"
+                                        @click="setAmount(passengerRefundAmount)"
                                     >
                                         Use
                                         <MoneyText
@@ -505,7 +597,19 @@ const submit = () =>
 
                     <div class="space-y-2">
                         <Label>Reason</Label>
-                        <Textarea v-model="form.reason" required />
+                        <Select v-model="form.reason_category">
+                            <SelectTrigger><SelectValue placeholder="Why is this going back?" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="(label, value) in partyReasons"
+                                    :key="value"
+                                    :value="value"
+                                >
+                                    {{ label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Textarea v-model="form.reason" required placeholder="Say what happened" />
                         <p v-if="form.errors.reason" class="text-xs text-destructive">
                             {{ form.errors.reason }}
                         </p>

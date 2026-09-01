@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AmountDelta from '@/components/AmountDelta.vue';
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
@@ -153,9 +154,26 @@ const grossCharges = computed(() =>
     Number(form.visa_sale_amount || 0) + Number(form.transport_amount || 0) + Number(props.group.hotel_amount || 0),
 );
 const receivable = computed(() => Math.max(grossCharges.value - Number(form.discount_amount || 0), 0));
-const totalCost = computed(() =>
+/*
+ * The costs on this page are editable, so the summary has to read the
+ * form like the charges do. Reading the saved group meant lowering a
+ * supplier's price moved nothing on the right-hand side, and the profit
+ * shown was this month's charge against last month's cost.
+ */
+const visaCost = computed(() => Number(form.visa_cost_amount || 0));
+const transportCost = computed(() => Number(form.transport_cost_amount || 0));
+const totalCost = computed(() => visaCost.value + transportCost.value + Number(props.group.hotel_cost_amount || 0));
+
+/** The same figures as saved, for showing what a change is changing. */
+const savedGross = computed(() =>
+    Number(props.group.visa_sale_amount || 0) + Number(props.group.transport_amount || 0) + Number(props.group.hotel_amount || 0),
+);
+const savedTotalCost = computed(() =>
     Number(props.group.visa_cost_amount || 0) + Number(props.group.transport_cost_amount || 0) + Number(props.group.hotel_cost_amount || 0),
 );
+const savedReceivable = computed(() => Math.max(savedGross.value - Number(props.group.discount_amount || 0), 0));
+const savedProfit = computed(() => savedReceivable.value - savedTotalCost.value);
+const savedBalance = computed(() => Math.max(savedReceivable.value - Number(props.group.total_paid || 0), 0));
 const profit = computed(() => receivable.value - totalCost.value);
 const balance = computed(() => Math.max(receivable.value - Number(props.group.total_paid || 0), 0));
 const paymentStatus = computed(() => {
@@ -325,6 +343,9 @@ const submit = () => {
                             <div class="space-y-2">
                                 <Label>Visa charge</Label>
                                 <Input v-model="form.visa_sale_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="Number(form.visa_sale_amount || 0) !== Number(group.visa_sale_amount || 0)" class="text-xs">
+                                    <AmountDelta :before="group.visa_sale_amount" :after="Number(form.visa_sale_amount || 0)" :currency="company.base_currency" align="start" />
+                                </p>
                                 <RateBasis
                                     :count="paxCount"
                                     :total="Number(form.visa_sale_amount || 0)"
@@ -338,6 +359,9 @@ const submit = () => {
                             <div class="space-y-2">
                                 <Label>Transport charge</Label>
                                 <Input v-model="form.transport_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="Number(form.transport_amount || 0) !== Number(group.transport_amount || 0)" class="text-xs">
+                                    <AmountDelta :before="group.transport_amount" :after="Number(form.transport_amount || 0)" :currency="company.base_currency" align="start" />
+                                </p>
                                 <RateBasis
                                     v-if="isStandardBus"
                                     :count="busSeats"
@@ -350,7 +374,14 @@ const submit = () => {
                                 <p v-if="form.errors.transport_amount" class="text-xs text-destructive">{{ form.errors.transport_amount }}</p>
                             </div>
                             <div class="space-y-2"><Label>Hotel charge</Label><Input :model-value="String(group.hotel_amount || 0)" type="number" disabled /><p class="text-xs text-muted-foreground">Controlled by approved hotel vouchers.</p></div>
-                            <div class="space-y-2"><Label>Discount</Label><Input v-model="form.discount_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.discount_amount" class="text-xs text-destructive">{{ form.errors.discount_amount }}</p></div>
+                            <div class="space-y-2">
+                                <Label>Discount</Label>
+                                <Input v-model="form.discount_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="form.errors.discount_amount" class="text-xs text-destructive">{{ form.errors.discount_amount }}</p>
+                                <p v-if="Number(form.discount_amount || 0) !== Number(group.discount_amount || 0)" class="text-xs">
+                                    <AmountDelta :before="group.discount_amount" :after="Number(form.discount_amount || 0)" :currency="company.base_currency" align="start" />
+                                </p>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -360,6 +391,9 @@ const submit = () => {
                             <div class="space-y-2">
                                 <Label>Visa cost</Label>
                                 <Input v-model="form.visa_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="Number(form.visa_cost_amount || 0) !== Number(group.visa_cost_amount || 0)" class="text-xs">
+                                    <AmountDelta :before="group.visa_cost_amount" :after="Number(form.visa_cost_amount || 0)" :currency="company.base_currency" align="start" />
+                                </p>
                                 <RateBasis
                                     :count="paxCount"
                                     :total="Number(form.visa_cost_amount || 0)"
@@ -373,6 +407,9 @@ const submit = () => {
                             <div class="space-y-2">
                                 <Label>Transport cost</Label>
                                 <Input v-model="form.transport_cost_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" />
+                                <p v-if="Number(form.transport_cost_amount || 0) !== Number(group.transport_cost_amount || 0)" class="text-xs">
+                                    <AmountDelta :before="group.transport_cost_amount" :after="Number(form.transport_cost_amount || 0)" :currency="company.base_currency" align="start" />
+                                </p>
                                 <RateBasis
                                     v-if="isStandardBus"
                                     :count="busSeats"
@@ -422,11 +459,11 @@ const submit = () => {
                 <Card variant="detail">
                     <CardHeader><CardTitle>Financial Position</CardTitle></CardHeader>
                     <CardContent class="space-y-3 text-sm">
-                        <div class="flex justify-between"><span>Gross charges</span><MoneyText :amount="grossCharges" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between"><span>Discount</span><MoneyText :amount="Number(form.discount_amount || 0)" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between border-t pt-3 font-medium"><span>Total receivable</span><MoneyText :amount="receivable" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2"><span>Gross charges</span><AmountDelta :before="savedGross" :after="grossCharges" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2"><span>Discount</span><AmountDelta :before="group.discount_amount" :after="Number(form.discount_amount || 0)" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2 border-t pt-3 font-medium"><span>Total receivable</span><AmountDelta :before="savedReceivable" :after="receivable" :currency="company.base_currency" /></div>
                         <div class="flex justify-between"><span>Received</span><MoneyText :amount="group.total_paid" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between border-t pt-3 text-base font-semibold"><span>Balance</span><MoneyText :amount="balance" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2 border-t pt-3 text-base font-semibold"><span>Balance</span><AmountDelta :before="savedBalance" :after="balance" :currency="company.base_currency" /></div>
                         <StatusBadge :status="paymentStatus" />
                     </CardContent>
                 </Card>
@@ -434,12 +471,12 @@ const submit = () => {
                 <Card variant="detail">
                     <CardHeader><CardTitle>Cost & Margin</CardTitle></CardHeader>
                     <CardContent class="space-y-3 text-sm">
-                        <div class="flex justify-between"><span>Visa cost</span><MoneyText :amount="group.visa_cost_amount" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between"><span>Mandatory transport</span><MoneyText :amount="group.mandatory_transport_cost_amount" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between"><span>Total transport cost</span><MoneyText :amount="group.transport_cost_amount" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2"><span>Visa cost</span><AmountDelta :before="group.visa_cost_amount" :after="visaCost" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2"><span>Mandatory transport</span><AmountDelta :before="group.mandatory_transport_cost_amount" :after="isStandardBus ? transportCost : Number(group.mandatory_transport_cost_amount || 0)" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2"><span>Total transport cost</span><AmountDelta :before="group.transport_cost_amount" :after="transportCost" :currency="company.base_currency" /></div>
                         <div class="flex justify-between"><span>Hotel cost</span><MoneyText :amount="group.hotel_cost_amount" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between border-t pt-3"><span>Total cost</span><MoneyText :amount="totalCost" :currency="company.base_currency" /></div>
-                        <div class="flex justify-between border-t pt-3 text-base font-semibold"><span>Profit</span><MoneyText :amount="profit" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2 border-t pt-3"><span>Total cost</span><AmountDelta :before="savedTotalCost" :after="totalCost" :currency="company.base_currency" /></div>
+                        <div class="flex items-center justify-between gap-2 border-t pt-3 text-base font-semibold"><span>Profit</span><AmountDelta :before="savedProfit" :after="profit" :currency="company.base_currency" /></div>
                     </CardContent>
                 </Card>
 

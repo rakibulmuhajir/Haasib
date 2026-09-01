@@ -39,14 +39,41 @@ const currentRate = computed(() => {
     return Math.round(((props.total - props.extra) / props.count) * 100) / 100
 })
 
+/**
+ * Two ways to say the same thing, because both are how the change arrives.
+ *
+ * A supplier quotes a rate a head; an agent renegotiates a lump sum for
+ * the group. Offering only the per-head box left whoever held the lump
+ * sum dividing it by fourteen to type it in, and the division is exactly
+ * what this component exists to do.
+ */
+const basis = ref<'each' | 'total'>('each')
 const newRate = ref('')
 
-const newTotal = computed(() => {
-    const rate = Number(newRate.value)
-    if (!Number.isFinite(rate) || newRate.value === '' || rate < 0) return null
+const typed = computed(() => {
+    const value = Number(newRate.value)
 
-    return Math.round((rate * props.count + props.extra) * 100) / 100
+    return Number.isFinite(value) && newRate.value !== '' && value >= 0 ? value : null
 })
+
+const newTotal = computed(() => {
+    if (typed.value === null) return null
+    if (basis.value === 'total') return Math.round(typed.value * 100) / 100
+
+    return Math.round((typed.value * props.count + props.extra) * 100) / 100
+})
+
+/** What a typed total works out at a head -- the sum, run the other way. */
+const impliedRate = computed(() => {
+    if (basis.value !== 'total' || newTotal.value === null || props.count <= 0) return null
+
+    return Math.round(((newTotal.value - props.extra) / props.count) * 100) / 100
+})
+
+const setBasis = (value: 'each' | 'total') => {
+    basis.value = value
+    newRate.value = ''
+}
 
 /**
  * A rate typed here counts as typed, whether or not Use was pressed.
@@ -75,9 +102,31 @@ const apply = () => {
                 · plus <MoneyText :amount="extra" :currency="currency" /> charged separately
             </template>
         </p>
-        <div v-if="!disabled" class="flex items-end gap-2">
+        <div v-if="!disabled" class="flex flex-wrap items-end gap-2">
             <div class="space-y-1">
-                <Label class="text-xs text-muted-foreground">New rate each</Label>
+                <div class="flex items-center gap-1">
+                    <Button
+                        type="button"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        :variant="basis === 'each' ? 'secondary' : 'ghost'"
+                        :aria-pressed="basis === 'each'"
+                        @click="setBasis('each')"
+                    >
+                        Per passenger
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        :variant="basis === 'total' ? 'secondary' : 'ghost'"
+                        :aria-pressed="basis === 'total'"
+                        @click="setBasis('total')"
+                    >
+                        Total
+                    </Button>
+                </div>
+                <Label class="text-xs text-muted-foreground">{{ basis === 'each' ? 'New rate each' : 'New total' }}</Label>
                 <Input
                     v-model="newRate"
                     type="number"
@@ -98,6 +147,9 @@ const apply = () => {
                 Use
                 <MoneyText v-if="newTotal !== null" :amount="newTotal" :currency="currency" />
             </Button>
+            <p v-if="impliedRate !== null" class="pb-2 text-xs text-muted-foreground">
+                = <MoneyText :amount="impliedRate" :currency="currency" /> each
+            </p>
         </div>
     </div>
 </template>

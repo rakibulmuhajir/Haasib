@@ -217,7 +217,11 @@ class GroupAccountingService
             ], false);
 
             $transportSale = round((float) $data['transport_amount'], 2);
-            $transportCost = round((float) $data['transport_cost_amount'], 2);
+            // Absent means unchanged. These arrived with the cost fields, so
+            // a page opened before them submits without them -- and a screen
+            // someone already had open must not be made to fail, nor to
+            // silently zero a cost it never showed.
+            $transportCost = round((float) ($data['transport_cost_amount'] ?? $group->transport_cost_amount), 2);
             $transportSnapshot = [];
 
             /*
@@ -259,7 +263,7 @@ class GroupAccountingService
                 'visa_sale_amount' => round((float) $data['visa_sale_amount'], 2),
                 'transport_amount' => $transportSale,
                 'discount_amount' => round((float) $data['discount_amount'], 2),
-                'visa_cost_amount' => round((float) $data['visa_cost_amount'], 2),
+                'visa_cost_amount' => round((float) ($data['visa_cost_amount'] ?? $group->visa_cost_amount), 2),
                 'transport_cost_amount' => $transportCost,
                 ...$transportSnapshot,
             ]);

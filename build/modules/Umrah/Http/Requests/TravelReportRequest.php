@@ -90,16 +90,24 @@ class TravelReportRequest extends BaseFormRequest
     public function rules(): array
     {
         $companyId = app(CurrentCompany::class)->get()->id;
-        $tenantExists = static fn (string $table) => Rule::exists($table, 'id')
+        /*
+         * The model class, never its table name. Laravel reads a dot in an
+         * exists rule as connection.table, so 'umrah.agents' sent it looking
+         * for a connection called umrah and threw before it ever ran a
+         * query. Every report filtered by a party died on it -- the agent
+         * filter on the statement most visibly. Given a class it takes the
+         * table and the connection from the model.
+         */
+        $tenantExists = static fn (string $model) => Rule::exists($model, 'id')
             ->where(static fn (Builder $query) => $query->where('company_id', $companyId)->whereNull('deleted_at'));
 
         return [
             'start' => ['required', 'date'],
             'end' => ['required', 'date', 'after_or_equal:start'],
-            'agent_id' => ['nullable', 'uuid', $tenantExists((new Agent)->getTable())],
-            'visa_vendor_id' => ['nullable', 'uuid', $tenantExists((new VisaVendor)->getTable())],
-            'transport_vendor_id' => ['nullable', 'uuid', $tenantExists((new VisaVendor)->getTable())],
-            'hotel_vendor_id' => ['nullable', 'uuid', $tenantExists((new HotelVendor)->getTable())],
+            'agent_id' => ['nullable', 'uuid', $tenantExists(Agent::class)],
+            'visa_vendor_id' => ['nullable', 'uuid', $tenantExists(VisaVendor::class)],
+            'transport_vendor_id' => ['nullable', 'uuid', $tenantExists(VisaVendor::class)],
+            'hotel_vendor_id' => ['nullable', 'uuid', $tenantExists(HotelVendor::class)],
             'status' => ['nullable', 'string', 'max:40'],
             'payment_status' => ['nullable', Rule::in(['paid', 'partially_paid', 'unpaid'])],
             'transaction_type' => ['nullable', Rule::in(['charge', 'allocation', 'advance', 'reversal'])],

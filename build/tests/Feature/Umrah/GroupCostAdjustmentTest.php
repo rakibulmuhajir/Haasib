@@ -120,6 +120,95 @@ function adjustAccounting(object $f, array $overrides = []): VisaGroup
     ], $overrides));
 }
 
+test('a report can be filtered to one agent', function () {
+    // Laravel reads a dot in an exists rule as connection.table, so the
+    // agent filter asked for a connection called umrah and threw before
+    // running a query. Every report filtered by a party did.
+    $f = costAdjustmentFixture();
+
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(App\Services\CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    $agentId = $f->group->agent_id;
+
+    test()->actingAs($f->user)
+        ->get("/{$f->company->slug}/umrah/reports/agent-statement?agent_id={$agentId}&start=2026-09-01&end=2026-09-30")
+        ->assertOk();
+});
+
+test('an agent from nowhere is still refused', function () {
+    $f = costAdjustmentFixture();
+
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(App\Services\CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    test()->actingAs($f->user)
+        ->get("/{$f->company->slug}/umrah/reports/agent-statement?agent_id=01a04ccc-964b-738d-baf0-21a0994f687e&start=2026-09-01&end=2026-09-30")
+        ->assertSessionHasErrors('agent_id');
+});
+
+test('an adjustment saves when the page sends no cost fields', function () {
+    // A screen opened before the cost fields existed submits without them.
+    // Absent has to mean unchanged, or every page somebody already had open
+    // would start failing the moment this deployed.
+    $f = costAdjustmentFixture();
+
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(App\Services\CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    test()->actingAs($f->user)
+        ->put("/{$f->company->slug}/umrah/groups/{$f->group->id}/accounting", [
+            'vendor_id' => $f->visaVendor->id,
+            'mandatory_transport_vendor_id' => $f->busVendor->id,
+            'visa_sale_amount' => 1120,
+            'transport_amount' => 160,
+            'discount_amount' => 0,
+            'reason' => 'Rate changed after the group was booked',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $group = $f->group->fresh();
+
+    expect((float) $group->visa_sale_amount)->toBe(1120.0)
+        ->and((float) $group->visa_cost_amount)->toBe(1040.0);
+});
+
+test('the accounting screen saves an adjustment over http', function () {
+    // Everything else here calls the service. This is the path a person
+    // actually takes -- through the form request, with the payload the
+    // page sends -- and nothing had covered it.
+    $f = costAdjustmentFixture();
+
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(App\Services\CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    test()->actingAs($f->user)
+        ->put("/{$f->company->slug}/umrah/groups/{$f->group->id}/accounting", [
+            'vendor_id' => $f->visaVendor->id,
+            'mandatory_transport_vendor_id' => $f->busVendor->id,
+            'visa_sale_amount' => 1120,
+            'transport_amount' => 160,
+            'discount_amount' => 0,
+            'visa_cost_amount' => 1040,
+            'transport_cost_amount' => 100,
+            'reason' => 'Rate changed after the group was booked',
+            'reason_category' => 'rate_change',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect((float) $f->group->fresh()->visa_sale_amount)->toBe(1120.0);
+});
+
 test('a supplier lowering their visa price can be recorded', function () {
     $f = costAdjustmentFixture();
 

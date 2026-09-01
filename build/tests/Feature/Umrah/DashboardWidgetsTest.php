@@ -176,10 +176,13 @@ function dashboardWidgetsLedgerAccounts(Company $company): array
     $period = AccountingPeriod::create([
         'company_id' => $company->id,
         'fiscal_year_id' => $fy->id,
-        'name' => 'Aug 2026',
-        'period_number' => 8,
-        'start_date' => '2026-08-01',
-        'end_date' => '2026-08-31',
+        // Covers the whole year rather than one month. Refund postings are
+        // dated today, so a single-month period made these tests start
+        // failing the morning the calendar left it.
+        'name' => 'FY 2026',
+        'period_number' => 1,
+        'start_date' => '2026-01-01',
+        'end_date' => '2026-12-31',
     ]);
 
     $cash = Account::create([
@@ -298,7 +301,7 @@ test('cash_position computes its three lines from posted entries only, excluding
     // Unposted (draft) — must not be counted.
     dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 9999, 'draft');
 
-    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $data = (new CashPositionWidget)->resolve($company, $owner, []);
     $lines = collect($data['lines'])->keyBy('label');
 
     expect($lines['Cash and bank']['amount'])->toBe(1000.0)
@@ -316,7 +319,7 @@ test('cash_position presents liability lines as positive magnitudes with a minus
     dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 150, 'posted');
     dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['vendor_payable']->id, 50, 'posted');
 
-    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $data = (new CashPositionWidget)->resolve($company, $owner, []);
     $lines = collect($data['lines'])->keyBy('label');
 
     expect($lines['Cash and bank']['sign'])->toBeNull()
@@ -346,7 +349,7 @@ test('cash_position conclusion goes negative when agent advances plus payables e
     dashboardWidgetsPostLine($company, $ledger, $suspense->id, $ledger['agent_advances']->id, 90, 'posted');
     dashboardWidgetsPostLine($company, $ledger, $suspense->id, $ledger['vendor_payable']->id, 40, 'posted');
 
-    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $data = (new CashPositionWidget)->resolve($company, $owner, []);
 
     expect($data['total'])->toBe(-30.0)
         ->and($data['total'])->toBeLessThan(0);
@@ -376,7 +379,7 @@ test("an agent user's departures widget returns only their own groups", function
         'passenger_count' => 3,
     ]);
 
-    $data = (new DeparturesWidget())->resolve($company, $agentOneUser, []);
+    $data = (new DeparturesWidget)->resolve($company, $agentOneUser, []);
 
     expect($data['rows'])->toHaveCount(1)
         ->and($data['rows'][0]['group_number'])->toBe('UGR-ONE');
@@ -425,7 +428,7 @@ test('cash_book widget puts a received payment in the in column and a paid payme
         'status' => GroupPayment::STATUS_POSTED,
     ]);
 
-    $data = (new CashBookWidget())->resolve($company, $owner, []);
+    $data = (new CashBookWidget)->resolve($company, $owner, []);
 
     $rowsByNumber = collect($data['rows'])->keyBy('payment_number');
 
@@ -508,7 +511,7 @@ test('the departures widget ranks groups yet to travel above travelled groups th
     $make('UGR-FLOWN-OLDER-OWING', now()->subDays(40)->toDateString(), 100);
     $make('UGR-FLOWN-SETTLED', now()->subDays(2)->toDateString(), 0);
 
-    $data = (new DeparturesWidget())->resolve($company, $owner, []);
+    $data = (new DeparturesWidget)->resolve($company, $owner, []);
 
     // Yet to travel first (soonest first), then travelled-and-owing (most
     // recent first). A group that has travelled and settled needs nothing
@@ -542,7 +545,7 @@ test('the departures chip names direction in words rather than a signed day coun
         'travel_date' => now()->subDays(30)->toDateString(), 'passenger_count' => 1, 'balance' => 250,
     ]);
 
-    $rows = collect((new DeparturesWidget())->resolve($company, $owner, [])['rows'])->keyBy('group_number');
+    $rows = collect((new DeparturesWidget)->resolve($company, $owner, [])['rows'])->keyBy('group_number');
 
     expect($rows['UGR-FUTURE']['chip'])->toBe('in 6 days')
         ->and($rows['UGR-PAST']['chip'])->toBe('30 days ago')
@@ -577,7 +580,7 @@ test('cash_position adds a fourth Refunds owed line from account 2300, subtracte
     dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['vendor_payable']->id, 50, 'posted');
     dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['refunds_payable']->id, 75, 'posted');
 
-    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $data = (new CashPositionWidget)->resolve($company, $owner, []);
     $lines = collect($data['lines'])->keyBy('label');
 
     expect($lines['Refunds owed']['amount'])->toBe(75.0)
@@ -602,7 +605,7 @@ test('accepting an agent refund moves its amount from held-for-agents to refunds
         'balance' => -100000.0,
     ]);
 
-    $before = (new CashPositionWidget())->resolve($company, $owner, []);
+    $before = (new CashPositionWidget)->resolve($company, $owner, []);
     $beforeLines = collect($before['lines'])->keyBy('label');
     expect($beforeLines['Held for agents']['amount'])->toBe(500.0)
         ->and($beforeLines['Refunds owed']['amount'])->toBe(0.0)
@@ -611,7 +614,7 @@ test('accepting an agent refund moves its amount from held-for-agents to refunds
     $refund = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 200), $owner->id);
     app(RefundService::class)->approve($refund, [], $owner->id);
 
-    $after = (new CashPositionWidget())->resolve($company, $owner, []);
+    $after = (new CashPositionWidget)->resolve($company, $owner, []);
     $afterLines = collect($after['lines'])->keyBy('label');
 
     // Accepting posts Dr 2200 / Cr 2300 (UmrahCoreService::postRefundAccept())
@@ -644,7 +647,7 @@ test('settling an accepted refund in cash leaves the cash_position total unchang
     $refund = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 200), $owner->id);
     app(RefundService::class)->approve($refund, [], $owner->id);
 
-    $accepted = (new CashPositionWidget())->resolve($company, $owner, []);
+    $accepted = (new CashPositionWidget)->resolve($company, $owner, []);
 
     app(RefundService::class)->settle($refund->fresh(), [
         'settlement_method' => Refund::SETTLEMENT_CASH,
@@ -652,7 +655,7 @@ test('settling an accepted refund in cash leaves the cash_position total unchang
         'date' => '2026-08-20',
     ], $owner->id);
 
-    $settled = (new CashPositionWidget())->resolve($company, $owner, []);
+    $settled = (new CashPositionWidget)->resolve($company, $owner, []);
     $settledLines = collect($settled['lines'])->keyBy('label');
 
     // Settling in cash posts Dr 2300 / Cr cash: cash and bank drops by 200
@@ -707,7 +710,7 @@ test('the refunds awaiting decision widget lists a requested refund and excludes
     app(RefundService::class)->approve($cancelled, [], $owner->id);
     app(RefundService::class)->cancel($cancelled->fresh(), 'Approved in error.', $owner->id);
 
-    $data = (new RefundsAwaitingDecisionWidget())->resolve($company, $owner, []);
+    $data = (new RefundsAwaitingDecisionWidget)->resolve($company, $owner, []);
 
     expect(collect($data['rows'])->pluck('id')->all())->toBe([$requested->id])
         ->and($data['rows'][0]['reason'])->toBe('Overpaid on visa package, refunding the excess.')
@@ -734,7 +737,7 @@ test('the refunds awaiting decision widget lists the oldest request first', func
     $older = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 100), $owner->id);
     $older->forceFill(['requested_at' => now()->subDays(5)])->saveQuietly();
 
-    $data = (new RefundsAwaitingDecisionWidget())->resolve($company, $owner, []);
+    $data = (new RefundsAwaitingDecisionWidget)->resolve($company, $owner, []);
 
     expect(collect($data['rows'])->pluck('id')->all())->toBe([$older->id, $newer->id]);
 });

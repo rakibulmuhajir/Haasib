@@ -207,9 +207,18 @@ class PaymentController extends Controller
         $record = $this->paymentForUser($company->id, $request, $payment)
             ->load(['agent:id,customer_id', 'visaVendor:id,vendor_id', 'transportVendor:id,vendor_id', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number', 'submittedBy:id,name', 'reviewedBy:id,name']);
 
+        $memberAgentId = $this->memberAgentId($company->id, $request);
+        $allocationGroups = collect($this->service->paymentAllocationOptions($company->id))
+            ->when($memberAgentId !== false, fn ($options) => $memberAgentId
+                ? $options->where('party_key', 'agent:'.$memberAgentId)
+                : collect());
+
         return Inertia::render('Umrah/Payments/Show', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'payment' => $record,
+            'allocationGroups' => $allocationGroups->values(),
+            'canAllocate' => $record->status === GroupPayment::STATUS_POSTED
+                && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_CREATE),
             'canReverse' => $record->status === GroupPayment::STATUS_POSTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_REVERSE),
             'canReview' => $record->status === GroupPayment::STATUS_SUBMITTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_APPROVE),
         ]);

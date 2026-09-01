@@ -636,9 +636,18 @@ class UmrahCoreService
             if ($amount > $outstanding + 0.01) {
                 throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed this party\'s outstanding amount for the group.']);
             }
-            if ($payment->allocations()->where('visa_group_id', $group->id)->exists()) {
-                throw ValidationException::withMessages(['visa_group_id' => 'This payment is already allocated to the selected group.']);
-            }
+            /*
+             * A payment may be put against the same group more than once.
+             *
+             * This used to be refused, from when a group's charge was
+             * settled at creation and one allocation could always cover
+             * it. An adjustment moves that charge afterwards, and then an
+             * agent with credit sitting with us had no way to apply it:
+             * the group they owed more on was the one group their payment
+             * was barred from. The guards that matter -- credit left on
+             * the payment, and amount still outstanding on the group --
+             * are both above, and neither is weakened by allowing this.
+             */
 
             $allocation = PaymentAllocation::create([
                 'company_id' => $payment->company_id,

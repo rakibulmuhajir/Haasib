@@ -11,13 +11,42 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
+import AllocatePaymentDialog from './components/AllocatePaymentDialog.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, Download, ReceiptText, RotateCcw, XCircle } from 'lucide-vue-next';
+import { CheckCircle2, Download, ReceiptText, RotateCcw, Split, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
-const props = defineProps<{ company: { name: string; slug: string; base_currency: string }; payment: any; canReverse: boolean; canReview: boolean }>();
+const props = defineProps<{
+    company: { name: string; slug: string; base_currency: string };
+    payment: any;
+    allocationGroups: Array<{
+        id: string;
+        party_key: string;
+        group_number: string;
+        name: string;
+        outstanding_amount: number;
+    }>;
+    canReverse: boolean;
+    canReview: boolean;
+    canAllocate: boolean;
+}>();
 const reverseOpen = ref(false);
+const allocateOpen = ref(false);
+
+/**
+ * What is left of this payment to put against a group. Reversed
+ * allocations handed their money back, so they are not spent.
+ */
+const unallocated = computed(() =>
+    Math.max(
+        Number(props.payment.base_amount) -
+            (props.payment.all_allocations || [])
+                .filter((allocation: any) => !allocation.reversed_at)
+                .reduce((sum: number, allocation: any) => sum + Number(allocation.base_amount), 0),
+        0,
+    ),
+);
 const form = useForm({ reason: '' });
 const reviewOpen = ref(false);
 const reviewDecision = ref<'approve' | 'reject'>('approve');
@@ -85,6 +114,7 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
     <PageShell :title="payment.payment_number" description="Payment record and allocation history." :breadcrumbs="breadcrumbs" :icon="ReceiptText">
         <template #actions>
             <Button variant="outline" @click="downloadReceipt"><Download class="mr-2 h-4 w-4" />Receipt PDF</Button>
+            <Button v-if="canAllocate && unallocated > 0.01" variant="outline" @click="allocateOpen = true"><Split class="mr-2 h-4 w-4" />Allocate</Button>
             <Button v-if="canReverse" variant="destructive" @click="reverseOpen = true"><RotateCcw class="mr-2 h-4 w-4" />Reverse</Button>
             <Button v-if="canReview" variant="outline" @click="openReview('reject')"><XCircle class="mr-2 h-4 w-4" />Reject</Button>
             <Button v-if="canReview" @click="openReview('approve')"><CheckCircle2 class="mr-2 h-4 w-4" />Approve</Button>
@@ -215,6 +245,13 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
                 </form>
             </DialogContent>
         </Dialog>
+
+        <AllocatePaymentDialog
+            v-model:open="allocateOpen"
+            :company="company"
+            :payment="payment"
+            :allocation-groups="allocationGroups"
+        />
 
         <Dialog v-model:open="reverseOpen"><DialogContent><DialogHeader><DialogTitle>Reverse Payment</DialogTitle><DialogDescription>This creates an opposite accounting entry. The original payment remains in the audit trail.</DialogDescription></DialogHeader>
             <div class="space-y-2"><Label for="reason">Reason</Label><Textarea id="reason" v-model="form.reason" required /><p v-if="form.errors.reason" class="text-sm text-destructive">{{ form.errors.reason }}</p></div>

@@ -8,13 +8,6 @@ import RecordPagination from '@/components/RecordPagination.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -25,7 +18,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import AllocatePaymentDialog from './components/AllocatePaymentDialog.vue';
+import { Head, router } from '@inertiajs/vue3';
 import {
     ArrowDownLeft,
     ArrowUpRight,
@@ -33,7 +27,7 @@ import {
     Search,
     WalletCards,
 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { ref } from 'vue';
 
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
@@ -57,7 +51,6 @@ const search = ref(props.filters.search || '');
 const direction = ref(props.filters.direction || 'all');
 const selectedPayment = ref<any>(null);
 const allocationOpen = ref(false);
-const allocationForm = useForm({ visa_group_id: 'none', base_amount: '' });
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
     { title: 'Payments', href: `/${props.company.slug}/umrah/payments` },
@@ -104,71 +97,9 @@ const availableAmount = (payment: any) =>
             ),
         0,
     );
-const selectedPartyKey = computed(() => {
-    const payment = selectedPayment.value;
-    if (!payment) return '';
-    if (payment.agent_id) return `agent:${payment.agent_id}`;
-    if (payment.visa_vendor_id) return `visa:${payment.visa_vendor_id}`;
-    if (payment.transport_vendor_id)
-        return `transport:${payment.transport_vendor_id}`;
-    return payment.hotel_vendor_id ? `hotel:${payment.hotel_vendor_id}` : '';
-});
-const availableAllocationGroups = computed(() =>
-    props.allocationGroups.filter(
-        (group) =>
-            group.party_key === selectedPartyKey.value &&
-            !(selectedPayment.value?.allocations || []).some(
-                (allocation: any) => allocation.visa_group_id === group.id,
-            ),
-    ),
-);
-const selectedAllocationGroup = computed(() =>
-    availableAllocationGroups.value.find(
-        (group) => group.id === allocationForm.visa_group_id,
-    ),
-);
 const openAllocation = (payment: any) => {
     selectedPayment.value = payment;
-    allocationForm.reset();
-    allocationForm.visa_group_id = 'none';
-    allocationForm.base_amount = String(availableAmount(payment));
     allocationOpen.value = true;
-};
-watch(
-    () => allocationForm.visa_group_id,
-    (groupId) => {
-        if (groupId === 'none' || !selectedPayment.value) return;
-        const group = availableAllocationGroups.value.find(
-            (option) => option.id === groupId,
-        );
-        if (group) {
-            allocationForm.base_amount = String(
-                Math.min(
-                    availableAmount(selectedPayment.value),
-                    Number(group.outstanding_amount),
-                ),
-            );
-        }
-    },
-);
-const submitAllocation = () => {
-    if (!selectedPayment.value) return;
-    allocationForm
-        .transform((data) => ({
-            ...data,
-            visa_group_id:
-                data.visa_group_id === 'none' ? null : data.visa_group_id,
-            base_amount: Number(data.base_amount || 0),
-        }))
-        .post(
-            `/${props.company.slug}/umrah/payments/${selectedPayment.value.id}/allocations`,
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    allocationOpen.value = false;
-                },
-            },
-        );
 };
 </script>
 
@@ -261,7 +192,11 @@ const submitAllocation = () => {
 
         <Card variant="register">
             <CardContent>
-                <LedgerRegister :data="payments.data" :columns="columns">
+                <LedgerRegister
+                    :data="payments.data"
+                    :columns="columns"
+                    @row-click="(row: any) => router.get(`/${company.slug}/umrah/payments/${row.id}`)"
+                >
                     <template #empty>No payments found.</template>
 
                     <template #cell-payment_number="{ row }">
@@ -380,84 +315,11 @@ const submitAllocation = () => {
             </CardContent>
         </Card>
 
-        <Dialog v-model:open="allocationOpen">
-            <DialogContent>
-                <DialogHeader
-                    ><DialogTitle>Allocate Payment</DialogTitle></DialogHeader
-                >
-                <form novalidate class="space-y-4" @submit.prevent="submitAllocation">
-                    <div class="space-y-2">
-                        <Label>Group</Label>
-                        <Select v-model="allocationForm.visa_group_id">
-                            <SelectTrigger
-                                ><SelectValue placeholder="Select group"
-                            /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none"
-                                    >Select group</SelectItem
-                                >
-                                <SelectItem
-                                    v-for="group in availableAllocationGroups"
-                                    :key="group.id"
-                                    :value="group.id"
-                                >
-                                    {{ group.group_number }} · {{ group.name }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p
-                            v-if="allocationForm.errors.visa_group_id"
-                            class="text-xs text-destructive"
-                        >
-                            {{ allocationForm.errors.visa_group_id }}
-                        </p>
-                    </div>
-                    <div class="space-y-2">
-                        <Label>Amount in {{ company.base_currency }}</Label>
-                        <Input
-                            v-model="allocationForm.base_amount"
-                            type="number"
-                            min="0.01"
-                            :max="selectedAllocationGroup?.outstanding_amount"
-                            step="0.01"
-                            required
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Available
-                            <MoneyText
-                                :amount="
-                                    selectedPayment
-                                        ? availableAmount(selectedPayment)
-                                        : 0
-                                "
-                                :currency="company.base_currency"
-                            />
-                            <template v-if="selectedAllocationGroup">
-                                · Group outstanding
-                                <MoneyText
-                                    :amount="
-                                        selectedAllocationGroup.outstanding_amount
-                                    "
-                                    :currency="company.base_currency"
-                                />
-                            </template>
-                        </p>
-                        <p
-                            v-if="allocationForm.errors.base_amount"
-                            class="text-xs text-destructive"
-                        >
-                            {{ allocationForm.errors.base_amount }}
-                        </p>
-                    </div>
-                    <DialogFooter
-                        ><Button
-                            type="submit"
-                            :disabled="allocationForm.processing"
-                            >Allocate</Button
-                        ></DialogFooter
-                    >
-                </form>
-            </DialogContent>
-        </Dialog>
+        <AllocatePaymentDialog
+            v-model:open="allocationOpen"
+            :company="company"
+            :payment="selectedPayment"
+            :allocation-groups="allocationGroups"
+        />
     </PageShell>
 </template>

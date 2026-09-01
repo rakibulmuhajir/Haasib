@@ -102,6 +102,69 @@ function journalTotals(?string $transactionId): array
     ];
 }
 
+test('an agent credit can be put against a group whose charge later grew', function () {
+    // The group had been allocated in full, so it was struck off this
+    // payment's list -- and then an adjustment raised what the agent owed
+    // on it. The one group their credit was wanted for was the one group
+    // it was barred from.
+    [$company, , $agent, $groupOne] = allocationReversalCompany();
+    $service = app(UmrahCoreService::class);
+
+    $payment = $service->addPayment($company->id, [
+        'direction' => GroupPayment::DIRECTION_RECEIVED,
+        'agent_id' => $agent->id,
+        'amount' => 1500,
+        'currency' => 'SAR',
+        'payment_date' => '2026-08-20',
+        'payment_number' => null,
+        'method' => GroupPayment::METHOD_CASH,
+    ]);
+
+    $service->allocatePayment($payment, [
+        'visa_group_id' => $groupOne->id,
+        'base_amount' => (float) $groupOne->fresh()->balance,
+    ]);
+
+    expect((float) $groupOne->fresh()->balance)->toBe(0.0);
+
+    $groupOne->fresh()->update([
+        'visa_sale_amount' => (float) $groupOne->visa_sale_amount + 280,
+    ]);
+    $service->recalculateGroup($groupOne->fresh());
+
+    expect((float) $groupOne->fresh()->balance)->toBe(280.0);
+
+    $service->allocatePayment($payment->fresh(), [
+        'visa_group_id' => $groupOne->id,
+        'base_amount' => 280,
+    ]);
+
+    expect((float) $groupOne->fresh()->balance)->toBe(0.0)
+        ->and($payment->fresh()->allocations()->where('visa_group_id', $groupOne->id)->count())->toBe(2);
+});
+
+test('a second allocation still cannot exceed what the group owes', function () {
+    [$company, , $agent, $groupOne] = allocationReversalCompany();
+    $service = app(UmrahCoreService::class);
+
+    $payment = $service->addPayment($company->id, [
+        'direction' => GroupPayment::DIRECTION_RECEIVED,
+        'agent_id' => $agent->id,
+        'amount' => 1500,
+        'currency' => 'SAR',
+        'payment_date' => '2026-08-20',
+        'payment_number' => null,
+        'method' => GroupPayment::METHOD_CASH,
+    ]);
+
+    $service->allocatePayment($payment, [
+        'visa_group_id' => $groupOne->id,
+        'base_amount' => (float) $groupOne->fresh()->balance,
+    ]);
+
+    $service->allocatePayment($payment->fresh(), ['visa_group_id' => $groupOne->id, 'base_amount' => 50]);
+})->throws(Illuminate\Validation\ValidationException::class);
+
 test('a payment records the account its money moved through', function () {
     // Choosing an account is optional and almost nobody does, so a
     // fallback picks one at posting time. Until that choice was written

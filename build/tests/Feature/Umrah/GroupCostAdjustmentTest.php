@@ -180,6 +180,36 @@ test('an adjustment saves when the page sends no cost fields', function () {
         ->and((float) $group->visa_cost_amount)->toBe(1040.0);
 });
 
+test('lowering the transport cost lowers what vendor aging says we owe', function () {
+    // Vendor aging reads the bus cost from its own column. Adjusting the
+    // transport cost without moving that column left the report claiming
+    // the old payable.
+    $f = costAdjustmentFixture();
+    // Vendor aging places a group by when it travels.
+    $f->group->update(['travel_date' => '2026-10-01']);
+
+    app(GroupAccountingService::class)->update($f->group->fresh(), [
+        'vendor_id' => $f->visaVendor->id,
+        'mandatory_transport_vendor_id' => $f->busVendor->id,
+        'visa_sale_amount' => 1200,
+        'transport_amount' => 160,
+        'discount_amount' => 0,
+        'visa_cost_amount' => 1040,
+        'transport_cost_amount' => 80,
+        'reason' => 'Bus company lowered their seat price',
+        'reason_category' => 'rate_change',
+    ]);
+
+    $group = $f->group->fresh();
+    expect((float) $group->mandatory_transport_cost_amount)->toBe(80.0);
+
+    $payables = app(App\Modules\Umrah\Services\TravelReportService::class)->build($f->company, $f->user, 'vendor-aging', [
+        'start' => '2026-01-01', 'end' => '2026-12-31', 'per_page' => 25,
+    ]);
+
+    expect(collect($payables['rows'])->where('vendor_type', 'transport')->first()['balance'])->toBe(80.0);
+});
+
 test('a save that changes nothing says so', function () {
     // A rate typed into the per-passenger box but never applied left the
     // form holding the figures it already had. The save worked, reported

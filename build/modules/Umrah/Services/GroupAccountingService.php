@@ -222,7 +222,17 @@ class GroupAccountingService
             // someone already had open must not be made to fail, nor to
             // silently zero a cost it never showed.
             $transportCost = round((float) ($data['transport_cost_amount'] ?? $group->transport_cost_amount), 2);
-            $transportSnapshot = [];
+            /*
+             * Vendor aging reads the mandatory bus cost from its own
+             * column, so lowering the transport cost here without moving
+             * that one left the provider's payable in the aging report at
+             * the old figure -- the adjustment posted, and the report that
+             * says what we owe them disagreed with it. For a standard bus
+             * the two are the same number and must stay that way.
+             */
+            $transportSnapshot = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS && $vendors['mandatory_transport_vendor_id']
+                ? ['mandatory_transport_cost_amount' => $transportCost]
+                : [];
 
             /*
              * Re-price from the provider only when the provider changed.

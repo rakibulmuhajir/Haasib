@@ -1768,7 +1768,13 @@ class UmrahCoreService
             ],
         ]);
 
-        $payment->update(['transaction_id' => $transaction->id]);
+        /*
+         * Keep the account the money actually moved through. Nobody has to
+         * pick one, so most payments carry none -- and the screen then had
+         * to say "no account selected" about money that plainly went
+         * somewhere. What the fallback chose is the answer; record it.
+         */
+        $payment->update(['transaction_id' => $transaction->id, 'account_id' => $depositAccountId]);
     }
 
     private function postVendorPayment(GroupPayment $payment): void
@@ -1803,7 +1809,7 @@ class UmrahCoreService
             ['account_id' => $cashAccountId, 'type' => 'credit', 'amount' => (float) $payment->amount, 'description' => "Payment sent {$payment->payment_number}"],
         ]);
 
-        $payment->update(['transaction_id' => $transaction->id]);
+        $payment->update(['transaction_id' => $transaction->id, 'account_id' => $cashAccountId]);
     }
 
     private function postPaymentAllocation(PaymentAllocation $allocation): void

@@ -1145,7 +1145,7 @@ const addPayment = () => {
                                     >
                                 </div>
                                 <div class="text-sm text-muted-foreground">
-                                    {{ payment.payment_date }} ·
+                                    {{ formatDateTime(payment.payment_date, { mode: 'date' }) }} ·
                                     {{
                                         paymentMethods[payment.method] ||
                                         payment.method

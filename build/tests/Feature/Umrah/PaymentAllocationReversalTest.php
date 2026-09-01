@@ -102,6 +102,29 @@ function journalTotals(?string $transactionId): array
     ];
 }
 
+test('a payment records the account its money moved through', function () {
+    // Choosing an account is optional and almost nobody does, so a
+    // fallback picks one at posting time. Until that choice was written
+    // back, the group screen could only say no account was selected about
+    // money that had plainly moved.
+    [$company, , $agent] = allocationReversalCompany();
+
+    $payment = app(UmrahCoreService::class)->addPayment($company->id, [
+        'direction' => GroupPayment::DIRECTION_RECEIVED,
+        'agent_id' => $agent->id,
+        'amount' => 1500,
+        'currency' => 'SAR',
+        'payment_date' => '2026-08-20',
+        'payment_number' => null,
+        'method' => GroupPayment::METHOD_CASH,
+    ]);
+
+    $account = App\Modules\Accounting\Models\Account::find($payment->fresh()->account_id);
+
+    expect($account)->not->toBeNull()
+        ->and($account->subtype)->toBe('cash');
+});
+
 test('reversing one allocation of a two-allocation payment leaves the payment posted and the other allocation untouched', function () {
     [$company, $owner, $agent, $groupOne, $groupTwo] = allocationReversalCompany();
     $service = app(UmrahCoreService::class);

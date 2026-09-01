@@ -112,8 +112,10 @@ test('a cash receipt is posted to the cash account, not the bank', function () {
 
     $payment = GroupPayment::where('company_id', $company->id)->firstOrFail();
 
-    expect($payment->account_id)->toBeNull()
-        ->and(settlementDebitedAccountCode($payment))->toBe('1001');
+    // Nobody picked an account, so the fallback picked one -- and posting
+    // writes that choice back, so the payment can say where its money went.
+    expect(settlementDebitedAccountCode($payment))->toBe('1001')
+        ->and($payment->account->code)->toBe('1001');
 });
 
 test('a bank transfer receipt is still posted to the bank account', function () {

@@ -14,25 +14,25 @@ return new class extends Migration
             $table->integer('pax_capacity')->nullable()->after('vehicle_type');
         });
 
-        DB::statement("
+        DB::statement('
             UPDATE umrah.transport_services ts
             SET
                 vehicle_type = vt.name,
                 pax_capacity = vt.seats
             FROM umrah.vehicle_types vt
             WHERE ts.vehicle_type_id = vt.id
-        ");
+        ');
 
         Schema::table('umrah.visa_groups', function (Blueprint $table) {
             $table->integer('transport_pax_capacity')->nullable()->after('transport_quantity');
         });
 
-        DB::statement("
+        DB::statement('
             UPDATE umrah.visa_groups vg
             SET transport_pax_capacity = ts.pax_capacity
             FROM umrah.transport_services ts
             WHERE vg.transport_service_id = ts.id
-        ");
+        ');
 
         Schema::table('umrah.transport_services', function (Blueprint $table) {
             $table->dropForeign(['vehicle_type_id']);

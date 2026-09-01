@@ -5,8 +5,6 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\VendorCreditApplication;
 use App\Modules\Umrah\Commands\CancelTicket;
-use App\Modules\Umrah\Models\Ticket;
-use App\Modules\Umrah\Models\TicketBooking;
 use App\Modules\Umrah\Models\TicketCancellation;
 use Illuminate\Support\Facades\Bus;
 

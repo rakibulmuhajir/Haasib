@@ -15,19 +15,31 @@ class Passenger extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.passengers';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_RECEIVED = 'received';
+
     public const STATUS_SUBMITTED = 'submitted';
+
     public const STATUS_EMBASSY = 'embassy';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_DELIVERED = 'delivered';
+
     public const SERVICE_VISA_TRANSPORT = 'visa_transport';
+
     public const SERVICE_TRANSPORT_ONLY = 'transport_only';
+
     public const SERVICE_TYPES = [
         self::SERVICE_VISA_TRANSPORT => 'Visa included',
         self::SERVICE_TRANSPORT_ONLY => 'Already has visa - transport only',

@@ -12,8 +12,11 @@ class TransportPackageSector extends Model
     use HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.transport_package_sectors';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = ['company_id', 'transport_package_id', 'transport_sector_id', 'sort_order'];
@@ -28,6 +31,13 @@ class TransportPackageSector extends Model
         'deleted_at' => 'datetime',
     ];
 
-    public function package(): BelongsTo { return $this->belongsTo(TransportPackage::class, 'transport_package_id'); }
-    public function sector(): BelongsTo { return $this->belongsTo(TransportSector::class, 'transport_sector_id'); }
+    public function package(): BelongsTo
+    {
+        return $this->belongsTo(TransportPackage::class, 'transport_package_id');
+    }
+
+    public function sector(): BelongsTo
+    {
+        return $this->belongsTo(TransportSector::class, 'transport_sector_id');
+    }
 }

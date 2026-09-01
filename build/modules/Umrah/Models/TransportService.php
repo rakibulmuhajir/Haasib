@@ -15,8 +15,11 @@ class TransportService extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.transport_services';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [

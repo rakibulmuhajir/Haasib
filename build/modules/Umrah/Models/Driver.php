@@ -15,8 +15,11 @@ class Driver extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.drivers';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [

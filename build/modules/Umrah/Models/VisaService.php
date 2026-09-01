@@ -15,8 +15,11 @@ class VisaService extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.visa_services';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [

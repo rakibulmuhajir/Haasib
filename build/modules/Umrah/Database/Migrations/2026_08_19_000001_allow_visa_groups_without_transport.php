@@ -29,7 +29,7 @@ return new class extends Migration
         if ($stranded > 0) {
             throw new \RuntimeException(
                 "Cannot roll back: {$stranded} visa group(s) use transport_mode 'none'. "
-                ."Reassign them deliberately before removing the value."
+                .'Reassign them deliberately before removing the value.'
             );
         }
 

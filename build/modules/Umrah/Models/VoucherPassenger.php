@@ -14,8 +14,11 @@ class VoucherPassenger extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.voucher_passengers';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [

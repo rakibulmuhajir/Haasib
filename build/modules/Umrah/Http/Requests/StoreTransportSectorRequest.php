@@ -7,7 +7,10 @@ use App\Modules\Umrah\Models\TransportSector;
 
 class StoreTransportSectorRequest extends UmrahFormRequest
 {
-    protected function permission(): string { return Permissions::UMRAH_SETTINGS_UPDATE; }
+    protected function permission(): string
+    {
+        return Permissions::UMRAH_SETTINGS_UPDATE;
+    }
 
     public function rules(): array
     {

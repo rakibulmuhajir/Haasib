@@ -182,3 +182,13 @@ Environment was deliberately asset-controlled: Laravel at `127.0.0.1:9001`, no V
 ## Recording verdict after 39aa8b41
 
 **Still not recording-ready.** Five of the six reported fixes passed in the browser. Amendment accounting is a financial-integrity failure, so it is the remaining must-fix before recording.
+
+## Clean amendment regression rerun — revision 0e47f2f8
+
+- **PASS:** Fresh control flow completed on Group B, independent of the corrupted Group C data. UVR-00006 was created as a Hotel Only voucher for all seven Group B passengers with one company-supplied Dar Al-Eiman Makkah quad room, 30 September to 3 October. Approval posted hotel charge/cost 14,400/11,400 and group consolidated receivable/balance/profit 21,140/15,140/4,210.
+- **PASS:** UVR-00007 amended UVR-00006, changing the room count from 1 to 2. Approval produced hotel charge/cost 28,800/22,800, and Group B consolidated receivable/received/balance/profit 35,540/6,000/29,540/7,210. These are exactly the new voucher figures and the expected +14,400/+11,400 amendment difference; the old 14,400/11,400 was not double-counted.
+- **PASS:** The original UVR-00006 is marked superseded by UVR-00007. The amendment preserves passengers, stay dates and audit history.
+
+## Recording verdict after 0e47f2f8
+
+**Core workflow is recording-ready.** The only remaining work is presentation/data cleanup: Group C still contains the intentionally bad 39aa8b41-era amendment totals (57,600/45,400), so do not show that group in a recording until it is repaired or the QA company is rebuilt. Group B is now a clean, verified amendment example.

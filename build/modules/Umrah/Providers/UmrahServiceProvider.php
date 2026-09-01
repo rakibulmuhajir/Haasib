@@ -31,13 +31,13 @@ class UmrahServiceProvider extends ServiceProvider
     {
         $registry = $this->app->make(WidgetRegistry::class);
 
-        $registry->register(new DeparturesWidget());
-        $registry->register(new CashBookWidget());
-        $registry->register(new CashPositionWidget());
-        $registry->register(new AgentBalancesWidget());
-        $registry->register(new VendorBalancesWidget());
-        $registry->register(new NeedsAttentionWidget());
-        $registry->register(new TransportReadinessWidget());
-        $registry->register(new RefundsAwaitingDecisionWidget());
+        $registry->register(new DeparturesWidget);
+        $registry->register(new CashBookWidget);
+        $registry->register(new CashPositionWidget);
+        $registry->register(new AgentBalancesWidget);
+        $registry->register(new VendorBalancesWidget);
+        $registry->register(new NeedsAttentionWidget);
+        $registry->register(new TransportReadinessWidget);
+        $registry->register(new RefundsAwaitingDecisionWidget);
     }
 }

@@ -56,10 +56,10 @@ return new class extends Migration
         DB::statement('ALTER TABLE umrah.group_payments DROP COLUMN IF EXISTS submitted_by_user_id');
 
         DB::statement('ALTER TABLE umrah.group_payments DROP CONSTRAINT IF EXISTS group_payments_exchange_rate_check');
-        DB::statement("ALTER TABLE umrah.group_payments ADD CONSTRAINT group_payments_exchange_rate_check CHECK (
+        DB::statement('ALTER TABLE umrah.group_payments ADD CONSTRAINT group_payments_exchange_rate_check CHECK (
             (currency = base_currency AND exchange_rate IS NULL AND base_amount = round(amount, 2))
             OR (currency <> base_currency AND exchange_rate > 0 AND base_amount = round(amount * exchange_rate, 2))
-        )");
+        )');
 
         DB::statement('ALTER TABLE umrah.group_payments ALTER COLUMN base_amount SET NOT NULL');
 

@@ -162,5 +162,5 @@ test('a visa group with no passengers entered yet is charged no visa', function 
 
     // The visa line is priced per head. No heads, no line -- a group that
     // has been named but not filled bills nothing.
-    expect(app(GroupAccountingService::class)->summary($group)["services"]->all())->toBe([]);
+    expect(app(GroupAccountingService::class)->summary($group)['services']->all())->toBe([]);
 });

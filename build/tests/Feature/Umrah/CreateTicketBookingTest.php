@@ -1,6 +1,5 @@
 <?php
 
-use App\Modules\Umrah\Commands\CreateTicketBooking;
 use App\Modules\Umrah\Models\TicketBooking;
 use Illuminate\Support\Facades\Bus;
 

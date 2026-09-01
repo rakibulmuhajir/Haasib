@@ -99,7 +99,7 @@ return new class extends Migration
             $table->index(['company_id', 'transport_service_id']);
         });
 
-        DB::statement("ALTER TABLE umrah.transport_fares ADD CONSTRAINT transport_fares_target_check CHECK ((transport_sector_id IS NOT NULL)::integer + (transport_package_id IS NOT NULL)::integer = 1)");
+        DB::statement('ALTER TABLE umrah.transport_fares ADD CONSTRAINT transport_fares_target_check CHECK ((transport_sector_id IS NOT NULL)::integer + (transport_package_id IS NOT NULL)::integer = 1)');
         DB::statement("ALTER TABLE umrah.transport_fares ADD CONSTRAINT transport_fares_basis_check CHECK (charging_basis IN ('per_vehicle', 'per_passenger', 'flat_group'))");
 
         Schema::create('umrah.group_transport_items', function (Blueprint $table) {

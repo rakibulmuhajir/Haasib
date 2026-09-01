@@ -45,7 +45,7 @@ return new class extends Migration
         if ($carrying > 0) {
             throw new \RuntimeException(
                 "Cannot roll back: {$carrying} voucher(s) use service_bundle 'visa' or 'visa_hotel'. "
-                ."Reassign them deliberately before removing the value."
+                .'Reassign them deliberately before removing the value.'
             );
         }
 

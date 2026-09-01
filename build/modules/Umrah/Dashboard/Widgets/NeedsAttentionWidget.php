@@ -114,7 +114,7 @@ class NeedsAttentionWidget implements DashboardWidget
     {
         $passengers = Passenger::where('company_id', $company->id)
             ->whereNotIn('visa_status', [Passenger::STATUS_DELIVERED, Passenger::STATUS_REJECTED])
-            ->whereHas('group', function ($query) use ($today, $horizon, $isAgent, $agentId) {
+            ->whereHas('group', function ($query) use ($horizon, $isAgent, $agentId) {
                 $query->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                     ->when($isAgent, fn ($q) => $q->where('agent_id', $agentId))
                     ->whereNotNull('travel_date')

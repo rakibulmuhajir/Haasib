@@ -21,7 +21,7 @@ class MutamerSheetImportService
 
     public function import(UploadedFile $file): array
     {
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($file->getRealPath()) !== true) {
             throw ValidationException::withMessages([
                 'mutamers_file' => 'The selected file could not be opened as an Excel workbook.',
@@ -134,6 +134,7 @@ class MutamerSheetImportService
             }
 
             $target = ltrim($relationship->getAttribute('Target'), '/');
+
             return str_starts_with($target, 'xl/') ? $target : "xl/{$target}";
         }
 
@@ -255,7 +256,7 @@ class MutamerSheetImportService
 
     private function dom(string $xml): DOMDocument
     {
-        $dom = new DOMDocument();
+        $dom = new DOMDocument;
         $dom->loadXML($xml, LIBXML_NONET);
 
         return $dom;

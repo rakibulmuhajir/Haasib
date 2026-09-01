@@ -42,9 +42,29 @@ class GroupAccountingController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
-        $before = $record->only(['vendor_id', 'mandatory_transport_vendor_id', 'visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'balance', 'profit']);
+        $before = $record->only([
+            'vendor_id', 'mandatory_transport_vendor_id', 'visa_sale_amount', 'transport_amount',
+            'discount_amount', 'visa_cost_amount', 'transport_cost_amount', 'total_receivable',
+            'balance', 'profit',
+        ]);
         $updated = $this->accounting->update($record, $request->validated());
         $after = $updated->only(array_keys($before));
+
+        /*
+         * Say what happened, not that something did. A save that moved no
+         * figure used to report success like any other, so a rate typed
+         * into the per-passenger box and never applied looked saved and
+         * was not. Nothing changed is worth being told.
+         */
+        $inputs = [
+            'vendor_id', 'mandatory_transport_vendor_id', 'visa_sale_amount',
+            'transport_amount', 'discount_amount', 'visa_cost_amount', 'transport_cost_amount',
+        ];
+
+        if (array_intersect_key($after, array_flip($inputs)) == array_intersect_key($before, array_flip($inputs))) {
+            return back()->with('success', 'Nothing changed, so nothing was recorded.');
+        }
+
         $this->changeLogger->log($request, $updated, 'visa_group', 'accounting_updated', $before, $after, $request->validated('reason'));
 
         return back()->with('success', 'Group accounting updated successfully.');

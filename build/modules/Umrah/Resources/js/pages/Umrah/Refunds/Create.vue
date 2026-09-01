@@ -509,6 +509,10 @@ const submit = () =>
                                         min="0"
                                         max="100"
                                         class="h-9 w-24"
+                                        @keydown.enter.prevent="
+                                            percentRefundAmount > 0 &&
+                                                setAmount(percentRefundAmount)
+                                        "
                                     />
                                     <span class="text-xs text-muted-foreground"
                                         >%</span
@@ -561,6 +565,10 @@ const submit = () =>
                                         min="1"
                                         :max="perPassenger.count"
                                         class="h-9 w-40"
+                                        @keydown.enter.prevent="
+                                            passengerRefundAmount > 0 &&
+                                                setAmount(passengerRefundAmount)
+                                        "
                                     />
                                 </div>
                                 <Button

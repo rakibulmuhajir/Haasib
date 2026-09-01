@@ -48,6 +48,15 @@ const newTotal = computed(() => {
     return Math.round((rate * props.count + props.extra) * 100) / 100
 })
 
+/**
+ * A rate typed here counts as typed, whether or not Use was pressed.
+ *
+ * The box sits inside the accounting form, so Enter used to submit that
+ * form -- saving the old total, reporting success, and dropping the rate
+ * on the floor. Leaving the field without pressing Use did the same thing
+ * more quietly. Both now commit what was typed, which is the only reading
+ * of typing a rate into a box labelled New rate each.
+ */
 const apply = () => {
     if (newTotal.value !== null) {
         emit('apply', newTotal.value)
@@ -69,7 +78,15 @@ const apply = () => {
         <div v-if="!disabled" class="flex items-end gap-2">
             <div class="space-y-1">
                 <Label class="text-xs text-muted-foreground">New rate each</Label>
-                <Input v-model="newRate" type="number" min="0" step="0.01" class="h-8 w-32" />
+                <Input
+                    v-model="newRate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="h-8 w-32"
+                    @keydown.enter.prevent="apply"
+                    @blur="apply"
+                />
             </div>
             <Button
                 type="button"

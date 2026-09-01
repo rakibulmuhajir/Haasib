@@ -180,6 +180,35 @@ test('an adjustment saves when the page sends no cost fields', function () {
         ->and((float) $group->visa_cost_amount)->toBe(1040.0);
 });
 
+test('a save that changes nothing says so', function () {
+    // A rate typed into the per-passenger box but never applied left the
+    // form holding the figures it already had. The save worked, reported
+    // success, and moved nothing -- which read as the adjustment being
+    // recorded when it had not been.
+    $f = costAdjustmentFixture();
+
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(App\Services\CompanyRbacBootstrapper::class)->bootstrap($f->company);
+    ticketingAddCompanyMember($f->company, $f->user, 'owner');
+    Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    $group = $f->group->fresh();
+
+    test()->actingAs($f->user)
+        ->put("/{$f->company->slug}/umrah/groups/{$group->id}/accounting", [
+            'vendor_id' => $f->visaVendor->id,
+            'mandatory_transport_vendor_id' => $f->busVendor->id,
+            'visa_sale_amount' => (float) $group->visa_sale_amount,
+            'transport_amount' => (float) $group->transport_amount,
+            'discount_amount' => (float) $group->discount_amount,
+            'visa_cost_amount' => (float) $group->visa_cost_amount,
+            'transport_cost_amount' => (float) $group->transport_cost_amount,
+            'reason' => 'Saving without having changed anything',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', 'Nothing changed, so nothing was recorded.');
+});
+
 test('the accounting screen saves an adjustment over http', function () {
     // Everything else here calls the service. This is the path a person
     // actually takes -- through the form request, with the payload the

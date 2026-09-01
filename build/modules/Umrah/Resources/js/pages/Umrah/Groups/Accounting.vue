@@ -14,7 +14,7 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Calculator, Save, Undo2 } from 'lucide-vue-next';
 import RateBasis from '@/components/RateBasis.vue';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 type Vendor = {
@@ -102,6 +102,33 @@ const transportCostExtra = computed(() =>
     ) / 100,
 );
 
+/*
+ * The reasons an adjustment actually has, and the difference between the
+ * first two is the one that matters later: correcting a mistake says the
+ * original figure was never right, while a renegotiation says it was right
+ * when it was made and the terms changed afterwards. An accountant closing
+ * a period needs to tell those apart, and free text does not let them.
+ *
+ * Other stays, because a list that cannot say everything must not force
+ * someone to pick the nearest wrong thing.
+ */
+const REASON_PRESETS = [
+    'Corrected an error made when the group was created',
+    'Renegotiated with the supplier',
+    'Rate changed after the group was booked',
+    'Passenger count changed',
+    'Discount agreed with the agent',
+];
+
+const reasonChoice = ref('');
+const reasonTyped = ref('');
+
+const isOtherReason = computed(() => reasonChoice.value === 'other');
+
+watch([reasonChoice, reasonTyped], () => {
+    form.reason = isOtherReason.value ? reasonTyped.value : reasonChoice.value;
+});
+
 const form = useForm({
     vendor_id: props.group.vendor_id || 'none',
     mandatory_transport_vendor_id: props.group.mandatory_transport_vendor_id || 'none',
@@ -185,6 +212,8 @@ const submit = () => {
             preserveScroll: true,
             onSuccess: () => {
                 form.reason = '';
+                reasonChoice.value = '';
+                reasonTyped.value = '';
             },
             onError: () => toast.error('Group accounting could not be updated'),
         });
@@ -361,7 +390,27 @@ const submit = () => {
                                 price after the group was built. The difference is posted
                                 against their payable; the agent's charge is not affected.
                             </p>
-                            <div v-if="canUpdate" class="space-y-2 sm:col-span-2"><Label>Adjustment reason</Label><Textarea v-model="form.reason" placeholder="Reason for changing charges, discount, or suppliers" /><p v-if="form.errors.reason" class="text-xs text-destructive">{{ form.errors.reason }}</p></div>
+                            <div v-if="canUpdate" class="space-y-2 sm:col-span-2">
+                                <Label>Adjustment reason</Label>
+                                <Select v-model="reasonChoice">
+                                    <SelectTrigger><SelectValue placeholder="Why is this changing?" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="preset in REASON_PRESETS" :key="preset" :value="preset">
+                                            {{ preset }}
+                                        </SelectItem>
+                                        <SelectItem value="other">Other — write it below</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Textarea
+                                    v-if="isOtherReason"
+                                    v-model="reasonTyped"
+                                    placeholder="Say what changed and why"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Kept with the adjustment and shown on the agent's statement.
+                                </p>
+                                <p v-if="form.errors.reason" class="text-xs text-destructive">{{ form.errors.reason }}</p>
+                            </div>
                         </CardContent>
                     </Card>
                 </form>

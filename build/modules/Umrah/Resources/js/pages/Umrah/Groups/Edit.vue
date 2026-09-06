@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Plane, Plus, Save, Trash2 } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -103,6 +103,17 @@ const removeTransportItem = (index: number) => {
 
 const nestedError = (path: string) =>
     form.errors[path as keyof typeof form.errors];
+
+onMounted(() => {
+    if (new URLSearchParams(window.location.search).get('focus') !== 'transport')
+        return;
+
+    window.requestAnimationFrame(() => {
+        document
+            .getElementById('transport-planning')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+});
 
 watch(
     () => form.vendor_id,
@@ -283,7 +294,11 @@ const submit = () =>
                          standard-bus group. Gating the picker on canManageVendors
                          left operations staff facing a required field with no
                          control on screen to satisfy it. -->
-                    <div v-if="form.transport_mode === 'standard_bus'" class="space-y-2">
+                    <div
+                        v-if="form.transport_mode === 'standard_bus'"
+                        id="transport-planning"
+                        class="scroll-mt-24 space-y-2"
+                    >
                         <Label>Mandatory transport provider</Label>
                         <Select v-model="form.mandatory_transport_vendor_id">
                             <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
@@ -295,7 +310,8 @@ const submit = () =>
                     </div>
                     <div
                         v-if="canManageVendors && form.transport_mode === 'specialized'"
-                        class="space-y-3 md:col-span-2"
+                        id="transport-planning"
+                        class="scroll-mt-24 space-y-3 md:col-span-2"
                     >
                         <Label>Vehicles</Label>
                         <p class="text-xs text-muted-foreground">

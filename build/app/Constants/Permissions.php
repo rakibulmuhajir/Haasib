@@ -406,6 +406,8 @@ class Permissions
 
     public const UMRAH_REPORT_OWN_VIEW = 'umrah.report.own.view';
 
+    public const UMRAH_OPERATIONS_VIEW = 'umrah.operations.view';
+
     // Umrah - Ticketing
     public const UMRAH_TICKET_VIEW = 'umrah.ticket.view';
 

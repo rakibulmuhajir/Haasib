@@ -18,25 +18,34 @@
  *      posting — see lib/glossary.ts.
  */
 
-export type StatusTone = 'neutral' | 'info' | 'success' | 'attention' | 'critical' | 'muted'
+export type StatusTone =
+    | 'neutral'
+    | 'info'
+    | 'success'
+    | 'attention'
+    | 'critical'
+    | 'muted';
 
 export interface StatusMeta {
     /** What the chip reads. Plain language, sentence case. */
-    label: string
-    tone: StatusTone
+    label: string;
+    tone: StatusTone;
     /**
      * Strike the label through. The second non-colour indicator, reserved for
      * records that exist but no longer count toward any balance.
      */
-    struck?: boolean
+    struck?: boolean;
     /** Glossary key, when the state is worth explaining on demand. */
-    explain?: string
+    explain?: string;
 }
 
 export const statusMeta = {
     // ── In progress ──────────────────────────────────────────────────────
     draft: { label: 'Draft', tone: 'neutral' },
     pending: { label: 'Pending', tone: 'attention' },
+    ready: { label: 'Ready', tone: 'success' },
+    needs_attention: { label: 'Needs attention', tone: 'attention' },
+    self_arranged: { label: 'Self-arranged', tone: 'neutral' },
     submitted: { label: 'Submitted', tone: 'info' },
     sent: { label: 'Sent', tone: 'info' },
     requested: { label: 'Requested', tone: 'info' },
@@ -82,7 +91,12 @@ export const statusMeta = {
     // books simply now contain it, so it reads as settled rather than green.
     posted: { label: 'Recorded', tone: 'neutral', explain: 'posted' },
     reconciled: { label: 'Matched', tone: 'success', explain: 'reconciled' },
-    reversed: { label: 'Reversed', tone: 'muted', struck: true, explain: 'reversed' },
+    reversed: {
+        label: 'Reversed',
+        tone: 'muted',
+        struck: true,
+        explain: 'reversed',
+    },
 
     // Billing for this record sits on a sibling record, so it is neither
     // unposted nor double-counted here. A fact about ownership, not a problem.
@@ -157,9 +171,9 @@ export const statusMeta = {
     passports_received: { label: 'Passports in', tone: 'info' },
     visa_approved: { label: 'Visa approved', tone: 'success' },
     delivered: { label: 'Delivered', tone: 'success' },
-} as const satisfies Record<string, StatusMeta>
+} as const satisfies Record<string, StatusMeta>;
 
-export type StatusKey = keyof typeof statusMeta
+export type StatusKey = keyof typeof statusMeta;
 
 /**
  * Resolve a status coming off the wire.
@@ -172,22 +186,24 @@ export type StatusKey = keyof typeof statusMeta
  * because hiding a state the server considers real is worse than showing one
  * this file has not caught up with yet.
  */
-export function resolveStatus(status: string | null | undefined): StatusMeta | null {
-    if (!status) return null
+export function resolveStatus(
+    status: string | null | undefined,
+): StatusMeta | null {
+    if (!status) return null;
 
     const key = String(status)
         .trim()
         .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
         .replace(/[\s-]+/g, '_')
-        .toLowerCase() as StatusKey
+        .toLowerCase() as StatusKey;
 
-    if (key in statusMeta) return statusMeta[key]
+    if (key in statusMeta) return statusMeta[key];
 
     return {
         label: key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()),
         tone: 'neutral',
-    }
+    };
 }
 
 /** Every key, in declaration order. Used by the design playground. */
-export const statusKeys = Object.keys(statusMeta) as StatusKey[]
+export const statusKeys = Object.keys(statusMeta) as StatusKey[];

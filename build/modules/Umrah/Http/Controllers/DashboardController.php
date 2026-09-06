@@ -7,6 +7,7 @@ use App\Dashboard\DashboardPresenter;
 use App\Http\Controllers\Controller;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Services\CurrentCompany;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -15,13 +16,20 @@ class DashboardController extends Controller
 {
     public function __construct(private TravelAccessService $access) {}
 
-    public function index(Request $request, DashboardPresenter $presenter): Response
+    public function index(Request $request, DashboardPresenter $presenter): Response|RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
+
+        $role = $this->access->companyRole($company->id, $request->user());
+        if (in_array($role, config('umrah.operations.landing_roles', []), true)
+            && $request->user()?->hasCompanyPermission(Permissions::UMRAH_OPERATIONS_VIEW)) {
+            return redirect()->route('umrah.operations.index', ['company' => $company->slug]);
+        }
+
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_GROUP_VIEW), 403);
 
         $isMember = $this->access->isAgentMember($company->id, $request->user());
-        $isOperations = $this->access->companyRole($company->id, $request->user()) === 'operations';
+        $isOperations = $role === 'operations';
 
         return Inertia::render('Umrah/Dashboard/Index', [
             'company' => $this->companyPayload($company),

@@ -214,6 +214,9 @@ return [
             'umrah.report.view',
             'umrah.report.own.view',
         ],
+        'operations' => [
+            'umrah.operations.view',
+        ],
     ],
 
 ];

@@ -1,17 +1,17 @@
 import type { ModuleNavConfig } from '@/navigation/types';
 import {
-    Scale,
     BadgeDollarSign,
     BarChart3,
     Building2,
     Bus,
+    CalendarRange,
     FileText,
     Hotel,
     LayoutDashboard,
     Plane,
     ReceiptText,
+    Scale,
     ScrollText,
-    Settings,
     Ticket,
     Undo2,
     Users,
@@ -216,10 +216,19 @@ export const umrahNav: ModuleNavConfig = {
             {
                 label: 'Umrah Operations',
                 items: [
+                    ...(!isOperations
+                        ? [
+                              {
+                                  title: 'Dashboard',
+                                  href: `/${slug}/umrah`,
+                                  icon: LayoutDashboard,
+                              },
+                          ]
+                        : []),
                     {
-                        title: 'Dashboard',
-                        href: `/${slug}/umrah`,
-                        icon: LayoutDashboard,
+                        title: 'Operations',
+                        href: `/${slug}/umrah/operations`,
+                        icon: CalendarRange,
                     },
                     {
                         title: 'Trips / Visa Groups',

@@ -537,7 +537,7 @@ class VoucherController extends Controller
         ])->contains(fn (mixed $value): bool => filled($value));
     }
 
-    public function show(string $companySlug, string $voucher): Response
+    public function show(Request $request, string $companySlug, string $voucher): Response
     {
         $company = app(CurrentCompany::class)->get();
         abort_unless(request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_VIEW), 403);
@@ -629,6 +629,9 @@ class VoucherController extends Controller
             'airlines' => Voucher::AIRLINES,
             'airportCities' => Voucher::AIRPORT_CITIES,
             'agentCapabilities' => $capabilities,
+            'openWorkflow' => $request->string('workflow')->toString() === 'amend' && $capabilities['can_amend']
+                ? 'amend'
+                : null,
             'canViewAccounting' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_ACCOUNTING_VIEW),
             'moveTargets' => $moveTargets,
             'changeLogs' => $this->access->isAgentMember($company->id, request()->user()) ? [] : ChangeLog::where('company_id', $company->id)

@@ -254,6 +254,7 @@ return [
         'umrah.settings.update',
         'umrah.settings.delete',
         'umrah.report.view',
+        'umrah.operations.view',
 
         // Ticketing: a manager runs the desk end to end, including
         // cancellations, which move money on both sides of the book.
@@ -453,6 +454,7 @@ return [
         'umrah.voucher.cancel',
         'umrah.vendor.view',
         'umrah.report.view',
+        'umrah.operations.view',
 
         // Ticketing: an accountant reads the register and reconciles it,
         // but never books one -- booking is an operational act, not a
@@ -474,6 +476,7 @@ return [
         'umrah.voucher.create',
         'umrah.voucher.view',
         'umrah.voucher.update',
+        'umrah.operations.view',
         'umrah.refund.view',
         'umrah.refund.create',
 
@@ -498,6 +501,7 @@ return [
         'umrah.voucher.approve',
         'umrah.voucher.update',
         'umrah.report.own.view',
+        'umrah.operations.view',
         'umrah.refund.view',
         'umrah.refund.create',
 

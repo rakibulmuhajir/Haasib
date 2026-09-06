@@ -8,6 +8,7 @@ use App\Modules\Umrah\Dashboard\Widgets\CashBookWidget;
 use App\Modules\Umrah\Dashboard\Widgets\CashPositionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\DeparturesWidget;
 use App\Modules\Umrah\Dashboard\Widgets\NeedsAttentionWidget;
+use App\Modules\Umrah\Dashboard\Widgets\OperationsSummaryWidget;
 use App\Modules\Umrah\Dashboard\Widgets\RefundsAwaitingDecisionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\TransportReadinessWidget;
 use App\Modules\Umrah\Dashboard\Widgets\VendorBalancesWidget;
@@ -37,6 +38,7 @@ class UmrahServiceProvider extends ServiceProvider
         $registry->register(new AgentBalancesWidget);
         $registry->register(new VendorBalancesWidget);
         $registry->register(new NeedsAttentionWidget);
+        $registry->register(new OperationsSummaryWidget);
         $registry->register(new TransportReadinessWidget);
         $registry->register(new RefundsAwaitingDecisionWidget);
     }

@@ -1,6 +1,6 @@
 # UI Screen Specifications – Canonical Reference
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2026-09-05
 **Purpose**: Complete specification for all transaction and master data screens
 **Audience**: Developers implementing UI, backend APIs, and business logic
 
@@ -55,6 +55,7 @@
 14. [Tax Configuration Screen](#14-tax-configuration-screen)
 15. [Global Rules & Constraints](#15-global-rules--constraints)
     - [Error Handling & Toast Notifications](#1511-error-handling--toast-notifications)
+16. [Umrah Operations Screen](#16-umrah-operations-screen)
 
 ---
 
@@ -2155,6 +2156,74 @@ Before marking implementation complete:
 - [ ] Flash messages handled in layout
 - [ ] All AJAX responses return proper error messages
 - [ ] Error messages are actionable (tell user what to do)
+
+---
+
+## 16. Umrah Operations Screen
+
+### 16.1 Purpose
+
+Operations is a read-only movement workspace over current Umrah vouchers, voucher passengers, hotel stays, and group transport items. Phase 1 does not introduce an editable event table or post accounting entries.
+
+### 16.2 Event types and sources
+
+| Event type | Canonical source | Scheduled value |
+|---|---|---|
+| Airport arrival | Approved, current voucher | `onward_arrival_at` |
+| Airport departure | Approved, current voucher | `return_departure_at` |
+| Hotel check-in | Voucher `hotel_stays` item | `check_in_date` |
+| Hotel check-out | Voucher `hotel_stays` item | `check_out_date` |
+| City transfer | Scheduled group transport item between Makkah and Madinah; otherwise inferred from consecutive voucher stays in those cities | Transport `scheduled_at`, otherwise the departing stay's `check_out_date` |
+| Transport pickup | Other scheduled group transport item | `scheduled_at` |
+
+An inferred city transfer is an operational warning, not a fabricated transport booking. It remains `Needs attention` when company transport is included but no matching transport item exists, and disappears in favour of the precise scheduled transport event once that item is assigned. Cancelled and superseded vouchers, cancelled groups, soft-deleted assignments, and soft-deleted transport items never appear in the active Operations workspace.
+
+### 16.3 Local-time rule
+
+Times retain the wall-clock value of the place where the event occurs, matching airline itinerary display. Departure uses departure-local time, arrival uses arrival-local time, and hotel/road events use the event city's local time. Office or browser timezone must not change the displayed value or date bucket. There is no user-facing timezone control.
+
+### 16.4 Role-shaped presentation
+
+| Company role | Presentation | Detail exposed |
+|---|---|---|
+| Owner | Operational | Full manifest and readiness details; the owner dashboard separately exposes aggregate movement totals |
+| Manager | Operational | Full manifest and readiness details |
+| Operations | Operational | Full manifest and readiness details; Operations is the Umrah landing page |
+| Agent | Agent operational | Full detail after mandatory agent self-scoping |
+| Accountant | Summary | Aggregate movement totals; finance dashboard remains the landing page |
+
+The server must omit passenger, passport, ticket, airport, hotel, and transport details from summary payloads. Vue column hiding is not an authorization boundary. Role-to-presentation mapping is configuration, while `Permissions::UMRAH_OPERATIONS_VIEW` controls access to the feature. Owner access to the dedicated Operations workspace uses the operational profile; the owner's dashboard Operations tab is a separate aggregate-only widget payload.
+
+### 16.5 Filters
+
+- Period: Today, Tonight, Tomorrow, Next 7 days, or custom date range.
+- Event type: all, arrival, departure, hotel check-in/out, city transfer, or transport pickup.
+- Operational profiles may additionally filter by agent and readiness.
+- Applied filters remain in the URL and are validated through a `BaseFormRequest`.
+
+### 16.6 Readiness
+
+Phase 1 derives, but does not store, `ready`, `needs_attention`, or `self_arranged`. Missing passengers, required transport, vehicle/driver assignment, hotel identity, or insufficient vehicle capacity produces a plain-language issue. Derived readiness never changes accounting or the source voucher.
+
+### 16.7 Interactions and responsive behavior
+
+- A compact summary strip reloads the same page with the corresponding event filter where the presentation permits drill-down.
+- Desktop is table-first: a compact period/filter toolbar and movement tabs sit above one dense register. Multi-day results use a thin date-divider row; single-day results do not repeat the selected date.
+- A missing time is never labelled `All day`. Flight and road events use an actionable missing-time label; date-only hotel events say that the time was not specified.
+- Operational rows link to their voucher or group and expose passenger identity only to authorized operational profiles.
+- Needs-attention rows may expose server-generated correction links only when the user has the corresponding update permission. Approved voucher issues open the amendment workflow; group transport issues open the existing group transport editor. Summary and agent profiles receive no correction actions.
+- Desktop uses the shared Haasib table/register grammar; mobile uses compact stacked register rows and keeps time, movement, passenger count, and readiness visible without horizontal scrolling.
+- Empty states distinguish no scheduled movement from filters that match nothing.
+
+### 16.8 Movement Report
+
+The Operations screen exposes a print preview and PDF download that use the same validated filters and `OperationalEventTimelineService` result as the interactive screen. The report must never run a separate event query or relax role and linked-agent scoping.
+
+- Summary profiles and the owner dashboard Operations widget receive only the four movement totals and no manifest or itinerary detail.
+- Operational profiles receive date-grouped event sheets with local event time, route, flight/airport or hotel, group, agent, transport assignment, readiness issues, and passenger manifest.
+- Agent and group overview tables label their figures as event and passenger-movement totals so repeated travellers across distinct movements are not mistaken for unique passengers.
+- Print and PDF outputs retain stored local wall-clock values without browser timezone conversion.
+- The print route renders a standalone, printer-safe HTML document. The PDF route renders the same Blade report body and downloads a stable, period-labelled filename.
 
 ---
 

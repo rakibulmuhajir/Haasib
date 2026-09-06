@@ -9,7 +9,7 @@
  * An unknown key is a DashboardGrid concern, not this file's — this map
  * simply may not have an entry for it, and the grid skips it silently.
  */
-import { defineAsyncComponent, type Component } from 'vue'
+import { defineAsyncComponent, type Component } from 'vue';
 
 export const widgetMap: Record<string, Component> = {
     'umrah.departures': defineAsyncComponent(
@@ -31,9 +31,21 @@ export const widgetMap: Record<string, Component> = {
         () => import('@/components/dashboard/widgets/NeedsAttentionWidget.vue'),
     ),
     'umrah.transport_readiness': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/TransportReadinessWidget.vue'),
+        () =>
+            import(
+                '@/components/dashboard/widgets/TransportReadinessWidget.vue'
+            ),
     ),
     'umrah.refunds_awaiting_decision': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/RefundsAwaitingDecisionWidget.vue'),
+        () =>
+            import(
+                '@/components/dashboard/widgets/RefundsAwaitingDecisionWidget.vue'
+            ),
     ),
-}
+    'umrah.operations_summary': defineAsyncComponent(
+        () =>
+            import(
+                '@/components/dashboard/widgets/OperationsSummaryWidget.vue'
+            ),
+    ),
+};

@@ -1,5 +1,6 @@
 <?php
 
+use App\Constants\Permissions;
 use App\Dashboard\DashboardLayoutResolver;
 use App\Dashboard\WidgetRegistry;
 use App\Facades\CompanyContext;
@@ -12,6 +13,7 @@ use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Umrah\Dashboard\Widgets\CashBookWidget;
 use App\Modules\Umrah\Dashboard\Widgets\CashPositionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\DeparturesWidget;
+use App\Modules\Umrah\Dashboard\Widgets\OperationsSummaryWidget;
 use App\Modules\Umrah\Dashboard\Widgets\RefundsAwaitingDecisionWidget;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
@@ -88,11 +90,15 @@ test('the resolver falls back to the role default layout when no saved layout ex
     // The dashboard is deliberately scoped to widgets real data already backs:
     // Upcoming (departures) and Money (cash book + the two balance registers).
     // needs_attention and transport_readiness stay registered but unplaced.
-    expect(collect($tabs)->pluck('key')->all())->toBe(['upcoming', 'money']);
+    expect(collect($tabs)->pluck('key')->all())->toBe(['upcoming', 'money', 'operations']);
 
     $money = collect($tabs)->firstWhere('key', 'money');
     expect(collect($money['widgets'])->pluck('key')->all())
         ->toBe(['umrah.cash_position', 'umrah.refunds_awaiting_decision', 'umrah.cash_book', 'umrah.agent_balances', 'umrah.vendor_balances']);
+
+    $operations = collect($tabs)->firstWhere('key', 'operations');
+    expect(collect($operations['widgets'])->pluck('key')->all())
+        ->toBe(['umrah.operations_summary']);
 });
 
 test('an unregistered widget key in a saved layout is dropped rather than throwing', function () {
@@ -459,12 +465,32 @@ test('the dashboard page ships a single dashboard prop naming its active tab', f
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('Umrah/Dashboard/Index')
-            ->has('dashboard.tabs', 2)
+            ->has('dashboard.tabs', 3)
             ->where('dashboard.activeTab', 'upcoming')
             ->where('dashboard.tabs.0.key', 'upcoming')
             ->where('dashboard.tabs.1.key', 'money')
+            ->where('dashboard.tabs.2.key', 'operations')
             ->has('dashboard.tabs.0.widgets.0.data')
             ->where('dashboard.tabs.1.widgets.0.data', null)
+            ->where('dashboard.tabs.2.widgets.0.data', null)
+        );
+});
+
+test('the owner Operations dashboard tab contains summary totals only', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+
+    expect(app(WidgetRegistry::class)->has('umrah.operations_summary'))->toBeTrue()
+        ->and(app(OperationsSummaryWidget::class)->permission())->toBe(Permissions::UMRAH_OPERATIONS_VIEW);
+
+    $this->actingAs($owner)
+        ->get("/{$company->slug}/umrah?tab=operations")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('dashboard.activeTab', 'operations')
+            ->has('dashboard.tabs.2.widgets.0.data.summary', 4)
+            ->where('dashboard.tabs.2.widgets.0.data.summary.0.key', 'moving_in')
+            ->missing('dashboard.tabs.2.widgets.0.data.events')
         );
 });
 

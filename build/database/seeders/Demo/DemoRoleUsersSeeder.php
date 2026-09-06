@@ -105,7 +105,7 @@ class DemoRoleUsersSeeder extends Seeder
     {
         $user = User::where('email', self::SEATS['agent'][2])->first();
         $agent = Agent::where('company_id', $company->id)
-            ->where('name', 'Al-Noor Travels')
+            ->whereNameLike('Al-Noor Travels')
             ->first();
 
         if (! $user || ! $agent) {

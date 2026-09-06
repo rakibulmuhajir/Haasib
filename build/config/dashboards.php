@@ -46,6 +46,13 @@ return [
                         ['key' => 'umrah.vendor_balances', 'span' => 6, 'options' => []],
                     ],
                 ],
+                [
+                    'key' => 'operations',
+                    'label' => 'Operations',
+                    'widgets' => [
+                        ['key' => 'umrah.operations_summary', 'span' => 12, 'options' => []],
+                    ],
+                ],
             ],
 
             // "admin" in company terms is the 'manager' role -- same tabs as owner.

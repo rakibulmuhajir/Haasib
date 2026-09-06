@@ -92,6 +92,7 @@ const props = defineProps<{
         passengers_count: number;
     }>;
     canViewAccounting: boolean;
+    openWorkflow?: 'amend' | null;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -106,7 +107,9 @@ const approveForm = useForm({ override_reason: '' });
 const approvalError = ref('');
 const moveOpen = ref(false);
 const separateOpen = ref(false);
-const workflowOpen = ref<'amend' | 'cancel' | 'delete' | null>(null);
+const workflowOpen = ref<'amend' | 'cancel' | 'delete' | null>(
+    props.openWorkflow ?? null,
+);
 const workflowForm = useForm({ reason: '' });
 const moveForm = useForm({
     passenger_ids: [] as string[],

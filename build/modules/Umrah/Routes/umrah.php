@@ -4,6 +4,7 @@ use App\Modules\Umrah\Http\Controllers\AdjustmentController;
 use App\Modules\Umrah\Http\Controllers\AgentController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
+use App\Modules\Umrah\Http\Controllers\OperationsController;
 use App\Modules\Umrah\Http\Controllers\ExpenseController;
 use App\Modules\Umrah\Http\Controllers\GroupAccountingController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
@@ -24,6 +25,9 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
     ->prefix('{company}/umrah')
     ->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('umrah.dashboard');
+        Route::get('operations', [OperationsController::class, 'index'])->name('umrah.operations.index');
+        Route::get('operations/report', [OperationsController::class, 'report'])->name('umrah.operations.report');
+        Route::get('operations/report/pdf', [OperationsController::class, 'pdf'])->name('umrah.operations.report.pdf');
 
         Route::get('agents', [AgentController::class, 'index'])->name('umrah.agents.index');
         Route::get('agents/create', [AgentController::class, 'create'])->name('umrah.agents.create');

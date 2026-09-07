@@ -517,7 +517,7 @@ const submit = () => {
             },
         ]"
     >
-        <div class="space-y-6">
+        <div class="voucher-form space-y-6">
             <div class="space-y-6">
                 <Card variant="form">
                     <CardHeader>
@@ -792,6 +792,7 @@ const submit = () => {
                                 <Label class="2xl:hidden">Takeoff</Label
                                 ><DateTimePicker
                                     v-model="form.onward_departure_at"
+                                    label="Onward takeoff"
                                     required
                                 />
                             </div>
@@ -799,6 +800,7 @@ const submit = () => {
                                 <Label class="2xl:hidden">Landing</Label
                                 ><DateTimePicker
                                     v-model="form.onward_arrival_at"
+                                    label="Onward landing"
                                     :min="
                                         plusOneMinute(form.onward_departure_at)
                                     "
@@ -849,6 +851,7 @@ const submit = () => {
                                 <Label class="2xl:hidden">Takeoff</Label
                                 ><DateTimePicker
                                     v-model="form.return_departure_at"
+                                    label="Return takeoff"
                                     :min="plusOneMinute(form.onward_arrival_at)"
                                     required
                                 />
@@ -857,6 +860,7 @@ const submit = () => {
                                 <Label class="2xl:hidden">Landing</Label
                                 ><DateTimePicker
                                     v-model="form.return_arrival_at"
+                                    label="Return landing"
                                     :min="
                                         plusOneMinute(form.return_departure_at)
                                     "
@@ -1249,3 +1253,11 @@ const submit = () => {
         </div>
     </PageShell>
 </template>
+
+<style scoped>
+.voucher-form :deep([data-slot='input']),
+.voucher-form :deep([data-slot='textarea']),
+.voucher-form :deep([role='combobox']) {
+    border-radius: 0;
+}
+</style>

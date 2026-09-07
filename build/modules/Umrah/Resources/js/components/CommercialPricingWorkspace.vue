@@ -82,11 +82,13 @@ const isDefault = computed(() => form.scope_type === 'default');
 const activeRates = computed(() => props.rates.filter((rate) => rate.is_active));
 const inactiveRates = computed(() => props.rates.filter((rate) => !rate.is_active));
 
+// Apply dependent defaults immediately so loading a saved rule can then restore
+// its target, scope and amount without a queued watcher overwriting them.
 watch(() => form.service_type, () => {
     if (!availableTargets.value.some((target) => target.id === form.target_id)) {
         form.target_id = availableTargets.value[0]?.id || '';
     }
-});
+}, { flush: 'sync' });
 watch(() => form.scope_type, (scope) => {
     if (props.lockedAgent) {
         form.scope_id = props.lockedAgent.id;
@@ -94,11 +96,11 @@ watch(() => form.scope_type, (scope) => {
     }
     form.scope_id = scope === 'default' ? '' : scopeOptions.value[0]?.id || '';
     if (scope === 'default') form.calculation_type = 'set_price';
-});
+}, { flush: 'sync' });
 watch(() => form.calculation_type, () => {
     if (usesPercentage.value) form.amount = '';
     else form.percentage = '';
-});
+}, { flush: 'sync' });
 
 const resetForm = () => {
     editingId.value = null;

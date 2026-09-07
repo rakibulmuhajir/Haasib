@@ -5,6 +5,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\CommercialRate;
 use App\Modules\Umrah\Models\GroupTransportItem;
 use App\Modules\Umrah\Models\Hotel;
 use App\Modules\Umrah\Models\HotelVendor;
@@ -205,6 +206,57 @@ function quickBookingPayload(object $fixture, array $overrides = []): array
         'transport_items' => [],
     ], $overrides);
 }
+
+test('quick booking saves commercial visa and bus prices and ignores submitted price tampering', function () {
+    $f = quickBookingFixture();
+    foreach ([['visa_adult', $f->visaVendor->id, 1100, 700], ['standard_transport', $f->transportProvider->id, 200, 90]] as [$service, $vendorId, $sale, $cost]) {
+        CommercialRate::create([
+            'company_id' => $f->company->id, 'service_type' => $service, 'visa_vendor_id' => $vendorId,
+            'scope_type' => 'default', 'calculation_type' => 'set_price', 'amount' => $sale, 'cost_amount' => $cost,
+            'currency' => 'SAR', 'effective_from' => '2026-09-01', 'is_active' => true,
+        ]);
+        CommercialRate::create([
+            'company_id' => $f->company->id, 'service_type' => $service, 'visa_vendor_id' => $vendorId,
+            'scope_type' => 'agent', 'agent_id' => $f->agent->id,
+            'calculation_type' => 'discount_percentage', 'percentage' => 10,
+            'currency' => 'SAR', 'effective_from' => '2026-09-01', 'is_active' => true,
+        ]);
+    }
+    $payload = quickBookingPayload($f, ['visa_sale_amount' => 1, 'transport_sale_amount' => 1, 'visa_cost_amount' => 1]);
+    $this->actingAs($f->owner)->post("/{$f->company->slug}/umrah/quick-booking", $payload)
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $group = VisaGroup::where('company_id', $f->company->id)->where('group_number', $payload['group_number'])->firstOrFail();
+    expect((float) $group->visa_sale_amount)->toBe(990.0)
+        ->and((float) $group->visa_cost_amount)->toBe(700.0)
+        ->and((float) $group->transport_amount)->toBe(180.0)
+        ->and((float) $group->transport_cost_amount)->toBe(90.0)
+        ->and(data_get($group->pricing_snapshot, 'visa.adult.source'))->toBe('agent');
+});
+
+test('specialized quick booking saves dated commercial fare prices with the vehicle quantity', function () {
+    $f = quickBookingFixture();
+    CommercialRate::create([
+        'company_id' => $f->company->id, 'service_type' => 'transport_fare', 'transport_fare_id' => $f->fare->id,
+        'scope_type' => 'default', 'calculation_type' => 'set_price', 'amount' => 500, 'cost_amount' => 250,
+        'currency' => 'SAR', 'effective_from' => '2026-09-01', 'is_active' => true,
+    ]);
+    CommercialRate::create([
+        'company_id' => $f->company->id, 'service_type' => 'transport_fare', 'transport_fare_id' => $f->fare->id,
+        'scope_type' => 'agent', 'agent_id' => $f->agent->id,
+        'calculation_type' => 'discount_amount', 'amount' => 50,
+        'currency' => 'SAR', 'effective_from' => '2026-09-01', 'is_active' => true,
+    ]);
+    $payload = quickBookingPayload($f, [
+        'service_mode' => 'transport', 'transport_mode' => VisaGroup::TRANSPORT_SPECIALIZED,
+        'transport_items' => [['transport_fare_id' => $f->fare->id, 'quantity' => 2, 'terminal' => 'standard']],
+    ]);
+    $this->actingAs($f->owner)->post("/{$f->company->slug}/umrah/quick-booking", $payload)
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $group = VisaGroup::where('company_id', $f->company->id)->where('group_number', $payload['group_number'])->firstOrFail();
+    expect((float) $group->visa_sale_amount)->toBe(0.0)
+        ->and((float) $group->transport_amount)->toBe(900.0)
+        ->and((float) $group->transport_cost_amount)->toBe(500.0);
+});
 
 test('quick booking page is role protected and never exposes supplier costs', function () {
     $f = quickBookingFixture();

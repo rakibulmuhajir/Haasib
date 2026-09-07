@@ -338,3 +338,119 @@ test('quick booking quote changes by agent and never sends supplier cost', funct
 
     expect(json_encode($response->viewData('page')['props']))->not->toContain('cost_amount');
 });
+
+test('commercial adjustments have predictable boundaries and never change supplier cost', function (string $method, ?float $amount, ?float $percentage, float $expected) {
+    $f = commercialPricingFixture();
+    CommercialRate::create(commercialRateData($f));
+    CommercialRate::create(commercialRateData($f, [
+        'scope_type' => 'agent', 'agent_id' => $f->agent->id,
+        'calculation_type' => $method, 'amount' => $amount, 'percentage' => $percentage, 'cost_amount' => null,
+    ]));
+
+    $price = app(CommercialRateResolver::class)->visa($f->visaVendor, 'adult', $f->agent->id, '2026-09-10');
+    expect($price['sale_amount'])->toBe($expected)->and($price['cost_amount'])->toBe(700.0);
+})->with([
+    'free exact price' => ['set_price', 0.0, null, 0.0],
+    'fixed discount' => ['discount_amount', 125.0, null, 875.0],
+    'discount floor' => ['discount_amount', 1500.0, null, 0.0],
+    'zero discount' => ['discount_percentage', null, 0.0, 1000.0],
+    'full discount' => ['discount_percentage', null, 100.0, 0.0],
+    'fractional discount' => ['discount_percentage', null, 12.3456, 876.54],
+    'fixed markup' => ['markup_amount', 125.25, null, 1125.25],
+    'percentage markup' => ['markup_percentage', null, 12.5, 1125.0],
+    'maximum markup' => ['markup_percentage', null, 1000.0, 11000.0],
+]);
+
+test('adjacent date periods are accepted and inclusive boundaries select exactly one rate', function () {
+    $f = commercialPricingFixture();
+    $url = "/{$f->company->slug}/umrah/settings/pricing/rates";
+    $payload = [
+        'service_type' => 'visa_adult', 'target_id' => $f->visaVendor->id,
+        'scope_type' => 'default', 'calculation_type' => 'set_price', 'amount' => 1000,
+        'effective_from' => '2026-09-01', 'effective_until' => '2026-09-30',
+    ];
+    $this->actingAs($f->owner)->post($url, $payload)->assertSessionHasNoErrors();
+    $this->post($url, [...$payload, 'amount' => 1200, 'effective_from' => '2026-10-01', 'effective_until' => '2026-10-31'])
+        ->assertSessionHasNoErrors();
+    $resolver = app(CommercialRateResolver::class);
+    foreach (['2026-08-31' => 900.0, '2026-09-01' => 1000.0, '2026-09-30' => 1000.0, '2026-10-01' => 1200.0, '2026-10-31' => 1200.0, '2026-11-01' => 900.0] as $date => $expected) {
+        expect($resolver->visa($f->visaVendor, 'adult', null, $date)['sale_amount'])->toBe($expected);
+    }
+});
+
+test('a dated override follows changing defaults and falls back to legacy when defaults expire', function () {
+    $f = commercialPricingFixture();
+    CommercialRate::create(commercialRateData($f, ['effective_until' => '2026-09-30', 'cost_amount' => null]));
+    CommercialRate::create(commercialRateData($f, ['amount' => 1200, 'effective_from' => '2026-10-01', 'effective_until' => '2026-10-31']));
+    CommercialRate::create(commercialRateData($f, [
+        'scope_type' => 'agent', 'agent_id' => $f->agent->id,
+        'calculation_type' => 'discount_percentage', 'amount' => null, 'percentage' => 10, 'cost_amount' => null,
+    ]));
+    $resolver = app(CommercialRateResolver::class);
+    foreach (['2026-09-01' => 900.0, '2026-10-01' => 1080.0, '2026-11-01' => 810.0] as $date => $expected) {
+        expect($resolver->visa($f->visaVendor, 'adult', $f->agent->id, $date)['sale_amount'])->toBe($expected);
+    }
+    expect($resolver->visa($f->visaVendor, 'adult', $f->agent->id, '2026-09-01')['cost_amount'])->toBe(750.0);
+});
+
+test('pricing writes are forbidden for accountant operations and agent roles', function (string $role) {
+    $f = commercialPricingFixture();
+    $user = $f->accountant;
+    if ($role !== 'accountant') {
+        $user = User::factory()->withoutTwoFactor()->create();
+        commercialPricingAddMember($f->company, $user, $role);
+    }
+    $rate = CommercialRate::create(commercialRateData($f));
+    $base = "/{$f->company->slug}/umrah/settings/pricing";
+    $this->actingAs($user)->get($base)->assertForbidden();
+    $this->post("$base/categories", ['name' => 'Unauthorized'])->assertForbidden();
+    $this->put("$base/categories/{$f->category->id}", ['name' => 'Unauthorized'])->assertForbidden();
+    $this->patch("$base/categories/{$f->category->id}/status", ['is_active' => false])->assertForbidden();
+    $this->post("$base/rates", [])->assertForbidden();
+    $this->put("$base/rates/{$rate->id}", [])->assertForbidden();
+    $this->patch("$base/rates/{$rate->id}/status", ['is_active' => false])->assertForbidden();
+    $this->put("/{$f->company->slug}/umrah/agents/{$f->agent->id}/pricing-category", ['pricing_category_id' => null])->assertForbidden();
+    expect($rate->fresh()->is_active)->toBeTrue()->and($f->agent->fresh()->pricing_category_id)->toBe($f->category->id);
+})->with(['accountant', 'operations', 'agent']);
+
+test('another company cannot supply the vendor agent or category for a pricing rule', function () {
+    $f = commercialPricingFixture();
+    $foreign = ticketingCompany();
+    $foreignVendor = VisaVendor::create([
+        'company_id' => $foreign->company->id, 'vendor_number' => 'FOREIGN-PRICE', 'name' => 'Other Company Supplier',
+        'service_type' => VisaVendor::SERVICE_VISA_PROVIDER, 'adult_retail_amount' => 999, 'adult_cost_amount' => 500,
+    ]);
+    $foreignAgent = ticketingAgent($foreign->company);
+    $foreignCategory = PricingCategory::create(['company_id' => $foreign->company->id, 'name' => 'Foreign Category', 'is_active' => true]);
+    CompanyContext::setContext($f->company);
+    $url = "/{$f->company->slug}/umrah/settings/pricing/rates";
+    $payload = [
+        'service_type' => 'visa_adult', 'target_id' => $f->visaVendor->id,
+        'scope_type' => 'default', 'calculation_type' => 'set_price', 'amount' => 1000, 'effective_from' => '2026-09-01',
+    ];
+    $this->actingAs($f->owner)->post($url, [...$payload, 'target_id' => $foreignVendor->id])->assertSessionHasErrors('target_id');
+    $this->post($url, [...$payload, 'scope_type' => 'agent', 'scope_id' => $foreignAgent->id])->assertSessionHasErrors('scope_id');
+    $this->post($url, [...$payload, 'scope_type' => 'category', 'scope_id' => $foreignCategory->id])->assertSessionHasErrors('scope_id');
+    expect(CommercialRate::where('company_id', $f->company->id)->count())->toBe(0);
+});
+
+test('a manager can create edit and deactivate a rate without moving its agent', function () {
+    $f = commercialPricingFixture();
+    $manager = User::factory()->withoutTwoFactor()->create();
+    commercialPricingAddMember($f->company, $manager, 'manager');
+    $base = "/{$f->company->slug}/umrah/settings/pricing";
+    $payload = [
+        'service_type' => 'visa_adult', 'target_id' => $f->visaVendor->id,
+        'scope_type' => 'agent', 'scope_id' => $f->agent->id,
+        'calculation_type' => 'set_price', 'amount' => 825, 'effective_from' => '2026-09-01',
+    ];
+    $this->actingAs($manager)->get($base)->assertOk();
+    $this->post("$base/rates", $payload)->assertSessionHasNoErrors()->assertSessionHas('success');
+    $rate = CommercialRate::where('company_id', $f->company->id)->firstOrFail();
+    $this->put("$base/rates/{$rate->id}", [...$payload, 'amount' => 800])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect((float) $rate->fresh()->amount)->toBe(800.0)->and($rate->fresh()->agent_id)->toBe($f->agent->id);
+    $this->patch("$base/rates/{$rate->id}/status", ['is_active' => false])->assertSessionHasNoErrors();
+    expect($rate->fresh()->is_active)->toBeFalse();
+    $this->patch("$base/rates/{$rate->id}/status", ['is_active' => true])->assertSessionHasNoErrors();
+    expect($rate->fresh()->is_active)->toBeTrue();
+});

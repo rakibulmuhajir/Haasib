@@ -3,10 +3,14 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import InputError from '@/components/InputError.vue';
+import { useFormFeedback } from '@/composables/useFormFeedback';
+import CommercialPricingWorkspace from '../../../components/CommercialPricingWorkspace.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Select,
     SelectContent,
@@ -16,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Pencil, Trash2, Undo2, Users } from 'lucide-vue-next';
+import { Pencil, Tags, Trash2, Undo2, Users } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -25,7 +29,17 @@ const props = defineProps<{
     agent: any;
     canManageAgents: boolean;
     canCreateRefund: boolean;
+    canManagePricing: boolean;
+    categories: any[];
+    agents: any[];
+    rates: any[];
+    targets: Record<string, any[]>;
+    serviceTypes: Record<string, string>;
+    scopeTypes: Record<string, string>;
+    calculationTypes: Record<string, string>;
 }>();
+
+const { showError } = useFormFeedback();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -45,6 +59,9 @@ const accessForm = useForm({
     voucher_cutoff_hours: String(props.agent.voucher_cutoff_hours || 6),
 });
 const removeDialogOpen = ref(false);
+const categoryForm = useForm({
+    pricing_category_id: props.agent.pricing_category_id || '',
+});
 
 const confirmRemoveAgent = () => {
     removeForm.delete(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
@@ -65,6 +82,18 @@ const saveAccess = () =>
                     toast.error('Failed to update agent voucher access'),
             },
         );
+const savePricingCategory = () =>
+    categoryForm.transform((data) => ({
+        pricing_category_id: data.pricing_category_id === 'none' || !data.pricing_category_id
+            ? null
+            : data.pricing_category_id,
+    })).put(
+        `/${props.company.slug}/umrah/agents/${props.agent.id}/pricing-category`,
+        {
+            preserveScroll: true,
+            onError: (errors) => showError(errors),
+        },
+    );
 </script>
 
 <template>
@@ -110,6 +139,13 @@ const saveAccess = () =>
             </template>
         </template>
 
+        <Tabs default-value="overview" class="space-y-5">
+            <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger v-if="canManagePricing" value="pricing">Pricing</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" class="space-y-5">
         <div v-if="agent.logo_url" class="flex items-center gap-3">
             <img
                 :src="agent.logo_url"
@@ -248,6 +284,49 @@ const saveAccess = () =>
                 </div>
             </CardContent>
         </Card>
+            </TabsContent>
+
+            <TabsContent v-if="canManagePricing" value="pricing" class="space-y-6">
+                <Card variant="form">
+                    <CardHeader>
+                        <CardTitle class="flex items-center gap-2"><Tags class="h-4 w-4" />Shared pricing category</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form class="flex flex-col gap-3 sm:flex-row sm:items-end" novalidate @submit.prevent="savePricingCategory">
+                            <div class="w-full max-w-md space-y-2">
+                                <Label>Category</Label>
+                                <Select v-model="categoryForm.pricing_category_id">
+                                    <SelectTrigger><SelectValue placeholder="Normal pricing — no category" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Normal pricing — no category</SelectItem>
+                                        <SelectItem v-for="category in categories.filter((item) => item.is_active)" :key="category.id" :value="category.id">{{ category.name }}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <InputError :message="categoryForm.errors.pricing_category_id" />
+                            </div>
+                            <Button type="submit" :disabled="categoryForm.processing">
+                                {{ categoryForm.processing ? 'Saving…' : 'Save category' }}
+                            </Button>
+                        </form>
+                        <p class="mt-3 text-sm text-muted-foreground">Agent-specific rules below take priority over this category.</p>
+                    </CardContent>
+                </Card>
+
+                <CommercialPricingWorkspace
+                    :company-slug="company.slug"
+                    :base-currency="company.base_currency"
+                    :categories="categories"
+                    :agents="agents"
+                    :rates="rates"
+                    :targets="targets"
+                    :service-types="serviceTypes"
+                    :scope-types="scopeTypes"
+                    :calculation-types="calculationTypes"
+                    :can-manage="canManagePricing"
+                    :locked-agent="{ id: agent.id, name: agent.name }"
+                />
+            </TabsContent>
+        </Tabs>
 
         <ConfirmDialog
             v-model:open="removeDialogOpen"

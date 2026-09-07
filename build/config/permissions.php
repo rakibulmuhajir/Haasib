@@ -210,6 +210,10 @@ return [
         'settings' => [
             'umrah.settings.update',
         ],
+        'pricing' => [
+            'umrah.pricing.view',
+            'umrah.pricing.update',
+        ],
         'report' => [
             'umrah.report.view',
             'umrah.report.own.view',

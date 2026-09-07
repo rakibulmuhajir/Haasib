@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, FileDown, Truck, Undo2 } from 'lucide-vue-next';
+import { ArrowLeft, FileDown, Tags, Truck, Undo2 } from 'lucide-vue-next';
 import { computed, reactive } from 'vue';
 
 const props = defineProps<{
@@ -27,6 +27,7 @@ const props = defineProps<{
     backUrl?: string;
     statementUrl?: string;
     canCreateRefund: boolean;
+    canManagePricing: boolean;
 }>();
 
 // This page renders both a visa vendor and a transport provider (see
@@ -101,6 +102,13 @@ const exportPdf = () => {
                 "
             >
                 <Undo2 class="mr-2 h-4 w-4" />Request a refund
+            </Button>
+            <Button
+                v-if="canManagePricing"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/settings/pricing`, { target_id: vendor.id })"
+            >
+                <Tags class="mr-2 h-4 w-4" />Advanced pricing
             </Button>
             <Button @click="exportPdf"><FileDown class="mr-2 h-4 w-4" />PDF</Button>
         </template>

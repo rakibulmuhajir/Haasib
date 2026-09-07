@@ -72,11 +72,15 @@ const props = defineProps<{
     isAgent: boolean;
     canBuildVoucher: boolean;
     pricing: {
-        visa: { adult: number; child: number } | null;
+        visa: { adult: number; child: number; source?: string } | null;
         standard_transport: {
             per_passenger: number;
             charge_child_fare: boolean;
+            source?: string;
         } | null;
+        agent_id?: string | null;
+        service_date?: string;
+        selected_service_date?: string | null;
     };
     transportFares: Array<{
         id: string;
@@ -179,8 +183,8 @@ const form = useForm({
     idempotency_key: randomKey(),
     group_number: props.nextBookingNumber,
     name: '',
-    agent_id: props.agents.length === 1 ? props.agents[0].id : '',
-    travel_date: '',
+    agent_id: props.pricing.agent_id || '',
+    travel_date: props.pricing.selected_service_date || '',
     passenger_count: '1',
     transport_mode: 'standard_bus',
     hotel_makkah_id: 'none',
@@ -346,6 +350,26 @@ watch(
 watch(
     () => form.agent_id,
     () => form.clearErrors('agent_id'),
+);
+
+const defaultQuoteDate = props.pricing.service_date || new Date().toISOString().slice(0, 10);
+let quoteTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+    [() => form.agent_id, () => form.travel_date],
+    ([agentId, travelDate]) => {
+        if (!agentId) return;
+        const serviceDate = travelDate || defaultQuoteDate;
+        if (props.pricing.agent_id === agentId && props.pricing.service_date === serviceDate) return;
+        if (quoteTimer) clearTimeout(quoteTimer);
+        quoteTimer = setTimeout(() => {
+            router.reload({
+                data: { agent_id: agentId, travel_date: travelDate || undefined },
+                only: ['pricing', 'transportFares'],
+                preserveState: true,
+                preserveScroll: true,
+            });
+        }, 250);
+    },
 );
 
 watch(

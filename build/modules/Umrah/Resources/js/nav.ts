@@ -13,6 +13,7 @@ import {
     ReceiptText,
     Scale,
     ScrollText,
+    Settings2,
     Ticket,
     Undo2,
     Users,
@@ -203,19 +204,9 @@ export const umrahNav: ModuleNavConfig = {
                       icon: Building2,
                   },
                   {
-                      title: 'Transport Services',
-                      href: `/${slug}/umrah/settings/transport-services`,
-                      icon: Bus,
-                  },
-                  {
-                      title: 'Drivers',
-                      href: `/${slug}/umrah/settings/drivers`,
-                      icon: Users,
-                  },
-                  {
-                      title: 'Hotels',
-                      href: `/${slug}/umrah/settings/hotels`,
-                      icon: Hotel,
+                      title: 'Umrah Setup',
+                      href: `/${slug}/umrah/settings`,
+                      icon: Settings2,
                   },
               ]
             : [];

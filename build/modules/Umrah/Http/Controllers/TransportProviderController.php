@@ -79,6 +79,7 @@ class TransportProviderController extends Controller
             'backUrl' => "/{$company->slug}/umrah/transport-providers",
             'statementUrl' => "/{$company->slug}/umrah/transport-providers/{$provider->id}/statement.pdf",
             'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
+            'canManagePricing' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PRICING_UPDATE),
         ]);
     }
 

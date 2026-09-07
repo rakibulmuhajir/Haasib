@@ -65,6 +65,7 @@ class VisaVendorController extends Controller
             'statement' => $this->service->vendorStatement($record, $request->validated('date_from'), $request->validated('date_to')),
             'filters' => $request->validated(),
             'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
+            'canManagePricing' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PRICING_UPDATE),
         ]);
     }
 

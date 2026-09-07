@@ -253,6 +253,8 @@ return [
         'umrah.vendor.update',
         'umrah.settings.update',
         'umrah.settings.delete',
+        'umrah.pricing.view',
+        'umrah.pricing.update',
         'umrah.report.view',
         'umrah.operations.view',
 

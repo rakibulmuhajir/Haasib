@@ -30,6 +30,7 @@ class UmrahCoreService
         private GlPostingService $glPostingService,
         private PostingService $postingService,
         private TransportPricingCalculator $transportPricing,
+        private CommercialRateResolver $commercialRates,
     ) {}
 
     public function nextAgentNumber(string $companyId): string
@@ -140,6 +141,7 @@ class UmrahCoreService
                     'madinah' => $data['hotel_madinah'] ?? null,
                     'notes' => $data['hotel_notes'] ?? null,
                 ],
+                'pricing_snapshot' => $data['pricing_snapshot'] ?? [],
                 'includes_hotel' => (bool) ($data['includes_hotel'] ?? false),
                 'idempotency_key' => $data['idempotency_key'] ?? null,
                 'transport_required' => (bool) ($data['transport_required'] ?? false),
@@ -192,7 +194,7 @@ class UmrahCoreService
             }
 
             foreach ($transportItems as $item) {
-                unset($item['pax_capacity']);
+                unset($item['pax_capacity'], $item['pricing_snapshot']);
                 GroupTransportItem::create([
                     ...$item,
                     'company_id' => $companyId,
@@ -556,7 +558,14 @@ class UmrahCoreService
      */
     public function syncGroupTransportItems(VisaGroup $group, array $items): array
     {
-        $resolved = $this->resolveTransportItems($group->company_id, $items, [], (int) $group->passenger_count);
+        $resolved = $this->resolveTransportItems(
+            $group->company_id,
+            $items,
+            [],
+            (int) $group->passenger_count,
+            $group->agent_id,
+            $group->travel_date?->toDateString(),
+        );
 
         $group->transportItems()->delete();
 
@@ -1315,9 +1324,17 @@ class UmrahCoreService
         if (! $vendor) {
             return ['visa_sale' => 0.0, 'visa_cost' => 0.0, 'bus_deduction' => 0.0, 'mandatory_transport_cost' => 0.0, 'transport_sale' => 0.0];
         }
-        $pricing = $this->calculateVisaPricingFromVendor($vendor, [$passenger], optional($group->travel_date)->toDateString(), 1);
+        $band = $this->ageBand(
+            $passenger['date_of_birth'] ?? null,
+            optional($group->travel_date)->toDateString(),
+            $passenger['imported_age'] ?? null,
+        );
+        $storedRate = data_get($group->pricing_snapshot, "visa.{$band}");
+        $pricing = $storedRate
+            ? ['sale' => (float) $storedRate['sale_amount'], 'cost' => (float) $storedRate['cost_amount']]
+            : $this->calculateVisaPricingFromVendor($vendor, [$passenger], optional($group->travel_date)->toDateString(), 1, $group->agent_id);
         $busCharged = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS
-            && ($group->standard_bus_charge_child_fare || $this->ageBand($passenger['date_of_birth'] ?? null, optional($group->travel_date)->toDateString(), $passenger['imported_age'] ?? null) === 'adult');
+            && ($group->standard_bus_charge_child_fare || $band === 'adult');
 
         return [
             'visa_sale' => $pricing['sale'],
@@ -1342,6 +1359,7 @@ class UmrahCoreService
         $data['standard_bus_charge_child_fare'] = true;
         $data['standard_bus_billable_passenger_count'] = 0;
         $data['mandatory_transport_cost_amount'] = 0;
+        $data['pricing_snapshot'] = [];
 
         if ($data['transport_mode'] === VisaGroup::TRANSPORT_NONE) {
             $data['mandatory_transport_vendor_id'] = null;
@@ -1365,9 +1383,10 @@ class UmrahCoreService
             $vendor = VisaVendor::where('company_id', $companyId)->find($data['vendor_id']);
 
             if ($vendor) {
-                $pricing = $this->calculateVisaPricingFromVendor($vendor, $data['passengers'] ?? [], $data['travel_date'] ?? null, (int) ($data['passenger_count'] ?? 0));
+                $pricing = $this->calculateVisaPricingFromVendor($vendor, $data['passengers'] ?? [], $data['travel_date'] ?? null, (int) ($data['passenger_count'] ?? 0), $data['agent_id'] ?? null);
                 $data['visa_sale_amount'] = $pricing['sale'];
                 $data['visa_cost_amount'] = $pricing['cost'];
+                $data['pricing_snapshot']['visa'] = $pricing['snapshot'];
             }
         }
 
@@ -1386,20 +1405,33 @@ class UmrahCoreService
                 (bool) $transportVendor->charge_child_fare,
                 ! ($data['includes_visa'] ?? true),
             );
-            $data['standard_bus_retail_amount'] = (float) $transportVendor->standard_bus_retail_amount;
-            $data['standard_bus_cost_amount'] = (float) $transportVendor->standard_bus_cost_amount;
+            $resolvedRate = $this->commercialRates->standardTransport($transportVendor, $data['agent_id'] ?? null, $data['travel_date'] ?? null);
+            $data['standard_bus_retail_amount'] = $resolvedRate['sale_amount'];
+            $data['standard_bus_cost_amount'] = $resolvedRate['cost_amount'];
             $data['standard_bus_charge_child_fare'] = (bool) $transportVendor->charge_child_fare;
             $data['standard_bus_billable_passenger_count'] = $billablePassengers;
-            $data['transport_amount'] = round((float) $data['transport_amount'] + ((float) $transportVendor->standard_bus_retail_amount * $billablePassengers), 2);
-            $data['mandatory_transport_cost_amount'] = round((float) $transportVendor->standard_bus_cost_amount * $billablePassengers, 2);
+            $data['transport_amount'] = round((float) $data['transport_amount'] + ($resolvedRate['sale_amount'] * $billablePassengers), 2);
+            $data['mandatory_transport_cost_amount'] = round($resolvedRate['cost_amount'] * $billablePassengers, 2);
             $data['transport_cost_amount'] = $data['mandatory_transport_cost_amount'];
+            $data['pricing_snapshot']['standard_transport'] = $resolvedRate;
         }
 
         if ($data['transport_mode'] === VisaGroup::TRANSPORT_SPECIALIZED) {
-            $items = $this->resolveTransportItems($companyId, $data['transport_items'] ?? [], $data['passengers'] ?? [], (int) ($data['passenger_count'] ?? 0));
+            $items = $this->resolveTransportItems(
+                $companyId,
+                $data['transport_items'] ?? [],
+                $data['passengers'] ?? [],
+                (int) ($data['passenger_count'] ?? 0),
+                $data['agent_id'] ?? null,
+                $data['travel_date'] ?? null,
+            );
             $data['resolved_transport_items'] = $items;
             $data['transport_amount'] = round((float) $data['transport_amount'] + array_sum(array_column($items, 'total_sale_amount')), 2);
             $data['transport_cost_amount'] = round(array_sum(array_column($items, 'total_cost_amount')), 2);
+            $data['pricing_snapshot']['specialized_transport'] = array_values(array_map(
+                fn (array $item): array => $item['pricing_snapshot'],
+                $items,
+            ));
         }
 
         return $data;
@@ -1470,12 +1502,15 @@ class UmrahCoreService
             $chargeChildFare,
             ! $group->includes_visa,
         );
+        $resolvedRate = $hasStoredRates
+            ? null
+            : $this->commercialRates->standardTransport($provider, $group->agent_id, $group->travel_date);
         $retailRate = $hasStoredRates
             ? (float) $group->standard_bus_retail_amount
-            : (float) $provider->standard_bus_retail_amount;
+            : $resolvedRate['sale_amount'];
         $costRate = $hasStoredRates
             ? (float) $group->standard_bus_cost_amount
-            : (float) $provider->standard_bus_cost_amount;
+            : $resolvedRate['cost_amount'];
 
         return [
             'passenger_count' => $count,
@@ -1487,8 +1522,14 @@ class UmrahCoreService
         ];
     }
 
-    private function resolveTransportItems(string $companyId, array $items, array $passengers, int $fallbackPassengerCount): array
-    {
+    private function resolveTransportItems(
+        string $companyId,
+        array $items,
+        array $passengers,
+        int $fallbackPassengerCount,
+        ?string $agentId,
+        ?string $travelDate,
+    ): array {
         $namedPassengerCount = count(array_filter($passengers, fn (array $passenger) => trim((string) ($passenger['full_name'] ?? '')) !== ''));
         $groupPassengerCount = max($namedPassengerCount, $fallbackPassengerCount);
         $resolved = [];
@@ -1506,7 +1547,20 @@ class UmrahCoreService
             $quantity = max((int) ($item['quantity'] ?? 1), 1);
             $passengerCount = max((int) ($item['passenger_count'] ?? $groupPassengerCount), 1);
             $isHajjTerminal = ($item['terminal'] ?? 'standard') === 'hajj';
-            $totals = $this->transportPricing->fareTotals($fare, $quantity, $passengerCount, $isHajjTerminal);
+            $serviceDate = filled($item['scheduled_at'] ?? null)
+                ? Carbon::parse($item['scheduled_at'])->toDateString()
+                : $travelDate;
+            $resolvedRate = $this->commercialRates->transportFare($fare, $agentId, $serviceDate);
+            $totals = $this->transportPricing->fareTotalsFromAmounts(
+                $fare->charging_basis,
+                $resolvedRate['sale_amount'],
+                $resolvedRate['cost_amount'],
+                (float) $fare->hajj_terminal_sale_amount,
+                (float) $fare->hajj_terminal_cost_amount,
+                $quantity,
+                $passengerCount,
+                $isHajjTerminal,
+            );
 
             $resolved[] = [
                 'transport_fare_id' => $fare->id,
@@ -1521,26 +1575,40 @@ class UmrahCoreService
                 'charging_basis' => $fare->charging_basis,
                 'quantity' => $quantity,
                 'passenger_count' => $passengerCount,
-                'unit_sale_amount' => (float) $fare->sale_amount,
-                'unit_cost_amount' => (float) $fare->cost_amount,
+                'unit_sale_amount' => $resolvedRate['sale_amount'],
+                'unit_cost_amount' => $resolvedRate['cost_amount'],
                 'surcharge_sale_amount' => $totals['surcharge_sale_amount'],
                 'surcharge_cost_amount' => $totals['surcharge_cost_amount'],
                 'total_sale_amount' => $totals['total_sale_amount'],
                 'total_cost_amount' => $totals['total_cost_amount'],
                 'notes' => $item['notes'] ?? null,
                 'pax_capacity' => $fare->service->pax_capacity,
+                'pricing_snapshot' => [
+                    ...$resolvedRate,
+                    'transport_fare_id' => $fare->id,
+                ],
             ];
         }
 
         return $resolved;
     }
 
-    private function calculateVisaPricingFromVendor(VisaVendor $vendor, array $passengers, ?string $travelDate, int $passengerCount): array
-    {
+    private function calculateVisaPricingFromVendor(
+        VisaVendor $vendor,
+        array $passengers,
+        ?string $travelDate,
+        int $passengerCount,
+        ?string $agentId = null,
+    ): array {
         $sale = 0.0;
         $cost = 0.0;
         $pricedPassengers = 0;
         $namedPassengers = 0;
+
+        $rates = [
+            'adult' => $this->commercialRates->visa($vendor, 'adult', $agentId, $travelDate),
+            'child' => $this->commercialRates->visa($vendor, 'child', $agentId, $travelDate),
+        ];
 
         foreach ($passengers as $passenger) {
             if (! trim((string) ($passenger['full_name'] ?? ''))) {
@@ -1554,21 +1622,25 @@ class UmrahCoreService
             }
 
             $band = $this->ageBand($passenger['date_of_birth'] ?? null, $travelDate, $passenger['imported_age'] ?? null);
-            $sale += (float) $vendor->getAttribute("{$band}_retail_amount");
-            $cost += (float) $vendor->getAttribute("{$band}_cost_amount");
+            $sale += $rates[$band]['sale_amount'];
+            $cost += $rates[$band]['cost_amount'];
             $pricedPassengers++;
         }
 
         if ($namedPassengers === 0) {
             $pricedPassengers = max($passengerCount, 0);
-            $sale = (float) $vendor->adult_retail_amount * $pricedPassengers;
-            $cost = (float) $vendor->adult_cost_amount * $pricedPassengers;
+            $sale = $rates['adult']['sale_amount'] * $pricedPassengers;
+            $cost = $rates['adult']['cost_amount'] * $pricedPassengers;
         }
 
         return [
             'sale' => round($sale, 2),
             'cost' => round($cost, 2),
             'passenger_count' => $pricedPassengers,
+            'snapshot' => [
+                'adult' => $rates['adult'],
+                'child' => $rates['child'],
+            ],
         ];
     }
 

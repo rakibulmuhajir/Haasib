@@ -2,6 +2,7 @@
 
 use App\Modules\Umrah\Http\Controllers\AdjustmentController;
 use App\Modules\Umrah\Http\Controllers\AgentController;
+use App\Modules\Umrah\Http\Controllers\CommercialPricingController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
 use App\Modules\Umrah\Http\Controllers\ExpenseController;
@@ -13,6 +14,7 @@ use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\QuickBookingController;
 use App\Modules\Umrah\Http\Controllers\RefundController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
+use App\Modules\Umrah\Http\Controllers\SetupController;
 use App\Modules\Umrah\Http\Controllers\TicketBookingController;
 use App\Modules\Umrah\Http\Controllers\TransportProviderController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
@@ -37,6 +39,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('agents/{agent}/edit', [AgentController::class, 'edit'])->whereUuid('agent')->name('umrah.agents.edit');
         Route::put('agents/{agent}', [AgentController::class, 'update'])->whereUuid('agent')->name('umrah.agents.update');
         Route::put('agents/{agent}/voucher-access', [AgentController::class, 'updateVoucherAccess'])->whereUuid('agent')->name('umrah.agents.voucher-access.update');
+        Route::put('agents/{agent}/pricing-category', [CommercialPricingController::class, 'assignAgentCategory'])->whereUuid('agent')->name('umrah.agents.pricing-category.update');
         Route::delete('agents/{agent}', [AgentController::class, 'destroy'])->whereUuid('agent')->name('umrah.agents.destroy');
         Route::get('agents/{agent}', [AgentController::class, 'show'])->whereUuid('agent')->name('umrah.agents.show');
 
@@ -121,6 +124,15 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers/{voucher}/approve', [VoucherController::class, 'approve'])->whereUuid('voucher')->name('umrah.vouchers.approve');
 
         Route::post('logos', [LogoUploadController::class, 'store'])->name('umrah.logos.store');
+
+        Route::get('settings', [SetupController::class, 'index'])->name('umrah.settings.index');
+        Route::get('settings/pricing', [CommercialPricingController::class, 'index'])->name('umrah.pricing.index');
+        Route::post('settings/pricing/categories', [CommercialPricingController::class, 'storeCategory'])->name('umrah.pricing.categories.store');
+        Route::put('settings/pricing/categories/{category}', [CommercialPricingController::class, 'updateCategory'])->whereUuid('category')->name('umrah.pricing.categories.update');
+        Route::patch('settings/pricing/categories/{category}/status', [CommercialPricingController::class, 'updateCategoryStatus'])->whereUuid('category')->name('umrah.pricing.categories.status.update');
+        Route::post('settings/pricing/rates', [CommercialPricingController::class, 'storeRate'])->name('umrah.pricing.rates.store');
+        Route::put('settings/pricing/rates/{rate}', [CommercialPricingController::class, 'updateRate'])->whereUuid('rate')->name('umrah.pricing.rates.update');
+        Route::patch('settings/pricing/rates/{rate}/status', [CommercialPricingController::class, 'updateRateStatus'])->whereUuid('rate')->name('umrah.pricing.rates.status.update');
 
         Route::get('settings/drivers', [DriverController::class, 'index'])->name('umrah.drivers.index');
         Route::post('settings/drivers', [DriverController::class, 'store'])->name('umrah.drivers.store');

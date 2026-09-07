@@ -52,6 +52,7 @@ class Agent extends Model
         'company_id',
         'customer_id',
         'user_id',
+        'pricing_category_id',
         'agent_number',
         'name',
         'phone',
@@ -75,6 +76,7 @@ class Agent extends Model
         'company_id' => 'string',
         'customer_id' => 'string',
         'user_id' => 'string',
+        'pricing_category_id' => 'string',
         'total_receivable' => 'decimal:2',
         'total_paid' => 'decimal:2',
         'balance' => 'decimal:2',
@@ -251,6 +253,16 @@ class Agent extends Model
     public function groups(): HasMany
     {
         return $this->hasMany(VisaGroup::class);
+    }
+
+    public function pricingCategory(): BelongsTo
+    {
+        return $this->belongsTo(PricingCategory::class)->withTrashed();
+    }
+
+    public function commercialRates(): HasMany
+    {
+        return $this->hasMany(CommercialRate::class);
     }
 
     public function payments(): HasMany

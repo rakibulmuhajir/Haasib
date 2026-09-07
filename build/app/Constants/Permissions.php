@@ -402,6 +402,10 @@ class Permissions
 
     public const UMRAH_SETTINGS_DELETE = 'umrah.settings.delete';
 
+    public const UMRAH_PRICING_VIEW = 'umrah.pricing.view';
+
+    public const UMRAH_PRICING_UPDATE = 'umrah.pricing.update';
+
     public const UMRAH_REPORT_VIEW = 'umrah.report.view';
 
     public const UMRAH_REPORT_OWN_VIEW = 'umrah.report.own.view';

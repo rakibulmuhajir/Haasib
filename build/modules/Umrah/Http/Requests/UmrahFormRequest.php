@@ -167,6 +167,30 @@ abstract class UmrahFormRequest extends BaseFormRequest
         };
     }
 
+    protected function uniqueForCompanyIgnoringCase(string $modelClass, string $column, string $message, ?string $ignoreId = null): Closure
+    {
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+
+        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $modelClass, $column, $message, $ignoreId): void {
+            if (! is_string($value) || $value === '') {
+                return;
+            }
+
+            $query = $modelClass::query()
+                ->where('company_id', $companyId)
+                ->whereRaw('LOWER('.$column.') = LOWER(?)', [$value])
+                ->whereNull('deleted_at');
+
+            if ($ignoreId !== null) {
+                $query->whereKeyNot($ignoreId);
+            }
+
+            if ($query->exists()) {
+                $fail($message);
+            }
+        };
+    }
+
     protected function existsForCompany(string $modelClass, string $message): Closure
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();

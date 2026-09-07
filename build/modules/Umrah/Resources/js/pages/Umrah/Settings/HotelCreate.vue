@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
-import { Building2, Save } from 'lucide-vue-next'
+import { Building2, Save, Tags } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
@@ -57,6 +57,11 @@ const submit = () => {
 <template>
   <Head :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" />
   <PageShell :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" description="Set the vendor and per-bed nightly rates for available room types." :breadcrumbs="breadcrumbs" :icon="Building2">
+    <template v-if="editingHotel?.room_rates?.length" #actions>
+      <Button variant="outline" @click="router.get(`/${company.slug}/umrah/settings/pricing`, { target_id: editingHotel.room_rates[0].id })">
+        <Tags class="mr-2 h-4 w-4" />Advanced pricing
+      </Button>
+    </template>
     <Card class="mx-auto max-w-4xl" variant="form">
       <CardHeader><CardTitle>Hotel Details</CardTitle></CardHeader>
       <CardContent>

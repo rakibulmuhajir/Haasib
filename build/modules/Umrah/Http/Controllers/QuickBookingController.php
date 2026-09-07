@@ -12,6 +12,7 @@ use App\Modules\Umrah\Models\HotelRoomRate;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Modules\Umrah\Services\CommercialRateResolver;
 use App\Modules\Umrah\Services\TransportCatalogService;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Modules\Umrah\Services\UmrahCoreService;
@@ -29,6 +30,7 @@ class QuickBookingController extends Controller
         private readonly UmrahCoreService $core,
         private readonly TransportCatalogService $transportCatalog,
         private readonly TravelAccessService $access,
+        private readonly CommercialRateResolver $commercialRates,
     ) {}
 
     public function create(Request $request): Response
@@ -50,6 +52,14 @@ class QuickBookingController extends Controller
             // Agent names live on the linked customer. Keep customer_id when
             // narrowing columns so the model can eager-load that party.
             ->get(['id', 'customer_id', 'agent_number', 'country']);
+        $requestedAgentId = $request->string('agent_id')->toString();
+        $pricingAgentId = $isAgent
+            ? $linkedAgentId
+            : ($agents->contains('id', $requestedAgentId)
+                ? $requestedAgentId
+                : ($agents->count() === 1 ? $agents->first()?->id : null));
+        $selectedServiceDate = $request->date('travel_date')?->toDateString();
+        $pricingDate = $selectedServiceDate ?: now()->toDateString();
 
         $visaVendor = VisaVendor::where('company_id', $company->id)
             ->where('is_active', true)
@@ -75,19 +85,34 @@ class QuickBookingController extends Controller
             ->with(['service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])
             ->orderBy('name')
             ->get()
-            ->map(fn (TransportFare $fare) => [
-                'id' => $fare->id,
-                'name' => $fare->name,
-                'charging_basis' => $fare->charging_basis,
-                'sale_amount' => (float) $fare->sale_amount,
-                'hajj_terminal_sale_amount' => (float) $fare->hajj_terminal_sale_amount,
-                'service' => $fare->service ? [
-                    'name' => $fare->service->name,
-                    'vehicle_type' => $fare->service->vehicle_type,
-                    'pax_capacity' => $fare->service->pax_capacity,
-                ] : null,
-                'route' => $fare->sector?->name ?: $fare->package?->name,
-            ]);
+            ->map(function (TransportFare $fare) use ($pricingAgentId, $pricingDate) {
+                $rate = $this->commercialRates->transportFare($fare, $pricingAgentId, $pricingDate);
+
+                return [
+                    'id' => $fare->id,
+                    'name' => $fare->name,
+                    'charging_basis' => $fare->charging_basis,
+                    'sale_amount' => $rate['sale_amount'],
+                    'hajj_terminal_sale_amount' => (float) $fare->hajj_terminal_sale_amount,
+                    'service' => $fare->service ? [
+                        'name' => $fare->service->name,
+                        'vehicle_type' => $fare->service->vehicle_type,
+                        'pax_capacity' => $fare->service->pax_capacity,
+                    ] : null,
+                    'route' => $fare->sector?->name ?: $fare->package?->name,
+                    'rate_source' => $rate['source'],
+                ];
+            });
+
+        $adultVisaRate = $visaVendor
+            ? $this->commercialRates->visa($visaVendor, 'adult', $pricingAgentId, $pricingDate)
+            : null;
+        $childVisaRate = $visaVendor
+            ? $this->commercialRates->visa($visaVendor, 'child', $pricingAgentId, $pricingDate)
+            : null;
+        $standardTransportRate = $transportProvider
+            ? $this->commercialRates->standardTransport($transportProvider, $pricingAgentId, $pricingDate)
+            : null;
 
         return Inertia::render('Umrah/QuickBooking/Create', [
             'company' => [
@@ -102,13 +127,18 @@ class QuickBookingController extends Controller
                 && (! $isAgent || (bool) Agent::where('company_id', $company->id)->whereKey($linkedAgentId)->value('can_create_voucher')),
             'pricing' => [
                 'visa' => $visaVendor ? [
-                    'adult' => (float) $visaVendor->adult_retail_amount,
-                    'child' => (float) $visaVendor->child_retail_amount,
+                    'adult' => $adultVisaRate['sale_amount'],
+                    'child' => $childVisaRate['sale_amount'],
+                    'source' => $adultVisaRate['source'] === $childVisaRate['source'] ? $adultVisaRate['source'] : 'mixed',
                 ] : null,
                 'standard_transport' => $transportProvider ? [
-                    'per_passenger' => (float) $transportProvider->standard_bus_retail_amount,
+                    'per_passenger' => $standardTransportRate['sale_amount'],
                     'charge_child_fare' => (bool) $transportProvider->charge_child_fare,
+                    'source' => $standardTransportRate['source'],
                 ] : null,
+                'agent_id' => $pricingAgentId,
+                'service_date' => $pricingDate,
+                'selected_service_date' => $selectedServiceDate,
             ],
             'transportFares' => $fares,
             'hotels' => Hotel::where('company_id', $company->id)

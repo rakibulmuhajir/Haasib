@@ -211,6 +211,7 @@ class VisaGroupController extends Controller
                 'profit',
                 'sale_transaction_id',
                 'cost_transaction_id',
+                'pricing_snapshot',
             ]);
             $record->vendor?->makeHidden([
                 'adult_retail_amount',

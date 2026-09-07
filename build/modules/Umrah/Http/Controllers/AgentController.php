@@ -13,6 +13,7 @@ use App\Modules\Umrah\Http\Requests\UpdateAgentRequest;
 use App\Modules\Umrah\Http\Requests\UpdateAgentVoucherAccessRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Services\AgentParty;
+use App\Modules\Umrah\Services\CommercialPricingCatalog;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +28,7 @@ class AgentController extends Controller
     public function __construct(
         private UmrahCoreService $service,
         private AgentParty $party,
+        private CommercialPricingCatalog $pricingCatalog,
     ) {}
 
     public function index(Request $request): Response
@@ -128,12 +130,26 @@ class AgentController extends Controller
         $record = Agent::where('company_id', $company->id)->with('user:id,username')->findOrFail($agent);
 
         $record->load(['groups' => fn ($query) => $query->orderByDesc('created_at')->limit(20)]);
+        $canManagePricing = (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PRICING_UPDATE);
+        $pricingPayload = $canManagePricing
+            ? $this->pricingCatalog->payload($company->id, $record->id)
+            : [
+                'categories' => [],
+                'agents' => [],
+                'rates' => [],
+                'targets' => [],
+                'serviceTypes' => [],
+                'scopeTypes' => [],
+                'calculationTypes' => [],
+            ];
 
         return Inertia::render('Umrah/Agents/Show', [
             'company' => $this->companyPayload($company),
             'agent' => $record,
             'canManageAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE),
             'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
+            'canManagePricing' => $canManagePricing,
+            ...$pricingPayload,
         ]);
     }
 

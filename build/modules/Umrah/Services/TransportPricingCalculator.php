@@ -18,22 +18,44 @@ class TransportPricingCalculator
 
     public function fareTotals(TransportFare $fare, int $quantity, int $passengerCount, bool $hajjTerminal): array
     {
+        return $this->fareTotalsFromAmounts(
+            $fare->charging_basis,
+            (float) $fare->sale_amount,
+            (float) $fare->cost_amount,
+            (float) $fare->hajj_terminal_sale_amount,
+            (float) $fare->hajj_terminal_cost_amount,
+            $quantity,
+            $passengerCount,
+            $hajjTerminal,
+        );
+    }
+
+    public function fareTotalsFromAmounts(
+        string $chargingBasis,
+        float $saleAmount,
+        float $costAmount,
+        float $hajjSaleAmount,
+        float $hajjCostAmount,
+        int $quantity,
+        int $passengerCount,
+        bool $hajjTerminal,
+    ): array {
         $quantity = max($quantity, 1);
         $passengerCount = max($passengerCount, 1);
-        $factor = match ($fare->charging_basis) {
+        $factor = match ($chargingBasis) {
             TransportFare::BASIS_PER_PASSENGER => $passengerCount,
             TransportFare::BASIS_FLAT_GROUP => 1,
             default => $quantity,
         };
-        $surchargeSale = $hajjTerminal ? round((float) $fare->hajj_terminal_sale_amount * $factor, 2) : 0.0;
-        $surchargeCost = $hajjTerminal ? round((float) $fare->hajj_terminal_cost_amount * $factor, 2) : 0.0;
+        $surchargeSale = $hajjTerminal ? round($hajjSaleAmount * $factor, 2) : 0.0;
+        $surchargeCost = $hajjTerminal ? round($hajjCostAmount * $factor, 2) : 0.0;
 
         return [
             'factor' => $factor,
             'surcharge_sale_amount' => $surchargeSale,
             'surcharge_cost_amount' => $surchargeCost,
-            'total_sale_amount' => round((float) $fare->sale_amount * $factor + $surchargeSale, 2),
-            'total_cost_amount' => round((float) $fare->cost_amount * $factor + $surchargeCost, 2),
+            'total_sale_amount' => round($saleAmount * $factor + $surchargeSale, 2),
+            'total_cost_amount' => round($costAmount * $factor + $surchargeCost, 2),
         ];
     }
 }

@@ -20,6 +20,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Transport service is the vehicle source of truth. Do not maintain a separate vehicle type setup screen.
 - Transport sectors and journey packages are configurable. Fares belong to a transport service and either one sector or one journey package.
 - Group transport items are immutable pricing snapshots. Later fare changes must not alter historical group totals.
+- Commercial selling rates are effective-dated and resolve in this order: agent rule, agent-category rule, default rule, then the legacy current rate on the service record. Agent and category rules never change supplier cost.
+- Every confirmed group and approved Company hotel stay stores the winning pricing rule and the underlying default-rate snapshot. Later rate or category changes must not alter historical sales, costs, or profit.
 - Drivers are reusable transport staff records. A transport service can have a default driver, and group creation can override the driver for that trip.
 - Visa and transport providers have separate CRUDs and independent default retail/cost amounts. Visa vendor adult and child amounts are used for visa pricing from passenger DOB. A transport provider supplies standard-bus retail/cost per chargeable passenger and controls whether children are charged. Users may override copied transport prices/costs per group where the accounting workflow permits it.
 
@@ -42,6 +44,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `id` uuid PK.
   - `company_id` uuid FK -> `auth.companies.id`.
   - `user_id` uuid nullable FK -> `auth.users.id`. Optional login user for agent self-service.
+  - `pricing_category_id` uuid nullable FK -> `umrah.pricing_categories.id`. Optional commercial segment used only when no agent-specific rate exists.
   - `agent_number` varchar(50), unique per company.
   - `name` varchar(255).
   - `phone` varchar(50) nullable.
@@ -65,7 +68,65 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - Unique (`company_id`, `user_id`) where `user_id` is not null.
   - Index (`company_id`, `name`), (`company_id`, `is_active`), (`company_id`, `user_id`).
 - Model fillable:
-  - `company_id`, `user_id`, `agent_number`, `name`, `phone`, `email`, `city`, `country`, `logo_url`, `notes`, `can_create_voucher`, `can_approve_voucher`, `can_edit_group`, `can_edit_voucher`, `voucher_cutoff_hours`, `total_receivable`, `total_paid`, `balance`, `is_active`.
+  - `company_id`, `user_id`, `pricing_category_id`, `agent_number`, `name`, `phone`, `email`, `city`, `country`, `logo_url`, `notes`, `can_create_voucher`, `can_approve_voucher`, `can_edit_group`, `can_edit_voucher`, `voucher_cutoff_hours`, `total_receivable`, `total_paid`, `balance`, `is_active`.
+
+### umrah.pricing_categories
+- Purpose: User-defined commercial segments such as Standard B2B, Preferred, Volume Partner, or Strategic Partner. A category is optional; unassigned agents use normal default pricing.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid FK -> `auth.companies.id`.
+  - `name` varchar(100).
+  - `description` text nullable.
+  - `is_active` boolean default true.
+  - timestamps, soft deletes.
+- Constraints/indexes:
+  - Unique (`company_id`, `name`) for non-deleted rows.
+  - Index (`company_id`, `is_active`, `name`).
+- RLS: company isolation plus super-admin override.
+- Model fillable: `company_id`, `name`, `description`, `is_active`.
+- Business rules:
+  - Deactivation preserves assigned agents and historical pricing. An inactive category is unavailable for new assignments and its rules do not win future resolution.
+  - Deletion is lifecycle deactivation plus soft deletion and is blocked while active agents remain assigned.
+
+### umrah.commercial_rates
+- Purpose: Effective-dated default selling/cost rates and category/agent selling-price rules for visa, transport, and hotel services.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid FK -> `auth.companies.id`.
+  - `service_type` varchar(30). Values: `visa_adult`, `visa_child`, `standard_transport`, `transport_fare`, `hotel_room`.
+  - `visa_vendor_id` uuid nullable FK -> `umrah.visa_vendors.id` (on delete restrict). Used by visa and standard-transport rates.
+  - `transport_fare_id` uuid nullable FK -> `umrah.transport_fares.id` (on delete restrict).
+  - `hotel_room_rate_id` uuid nullable FK -> `umrah.hotel_room_rates.id` (on delete restrict).
+  - `scope_type` varchar(20). Values: `default`, `category`, `agent`.
+  - `pricing_category_id` uuid nullable FK -> `umrah.pricing_categories.id` (on delete restrict).
+  - `agent_id` uuid nullable FK -> `umrah.agents.id` (on delete restrict).
+  - `calculation_type` varchar(30). Values: `set_price`, `discount_amount`, `discount_percentage`, `markup_amount`, `markup_percentage`.
+  - `amount` numeric(15,2) nullable. Required by `set_price`, `discount_amount`, and `markup_amount`.
+  - `percentage` numeric(9,4) nullable. Required by percentage calculation types.
+  - `cost_amount` numeric(15,2) nullable. Supplier cost is accepted only on a default `set_price` rule and is never returned to agent-facing pages.
+  - `currency` char(3) FK -> `public.currencies.code`. Phase 1 requires the company base currency.
+  - `effective_from` date.
+  - `effective_until` date nullable and inclusive.
+  - `notes` text nullable.
+  - `is_active` boolean default true.
+  - `created_by_user_id` uuid nullable FK -> `auth.users.id` (on delete set null).
+  - timestamps, soft deletes.
+- Constraints/indexes:
+  - Exactly one service target is set. Visa adult/child and standard transport target a visa vendor; transport fare targets a transport fare; hotel room targets a hotel room rate.
+  - `default` has no category or agent; `category` has exactly one category; `agent` has exactly one agent.
+  - Default rules use `set_price`. Category and agent rules may use any calculation type but cannot set supplier cost.
+  - `amount >= 0`; discounts cannot reduce a selling price below zero; discount percentage is between 0 and 100; markup percentage is between 0 and 1000.
+  - `effective_until` is null or on/after `effective_from`.
+  - Active, non-deleted date ranges may not overlap for the same company, service target, and scope target.
+  - Indexes support (`company_id`, `service_type`, `effective_from`, `effective_until`) and each target/scope FK.
+- RLS: company isolation plus super-admin override.
+- Model fillable: all business columns above.
+- Business rules:
+  - Resolution first finds the effective default rate. If none exists, the legacy current sale/cost values on the target record are the fallback.
+  - One non-stacking selling rule wins: effective agent rule, otherwise effective active-category rule, otherwise the effective default. Percentage and amount adjustments are calculated from that date's default selling price, not compounded with another override.
+  - Supplier cost always comes from the effective default or legacy fallback; category and agent rules affect selling price only.
+  - An exact price is stored as `set_price`. Use discount or markup only when the relationship should track future default-price changes.
+  - The natural service date selects the rate: group travel date for visa and standard transport, scheduled movement date for a specialized transport fare, and each occupied night for a hotel room. When an exact date is not yet known, the booking's expected travel date is used.
 
 ### umrah.visa_vendors
 - Purpose: Visa suppliers, usually government or service providers.
@@ -322,6 +383,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `travel_date` date nullable.
   - `flight_info` jsonb nullable.
   - `hotel_info` jsonb nullable.
+  - `pricing_snapshot` jsonb default `{}`. Immutable source details for resolved visa and transport rates, including service date, currency, default rule, winning agent/category rule, and unit sale/cost values. No supplier cost is exposed in agent-facing payloads.
   - `includes_hotel` boolean default false. Records whether accommodation is part of the sale; hotel prices and accounting remain owned by approved vouchers.
   - `idempotency_key` uuid nullable, unique per company. Used by Quick Booking to make repeated form submissions return the original group instead of creating a duplicate.
   - `transport_required` boolean default false.
@@ -409,7 +471,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `return_arrival_at` timestamp nullable. Required unless `service_bundle = hotel`.
   - `hotel_stays` jsonb default `[]`. Required for every voucher because the voucher must show the passenger's complete journey and stays, even when hotel service was bought elsewhere. Each stay has hotel name, city, check-in date, checkout date, and notes. Hotel stays do not record check-in or checkout times. New vouchers start with three editable stays: Makkah, Madinah, Makkah.
     - Selecting a stay checkout date sets the next stay check-in to the same date by default. Same-day hotel transfers are valid; a later stay cannot begin before the previous checkout date.
-    - Company stay snapshot also stores `hotel_id`, `hotel_vendor_id`, `room_type`, `room_count`, `beds_per_room`, `night_count`, per-bed unit retail/cost and total retail/cost.
+  - Company stay snapshot also stores `hotel_id`, `hotel_vendor_id`, `room_type`, `room_count`, `beds_per_room`, `night_count`, per-bed unit retail/cost and total retail/cost.
+    - Effective-dated stays additionally store a `pricing_breakdown` entry for each occupied date with the default rule, winning agent/category rule, currency, and snapshotted per-bed retail/cost. This supports a stay crossing two rate periods without changing its itinerary shape.
     - Self-arranged stay stores `source = self` and zero retail/cost while preserving itinerary information.
     - A Company stay uses the configured company hotel and is charged; a Self stay is itinerary-only and has zero retail/cost.
   - `hotel_sale_amount`, `hotel_cost_amount` numeric(15,2) default 0.
@@ -629,6 +692,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Deactivating a hotel vendor is blocked while it has active hotels. Deactivating a driver is blocked while it has active transport services. Deactivating a transport service, sector, or package is blocked while an active fare or active package depends on it.
 - Reactivation is blocked until required parent records are active. New and edited setup records may reference active suppliers, drivers, vehicles, sectors, and packages only.
 - Hotel room rates are copied into voucher stay pricing snapshots. Transport fare values and suppliers are copied into group transport item snapshots. Editing or deactivating current setup must never recalculate historical vouchers or groups.
+- Rate resolution precedence is booking-specific approved price (when a later workflow explicitly supports one), agent, active agent category, effective default, then legacy target value. Commercial rules never stack. Changing an agent category affects only future resolutions.
+- Draft vouchers carry no hotel money. Approval resolves Company stays per occupied night using the voucher agent and each night's date, writes the pricing breakdown into `hotel_stays`, and posts only the resulting immutable snapshot.
 - Deactivated suppliers with an outstanding balance remain selectable for sent payments until the balance is settled.
 
 ## Phase 1 Accounting Target

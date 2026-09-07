@@ -20,6 +20,7 @@ use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\Voucher;
 use App\Modules\Umrah\Models\VoucherPassenger;
+use App\Modules\Umrah\Services\CommercialRateResolver;
 use App\Modules\Umrah\Services\HotelStayPricingCalculator;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Modules\Umrah\Services\TravelChangeLogger;
@@ -31,6 +32,7 @@ use App\Services\CurrentCompany;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -40,6 +42,7 @@ class VoucherController extends Controller
     public function __construct(
         private UmrahCoreService $service,
         private HotelStayPricingCalculator $hotelPricing,
+        private CommercialRateResolver $commercialRates,
         private TravelAccessService $access,
         private TravelChangeLogger $changeLogger,
         private VoucherPassengerAssignmentService $passengerAssignments,
@@ -176,6 +179,7 @@ class VoucherController extends Controller
                     $company->id,
                     $data['hotel_stays'],
                     Voucher::bundleIncludesHotel($data['service_bundle']),
+                    $group->agent_id,
                 );
             $voucher = Voucher::create([
                 'company_id' => $company->id,
@@ -246,6 +250,7 @@ class VoucherController extends Controller
                     $record->company_id,
                     $record->hotel_stays,
                     Voucher::bundleIncludesHotel($record->service_bundle),
+                    $record->agent_id,
                 );
                 $record->update([
                     'hotel_stays' => $hotelStays,
@@ -449,7 +454,7 @@ class VoucherController extends Controller
             ->with('success', $result['created']->count().' individual voucher(s) created successfully.');
     }
 
-    private function resolveHotelStays(string $companyId, array $stays, bool $chargeHotels): array
+    private function resolveHotelStays(string $companyId, array $stays, bool $chargeHotels, string $agentId): array
     {
         $resolved = [];
         $sale = 0.0;
@@ -462,14 +467,36 @@ class VoucherController extends Controller
             $snapshot['total_retail_amount'] = 0;
             $snapshot['total_cost_amount'] = 0;
             $snapshot['night_count'] = 0;
+            $snapshot['pricing_breakdown'] = [];
             if ($stay['source'] === 'company') {
                 $hotel = Hotel::where('company_id', $companyId)->with(['vendor', 'roomRates' => fn ($q) => $q->where('room_type', $stay['room_type'])->where('is_active', true)])->findOrFail($stay['hotel_id']);
                 $rate = $hotel->roomRates->firstOrFail();
                 $rooms = max((int) $stay['room_count'], 1);
-                $retail = $chargeHotels ? (float) $rate->retail_amount : 0.0;
-                $costAmount = $chargeHotels ? (float) $rate->cost_amount : 0.0;
-                $totals = $this->hotelPricing->calculate($stay['check_in_date'], $stay['check_out_date'], $rooms, HotelRoomRate::bedsFor($rate->room_type), $retail, $costAmount);
-                $snapshot = [...$snapshot, ...$totals, 'hotel_id' => $hotel->id, 'hotel_vendor_id' => $hotel->hotel_vendor_id, 'hotel_name' => $hotel->name, 'city' => $hotel->city, 'room_type' => $rate->room_type, 'room_count' => $rooms, 'unit_retail_amount' => $retail, 'unit_cost_amount' => $costAmount];
+                $beds = HotelRoomRate::bedsFor($rate->room_type);
+                $nights = Carbon::parse($stay['check_in_date'])->startOfDay();
+                $checkout = Carbon::parse($stay['check_out_date'])->startOfDay();
+                $nightlySale = 0.0;
+                $nightlyCost = 0.0;
+                $breakdown = [];
+                while ($nights->lt($checkout)) {
+                    $resolvedRate = $this->commercialRates->hotelRoom($rate, $agentId, $nights);
+                    $nightlySale += $chargeHotels ? $resolvedRate['sale_amount'] : 0.0;
+                    $nightlyCost += $chargeHotels ? $resolvedRate['cost_amount'] : 0.0;
+                    $breakdown[] = [
+                        ...$resolvedRate,
+                        'date' => $nights->toDateString(),
+                        'hotel_room_rate_id' => $rate->id,
+                    ];
+                    $nights->addDay();
+                }
+                $nightCount = count($breakdown);
+                $factor = $rooms * $beds;
+                $totalRetail = round($nightlySale * $factor, 2);
+                $totalCost = round($nightlyCost * $factor, 2);
+                $retail = $nightCount > 0 ? round($nightlySale / $nightCount, 2) : 0.0;
+                $costAmount = $nightCount > 0 ? round($nightlyCost / $nightCount, 2) : 0.0;
+                $totals = ['night_count' => $nightCount, 'beds_per_room' => $beds, 'total_retail_amount' => $totalRetail, 'total_cost_amount' => $totalCost];
+                $snapshot = [...$snapshot, ...$totals, 'hotel_id' => $hotel->id, 'hotel_vendor_id' => $hotel->hotel_vendor_id, 'hotel_name' => $hotel->name, 'city' => $hotel->city, 'room_type' => $rate->room_type, 'room_count' => $rooms, 'unit_retail_amount' => $retail, 'unit_cost_amount' => $costAmount, 'pricing_breakdown' => $breakdown];
                 $sale += $snapshot['total_retail_amount'];
                 $cost += $snapshot['total_cost_amount'];
             } else {
@@ -511,6 +538,7 @@ class VoucherController extends Controller
                     'total_retail_amount' => 0,
                     'total_cost_amount' => 0,
                     'night_count' => $this->draftNightCount($stay),
+                    'pricing_breakdown' => [],
                 ];
             })->values()->all();
     }
@@ -590,6 +618,11 @@ class VoucherController extends Controller
                     $stay['cost_amount'],
                     $stay['total_cost_amount'],
                 );
+                $stay['pricing_breakdown'] = collect($stay['pricing_breakdown'] ?? [])->map(function (array $night): array {
+                    unset($night['cost_amount']);
+
+                    return $night;
+                })->all();
 
                 return $stay;
             })->all();

@@ -746,7 +746,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.onward_airline"
                                     :options="airlineOptions"
-                                    open-on-focus
                                     placeholder="Code"
                                     search-placeholder="Type airline or code"
                                 />
@@ -764,7 +763,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.onward_departure_city"
                                     :options="cityOptions"
-                                    open-on-focus
                                     placeholder="City"
                                     search-placeholder="Type city or code"
                                 />
@@ -774,7 +772,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.onward_arrival_city"
                                     :options="cityOptions"
-                                    open-on-focus
                                     placeholder="City"
                                     search-placeholder="Type city or code"
                                 />
@@ -806,7 +803,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.return_airline"
                                     :options="airlineOptions"
-                                    open-on-focus
                                     placeholder="Code"
                                     search-placeholder="Type airline or code"
                                 />
@@ -824,7 +820,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.return_departure_city"
                                     :options="cityOptions"
-                                    open-on-focus
                                     placeholder="City"
                                     search-placeholder="Type city or code"
                                 />
@@ -834,7 +829,6 @@ const submit = () => {
                                 ><SearchableSelect
                                     v-model="form.return_arrival_city"
                                     :options="cityOptions"
-                                    open-on-focus
                                     placeholder="City"
                                     search-placeholder="Type city or code"
                                 />
@@ -945,7 +939,6 @@ const submit = () => {
                                     :model-value="stay.hotel_id"
                                     :options="hotelOptionsFor(stay.city)"
                                     :show-value="false"
-                                    open-on-focus
                                     placeholder="Select hotel"
                                     search-placeholder="Type hotel name"
                                     @update:model-value="

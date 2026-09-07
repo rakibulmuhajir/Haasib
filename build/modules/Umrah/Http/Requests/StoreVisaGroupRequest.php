@@ -59,6 +59,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'hotel_notes' => ['nullable', 'string', 'max:500'],
             'transport_required' => [Rule::requiredIf($this->input('transport_mode') !== VisaGroup::TRANSPORT_NONE), 'boolean', Rule::when($this->input('transport_mode') !== VisaGroup::TRANSPORT_NONE, ['accepted'])],
             'includes_visa' => ['required', 'boolean'],
+            'includes_hotel' => ['sometimes', 'boolean'],
             'transport_mode' => [
                 'required',
                 Rule::in(array_keys(VisaGroup::TRANSPORT_MODES)),

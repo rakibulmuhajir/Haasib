@@ -87,9 +87,9 @@ class UpdateVoucherRequest extends UmrahFormRequest
             $companyId = app(CompanyContextService::class)->getCompanyId();
             $voucher = Voucher::where('company_id', $companyId)->with('group')->find($this->route('voucher'));
 
-            if ($voucher?->group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForTransportMode($voucher->group->transport_mode))) {
+            if ($voucher?->group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForGroup($voucher->group))) {
                 $validator->errors()->add('service_bundle', $voucher->group->transport_mode === 'none'
-                    ? 'This group has self-arranged transport, so a transport bundle cannot be sold on it.'
+                    ? 'This booking does not include that service combination.'
                     : 'Selected service bundle is not valid for this group.');
 
                 return;

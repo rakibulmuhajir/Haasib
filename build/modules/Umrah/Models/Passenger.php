@@ -40,9 +40,12 @@ class Passenger extends Model
 
     public const SERVICE_TRANSPORT_ONLY = 'transport_only';
 
+    public const SERVICE_HOTEL_ONLY = 'hotel_only';
+
     public const SERVICE_TYPES = [
         self::SERVICE_VISA_TRANSPORT => 'Visa included',
         self::SERVICE_TRANSPORT_ONLY => 'Already has visa - transport only',
+        self::SERVICE_HOTEL_ONLY => 'Hotel only',
     ];
 
     public const STATUSES = [

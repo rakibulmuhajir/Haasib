@@ -74,6 +74,8 @@ class VisaGroup extends Model
         'travel_date',
         'flight_info',
         'hotel_info',
+        'includes_hotel',
+        'idempotency_key',
         'transport_required',
         'transport_mode',
         'includes_visa',
@@ -111,6 +113,7 @@ class VisaGroup extends Model
      */
     protected $attributes = [
         'includes_visa' => true,
+        'includes_hotel' => false,
     ];
 
     protected $casts = [
@@ -121,9 +124,11 @@ class VisaGroup extends Model
         'visa_service_id' => 'string',
         'transport_service_id' => 'string',
         'driver_id' => 'string',
+        'idempotency_key' => 'string',
         'travel_date' => 'date',
         'flight_info' => 'array',
         'hotel_info' => 'array',
+        'includes_hotel' => 'boolean',
         'transport_required' => 'boolean',
         'includes_visa' => 'boolean',
         'included_bus_cost_per_passenger' => 'decimal:2',

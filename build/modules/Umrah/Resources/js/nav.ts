@@ -5,6 +5,7 @@ import {
     Building2,
     Bus,
     CalendarRange,
+    ClipboardPlus,
     FileText,
     Hotel,
     LayoutDashboard,
@@ -45,6 +46,13 @@ export const umrahNav: ModuleNavConfig = {
         const isAgent = role === 'agent';
         const isOperations = role === 'operations';
         const isBackOffice = !isAgent && !isOperations;
+        const canQuickBook = [
+            'super_admin',
+            'owner',
+            'manager',
+            'operations',
+            'agent',
+        ].includes(role);
 
         const reportItems = isAgent
             ? [
@@ -230,6 +238,15 @@ export const umrahNav: ModuleNavConfig = {
                         href: `/${slug}/umrah/operations`,
                         icon: CalendarRange,
                     },
+                    ...(canQuickBook
+                        ? [
+                              {
+                                  title: 'Quick Booking',
+                                  href: `/${slug}/umrah/quick-booking`,
+                                  icon: ClipboardPlus,
+                              },
+                          ]
+                        : []),
                     {
                         title: 'Trips / Visa Groups',
                         href: `/${slug}/umrah/groups`,

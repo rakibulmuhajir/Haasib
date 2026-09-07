@@ -4,12 +4,13 @@ use App\Modules\Umrah\Http\Controllers\AdjustmentController;
 use App\Modules\Umrah\Http\Controllers\AgentController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
-use App\Modules\Umrah\Http\Controllers\OperationsController;
 use App\Modules\Umrah\Http\Controllers\ExpenseController;
 use App\Modules\Umrah\Http\Controllers\GroupAccountingController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
 use App\Modules\Umrah\Http\Controllers\LogoUploadController;
+use App\Modules\Umrah\Http\Controllers\OperationsController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
+use App\Modules\Umrah\Http\Controllers\QuickBookingController;
 use App\Modules\Umrah\Http\Controllers\RefundController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TicketBookingController;
@@ -55,6 +56,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::patch('transport-providers/{transportProvider}/status', [TransportProviderController::class, 'updateStatus'])->whereUuid('transportProvider')->name('umrah.transport-providers.status.update');
 
         Route::get('groups', [VisaGroupController::class, 'index'])->name('umrah.groups.index');
+        Route::get('quick-booking', [QuickBookingController::class, 'create'])->name('umrah.quick-booking.create');
+        Route::post('quick-booking', [QuickBookingController::class, 'store'])->name('umrah.quick-booking.store');
         Route::get('payments', [PaymentController::class, 'index'])->name('umrah.payments.index');
         Route::get('payments/create', [PaymentController::class, 'create'])->name('umrah.payments.create');
         Route::post('payments', [PaymentController::class, 'store'])->name('umrah.payments.store');

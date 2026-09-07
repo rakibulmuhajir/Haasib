@@ -20,7 +20,7 @@ abstract class UmrahFormRequest extends BaseFormRequest
     abstract protected function permission(): string;
 
     /**
-     * A group must sell a visa, transport, or both. Shared by Store and
+     * A group must sell a visa, hotel, transport, or a combination. Shared by Store and
      * Update so the "neither" case is rejected the same way regardless of
      * which request built the transport_mode rule.
      *
@@ -29,15 +29,18 @@ abstract class UmrahFormRequest extends BaseFormRequest
      * an ordinary visa group being switched to self-arranged transport would
      * be rejected as selling nothing.
      */
-    protected function transportSellsSomethingRule(?bool $storedValue = null): Closure
+    protected function transportSellsSomethingRule(?bool $storedValue = null, ?bool $storedHotelValue = null): Closure
     {
-        return function (string $attribute, mixed $value, Closure $fail) use ($storedValue): void {
+        return function (string $attribute, mixed $value, Closure $fail) use ($storedValue, $storedHotelValue): void {
             $includesVisa = $this->has('includes_visa')
                 ? $this->boolean('includes_visa')
                 : ($storedValue ?? true);
+            $includesHotel = $this->has('includes_hotel')
+                ? $this->boolean('includes_hotel')
+                : ($storedHotelValue ?? false);
 
-            if (! $includesVisa && $value === VisaGroup::TRANSPORT_NONE) {
-                $fail('A group must sell a visa, transport, or both.');
+            if (! $includesVisa && ! $includesHotel && $value === VisaGroup::TRANSPORT_NONE) {
+                $fail('A booking must include visa, hotel, transport, or a combination.');
             }
         };
     }
@@ -56,9 +59,11 @@ abstract class UmrahFormRequest extends BaseFormRequest
      */
     protected function deriveGroupServiceFields(): void
     {
-        $serviceType = $this->boolean('includes_visa')
-            ? Passenger::SERVICE_VISA_TRANSPORT
-            : Passenger::SERVICE_TRANSPORT_ONLY;
+        $serviceType = match (true) {
+            $this->boolean('includes_visa') => Passenger::SERVICE_VISA_TRANSPORT,
+            $this->input('transport_mode') !== VisaGroup::TRANSPORT_NONE => Passenger::SERVICE_TRANSPORT_ONLY,
+            default => Passenger::SERVICE_HOTEL_ONLY,
+        };
 
         $passengers = collect($this->input('passengers', []))
             ->map(fn ($passenger) => [

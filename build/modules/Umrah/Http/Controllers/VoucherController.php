@@ -149,7 +149,8 @@ class VoucherController extends Controller
             'availablePassengers' => $availablePassengers->values(),
             'assignedPassengers' => $assignedPassengers->values(),
             'statuses' => Voucher::STATUSES,
-            'serviceBundles' => Voucher::bundlesForTransportMode($selectedGroup?->transport_mode),
+            'serviceBundles' => Voucher::bundlesForGroup($selectedGroup),
+            'bookingDefaults' => $this->bookingDefaults($selectedGroup, $hotels),
             'airlines' => Voucher::AIRLINES,
             'airportCities' => Voucher::AIRPORT_CITIES,
             'hotels' => $hotels,
@@ -292,8 +293,8 @@ class VoucherController extends Controller
             'company' => $this->companyPayload($company), 'nextVoucherNumber' => $record->voucher_number,
             'groups' => collect([$record->group]), 'selectedGroup' => $record->group,
             'availablePassengers' => $record->passengers, 'assignedPassengers' => collect(),
-            'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::bundlesForTransportMode($record->group?->transport_mode), 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
-            'hotels' => $hotels, 'editingVoucher' => $record, 'agentCapabilities' => $capabilities,
+            'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::bundlesForGroup($record->group), 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
+            'hotels' => $hotels, 'editingVoucher' => $record, 'bookingDefaults' => null, 'agentCapabilities' => $capabilities,
         ]);
     }
 
@@ -712,6 +713,41 @@ class VoucherController extends Controller
             // holding it in Jeddah needs an address and a registration number
             // as much as the party holding an invoice does.
             'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
+        ];
+    }
+
+    private function bookingDefaults(?VisaGroup $group, $hotels): ?array
+    {
+        if (! $group) {
+            return null;
+        }
+
+        $info = is_array($group->hotel_info) ? $group->hotel_info : [];
+        $byId = $hotels->keyBy('id');
+        $roomType = $info['room_type'] ?? null;
+        $stays = collect([
+            ['city' => 'Makkah', 'hotel_id' => $info['makkah_hotel_id'] ?? null],
+            ['city' => 'Madinah', 'hotel_id' => $info['madinah_hotel_id'] ?? null],
+            ['city' => 'Makkah', 'hotel_id' => $info['makkah_hotel_id'] ?? null],
+        ])->map(function (array $stay) use ($byId, $roomType): array {
+            $hotel = $stay['hotel_id'] ? $byId->get($stay['hotel_id']) : null;
+
+            return [
+                'source' => $hotel ? 'company' : 'self',
+                'hotel_id' => $hotel?->id,
+                'hotel_name' => $hotel?->name ?? '',
+                'city' => $stay['city'],
+                'room_type' => $roomType,
+                'room_count' => 1,
+                'check_in_date' => null,
+                'check_out_date' => null,
+                'notes' => null,
+            ];
+        })->all();
+
+        return [
+            'service_bundle' => Voucher::defaultBundleForGroup($group),
+            'hotel_stays' => $stays,
         ];
     }
 

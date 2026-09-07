@@ -62,7 +62,7 @@ class StoreVoucherRequest extends UmrahFormRequest
             'passenger_ids' => ['required', 'array', 'min:1'],
             'passenger_ids.*' => ['required', 'uuid'],
             'passenger_services' => ['required', 'array'],
-            'passenger_services.*' => ['required', Rule::in(['visa_transport', 'transport_only'])],
+            'passenger_services.*' => ['required', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
             'onward_airline' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRLINES))],
             'onward_flight_number' => ['nullable', 'string', 'max:5', 'regex:/^[A-Za-z0-9]+$/'],
             'onward_departure_city' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
@@ -102,9 +102,9 @@ class StoreVoucherRequest extends UmrahFormRequest
                 $groupId = (string) $this->input('visa_group_id');
                 $group = VisaGroup::where('company_id', $companyId)->find($groupId);
 
-                if ($group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForTransportMode($group->transport_mode))) {
+                if ($group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForGroup($group))) {
                     $validator->errors()->add('service_bundle', $group->transport_mode === 'none'
-                        ? 'This group has self-arranged transport, so a transport bundle cannot be sold on it.'
+                        ? 'This booking does not include that service combination.'
                         : 'Selected service bundle is not valid for this group.');
                 }
 

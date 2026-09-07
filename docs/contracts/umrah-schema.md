@@ -322,6 +322,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `travel_date` date nullable.
   - `flight_info` jsonb nullable.
   - `hotel_info` jsonb nullable.
+  - `includes_hotel` boolean default false. Records whether accommodation is part of the sale; hotel prices and accounting remain owned by approved vouchers.
+  - `idempotency_key` uuid nullable, unique per company. Used by Quick Booking to make repeated form submissions return the original group instead of creating a duplicate.
   - `transport_required` boolean default false.
   - `transport_mode` varchar(30) default `standard_bus`. Values: `none`, `standard_bus`, `specialized`. `transport_required` must be false only for `none`; no transport references, fare items, revenue, or cost may remain on a `none` group.
   - `included_bus_cost_per_passenger` numeric(15,2) default 0. Legacy historical snapshot only.
@@ -351,6 +353,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - timestamps, soft deletes.
 - Check:
   - `status` in `draft`, `passports_received`, `submitted`, `visa_approved`, `delivered`, `closed`, `cancelled`.
+  - At least one of `includes_visa`, `includes_hotel`, or `transport_mode <> 'none'` must be true.
 - Model fillable:
   - all business columns above.
 - Accounting interface:
@@ -370,7 +373,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `nationality` varchar(100) nullable.
   - `date_of_birth` date nullable.
   - `imported_age` integer nullable. Age from a mutamer list import or manual age entry when DOB is unavailable.
-  - `service_type` varchar(30) default `visa_transport`. Values: `visa_transport`, `transport_only`. The historical `visa_transport` value means the passenger receives the group's visa service and, only when the group transport mode is not `none`, its group transport; user-facing labels must say `Visa only` for `none` groups. `transport_only` is invalid for a `none` group.
+  - `service_type` varchar(30) default `visa_transport`. Values: `visa_transport`, `transport_only`, `hotel_only`. The historical `visa_transport` value means the passenger receives the group's visa service and, only when the group transport mode is not `none`, its group transport; user-facing labels must say `Visa only` for `none` groups. `transport_only` is invalid for a `none` group. `hotel_only` is used only when the group sells accommodation without visa or transport.
   - `transport_charge_amount` numeric(15,2) default 0. Passenger-specific sale for a traveller whose visa came from another provider.
   - `visa_status` varchar(30) default `pending`.
   - `notes` text nullable.
@@ -598,6 +601,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Passenger count is recalculated from passengers unless explicitly entered on group creation.
 - The mutamer list import reads only mutamer name, mutamer age, passport number, and nationality. Imported rows remain editable before saving the visa group.
 - Visa groups are created after visa approval; their existing status value is informational and no artificial pre-approval lifecycle is enforced.
+- Quick Booking uses `idempotency_key` to make a repeated submission return the original booking. The key is scoped to the company and never reused to update a different booking.
+- `includes_hotel` records service intent only. Hotel stays, price snapshots, supplier cost, and hotel journals continue to belong to the voucher workflow; a Quick Booking that includes hotel opens the existing universal voucher builder rather than creating a second accommodation ledger.
 - Passenger identity, age, service type, and transport charge may be corrected with audit history. Removing a passenger is blocked while the passenger has an active approved voucher; draft assignments are released and group sale/cost adjustments are posted atomically.
 - If group code is blank, the next sequential group number is used. If group name is blank, the service generates `{agent name} - {pax} pax - {YYYYMMDD HHMMSS}`.
 - Payments cannot exceed group balance in phase 1.

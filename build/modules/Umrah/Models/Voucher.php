@@ -245,6 +245,48 @@ class Voucher extends Model
         return self::SERVICE_BUNDLES;
     }
 
+    public static function defaultBundleForGroup(?VisaGroup $group): string
+    {
+        if (! $group) {
+            return self::SERVICE_VISA_TRANSPORT;
+        }
+
+        $hasVisa = (bool) $group->includes_visa;
+        $hasHotel = (bool) $group->includes_hotel;
+        $hasTransport = $group->transport_mode !== VisaGroup::TRANSPORT_NONE;
+
+        return match (true) {
+            $hasVisa && $hasTransport && $hasHotel => self::SERVICE_VISA_TRANSPORT_HOTEL,
+            $hasVisa && $hasTransport => self::SERVICE_VISA_TRANSPORT,
+            $hasVisa && $hasHotel => self::SERVICE_VISA_HOTEL,
+            $hasTransport && $hasHotel => self::SERVICE_TRANSPORT_HOTEL,
+            $hasVisa => self::SERVICE_VISA,
+            $hasTransport => self::SERVICE_TRANSPORT,
+            default => self::SERVICE_HOTEL,
+        };
+    }
+
+    public static function bundlesForGroup(?VisaGroup $group): array
+    {
+        if (! $group) {
+            return self::SERVICE_BUNDLES;
+        }
+
+        $allowed = [];
+        $hasVisa = (bool) $group->includes_visa;
+        $hasTransport = $group->transport_mode !== VisaGroup::TRANSPORT_NONE;
+
+        foreach (self::SERVICE_BUNDLES as $key => $label) {
+            $needsVisa = in_array($key, [self::SERVICE_VISA, self::SERVICE_VISA_HOTEL, self::SERVICE_VISA_TRANSPORT, self::SERVICE_VISA_TRANSPORT_HOTEL], true);
+            $needsTransport = in_array($key, [self::SERVICE_TRANSPORT, self::SERVICE_TRANSPORT_HOTEL, self::SERVICE_VISA_TRANSPORT, self::SERVICE_VISA_TRANSPORT_HOTEL], true);
+            if ((! $needsVisa || $hasVisa) && (! $needsTransport || $hasTransport)) {
+                $allowed[$key] = $label;
+            }
+        }
+
+        return $allowed;
+    }
+
     public function separatedBillingPlan(bool $archiveSource, int $separationIndex): array
     {
         $becomesBillingOwner = $archiveSource

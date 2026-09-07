@@ -67,10 +67,11 @@ class UpdateVisaGroupRequest extends UmrahFormRequest
         return [
             'vendor_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
             'includes_visa' => ['sometimes', 'boolean'],
+            'includes_hotel' => ['sometimes', 'boolean'],
             'transport_mode' => [
                 'required',
                 Rule::in(array_unique([VisaGroup::TRANSPORT_NONE, VisaGroup::TRANSPORT_STANDARD_BUS, $group?->transport_mode ?? VisaGroup::TRANSPORT_STANDARD_BUS])),
-                $this->transportSellsSomethingRule($group?->includes_visa),
+                $this->transportSellsSomethingRule($group?->includes_visa, $group?->includes_hotel),
             ],
             'mandatory_transport_vendor_id' => [Rule::requiredIf($this->input('transport_mode') === VisaGroup::TRANSPORT_STANDARD_BUS), 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
             'name' => ['required', 'string', 'max:255'],

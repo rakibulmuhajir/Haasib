@@ -35,7 +35,7 @@ type Passenger = {
     passport_number?: string | null;
     nationality?: string | null;
     visa_status?: string | null;
-    service_type?: 'visa_transport' | 'transport_only';
+    service_type?: 'visa_transport' | 'transport_only' | 'hotel_only';
 };
 
 const props = defineProps<{
@@ -51,6 +51,10 @@ const props = defineProps<{
     airportCities: Record<string, string>;
     hotels: any[];
     editingVoucher: any | null;
+    bookingDefaults?: {
+        service_bundle: string;
+        hotel_stays: any[];
+    } | null;
     agentCapabilities: {
         can_create: boolean;
         can_approve: boolean;
@@ -88,7 +92,7 @@ const selectedPassengerIds = ref<string[]>(
     props.availablePassengers.map((passenger) => passenger.id),
 );
 const passengerServices = ref<
-    Record<string, 'visa_transport' | 'transport_only'>
+    Record<string, 'visa_transport' | 'transport_only' | 'hotel_only'>
 >(
     Object.fromEntries(
         props.availablePassengers.map((passenger) => [
@@ -101,7 +105,9 @@ const editingVoucher = computed(() => props.editingVoucher);
 const localDateTime = (value: unknown) =>
     value ? String(value).slice(0, 16) : '';
 const localDate = (value: unknown) => (value ? String(value).slice(0, 10) : '');
-const editableStays = props.editingVoucher?.hotel_stays?.map((stay: any) => ({
+const editableStays = (
+    props.editingVoucher?.hotel_stays ?? props.bookingDefaults?.hotel_stays
+)?.map((stay: any) => ({
     source: stay.source === 'company' ? 'company' : 'self',
     hotel_id: stay.hotel_id || 'none',
     hotel_name: stay.hotel_name || '',
@@ -122,7 +128,10 @@ const form = useForm({
         (props.selectedGroup
             ? `${props.selectedGroup.group_number} Journey Voucher`
             : ''),
-    service_bundle: props.editingVoucher?.service_bundle || 'visa_transport',
+    service_bundle:
+        props.editingVoucher?.service_bundle ||
+        props.bookingDefaults?.service_bundle ||
+        'visa_transport',
     status: props.editingVoucher?.status || 'draft',
     onward_airline: props.editingVoucher?.onward_airline || '',
     onward_flight_number: props.editingVoucher?.onward_flight_number || '',
@@ -429,22 +438,28 @@ const removeHotelStay = (index: number) => {
 };
 
 const submit = () => {
-    // A self-arranged group (transport_mode 'none') has no bus to sell, so
-    // the non-hotel-only bundle must be the transport-free variant. The
-    // valid set for this group is decided server-side (Voucher::bundlesForTransportMode);
-    // this only picks which name matches the transport_mode already known here.
-    const transportless = props.selectedGroup?.transport_mode === 'none';
+    const hasVisa = props.selectedGroup?.includes_visa !== false;
+    const hasTransport = props.selectedGroup?.transport_mode !== 'none';
+    const hasCompanyHotel = form.hotel_stays.some(
+        (stay) => stay.source === 'company',
+    );
     form.transform((data) => ({
         ...data,
         service_bundle: hotelOnly.value
             ? 'hotel'
-            : data.hotel_stays.some((stay) => stay.source === 'company')
-              ? transportless
-                  ? 'visa_hotel'
-                  : 'visa_transport_hotel'
-              : transportless
-                ? 'visa'
-                : 'visa_transport',
+            : hasVisa && hasTransport
+              ? hasCompanyHotel
+                  ? 'visa_transport_hotel'
+                  : 'visa_transport'
+              : hasVisa
+                ? hasCompanyHotel
+                    ? 'visa_hotel'
+                    : 'visa'
+                : hasTransport
+                  ? hasCompanyHotel
+                      ? 'transport_hotel'
+                      : 'transport'
+                  : 'hotel',
         visa_group_id:
             data.visa_group_id === 'none' ? null : data.visa_group_id,
         passenger_ids: selectedPassengerIds.value,

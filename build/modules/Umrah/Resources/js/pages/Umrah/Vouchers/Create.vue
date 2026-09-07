@@ -25,7 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { Plus, Save, ScrollText, Trash2, Users } from 'lucide-vue-next';
+import { Plus, Save, ScrollText, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -504,8 +504,20 @@ const submit = () => {
         "
         :breadcrumbs="breadcrumbs"
         :icon="ScrollText"
+        :actions="[
+            {
+                label: editingVoucher ? 'Update Voucher' : 'Save Voucher',
+                icon: Save,
+                onClick: submit,
+                disabled:
+                    form.processing ||
+                    !selectedGroup ||
+                    (!editingVoucher && selectedPassengerIds.length === 0),
+                loading: form.processing,
+            },
+        ]"
     >
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div class="space-y-6">
             <div class="space-y-6">
                 <Card variant="form">
                     <CardHeader>
@@ -1187,23 +1199,26 @@ const submit = () => {
                                 {{ form.errors.override_reason }}
                             </p>
                         </div>
-                        <Button
-                            class="w-full"
-                            :disabled="
-                                form.processing ||
-                                !selectedGroup ||
-                                (!editingVoucher &&
-                                    selectedPassengerIds.length === 0)
-                            "
-                            @click="submit"
-                        >
-                            <Save class="mr-2 h-4 w-4" />
-                            {{
-                                editingVoucher
-                                    ? 'Update Voucher'
-                                    : 'Save Voucher'
-                            }}
-                        </Button>
+                        <div class="flex justify-end">
+                            <Button
+                                type="button"
+                                class="w-full sm:w-auto"
+                                :disabled="
+                                    form.processing ||
+                                    !selectedGroup ||
+                                    (!editingVoucher &&
+                                        selectedPassengerIds.length === 0)
+                                "
+                                @click="submit"
+                            >
+                                <Save class="mr-2 h-4 w-4" />
+                                {{
+                                    editingVoucher
+                                        ? 'Update Voucher'
+                                        : 'Save Voucher'
+                                }}
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -1228,28 +1243,6 @@ const submit = () => {
                                 {{ passenger.passport_number || 'No passport' }}
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card variant="detail">
-                    <CardHeader>
-                        <CardTitle>Quick Links</CardTitle>
-                    </CardHeader>
-                    <CardContent class="grid gap-2">
-                        <Button
-                            variant="outline"
-                            @click="router.get(`/${company.slug}/umrah/groups`)"
-                        >
-                            <Users class="mr-2 h-4 w-4" />
-                            Visa Groups
-                        </Button>
-                        <Button
-                            variant="outline"
-                            @click="
-                                router.get(`/${company.slug}/umrah/vouchers`)
-                            "
-                            >Voucher List</Button
-                        >
                     </CardContent>
                 </Card>
             </div>

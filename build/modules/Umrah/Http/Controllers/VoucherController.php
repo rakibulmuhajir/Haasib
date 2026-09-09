@@ -47,6 +47,7 @@ class VoucherController extends Controller
         private TravelChangeLogger $changeLogger,
         private VoucherPassengerAssignmentService $passengerAssignments,
         private VoucherWorkflowService $workflow,
+        private \App\Modules\Umrah\Services\VoucherPrintProfiles $printProfiles,
     ) {}
 
     public function index(Request $request): Response
@@ -154,6 +155,8 @@ class VoucherController extends Controller
             'statuses' => Voucher::STATUSES,
             'serviceBundles' => Voucher::bundlesForGroup($selectedGroup),
             'bookingDefaults' => $this->bookingDefaults($selectedGroup, $hotels),
+            'printDefaults' => $this->printProfiles->defaults($company, $selectedGroup?->agent_id),
+            'contactProfiles' => $this->printProfiles->catalog($company, $selectedGroup?->agent_id),
             'airlines' => Voucher::AIRLINES,
             'airportCities' => Voucher::AIRPORT_CITIES,
             'hotels' => $hotels,
@@ -207,6 +210,7 @@ class VoucherController extends Controller
                 'hotel_sale_amount' => $hotelSale,
                 'hotel_cost_amount' => $hotelCost,
                 'notes' => $data['notes'] ?? null,
+                'print_details' => $data['print_details'] ?? $this->printProfiles->defaults($company, $group->agent_id),
                 'created_by_user_id' => $request->user()?->id,
             ]);
 
@@ -300,6 +304,8 @@ class VoucherController extends Controller
             'availablePassengers' => $record->passengers, 'assignedPassengers' => collect(),
             'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::bundlesForGroup($record->group), 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
             'hotels' => $hotels, 'editingVoucher' => $record, 'bookingDefaults' => null, 'agentCapabilities' => $capabilities,
+            'printDefaults' => ['footer_text' => '', 'contacts' => []],
+            'contactProfiles' => $this->printProfiles->catalog($company, $record->agent_id),
         ]);
     }
 
@@ -324,6 +330,7 @@ class VoucherController extends Controller
         }
 
         $changes = [
+            'print_details' => $data['print_details'] ?? $record->print_details,
             'title' => $data['title'], 'service_bundle' => $data['service_bundle'], 'onward_airline' => $hasFlights ? ($data['onward_airline'] ?? null) : null, 'onward_flight_number' => $hasFlights ? ($data['onward_flight_number'] ?? null) : null,
             'onward_departure_city' => $hasFlights ? ($data['onward_departure_city'] ?? null) : null, 'onward_arrival_city' => $hasFlights ? ($data['onward_arrival_city'] ?? null) : null, 'onward_departure_at' => $hasFlights ? ($data['onward_departure_at'] ?? null) : null, 'onward_arrival_at' => $hasFlights ? ($data['onward_arrival_at'] ?? null) : null,
             'return_airline' => $hasFlights ? ($data['return_airline'] ?? null) : null, 'return_flight_number' => $hasFlights ? ($data['return_flight_number'] ?? null) : null, 'return_departure_city' => $hasFlights ? ($data['return_departure_city'] ?? null) : null,
@@ -720,15 +727,22 @@ class VoucherController extends Controller
             $logoPath = is_file($candidate) ? $candidate : null;
         }
 
-        return Pdf::loadView('umrah::vouchers.pdf', [
+        $printData = [
             'company' => $company,
             'voucher' => $record,
             'logoPath' => $logoPath,
             // The downloaded PDF is the copy that gets carried, so it needs the
             // issuer's identity at least as much as the on-screen page does.
             'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
-        ])
-            ->setPaper('letter', 'portrait')
+            ...app(\App\Modules\Umrah\Services\VoucherPrintDocument::class)->payload($company, $record),
+        ];
+        if ($request->routeIs('umrah.vouchers.print')) {
+            return response()->view('umrah::vouchers.pdf', $printData)->header('Cache-Control', 'private, no-store');
+        }
+
+        return Pdf::loadView('umrah::vouchers.pdf', $printData)
+            ->setOption('defaultMediaType', 'print')
+            ->setPaper('a4', 'portrait')
             ->download($filename);
     }
 

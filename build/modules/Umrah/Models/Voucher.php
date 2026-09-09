@@ -145,6 +145,7 @@ class Voucher extends Model
     public $incrementing = false;
 
     protected $fillable = [
+        'print_details',
         'company_id',
         'visa_group_id',
         'agent_id',
@@ -183,6 +184,7 @@ class Voucher extends Model
     ];
 
     protected $casts = [
+        'print_details' => 'array',
         'company_id' => 'string',
         'visa_group_id' => 'string',
         'agent_id' => 'string',

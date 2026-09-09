@@ -49,6 +49,7 @@ class UpdateVoucherRequest extends UmrahFormRequest
 
         return [
             'title' => ['required', 'string', 'max:255'],
+            ...\App\Modules\Umrah\Services\VoucherPrintProfiles::rules('print_details'),
             'service_bundle' => ['required', Rule::in(array_keys(Voucher::SERVICE_BUNDLES))],
             'onward_airline' => ['nullable', Rule::in(array_keys(Voucher::AIRLINES))],
             'onward_flight_number' => ['nullable', 'string', 'max:5', 'regex:/^[A-Za-z0-9]+$/'],
@@ -72,9 +73,16 @@ class UpdateVoucherRequest extends UmrahFormRequest
             'hotel_stays.*.check_in_date' => ['nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.check_out_date' => ['nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
+            'hotel_stays.*.meal_plan' => ['nullable', 'string', 'max:100'],
+            'hotel_stays.*.map_url' => ['nullable', 'url:https', 'max:500', 'regex:~^https://(www\.google\.com/maps/|maps\.google\.com/|maps\.app\.goo\.gl/|goo\.gl/maps/)~i'],
             'notes' => ['nullable', 'string'],
             'override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000'],
         ];
+    }
+
+    public function attributes(): array
+    {
+        return \App\Modules\Umrah\Services\VoucherPrintProfiles::attributes('print_details');
     }
 
     public function after(): array

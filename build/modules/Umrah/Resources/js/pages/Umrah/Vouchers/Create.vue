@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import DateTimePicker from '@/components/DateTimePicker.vue';
+import { nightsBetween, updateStayDates } from '../../../lib/stayDates';
+import VoucherPrintDetails, { type ContactProfile, type PrintDetails } from '../../../components/VoucherPrintDetails.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import SearchableSelect from '@/components/SearchableSelect.vue';
@@ -41,6 +43,8 @@ type Passenger = {
 const props = defineProps<{
     company: { slug: string; base_currency: string };
     nextVoucherNumber: string;
+    printDefaults: PrintDetails;
+    contactProfiles: ContactProfile[];
     groups: any[];
     selectedGroup: any | null;
     availablePassengers: Passenger[];
@@ -116,7 +120,10 @@ const editableStays = (
     room_count: String(stay.room_count || 1),
     check_in_date: localDate(stay.check_in_date),
     check_out_date: localDate(stay.check_out_date),
+    night_count: nightsBetween(localDate(stay.check_in_date), localDate(stay.check_out_date)),
     notes: stay.notes || '',
+    map_url: stay.map_url || '',
+    meal_plan: stay.meal_plan || '',
 }));
 
 const form = useForm({
@@ -161,6 +168,9 @@ const form = useForm({
                   room_count: '1',
                   check_in_date: '',
                   check_out_date: '',
+                  night_count: '',
+                  map_url: '',
+                  meal_plan: '',
                   notes: '',
               },
               {
@@ -172,6 +182,9 @@ const form = useForm({
                   room_count: '1',
                   check_in_date: '',
                   check_out_date: '',
+                  night_count: '',
+                  map_url: '',
+                  meal_plan: '',
                   notes: '',
               },
               {
@@ -183,10 +196,16 @@ const form = useForm({
                   room_count: '1',
                   check_in_date: '',
                   check_out_date: '',
+                  night_count: '',
+                  map_url: '',
+                  meal_plan: '',
                   notes: '',
               },
           ],
     notes: props.editingVoucher?.notes || '',
+    print_details: props.editingVoucher
+        ? (props.editingVoucher.print_details || { footer_text: '', contacts: [] })
+        : props.printDefaults,
     override_reason: '',
 });
 
@@ -308,14 +327,21 @@ const addHotelStay = () => {
         source: 'self',
         hotel_id: 'none',
         hotel_name: '',
-        city: '',
+        city: form.hotel_stays.length % 2 === 1 ? 'Madinah' : 'Makkah',
         room_type: 'double',
         room_count: '1',
         check_in_date: previousCheckout,
         check_out_date: '',
+        night_count: '',
+        map_url: '',
+        meal_plan: '',
         notes: '',
     });
 };
+
+if (!props.editingVoucher) {
+    while (form.hotel_stays.length < 3) addHotelStay();
+}
 
 const selectHotel = (index: number, hotelId: string) => {
     const stay = form.hotel_stays[index];
@@ -427,14 +453,12 @@ const stayCheckOutMin = (index: number) =>
     plusOneDay(form.hotel_stays[index]?.check_in_date);
 
 const setStayCheckout = (index: number, value: string | number) => {
-    const checkoutDate = String(value);
-    form.hotel_stays[index].check_out_date = checkoutDate;
-    if (form.hotel_stays[index + 1])
-        form.hotel_stays[index + 1].check_in_date = checkoutDate;
+    updateStayDates(form.hotel_stays, index, 'check_out_date', String(value));
 };
 
 const removeHotelStay = (index: number) => {
     form.hotel_stays.splice(index, 1);
+    if (index > 0) setStayCheckout(index - 1, form.hotel_stays[index - 1].check_out_date);
 };
 
 const submit = () => {
@@ -1014,7 +1038,9 @@ const submit = () => {
                             >
                                 <Label>Check-in</Label
                                 ><Input
-                                    v-model="stay.check_in_date"
+                                    :model-value="stay.check_in_date"
+                                    :aria-label="`Stay ${index + 1} check-in`"
+                                    @update:model-value="updateStayDates(form.hotel_stays, index, 'check_in_date', String($event))"
                                     type="date"
                                     :min="stayCheckInMin(index)"
                                     :max="stayWindowEnd"
@@ -1025,6 +1051,7 @@ const submit = () => {
                                 <Label>Checkout</Label
                                 ><Input
                                     :model-value="stay.check_out_date"
+                                    :aria-label="`Stay ${index + 1} checkout`"
                                     type="date"
                                     :min="stayCheckOutMin(index)"
                                     :max="stayWindowEnd"
@@ -1037,6 +1064,15 @@ const submit = () => {
                             <div class="min-w-0 space-y-1 lg:col-span-5">
                                 <Label>Notes</Label
                                 ><Input v-model="stay.notes" />
+                            </div>
+                            <div class="min-w-0 space-y-1 lg:col-span-3">
+                                <Label>Total nights</Label>
+                                <Input :model-value="stay.night_count" :aria-label="`Stay ${index + 1} total nights`" type="number" min="1" max="3650" step="1" @update:model-value="updateStayDates(form.hotel_stays, index, 'night_count', String($event))" />
+                            </div>
+                            <div class="min-w-0 space-y-1 lg:col-span-7">
+                                <Label>Verified Google Maps link (optional)</Label>
+                                <Input v-model="stay.map_url" maxlength="500" placeholder="https://maps.app.goo.gl/…" />
+                                <p v-if="form.errors[`hotel_stays.${index}.map_url`]" class="text-xs text-destructive">{{ form.errors[`hotel_stays.${index}.map_url`] }}</p>
                             </div>
                             <div
                                 class="flex items-end lg:col-start-12 lg:row-start-1"
@@ -1180,8 +1216,13 @@ const submit = () => {
                             <div class="font-medium">Draft</div>
                         </div>
                         <div class="space-y-2">
-                            <Label>Notes</Label>
+                            <Label>Journey-specific instructions</Label>
                             <Textarea v-model="form.notes" />
+                        </div>
+                        <div class="space-y-3 border-t pt-4">
+                            <h3 class="font-medium">Printed contacts &amp; footer</h3>
+                            <p class="text-sm text-muted-foreground">Saved with this voucher. Changes to the directory will not change this copy.</p>
+                            <VoucherPrintDetails v-model="form.print_details" :profiles="contactProfiles" :errors="form.errors" :disabled="form.processing" />
                         </div>
                         <div
                             v-if="

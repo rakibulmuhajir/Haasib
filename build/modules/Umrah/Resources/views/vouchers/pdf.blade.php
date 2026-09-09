@@ -5,115 +5,147 @@
     <title>{{ $voucher->voucher_number }}</title>
     <style>
 @include('print.sheet')
+        @page { size: A4 portrait; margin: 9mm 10mm; }
+        body { font-size: 10px; line-height: 1.25; }
+        .masthead td { width: 25%; text-align: center !important; }
+        .party-logo { height: 35px; max-width: 100px; margin: 0 auto 3px; }
+        .party-name { font-size: 10px; }
+        .document-title { font-size: 15px; padding: 4px; }
+        .metadata { font-size: 8px; margin: 4px 0 8px; }
+        .section { text-align: left; padding: 3px 5px; margin: 6px 0 0; }
+        .grid td { padding: 3px 5px; overflow-wrap: anywhere; }
+        .grid th { padding: 4px 5px; font-size: 8px; letter-spacing: 0; }
+        .grid { table-layout: fixed; }
+        .grid .nights { width: 7%; text-align: center; }
+        .grid .map { width: 11%; text-align: center; }
+        .map img { width: 52px; height: 52px; }
+        .flights { table-layout: fixed; }
+        .flights > tbody > tr > td { width: 50%; vertical-align: top; padding: 0; }
+        .flights > tbody > tr > td:first-child { padding-right: 4px; }
+        .flights > tbody > tr > td:last-child { padding-left: 4px; }
+        .flights .grid { font-size: 8px; }
+        .flights .grid th { font-size: 7px; }
+        .footer-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+        tr { page-break-inside: avoid; }
+        thead { display: table-header-group; }
+        tfoot { display: table-row-group; }
+        h3 { page-break-after: avoid; }
+        @media screen { body { max-width: 190mm; padding: 9mm 10mm; margin: auto; background: white; } }
+        @media print { body { padding: 0; margin: 0; max-width: none; } }
     </style>
 </head>
-<body>
+<body data-voucher-print="{{ $voucher->id }}">
 @php
-    $agent = $voucher->agent;
-    $transportPartner = $voucher->group?->mandatoryTransportVendor;
-    $partner = $transportPartner ?: $voucher->group?->vendor;
-    $partnerRole = $transportPartner ? 'Transport Partner' : 'Visa Partner';
-    $familyHead = $voucher->passengers->first();
     $totalNights = collect($voucher->hotel_stays ?? [])->sum(fn ($stay) => (int) ($stay['night_count'] ?? 0));
-    $resolveLogo = function (?string $url): ?string {
-        if (! $url || str_starts_with($url, 'data:') || str_starts_with($url, 'http')) {
-            return $url;
-        }
-
-        $path = public_path(ltrim($url, '/'));
-
-        return is_file($path) ? $path : null;
-    };
-    $agentLogo = $resolveLogo($agent?->logo_url);
-    $partnerLogo = $resolveLogo($partner?->logo_url);
+    $contacts = $voucher->print_details['contacts'] ?? [];
+    $footerText = $voucher->print_details['footer_text'] ?? '';
+    $ageDate = \Illuminate\Support\Carbon::parse($voucher->onward_departure_at ?? $voucher->group?->travel_date ?? $voucher->created_at);
+    $hasTransport = in_array($voucher->service_bundle, ['transport', 'transport_hotel', 'visa_transport', 'visa_transport_hotel'], true);
 @endphp
 @if($voucher->status === 'draft')<div class="watermark draft">DRAFT</div>@endif
 @if($voucher->status === 'cancelled')<div class="watermark cancelled">CANCELLED</div>@endif
-
+@if($voucher->superseded_at)<div class="watermark draft">SUPERSEDED</div>@endif
 <table class="masthead"><tr>
+@foreach($parties as $party)
     <td>
-        @if($agentLogo)<img class="party-logo" src="{{ $agentLogo }}" alt="Agent logo">@endif
-        <div class="party-name">{{ $agent?->name ?: 'Agent' }}</div>
-        <div class="secondary">{{ collect([$agent?->city, $agent?->country])->filter()->join(', ') }}</div>
-        <div class="secondary">{{ $agent?->phone }}</div>
+        @if($party['logo'])<img class="party-logo" src="{{ $party['logo'] }}" alt="{{ $party['role'] }} logo">@endif
+        <div class="party-name">{{ $party['name'] ?: '—' }}</div>
+        <div class="secondary">{{ $party['role'] }}</div>
     </td>
-    <td>
-        @if($logoPath)<img class="party-logo center-logo" src="{{ $logoPath }}" alt="Company logo">@elseif(str_starts_with((string) $company->logo_url, 'data:'))<img class="party-logo center-logo" src="{{ $company->logo_url }}" alt="Company logo">@endif
-        <div class="main-name">{{ $company->trade_name ?: $company->name }}</div>
-        {{-- The same lines the on-screen voucher prints, from the same
-             assembler, so the downloaded copy and the screen agree. --}}
-        @if($letterhead['legalName'] ?? null)<div class="secondary">{{ $letterhead['legalName'] }}</div>@endif
-        @foreach($letterhead['lines'] ?? [] as $line)<div class="secondary">{{ $line }}</div>@endforeach
-        @if($letterhead['email'] ?? null)<div class="secondary">{{ $letterhead['email'] }}</div>@endif
-        @if(($letterhead['phone'] ?? null) ?: data_get($company->settings, 'contact_phone'))<div class="secondary">Helpline: {{ ($letterhead['phone'] ?? null) ?: data_get($company->settings, 'contact_phone') }}</div>@endif
-        @if($letterhead['taxId'] ?? null)<div class="secondary">{{ $letterhead['taxIdLabel'] ?? 'Tax no.' }} {{ $letterhead['taxId'] }}</div>@endif
-    </td>
-    <td>
-        @if($partnerLogo)<img class="party-logo right-logo" src="{{ $partnerLogo }}" alt="{{ $partnerRole }} logo">@endif
-        <div class="party-name">{{ $partner?->name ?: $partnerRole }}</div>
-        <div class="secondary">{{ $partnerRole }}</div>
-        <div class="secondary">{{ collect([$partner?->city, $partner?->phone])->filter()->join(' | ') }}</div>
-    </td>
+@endforeach
 </tr></table>
+<div class="document-title">Journey Voucher · {{ $voucher->voucher_number }}</div>
+<div class="metadata">
+    <strong>{{ $voucher->title }}</strong> · {{ str($voucher->service_bundle)->replace('_', ' ')->title() }} · {{ strtoupper($voucher->status) }}<br>
+    Lead: {{ $voucher->passengers->first()?->full_name ?: 'Not assigned' }}
+    · Agent: {{ $voucher->agent?->name ?: '—' }}
+    · PAX: {{ $voucher->passengers->count() }}
+    · Group: {{ $voucher->group?->group_number }}
+    · Issued: {{ $voucher->created_at?->format('d M Y') }}
+    · Version: {{ $voucher->version_number ?: 1 }}
+</div>
+@if($voucher->cancellation_reason)<div class="footer-note">Cancellation reason: {{ $voucher->cancellation_reason }}</div>@endif
 
-<div class="document-title">{{ $voucher->title ?: 'Travel Voucher' }}</div>
-<table class="grid identity"><tr>
-    <td><span class="label">Family Head</span><span class="focus">{{ $familyHead?->full_name ?: 'Not assigned' }}</span></td>
-    <td><span class="label">Voucher No.</span><span class="focus">{{ $voucher->voucher_number }}</span></td>
-    <td><span class="label">Group</span>{{ $voucher->group?->group_number }} - {{ $voucher->group?->name }}</td>
-    <td><span class="label">PAX / Nights</span><span class="focus">{{ $voucher->passengers->count() }} / {{ $totalNights }}</span></td>
-    <td><span class="label">Status / Service</span>{{ strtoupper($voucher->status) }} | {{ str($voucher->service_bundle)->replace('_', ' ')->title() }}</td>
-</tr></table>
-
-@if($voucher->cancellation_reason)<div class="footer-note"><strong>Cancellation reason:</strong> {{ $voucher->cancellation_reason }}</div>@endif
-
-<div class="section">Mutamers / Passengers</div>
+<h3 class="section">Passengers</h3>
 <table class="grid">
-    <thead><tr><th>#</th><th>Mutamer Name</th><th>Passport</th><th>Nationality</th><th>DOB / Age</th><th>Visa Status</th></tr></thead>
+    <thead><tr><th style="width:5%">#</th><th style="width:50%">Name</th><th style="width:30%">Passport</th><th style="width:15%">Age</th></tr></thead>
     <tbody>
     @forelse($voucher->passengers as $passenger)
-        <tr><td>{{ $loop->iteration }}</td><td class="primary">{{ $passenger->full_name }}</td><td>{{ $passenger->passport_number ?: '-' }}</td><td>{{ $passenger->nationality ?: '-' }}</td><td>{{ $passenger->date_of_birth?->format('d-m-Y') ?: ($passenger->imported_age !== null ? 'Age '.$passenger->imported_age : '-') }}</td><td>{{ ucfirst($passenger->visa_status) }}</td></tr>
+        <tr><td>{{ $loop->iteration }}</td><td class="primary">{{ $passenger->full_name }}</td><td>{{ $passenger->passport_number ?: '—' }}</td><td>{{ $passenger->date_of_birth ? ($passenger->date_of_birth->lte($ageDate) ? (int) $passenger->date_of_birth->diffInYears($ageDate) : '—') : ($passenger->imported_age ?? '—') }}</td></tr>
     @empty
-        <tr><td colspan="6">No passengers assigned.</td></tr>
+        <tr><td colspan="4">No passengers assigned.</td></tr>
     @endforelse
     </tbody>
 </table>
 
-<div class="section">Accommodation</div>
+@if(count($voucher->hotel_stays ?? []))
+<h3 class="section">Accommodation</h3>
 <table class="grid">
-    <thead><tr><th>City</th><th>Hotel</th><th>Room</th><th>Check-in</th><th>Checkout</th><th>Nights</th></tr></thead>
+    <thead><tr><th style="width:10%">City</th><th style="width:29%">Hotel</th><th class="map">Location</th><th style="width:13%">Rooms</th><th style="width:15%">Check-in</th><th style="width:15%">Checkout</th><th class="nights">Nights</th></tr></thead>
     <tbody>
-    @forelse($voucher->hotel_stays ?? [] as $stay)
-        <tr><td>{{ $stay['city'] ?? '-' }}</td><td class="primary">{{ $stay['hotel_name'] ?? '-' }}</td><td>{{ $stay['room_count'] ?? 1 }} {{ ucfirst($stay['room_type'] ?? '') }}</td><td>{{ filled($stay['check_in_date'] ?? null) ? \Illuminate\Support\Carbon::parse($stay['check_in_date'])->format('d-m-Y') : '-' }}</td><td>{{ filled($stay['check_out_date'] ?? null) ? \Illuminate\Support\Carbon::parse($stay['check_out_date'])->format('d-m-Y') : '-' }}</td><td>{{ $stay['night_count'] ?? 0 }}</td></tr>
-    @empty
-        <tr><td colspan="6">No hotel stays added.</td></tr>
-    @endforelse
+    @foreach($voucher->hotel_stays as $index => $stay)
+        <tr>
+            <td>{{ $stay['city'] ?? '—' }}</td>
+            <td class="primary">{{ $stay['hotel_name'] ?? '—' }}</td>
+            <td class="map">@if(isset($mapCodes[$index]))<a href="{{ $stay['map_url'] }}"><img src="{{ $mapCodes[$index] }}" alt="Hotel location QR"></a>@else — @endif</td>
+            <td>{{ $stay['room_count'] ?? 1 }} {{ ucfirst($stay['room_type'] ?? '') }}</td>
+            <td>{{ filled($stay['check_in_date'] ?? null) ? \Illuminate\Support\Carbon::parse($stay['check_in_date'])->format('d M Y') : '—' }}</td>
+            <td>{{ filled($stay['check_out_date'] ?? null) ? \Illuminate\Support\Carbon::parse($stay['check_out_date'])->format('d M Y') : '—' }}</td>
+            <td class="nights">{{ $stay['night_count'] ?? 0 }}</td>
+        </tr>
+    @endforeach
     </tbody>
+    <tfoot><tr><td colspan="6" style="text-align:right"><strong>Total nights</strong></td><td class="nights"><strong>{{ $totalNights }}</strong></td></tr></tfoot>
 </table>
+@endif
 
 @if($voucher->service_bundle !== 'hotel')
-<div class="section">Transport / Services</div>
+<table class="flights"><tr>
+@foreach(['onward' => 'Outbound flight', 'return' => 'Return flight'] as $prefix => $label)
+    <td>
+        <h3 class="section">{{ $label }}</h3>
+        <table class="grid"><thead><tr><th>Flight</th><th>Sector</th><th>Departure</th><th>Arrival</th></tr></thead>
+            <tbody><tr>
+                <td>{{ $voucher->{$prefix.'_airline'} }} {{ $voucher->{$prefix.'_flight_number'} }}</td>
+                <td>{{ $voucher->{$prefix.'_departure_city'} }} – {{ $voucher->{$prefix.'_arrival_city'} }}</td>
+                <td>{{ $voucher->{$prefix.'_departure_at'}?->format('d M Y') ?: '—' }}<br><strong>{{ $voucher->{$prefix.'_departure_at'}?->format('H:i') }}</strong></td>
+                <td>{{ $voucher->{$prefix.'_arrival_at'}?->format('d M Y') ?: '—' }}<br><strong>{{ $voucher->{$prefix.'_arrival_at'}?->format('H:i') }}</strong></td>
+            </tr></tbody>
+        </table>
+    </td>
+@endforeach
+</tr></table>
+<div class="secondary">Flight times are local to each airport.</div>
+@endif
+
+@if($hasTransport)
+<h3 class="section">Transport</h3>
 <table class="grid">
-    <thead><tr><th>Schedule</th><th>Vehicle</th><th>Sector</th><th>Driver</th><th>Contact</th></tr></thead>
+    <thead><tr><th>Schedule</th><th>Vehicle / quantity</th><th style="width:30%">Route</th><th>Driver</th><th>Contact</th></tr></thead>
     <tbody>
     @forelse($voucher->group?->transportItems ?? [] as $item)
-        <tr><td>{{ $item->scheduled_at?->format('d-m-Y H:i') ?: '-' }}</td><td>{{ $item->service?->name ?: ($item->service?->vehicle_type ?: '-') }}</td><td class="primary">{{ $item->sector?->name ?: ($item->description ?: 'Transport') }}</td><td>{{ $item->driver?->name ?: ($item->service?->driver_name ?: '-') }}</td><td>{{ $item->driver?->phone ?: ($item->service?->driver_contact ?: '-') }}</td></tr>
+        <tr><td>{{ $item->scheduled_at?->format('d M Y H:i') ?: '—' }}</td><td>{{ $item->service?->name ?: ($item->service?->vehicle_type ?: '—') }} × {{ $item->quantity ?: 1 }}</td><td>{{ $item->sector?->name ?: ($item->description ?: 'Transport') }}</td><td>{{ $item->driver?->name ?: ($item->service?->driver_name ?: '—') }}</td><td>{{ $item->driver?->phone ?: ($item->service?->driver_contact ?: '—') }}</td></tr>
     @empty
-        <tr><td colspan="5">{{ $voucher->group?->transport_mode === 'none' ? 'Self-arranged transport' : ($voucher->group?->transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport') }}</td></tr>
+        <tr><td colspan="5">{{ $voucher->group?->mandatoryTransportVendor?->name ?: 'Provider not assigned' }} · {{ str($voucher->group?->transport_mode ?: 'not scheduled')->replace('_', ' ')->title() }}</td></tr>
     @endforelse
-    </tbody>
-</table>
-
-<div class="section">Flight Schedule</div>
-<table class="grid">
-    <thead><tr><th>Journey</th><th>Flight</th><th>Sector</th><th>Departure</th><th>Arrival</th></tr></thead>
-    <tbody>
-        <tr><td class="primary">Departure</td><td>{{ $voucher->onward_airline }} {{ $voucher->onward_flight_number }}</td><td>{{ $voucher->onward_departure_city }} - {{ $voucher->onward_arrival_city }}</td><td>{{ $voucher->onward_departure_at?->format('d-M-Y H:i') ?: '-' }}</td><td>{{ $voucher->onward_arrival_at?->format('d-M-Y H:i') ?: '-' }}</td></tr>
-        <tr><td class="primary">Return</td><td>{{ $voucher->return_airline }} {{ $voucher->return_flight_number }}</td><td>{{ $voucher->return_departure_city }} - {{ $voucher->return_arrival_city }}</td><td>{{ $voucher->return_departure_at?->format('d-M-Y H:i') ?: '-' }}</td><td>{{ $voucher->return_arrival_at?->format('d-M-Y H:i') ?: '-' }}</td></tr>
     </tbody>
 </table>
 @endif
 
-@if($voucher->notes)<div class="footer-note"><strong>Special instructions:</strong> {{ $voucher->notes }}</div>@endif
+@if(count($contacts))
+<h3 class="section">Journey contacts</h3>
+<table class="grid"><thead><tr><th>Responsibility / City</th><th>Representative</th><th>Company / Agent</th><th>Phone / WhatsApp</th></tr></thead>
+<tbody>
+@foreach($contacts as $contact)
+<tr><td>{{ $contact['responsibility'] }}@if($contact['city'] ?? null)<br>{{ $contact['city'] }}@endif</td><td class="primary">{{ $contact['name'] }}</td><td>{{ ($contact['organization'] ?? '') ?: '—' }}</td><td>{{ $contact['phone'] }}@if(($contact['whatsapp'] ?? '') && $contact['whatsapp'] !== $contact['phone'])<br>WhatsApp: {{ $contact['whatsapp'] }}@endif</td></tr>
+@endforeach
+</tbody></table>
+@endif
+@foreach($voucher->hotel_stays ?? [] as $stay)
+@if(filled($stay['notes'] ?? null))<div class="footer-note">{{ $stay['city'] ?? '' }} · {{ $stay['hotel_name'] ?? '' }}: {{ $stay['notes'] }}</div>@endif
+@endforeach
+@if($voucher->notes)<div class="footer-note"><strong>Journey instructions:</strong> {{ $voucher->notes }}</div>@endif
+@if(filled($footerText))<div class="footer-note">{{ $footerText }}</div>@endif
+<div class="footer-note secondary">{{ collect([$letterhead['legalName'] ?? null, ...($letterhead['lines'] ?? []), $letterhead['taxId'] ?? null])->filter()->join(' · ') }}</div>
 </body>
 </html>

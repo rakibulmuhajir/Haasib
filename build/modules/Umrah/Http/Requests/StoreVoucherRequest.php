@@ -49,6 +49,7 @@ class StoreVoucherRequest extends UmrahFormRequest
         array_push($hotelIdRules, 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.'));
 
         return [
+            ...\App\Modules\Umrah\Services\VoucherPrintProfiles::rules('print_details'),
             'voucher_number' => [
                 'nullable',
                 'string',
@@ -85,8 +86,15 @@ class StoreVoucherRequest extends UmrahFormRequest
             'hotel_stays.*.check_in_date' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.check_out_date' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
+            'hotel_stays.*.meal_plan' => ['nullable', 'string', 'max:100'],
+            'hotel_stays.*.map_url' => ['nullable', 'url:https', 'max:500', 'regex:~^https://(www\.google\.com/maps/|maps\.google\.com/|maps\.app\.goo\.gl/|goo\.gl/maps/)~i'],
             'notes' => ['nullable', 'string'],
         ];
+    }
+
+    public function attributes(): array
+    {
+        return \App\Modules\Umrah\Services\VoucherPrintProfiles::attributes('print_details');
     }
 
     public function after(): array

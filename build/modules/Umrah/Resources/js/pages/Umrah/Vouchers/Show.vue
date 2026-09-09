@@ -28,9 +28,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { printBaseCss } from '@/lib/printSheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import VoucherPreview from '../../../components/VoucherPreview.vue';
 import type { BreadcrumbItem } from '@/types';
-import { formatDateTime as sharedFormatDateTime } from '@/lib/datetime';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowRightLeft,
@@ -237,27 +237,7 @@ const submitWorkflow = () => {
     else workflowForm.post(`${url}/${action}`, options);
 };
 
-const escapeHtml = (value: unknown) =>
-    String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
 
-// Was new Date(...).toLocaleString(), which read the Z Laravel appends as
-// a real zone and redrew a 13:00 flight as 18:00 while the PDF printed
-// 13:00. The shared helper treats these columns as the wall-clock times
-// they are.
-const formatDateTime = (value: unknown) =>
-    value ? sharedFormatDateTime(value as string, { fallback: '' }) : '';
-const formatDate = (value: unknown) => {
-    if (!value) return '';
-    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-    return Number.isNaN(date.getTime())
-        ? String(value)
-        : date.toLocaleDateString();
-};
 const roomBeds = (stay: any) =>
     Number(
         stay.beds_per_room ||
@@ -313,134 +293,13 @@ const issuerLines = computed<string[]>(() => {
     ].filter((line): line is string => Boolean(line));
 });
 
-/** The same lines, as markup, for the two print templates. */
-const issuerLinesHtml = (className: string) =>
-    issuerLines.value
-        .map((line) => `<div class="${className}">${escapeHtml(line)}</div>`)
-        .join('');
 
-const voucherHtml = () => {
-    const agent = props.voucher.agent;
-    const transportPartner =
-        props.voucher.group?.mandatory_transport_vendor || null;
-    const partner = transportPartner || props.voucher.group?.vendor || null;
-    const partnerRole = transportPartner
-        ? 'Transport Partner'
-        : 'Visa Partner';
-    const familyHead = props.voucher.passengers?.[0];
-    const totalNights = (props.voucher.hotel_stays || []).reduce(
-        (total: number, stay: any) => total + Number(stay.night_count || 0),
-        0,
-    );
-    const logo = (party: any, alt: string) =>
-        party?.logo_url
-            ? `<img class="party-logo" src="${escapeHtml(party.logo_url)}" alt="${escapeHtml(alt)}">`
-            : '';
-    const passengerRows = (props.voucher.passengers || [])
-        .map(
-            (passenger: any, index: number) => `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td class="primary">${escapeHtml(passenger.full_name)}</td>
-                    <td>${escapeHtml(passenger.passport_number || '-')}</td>
-                    <td>${escapeHtml(passenger.nationality || '-')}</td>
-                    <td>${escapeHtml(passenger.date_of_birth || (passenger.imported_age !== null ? `Age ${passenger.imported_age}` : '-'))}</td>
-                    <td>${escapeHtml(passenger.visa_status || '-')}</td>
-                </tr>`,
-        )
-        .join('');
-    const hotelRows = (props.voucher.hotel_stays || [])
-        .map(
-            (stay: any) => `
-                <tr>
-                    <td>${escapeHtml(stay.city || '-')}</td>
-                    <td class="primary">${escapeHtml(stay.hotel_name)}</td>
-                    <td>${escapeHtml(`${stay.room_count || 1} ${stay.room_type || ''}`)}</td>
-                    <td>${escapeHtml(formatDate(stay.check_in_date))}</td>
-                    <td>${escapeHtml(formatDate(stay.check_out_date))}</td>
-                    <td>${escapeHtml(stay.night_count || 0)}</td>
-                </tr>`,
-        )
-        .join('');
-    const transportRows = (props.voucher.group?.transport_items || [])
-        .map(
-            (item: any) => `
-                <tr>
-                    <td>${escapeHtml(formatDateTime(item.scheduled_at) || '-')}</td>
-                    <td>${escapeHtml(item.service?.name || item.service?.vehicle_type || '-')}</td>
-                    <td class="primary">${escapeHtml(item.sector?.name || item.description || 'Transport')}</td>
-                    <td>${escapeHtml(item.driver?.name || item.service?.driver_name || '-')}</td>
-                    <td>${escapeHtml(item.driver?.phone || item.service?.driver_contact || '-')}</td>
-                </tr>`,
-        )
-        .join('');
-    const flights =
-        props.voucher.service_bundle === 'hotel'
-            ? ''
-            : `
-                <div class="section-title">Flight Schedule</div>
-                <table>
-                    <thead><tr><th>Journey</th><th>Flight</th><th>Sector</th><th>Departure</th><th>Arrival</th></tr></thead>
-                    <tbody>
-                        <tr><td class="primary">Departure</td><td>${escapeHtml(props.voucher.onward_airline)} ${escapeHtml(props.voucher.onward_flight_number || '')}</td><td>${escapeHtml(props.voucher.onward_departure_city)} - ${escapeHtml(props.voucher.onward_arrival_city)}</td><td>${escapeHtml(formatDateTime(props.voucher.onward_departure_at))}</td><td>${escapeHtml(formatDateTime(props.voucher.onward_arrival_at))}</td></tr>
-                        <tr><td class="primary">Return</td><td>${escapeHtml(props.voucher.return_airline)} ${escapeHtml(props.voucher.return_flight_number || '')}</td><td>${escapeHtml(props.voucher.return_departure_city)} - ${escapeHtml(props.voucher.return_arrival_city)}</td><td>${escapeHtml(formatDateTime(props.voucher.return_departure_at))}</td><td>${escapeHtml(formatDateTime(props.voucher.return_arrival_at))}</td></tr>
-                    </tbody>
-                </table>`;
-    const transport = includesTransport.value
-        ? `
-                <div class="section-title">Transport / Services</div>
-                <table>
-                    <thead><tr><th>Schedule</th><th>Vehicle</th><th>Sector</th><th>Driver</th><th>Contact</th></tr></thead>
-                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : props.voucher.group?.transport_mode === 'none' ? 'Self-arranged transport' : 'Standard bus transport')}</td></tr>`}</tbody>
-                </table>`
-        : '';
-
-    return `<!doctype html>
-<html><head><meta charset="utf-8">
-<title>${escapeHtml(props.voucher.voucher_number)} - Voucher</title>
-<style>
-${printBaseCss()}
-
-/* A voucher's own arrangement: three parties across the head -- the agent who
-   sold it, us, and whoever is carrying it out -- then a strip of the five
-   facts a desk clerk checks first. Everything else is the shared sheet. */
-.masthead { margin-bottom: 5px; table-layout: fixed; }
-.masthead td { border: 0; padding: 0 5px; text-align: center; vertical-align: top; width: 33.333%; }
-.masthead td:first-child { padding-left: 0; text-align: left; }
-.masthead td:last-child { padding-right: 0; text-align: right; }
-.party-logo { display: block; height: 40px; margin-bottom: 3px; max-width: 135px; object-fit: contain; }
-.masthead td:nth-child(2) .party-logo { margin-left: auto; margin-right: auto; }
-.masthead td:last-child .party-logo { margin-left: auto; }
-.party-name { font-family: "Zilla Slab", Georgia, serif; font-size: 10px; font-weight: 700; }
-.main-name { color: var(--mark); font-family: "Zilla Slab", Georgia, serif; font-size: 15px; font-weight: 700; }
-.identity { margin-bottom: 4px; }
-.identity td { padding: 3px 5px; }
-.focus { font-size: 11px; font-weight: 700; }
-</style></head><body>
-<table class="masthead"><tr>
-    <td>${logo(agent, 'Agent logo')}<div class="party-name">${escapeHtml(agent?.name || 'Agent')}</div><div class="secondary">${escapeHtml([agent?.city, agent?.country].filter(Boolean).join(', '))}</div><div class="secondary">${escapeHtml(agent?.phone || '')}</div></td>
-    <td>${logo(props.company, 'Company logo')}<div class="main-name">${escapeHtml(props.company.name)}</div>${issuerLinesHtml('secondary')}</td>
-    <td>${logo(partner, `${partnerRole} logo`)}<div class="party-name">${escapeHtml(partner?.name || partnerRole)}</div><div class="secondary">${escapeHtml(partnerRole)}</div><div class="secondary">${escapeHtml([partner?.city, partner?.phone].filter(Boolean).join(' | '))}</div></td>
-</tr></table>
-<div class="document-title">${escapeHtml(props.voucher.title || 'Travel Voucher')}</div>
-<table class="identity"><tr>
-    <td><span class="label">Family Head</span><span class="focus">${escapeHtml(familyHead?.full_name || 'Not assigned')}</span></td>
-    <td><span class="label">Voucher No.</span><span class="focus">${escapeHtml(props.voucher.voucher_number)}</span></td>
-    <td><span class="label">Group</span>${escapeHtml(props.voucher.group?.group_number)} - ${escapeHtml(props.voucher.group?.name)}</td>
-    <td><span class="label">PAX / Nights</span><span class="focus">${(props.voucher.passengers || []).length} / ${totalNights}</span></td>
-    <td><span class="label">Status / Service</span>${escapeHtml(props.statuses[props.voucher.status] || props.voucher.status)} | ${escapeHtml(serviceBundleLabel.value)}</td>
-</tr></table>
-<div class="section-title">Mutamers / Passengers</div>
-<table><thead><tr><th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB / Age</th><th>Visa Status</th></tr></thead><tbody>${passengerRows || '<tr><td colspan="6">No passengers assigned.</td></tr>'}</tbody></table>
-<div class="section-title">Accommodation</div>
-<table><thead><tr><th>City</th><th>Hotel</th><th>Room</th><th>Check-in</th><th>Checkout</th><th>Nights</th></tr></thead><tbody>${hotelRows || '<tr><td colspan="6">No hotel stays added.</td></tr>'}</tbody></table>
-${transport}
-${flights}
-${props.voucher.notes ? `<div class="footer-note"><strong>Special instructions:</strong> ${escapeHtml(props.voucher.notes)}</div>` : ''}
-</body></html>`;
-};
-
+const preparingPrint = ref(false);
+const viewTab = ref('voucher');
+const printUrl = computed(() => `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`);
 const printVoucher = () => {
+    if (preparingPrint.value) return;
+    preparingPrint.value = true;
     const printFrame = document.createElement('iframe');
     printFrame.setAttribute('aria-hidden', 'true');
     printFrame.style.position = 'fixed';
@@ -451,14 +310,20 @@ const printVoucher = () => {
 
     printFrame.addEventListener(
         'load',
-        () => {
+        async () => {
             const printWindow = printFrame.contentWindow;
-            if (!printWindow) {
+            if (!printWindow || printWindow.document.body?.dataset.voucherPrint !== props.voucher.id) {
+                preparingPrint.value = false;
+                clearTimeout(printTimeout);
                 printFrame.remove();
                 toast.error('Unable to open the voucher print view.');
                 return;
             }
-
+            await printWindow.document.fonts.ready;
+            await Promise.all(Array.from(printWindow.document.images).map((image) => image.decode().catch(() => undefined)));
+            if (!printFrame.isConnected) return;
+            clearTimeout(printTimeout);
+            preparingPrint.value = false;
             printWindow.addEventListener(
                 'afterprint',
                 () => printFrame.remove(),
@@ -470,7 +335,12 @@ const printVoucher = () => {
         { once: true },
     );
 
-    printFrame.srcdoc = voucherHtml();
+    const printTimeout = window.setTimeout(() => {
+        preparingPrint.value = false;
+        printFrame.remove();
+        toast.error('The print view could not load. Please try again.');
+    }, 15000);
+    printFrame.src = `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`;
     document.body.appendChild(printFrame);
 };
 
@@ -490,6 +360,7 @@ const exportVoucher = () => {
         :icon="ScrollText"
     >
         <template #actions>
+            <div class="flex max-w-full flex-wrap gap-2">
             <Button
                 v-if="canViewAccounting"
                 variant="outline"
@@ -501,9 +372,9 @@ const exportVoucher = () => {
             >
                 <Calculator class="mr-2 h-4 w-4" />Accounting
             </Button>
-            <Button variant="outline" @click="printVoucher">
+            <Button variant="outline" :disabled="preparingPrint" @click="printVoucher">
                 <Printer class="mr-2 h-4 w-4" />
-                Print
+                {{ preparingPrint ? 'Preparing…' : 'Print' }}
             </Button>
             <Button variant="outline" @click="exportVoucher">
                 <Download class="mr-2 h-4 w-4" />
@@ -583,6 +454,7 @@ const exportVoucher = () => {
                 <Plane class="mr-2 h-4 w-4" />
                 Open Group
             </Button>
+            </div>
         </template>
 
         <div
@@ -593,6 +465,24 @@ const exportVoucher = () => {
             {{ approvalError }}
         </div>
 
+        <Tabs v-model="viewTab" class="mb-4 min-w-0 max-w-full">
+            <TabsList aria-label="Voucher view">
+                <TabsTrigger value="voucher">Voucher</TabsTrigger>
+                <TabsTrigger value="details">Internal details &amp; history</TabsTrigger>
+            </TabsList>
+        <TabsContent value="voucher" class="space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>Passenger copy · same layout as Print and Export PDF</span>
+                <span>Long vouchers continue beyond one page.</span>
+            </div>
+            <div v-if="voucher.status === 'draft' && canApprove && agentCapabilities.requires_override_reason" class="space-y-2">
+                <Label for="preview-override">Reason for approving after travel started</Label>
+                <Textarea id="preview-override" v-model="approveForm.override_reason" />
+            </div>
+            <VoucherPreview :url="printUrl" :voucher-id="voucher.id" :revision="`${voucher.updated_at}-${voucher.status}`" />
+        </TabsContent>
+
+        <TabsContent value="details" force-mount v-show="viewTab === 'details'" class="space-y-6">
         <div class="mb-6 flex flex-col items-center text-center">
             <img
                 v-if="company.logo_url"
@@ -1254,5 +1144,18 @@ const exportVoucher = () => {
                 </form>
             </DialogContent>
         </Dialog>
+        <Card v-if="voucher.print_details?.contacts?.length || voucher.print_details?.footer_text" variant="detail">
+            <CardHeader><CardTitle>Printed contacts &amp; footer</CardTitle><CardDescription>Saved on this voucher; directory changes do not change this copy.</CardDescription></CardHeader>
+            <CardContent class="space-y-3">
+                <div v-for="(contact, index) in voucher.print_details.contacts" :key="index" class="grid gap-1 border-b py-2 text-sm sm:grid-cols-4">
+                    <span>{{ contact.responsibility }} · {{ contact.city }}</span>
+                    <strong>{{ contact.name }}</strong><span>{{ contact.organization }}</span>
+                    <span>{{ contact.phone }}<span v-if="contact.whatsapp && contact.whatsapp !== contact.phone"> · WhatsApp {{ contact.whatsapp }}</span></span>
+                </div>
+                <p v-if="voucher.print_details.footer_text" class="whitespace-pre-wrap text-sm">{{ voucher.print_details.footer_text }}</p>
+            </CardContent>
+        </Card>
+        </TabsContent>
+        </Tabs>
     </PageShell>
 </template>

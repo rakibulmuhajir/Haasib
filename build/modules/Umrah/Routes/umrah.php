@@ -22,6 +22,7 @@ use App\Modules\Umrah\Http\Controllers\VisaGroupController;
 use App\Modules\Umrah\Http\Controllers\VisaVendorController;
 use App\Modules\Umrah\Http\Controllers\VoucherAccountingController;
 use App\Modules\Umrah\Http\Controllers\VoucherController;
+use App\Modules\Umrah\Http\Controllers\VoucherProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
@@ -120,12 +121,15 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers/{voucher}/passengers/separate', [VoucherController::class, 'separatePassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.separate');
         Route::get('vouchers/{voucher}/accounting', [VoucherAccountingController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.accounting.show');
         Route::get('vouchers/{voucher}/pdf', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.pdf');
+        Route::get('vouchers/{voucher}/print', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.print');
         Route::get('vouchers/{voucher}', [VoucherController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.show');
         Route::post('vouchers/{voucher}/approve', [VoucherController::class, 'approve'])->whereUuid('voucher')->name('umrah.vouchers.approve');
 
         Route::post('logos', [LogoUploadController::class, 'store'])->name('umrah.logos.store');
 
         Route::get('settings', [SetupController::class, 'index'])->name('umrah.settings.index');
+        Route::get('settings/voucher', [VoucherProfileController::class, 'index'])->name('umrah.voucher-settings.index');
+        Route::put('settings/voucher', [VoucherProfileController::class, 'update'])->name('umrah.voucher-settings.update');
         Route::get('settings/pricing', [CommercialPricingController::class, 'index'])->name('umrah.pricing.index');
         Route::post('settings/pricing/categories', [CommercialPricingController::class, 'storeCategory'])->name('umrah.pricing.categories.store');
         Route::put('settings/pricing/categories/{category}', [CommercialPricingController::class, 'updateCategory'])->whereUuid('category')->name('umrah.pricing.categories.update');

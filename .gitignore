@@ -40,3 +40,6 @@ build/public/build-previous
 # curl cookie jars — session cookies, never source.
 cookies.txt
 **/cookies.txt
+
+# Generated sample documents
+build/output/

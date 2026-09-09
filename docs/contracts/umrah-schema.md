@@ -39,6 +39,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 ## Tables
 
 ### umrah.agents
+- `voucher_settings` jsonb nullable, fillable and cast to array. Reusable footer/contact profile as defined below.
 - Purpose: Agents who send passports/groups.
 - Columns:
   - `id` uuid PK.
@@ -51,7 +52,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `email` varchar(255) nullable.
   - `city` varchar(100) nullable.
   - `country` varchar(100) nullable. Used as the default passenger nationality for this agent's new groups.
-  - `logo_url` varchar(500) nullable.
+  - `logo_url` varchar(500) nullable. Party logo uploads accept PNG/JPEG/WebP up to 2 MB, re-encode to PNG with a maximum 600-pixel edge, and return a same-origin `/storage/party-logos/{company_id}/...` path. Uploading alone does not replace the saved party logo or delete its existing file; the enclosing form must be saved.
   - `notes` text nullable.
   - `can_create_voucher` boolean default true.
   - `can_approve_voucher` boolean default false.
@@ -129,6 +130,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - The natural service date selects the rate: group travel date for visa and standard transport, scheduled movement date for a specialized transport fare, and each occupied night for a hotel room. When an exact date is not yet known, the booking's expected travel date is used.
 
 ### umrah.visa_vendors
+- `voucher_settings` jsonb nullable, fillable and cast to array. Independent representative directory for this supplier, including transport providers.
 - Purpose: Visa suppliers, usually government or service providers.
 - Columns:
   - `id` uuid PK.
@@ -447,6 +449,9 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `company_id`, `visa_group_id`, `full_name`, `passport_number`, `nationality`, `date_of_birth`, `imported_age`, `service_type`, `transport_charge_amount`, `visa_status`, `notes`, `sort_order`.
 
 ### umrah.vouchers
+- `print_details` jsonb nullable, fillable and cast to array. Saved footer/contact snapshot; never resolved from current profiles during printing. Null on legacy records means no configured footer. Amendment/separation copies preserve this field.
+- Voucher profile/snapshot shape: `footer_text` nullable plain text (max 2000), `contacts` array (max 12); each contact has `name` (required, max 150), `responsibility` (required, max 100), `organization` (nullable, max 150), `phone` (required, max 50), `whatsapp` (nullable, max 50), `city` (nullable, max 100). No HTML or remote content is executed.
+- Company defaults live at `auth.companies.settings.umrah_voucher`. A nonempty agent footer overrides company footer. Company and agent contacts prefill new vouchers; supplier directories offer explicit selection independently, never automatically overwrite contacts. Draft edits may change snapshots; approved copies require an amendment. Removing all contacts or clearing footer is an intentional empty snapshot.
 - Purpose: Travel voucher / journey schedule for all or selected passengers in a visa group.
 - Columns:
   - `id` uuid PK.
@@ -470,6 +475,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `return_departure_at` timestamp nullable. Required unless `service_bundle = hotel`.
   - `return_arrival_at` timestamp nullable. Required unless `service_bundle = hotel`.
   - `hotel_stays` jsonb default `[]`. Required for every voucher because the voucher must show the passenger's complete journey and stays, even when hotel service was bought elsewhere. Each stay has hotel name, city, check-in date, checkout date, and notes. Hotel stays do not record check-in or checkout times. New vouchers start with three editable stays: Makkah, Madinah, Makkah.
+    - Optional `meal_plan` plain text max 100 and `map_url` HTTPS Google Maps link max 500, explicitly checked by the clerk; never guess hotel entrances from hotel names. The print generates a local QR from this snapshot; no address lookup service receives passenger information.
     - Selecting a stay checkout date sets the next stay check-in to the same date by default. Same-day hotel transfers are valid; a later stay cannot begin before the previous checkout date.
   - Company stay snapshot also stores `hotel_id`, `hotel_vendor_id`, `room_type`, `room_count`, `beds_per_room`, `night_count`, per-bed unit retail/cost and total retail/cost.
     - Effective-dated stays additionally store a `pricing_breakdown` entry for each occupied date with the default rule, winning agent/category rule, currency, and snapshotted per-bed retail/cost. This supports a stay crossing two rate periods without changing its itinerary shape.

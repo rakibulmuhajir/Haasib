@@ -1,5 +1,7 @@
 # Schema Contract — Auth (Users & Companies)
 
+Company settings additionally allow `umrah_voucher`: a footer/contact defaults object following the voucher profile shape in `umrah-schema.md`. Updating this key preserves all unrelated settings and never rewrites voucher snapshots.
+
 Single source of truth for the shared auth schema. Read this before touching migrations, models, requests, resources, or Vue forms. Do not invent new columns/props; if something is missing, pause and update this contract first.
 
 ## Guardrails

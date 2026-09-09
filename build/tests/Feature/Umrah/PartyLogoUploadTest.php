@@ -93,3 +93,26 @@ test('a file that is not an image is refused', function () {
         'party-logos/test',
     ))->toThrow(Illuminate\Validation\ValidationException::class);
 });
+
+test('public logo paths do not depend on the default disk or app host', function () {
+    config(['filesystems.default' => 'local', 'filesystems.disks.local.url' => 'https://wrong-host/private']);
+    $url = app(LogoUploadService::class)->store(logoFile(100, 100), 'party-logos/test');
+    expect($url)->toStartWith('/storage/party-logos/test/');
+    Storage::disk('public')->assertExists(substr($url, strlen('/storage/')));
+});
+
+test('failed storage does not report success or remove the existing logo', function () {
+    $disk = Mockery::mock(\Illuminate\Filesystem\FilesystemAdapter::class);
+    $disk->shouldReceive('put')->once()->andReturn(false);
+    $disk->shouldNotReceive('delete');
+    Storage::shouldReceive('disk')->with('public')->once()->andReturn($disk);
+    expect(fn () => app(LogoUploadService::class)->store(logoFile(100, 100), 'party-logos/test', '/storage/party-logos/test/old.png'))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+test('logo validation accepts images above the old limit and rejects over two megabytes', function () {
+    $request = new \App\Modules\Umrah\Http\Requests\StoreLogoRequest;
+    $accepted = \Illuminate\Support\Facades\Validator::make(['logo' => UploadedFile::fake()->image('logo.png')->size(650)], $request->rules());
+    $rejected = \Illuminate\Support\Facades\Validator::make(['logo' => UploadedFile::fake()->image('logo.png')->size(2049)], $request->rules());
+    expect($accepted->passes())->toBeTrue()->and($rejected->fails())->toBeTrue();
+});

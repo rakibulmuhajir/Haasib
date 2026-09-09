@@ -30,6 +30,7 @@ const props = defineProps<{
     canManageAgents: boolean;
     canCreateRefund: boolean;
     canManagePricing: boolean;
+    canManageVoucherSettings: boolean;
     categories: any[];
     agents: any[];
     rates: any[];
@@ -105,6 +106,7 @@ const savePricingCategory = () =>
         :icon="Users"
     >
         <template #actions>
+            <Button v-if="canManageVoucherSettings" variant="outline" @click="router.get(`/${company.slug}/umrah/settings/voucher`, { target: `agent:${agent.id}` })">Voucher contacts &amp; footer</Button>
             <Button
                 v-if="canCreateRefund"
                 variant="outline"

@@ -28,7 +28,7 @@ class StoreVisaVendorRequest extends UmrahFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
-            'logo_url' => ['nullable', 'url:http,https', 'max:500'],
+            'logo_url' => ['nullable', 'string', new \App\Modules\Umrah\Rules\PartyLogoUrl, 'max:500'],
             'adult_retail_amount' => $this->visaRateRules(true),
             'adult_cost_amount' => $this->visaRateRules(true),
             'child_retail_amount' => $this->visaRateRules(true),

@@ -49,6 +49,7 @@ class Agent extends Model
      * COUNTRIES. Folding one into the other would change what the value means.
      */
     protected $fillable = [
+        'voucher_settings',
         'company_id',
         'customer_id',
         'user_id',
@@ -73,6 +74,7 @@ class Agent extends Model
     ];
 
     protected $casts = [
+        'voucher_settings' => 'array',
         'company_id' => 'string',
         'customer_id' => 'string',
         'user_id' => 'string',

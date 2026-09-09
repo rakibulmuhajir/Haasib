@@ -14,7 +14,10 @@
  */
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { computed, ref } from 'vue'
+import { Input } from '@/components/ui/input'
+import { useForm } from '@inertiajs/vue3'
+import { toast } from 'vue-sonner'
+import { computed, ref, useId } from 'vue'
 
 const props = withDefaults(
     defineProps<{
@@ -26,19 +29,21 @@ const props = withDefaults(
         error?: string
         disabled?: boolean
     }>(),
-    { modelValue: null, label: 'Logo', maxKilobytes: 300, disabled: false },
+    { modelValue: null, label: 'Logo', maxKilobytes: 2048, disabled: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [url: string | null] }>()
 
-const input = ref<HTMLInputElement | null>(null)
-const uploading = ref(false)
+const inputKey = ref(0)
+const inputId = useId()
+const upload = useForm({ logo: null as File | null })
+const uploading = computed(() => upload.processing)
 const failure = ref<string | null>(null)
 
 const shown = computed(() => props.modelValue)
 
 const reset = () => {
-    if (input.value) input.value.value = ''
+    inputKey.value++
 }
 
 const onChange = async (event: Event) => {
@@ -57,38 +62,30 @@ const onChange = async (event: Event) => {
         return
     }
 
-    const body = new FormData()
-    body.append('logo', file)
-    if (props.modelValue) body.append('replacing', props.modelValue)
-
-    uploading.value = true
-
-    try {
-        const response = await fetch(`/${props.companySlug}/umrah/logos`, {
-            method: 'POST',
-            body,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN':
-                    document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
-            },
-        })
-
-        if (!response.ok) {
-            const problem = await response.json().catch(() => null)
-            failure.value = problem?.errors?.logo?.[0] ?? 'That image could not be uploaded.'
+    upload.logo = file
+    upload.post(`/${props.companySlug}/umrah/logos`, {
+        forceFormData: true,
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: (page) => {
+            const flash = page.props.flash as { uploadedLogoUrl?: string } | undefined
+            if (flash?.uploadedLogoUrl) {
+                emit('update:modelValue', flash.uploadedLogoUrl)
+                toast.success('Logo uploaded. Save the form to apply it.')
+            } else {
+                failure.value = 'That image could not be uploaded. Please try again.'
+                toast.error(failure.value)
+            }
+        },
+        onError: (errors) => {
+            failure.value = errors.logo ?? 'That image could not be uploaded.'
+            toast.error(failure.value)
+        },
+        onFinish: () => {
+            upload.reset()
             reset()
-
-            return
-        }
-
-        emit('update:modelValue', (await response.json()).url)
-    } catch {
-        failure.value = 'That image could not be uploaded.'
-    } finally {
-        uploading.value = false
-        reset()
-    }
+        },
+    })
 }
 
 const clear = () => {
@@ -100,7 +97,7 @@ const clear = () => {
 
 <template>
     <div class="space-y-2">
-        <Label>{{ label }}</Label>
+        <Label :for="inputId">{{ label }}</Label>
         <div class="flex items-center gap-3">
             <div
                 class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/40"
@@ -109,8 +106,9 @@ const clear = () => {
                 <span v-else class="text-[10px] text-muted-foreground">None</span>
             </div>
             <div class="min-w-0 space-y-1">
-                <input
-                    ref="input"
+                <Input
+                    :id="inputId"
+                    :key="inputKey"
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     :disabled="disabled || uploading"
@@ -124,7 +122,7 @@ const clear = () => {
                     </template>
                 </p>
             </div>
-            <Button v-if="shown" type="button" variant="ghost" size="sm" :disabled="disabled" @click="clear">
+            <Button v-if="shown" type="button" variant="ghost" size="sm" :disabled="disabled || uploading" @click="clear">
                 Remove
             </Button>
         </div>

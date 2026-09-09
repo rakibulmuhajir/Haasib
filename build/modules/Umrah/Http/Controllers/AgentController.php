@@ -149,6 +149,7 @@ class AgentController extends Controller
             'canManageAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE),
             'canCreateRefund' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CREATE),
             'canManagePricing' => $canManagePricing,
+            'canManageVoucherSettings' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_SETTINGS_UPDATE),
             ...$pricingPayload,
         ]);
     }

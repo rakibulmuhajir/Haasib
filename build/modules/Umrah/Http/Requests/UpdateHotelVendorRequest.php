@@ -20,7 +20,7 @@ class UpdateHotelVendorRequest extends UmrahFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
-            'logo_url' => ['nullable', 'url:http,https', 'max:500'],
+            'logo_url' => ['nullable', 'string', new \App\Modules\Umrah\Rules\PartyLogoUrl, 'max:500'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

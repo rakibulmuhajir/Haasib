@@ -6,9 +6,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, ChevronsUpDown } from 'lucide-vue-next'
 
 type Option = { value: string; label: string }
-const props = withDefaults(defineProps<{ modelValue: string; options: Option[]; placeholder?: string; searchPlaceholder?: string; showValue?: boolean; openOnFocus?: boolean }>(), {
+const props = withDefaults(defineProps<{ modelValue: string; options: Option[]; placeholder?: string; searchPlaceholder?: string; showValue?: boolean; openOnFocus?: boolean; disabled?: boolean }>(), {
   showValue: true,
   openOnFocus: false,
+  disabled: false,
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const open = ref(false)
@@ -19,13 +20,13 @@ const filtered = computed(() => {
   return term ? props.options.filter((option) => `${option.value} ${option.label}`.toLowerCase().includes(term)) : props.options
 })
 watch(open, (value) => { if (!value) search.value = '' })
-const choose = (value: string) => { emit('update:modelValue', value); open.value = false }
+const choose = (value: string) => { if (props.disabled) return; emit('update:modelValue', value); open.value = false }
 </script>
 
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button type="button" variant="outline" role="combobox" :aria-expanded="open" class="w-full justify-between px-3 font-normal" @focus="openOnFocus && (open = true)">
+      <Button type="button" variant="outline" role="combobox" :disabled="disabled" :aria-expanded="open" class="w-full justify-between px-3 font-normal" @focus="!disabled && openOnFocus && (open = true)">
         <span class="truncate">{{ selected ? (showValue ? `${selected.value} · ${selected.label}` : selected.label) : (placeholder || 'Select') }}</span>
         <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>

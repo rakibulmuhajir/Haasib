@@ -61,6 +61,7 @@ class VisaVendor extends Model
      * create.
      */
     protected $fillable = [
+        'voucher_settings',
         'company_id',
         'vendor_id',
         'vendor_number',
@@ -90,6 +91,7 @@ class VisaVendor extends Model
     ];
 
     protected $casts = [
+        'voucher_settings' => 'array',
         'company_id' => 'string',
         'vendor_id' => 'string',
         'is_company_owned' => 'boolean',

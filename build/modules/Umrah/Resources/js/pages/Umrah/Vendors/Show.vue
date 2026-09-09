@@ -28,6 +28,7 @@ const props = defineProps<{
     statementUrl?: string;
     canCreateRefund: boolean;
     canManagePricing: boolean;
+    canManageVoucherSettings: boolean;
 }>();
 
 // This page renders both a visa vendor and a transport provider (see
@@ -88,6 +89,7 @@ const exportPdf = () => {
         :icon="Truck"
     >
         <template #actions>
+            <Button v-if="canManageVoucherSettings" variant="outline" @click="router.get(`/${company.slug}/umrah/settings/voucher`, { target: `vendor:${vendor.id}` })">Voucher contacts &amp; footer</Button>
             <Button variant="outline" @click="router.get(backUrl || `/${company.slug}/umrah/vendors`)">
                 <ArrowLeft class="mr-2 h-4 w-4" />Back
             </Button>

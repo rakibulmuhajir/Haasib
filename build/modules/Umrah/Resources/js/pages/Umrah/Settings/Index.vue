@@ -32,6 +32,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const sections = [
     {
+        title: 'Voucher settings',
+        description: 'Printed footer, company contacts and agent/provider representatives.',
+        href: 'settings/voucher',
+        icon: Building2,
+        count: () => 'Defaults & contacts',
+    },
+    {
         title: 'Company & Currencies',
         description:
             'Company profile, base currency and enabled currencies used across Haasib.',

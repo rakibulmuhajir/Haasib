@@ -25,7 +25,7 @@ use Illuminate\Validation\ValidationException;
 class LogoUploadService
 {
     /** Matches the `max:` on the validation rules, which are in kilobytes. */
-    public const MAX_KILOBYTES = 300;
+    public const MAX_KILOBYTES = 2048;
 
     /** Long edge in pixels. A logo is never rendered larger than this. */
     public const MAX_EDGE = 600;
@@ -66,11 +66,13 @@ class LogoUploadService
         }
 
         $path = trim($directory, '/').'/'.Str::uuid().'.png';
-        Storage::disk('public')->put($path, $png);
+        if (! Storage::disk('public')->put($path, $png)) {
+            throw ValidationException::withMessages(['logo' => 'The logo could not be saved. Please try again.']);
+        }
 
         $this->deleteIfOurs($replacing);
 
-        return Storage::url($path);
+        return '/storage/'.$path;
     }
 
     public function deleteIfOurs(?string $url): void

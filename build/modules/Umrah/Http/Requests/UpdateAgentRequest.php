@@ -54,7 +54,7 @@ class UpdateAgentRequest extends UmrahFormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
-            'logo_url' => ['nullable', 'url:http,https', 'max:500'],
+            'logo_url' => ['nullable', 'string', new \App\Modules\Umrah\Rules\PartyLogoUrl, 'max:500'],
             'notes' => ['nullable', 'string'],
         ];
     }

@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Building2, Loader2, Globe } from 'lucide-vue-next'
+import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'vue-sonner'
 
 interface Currency {
   code: string
@@ -111,12 +113,16 @@ watch(() => form.secondary_currency, (secondaryCurrency) => {
 })
 
 const submit = () => {
-  form.post('/companies')
+  if (form.processing) return
+  form.post('/companies', {
+    onError: () => toast.error('Company was not created. Please review the errors shown in the form.'),
+  })
 }
 </script>
 
 <template>
   <Head title="Create Company" />
+  <Toaster />
 
   <div class="min-h-screen bg-surface-canvas">
     <div class="container mx-auto px-4 py-16 max-w-2xl">
@@ -144,6 +150,16 @@ const submit = () => {
 
         <CardContent>
           <form novalidate @submit.prevent="submit" class="space-y-6">
+            <div
+              v-if="form.hasErrors"
+              role="alert"
+              class="border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical"
+            >
+              <p class="font-medium">Company was not created. Please review these errors:</p>
+              <ul class="mt-2 list-disc pl-5">
+                <li v-for="(error, field) in form.errors" :key="field">{{ error }}</li>
+              </ul>
+            </div>
             <div v-if="canAssignOwner" class="space-y-2">
               <Label for="owner" class="font-medium">
                 Owner <span class="text-status-critical">*</span>

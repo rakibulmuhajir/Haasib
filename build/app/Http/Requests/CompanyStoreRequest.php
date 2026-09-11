@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -91,6 +92,7 @@ class CompanyStoreRequest extends FormRequest
                 },
             ],
             'secondary_exchange_rate' => [
+                'nullable',
                 'numeric',
                 'gt:0',
                 'decimal:0,8',
@@ -100,7 +102,7 @@ class CompanyStoreRequest extends FormRequest
             'owner_user_id' => [
                 'required',
                 'uuid',
-                Rule::exists('auth.users', 'id'),
+                Rule::exists(User::class, 'id'),
             ],
         ];
     }

@@ -12,11 +12,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { localDateInput } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, WalletCards } from 'lucide-vue-next';
 import { computed, reactive, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import { preparePaymentAllocations } from '../../../lib/paymentAllocations';
 
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
@@ -50,7 +52,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const form = useForm({
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: localDateInput(),
     direction: 'received',
     agent_id: props.agents.length === 1 ? props.agents[0].id : 'none',
     payee: 'none',
@@ -89,12 +91,10 @@ const partyGroups = computed(() =>
         (group) => group.party_key === selectedPartyKey.value,
     ),
 );
-const allocatedAmount = computed(() =>
-    partyGroups.value.reduce(
-        (total, group) => total + Number(allocationAmounts[group.id] || 0),
-        0,
-    ),
+const allocationState = computed(() =>
+    preparePaymentAllocations(partyGroups.value, allocationAmounts),
 );
+const allocatedAmount = computed(() => allocationState.value.total);
 const unallocatedAmount = computed(() =>
     Math.max(Math.round((baseAmount.value - allocatedAmount.value) * 100) / 100, 0),
 );
@@ -156,7 +156,16 @@ watch(
     },
 );
 
-const submit = () =>
+const submit = () => {
+    if (form.processing) return;
+    if (!allocationState.value.valid) {
+        toast.error('Correct the highlighted allocations before recording payment.');
+        return;
+    }
+    if (allocatedAmount.value > baseAmount.value) {
+        toast.error('Allocations exceed the converted payment amount.');
+        return;
+    }
     form
         .transform((data) => ({
             payment_date: data.payment_date,
@@ -183,16 +192,12 @@ const submit = () =>
                 data.currency === props.company.base_currency
                     ? null
                     : Number(data.exchange_rate || 0),
-            allocations: partyGroups.value
-                .map((group) => ({
-                    visa_group_id: group.id,
-                    base_amount: Number(allocationAmounts[group.id] || 0),
-                }))
-                .filter((allocation) => allocation.base_amount > 0),
+            allocations: allocationState.value.allocations,
         }))
         .post(`/${props.company.slug}/umrah/payments`, {
             onError: () => toast.error('Failed to record payment'),
         });
+};
 </script>
 
 <template>
@@ -373,7 +378,10 @@ const submit = () =>
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <Label>Allocate payment</Label>
-                                <div class="text-xs text-muted-foreground">
+                                <div
+                                    v-if="allocationState.valid"
+                                    class="text-xs text-muted-foreground"
+                                >
                                     Credit held — not applied to a group:
                                     <MoneyText
                                         :amount="unallocatedAmount"
@@ -392,7 +400,7 @@ const submit = () =>
                                     Auto allocate
                                 </Button>
                                 <Button
-                                    v-if="allocatedAmount > 0"
+                                    v-if="Object.keys(allocationAmounts).length"
                                     type="button"
                                     variant="ghost"
                                     size="sm"
@@ -446,14 +454,24 @@ const submit = () =>
                                         :currency="company.base_currency"
                                     />
                                 </div>
-                                <Input
-                                    v-model="allocationAmounts[group.id]"
-                                    type="number"
-                                    min="0"
-                                    :max="group.outstanding_amount"
-                                    step="0.01"
-                                    :placeholder="company.base_currency"
-                                />
+                                <div class="space-y-1">
+                                    <Input
+                                        v-model="allocationAmounts[group.id]"
+                                        type="text"
+                                        inputmode="decimal"
+                                        :aria-label="`Allocate to ${group.group_number}`"
+                                        :aria-invalid="!!allocationState.errors[group.id]"
+                                        :aria-describedby="allocationState.errors[group.id] ? `allocation-error-${group.id}` : undefined"
+                                        :placeholder="company.base_currency"
+                                    />
+                                    <p
+                                        v-if="allocationState.errors[group.id]"
+                                        :id="`allocation-error-${group.id}`"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ allocationState.errors[group.id] }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                         <p v-else class="text-sm text-muted-foreground">

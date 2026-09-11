@@ -1,5 +1,10 @@
 export type DateTimeMode = 'date' | 'datetime' | 'time'
 
+/** Calendar date at the user's location, without converting it to UTC. */
+export function localDateInput(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 type DateInput = string | Date | null | undefined
 
 type FormatOptions = {

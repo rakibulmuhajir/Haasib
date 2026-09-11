@@ -298,6 +298,10 @@ class UmrahCoreService
         DB::transaction(function () use ($group, $passenger, $reason) {
             $group = VisaGroup::where('company_id', $group->company_id)->lockForUpdate()->findOrFail($group->id);
             $passenger = Passenger::where('company_id', $group->company_id)->where('visa_group_id', $group->id)->lockForUpdate()->findOrFail($passenger->id);
+            if (VoucherPassenger::where('company_id', $group->company_id)->where('passenger_id', $passenger->id)
+                ->whereHas('voucher', fn ($query) => $query->where('visa_group_id', '!=', $group->id))->exists()) {
+                throw ValidationException::withMessages(['passenger' => 'This passenger is travelling on another group\'s voucher. Resolve that assignment before removing the original passenger purchase.']);
+            }
             if (Voucher::where('company_id', $group->company_id)->where('visa_group_id', $group->id)
                 ->where('status', Voucher::STATUS_APPROVED)->whereNull('superseded_at')
                 ->whereHas('passengers', fn ($query) => $query->whereKey($passenger->id))->exists()) {
@@ -1205,7 +1209,7 @@ class UmrahCoreService
         $this->recalculateGroup($group->fresh());
         $this->recalculateAgent($group->agent_id);
         collect($voucher->hotel_stays)->pluck('hotel_vendor_id')->filter()->unique()
-            ->each(fn (string $vendorId) => $this->recalculateHotelVendor($vendorId));
+            ->each(fn (string $vendorId) => $this->recalculateHotelVendor($vendorId, $voucher->id));
     }
 
     public function reversePayment(GroupPayment $payment, string $reason, ?string $userId): GroupPayment
@@ -1301,13 +1305,16 @@ class UmrahCoreService
         });
     }
 
-    public function recalculateHotelVendor(string $vendorId): void
+    public function recalculateHotelVendor(string $vendorId, ?string $excludedVoucherId = null): void
     {
         $vendor = HotelVendor::find($vendorId);
         if (! $vendor) {
             return;
         }
         $cost = Voucher::where('company_id', $vendor->company_id)->where('status', Voucher::STATUS_APPROVED)
+            // Reversal runs inside the lifecycle transaction, before the old
+            // voucher receives its cancelled/superseded marker.
+            ->when($excludedVoucherId, fn ($query) => $query->whereKeyNot($excludedVoucherId))
             ->whereNull('superseded_at')->whereNull('billing_voucher_id')->get(['hotel_stays'])
             ->sum(fn (Voucher $voucher) => collect($voucher->hotel_stays)->where('hotel_vendor_id', $vendor->id)->sum('total_cost_amount'));
         $paid = GroupPayment::where('company_id', $vendor->company_id)->where('hotel_vendor_id', $vendor->id)

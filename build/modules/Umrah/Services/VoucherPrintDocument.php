@@ -11,8 +11,12 @@ use BaconQrCode\Writer;
 
 class VoucherPrintDocument
 {
+    public function __construct(private VoucherServiceOrigins $origins) {}
+
     public function payload(Company $company, Voucher $voucher): array
     {
+        $hasExternalSources = $this->origins->hasExternalSources($voucher);
+        $originServices = $hasExternalSources ? $this->origins->printRows($voucher) : [];
         $hasVisa = in_array($voucher->service_bundle, ['visa', 'visa_hotel', 'visa_transport', 'visa_transport_hotel'], true);
         $hasTransport = in_array($voucher->service_bundle, ['transport', 'transport_hotel', 'visa_transport', 'visa_transport_hotel'], true);
         $parties = [
@@ -21,6 +25,12 @@ class VoucherPrintDocument
             ['role' => 'Visa provider', 'name' => $hasVisa ? $voucher->group?->vendor?->name : null, 'logo' => $hasVisa ? $this->logo($voucher->group?->vendor?->logo_url) : null],
             ['role' => 'Transport provider', 'name' => $hasTransport ? $voucher->group?->mandatoryTransportVendor?->name : null, 'logo' => $hasTransport ? $this->logo($voucher->group?->mandatoryTransportVendor?->logo_url) : null],
         ];
+        if ($hasExternalSources) {
+            // Preserve the four header slots; never attribute everyone to the
+            // destination agent's providers or add an unbounded wall of logos.
+            $parties[2] = ['role' => 'Visa providers', 'name' => 'See passenger services', 'logo' => null];
+            $parties[3] = ['role' => 'Transport providers', 'name' => 'See passenger services', 'logo' => null];
+        }
         $writer = new Writer(new ImageRenderer(new RendererStyle(180, 4), new SvgImageBackEnd));
         $mapCodes = [];
         foreach ($voucher->hotel_stays ?? [] as $index => $stay) {
@@ -30,7 +40,7 @@ class VoucherPrintDocument
             }
         }
 
-        return compact('parties', 'mapCodes');
+        return compact('parties', 'mapCodes', 'hasExternalSources', 'originServices');
     }
 
     private function logo(?string $url): ?string

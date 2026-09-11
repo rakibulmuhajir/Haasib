@@ -4,6 +4,7 @@ namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
+use App\Modules\Umrah\Commands\MoveVoucherPassengers;
 use App\Modules\Umrah\Http\Requests\AmendVoucherRequest;
 use App\Modules\Umrah\Http\Requests\ApproveVoucherRequest;
 use App\Modules\Umrah\Http\Requests\CancelVoucherRequest;
@@ -33,6 +34,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -185,6 +187,7 @@ class VoucherController extends Controller
                     $group->agent_id,
                 );
             $voucher = Voucher::create([
+                'leader_passenger_id' => $data['leader_passenger_id'] ?? null,
                 'company_id' => $company->id,
                 'visa_group_id' => $group->id,
                 'agent_id' => $group->agent_id,
@@ -282,6 +285,7 @@ class VoucherController extends Controller
             ->findOrFail($voucher);
         if ($this->access->isAgentMember($company->id, $request->user())) {
             abort_unless($this->access->agentCanEditVoucher($company->id, $request->user(), $record), 403, 'This voucher can no longer be modified by your agent login.');
+            $record->passengers->each->makeHidden(['transport_charge_amount', 'notes']);
         }
         if ($record->status !== Voucher::STATUS_DRAFT && $this->access->isAgentMember($company->id, $request->user())) {
             return redirect()->route('umrah.vouchers.show', ['company' => $companySlug, 'voucher' => $record->id])
@@ -330,6 +334,7 @@ class VoucherController extends Controller
         }
 
         $changes = [
+            'leader_passenger_id' => array_key_exists('leader_passenger_id', $data) ? $data['leader_passenger_id'] : $record->leader_passenger_id,
             'print_details' => $data['print_details'] ?? $record->print_details,
             'title' => $data['title'], 'service_bundle' => $data['service_bundle'], 'onward_airline' => $hasFlights ? ($data['onward_airline'] ?? null) : null, 'onward_flight_number' => $hasFlights ? ($data['onward_flight_number'] ?? null) : null,
             'onward_departure_city' => $hasFlights ? ($data['onward_departure_city'] ?? null) : null, 'onward_arrival_city' => $hasFlights ? ($data['onward_arrival_city'] ?? null) : null, 'onward_departure_at' => $hasFlights ? ($data['onward_departure_at'] ?? null) : null, 'onward_arrival_at' => $hasFlights ? ($data['onward_arrival_at'] ?? null) : null,
@@ -387,32 +392,45 @@ class VoucherController extends Controller
         $source = $this->voucherForUpdate($company->id, $request, $voucher);
         $target = $this->voucherForUpdate($company->id, $request, $data['target_voucher_id']);
         $hadStarted = $this->access->voucherHasStarted($source) || $this->access->voucherHasStarted($target);
-        $result = DB::transaction(function () use ($request, $source, $target, $data, $hadStarted) {
-            $result = $this->passengerAssignments->move($source, $target, $data['passenger_ids']);
+        try {
+            $result = DB::transaction(function () use ($request, $source, $target, $data, $hadStarted) {
+                $allowApproved = ! $this->access->isAgentMember($source->company_id, $request->user())
+                    && $request->user()->hasCompanyPermission(Permissions::UMRAH_VOUCHER_APPROVE);
+                $result = Bus::dispatch(new MoveVoucherPassengers($source, $target, $data['passenger_ids'], $allowApproved, $data['override_reason'] ?? null));
 
-            $this->changeLogger->log(
-                $request,
-                $result['source'],
-                'voucher',
-                'passengers_moved_out',
-                ['passenger_ids' => $result['source_before']],
-                ['passenger_ids' => $result['source_after']],
-                $data['override_reason'] ?? null,
-                ['target_voucher_id' => $target->id, 'after_travel_start' => $hadStarted],
-            );
-            $this->changeLogger->log(
-                $request,
-                $result['target'],
-                'voucher',
-                'passengers_moved_in',
-                ['passenger_ids' => $result['target_before']],
-                ['passenger_ids' => $result['target_after']],
-                $data['override_reason'] ?? null,
-                ['source_voucher_id' => $source->id, 'after_travel_start' => $hadStarted],
-            );
+                $this->changeLogger->log(
+                    $request,
+                    $result['source'],
+                    'voucher',
+                    'passengers_moved_out',
+                    ['passenger_ids' => $result['source_before']],
+                    ['passenger_ids' => $result['source_after']],
+                    $data['override_reason'] ?? null,
+                    ['target_voucher_id' => $target->id, 'source_agent_id' => $source->agent_id, 'target_agent_id' => $target->agent_id, 'original_purchases_preserved' => true, 'after_travel_start' => $hadStarted,
+                        'manifest_before' => $result['source_manifest_before'], 'manifest_after' => $result['source_manifest_after'], 'purchase_snapshot' => $result['source_purchase_snapshot']],
+                );
+                $this->changeLogger->log(
+                    $request,
+                    $result['target'],
+                    'voucher',
+                    'passengers_moved_in',
+                    ['passenger_ids' => $result['target_before']],
+                    ['passenger_ids' => $result['target_after']],
+                    $data['override_reason'] ?? null,
+                    ['source_voucher_id' => $source->id, 'source_agent_id' => $source->agent_id, 'target_agent_id' => $target->agent_id, 'original_purchases_preserved' => true, 'after_travel_start' => $hadStarted,
+                        'manifest_before' => $result['target_manifest_before'], 'manifest_after' => $result['target_manifest_after'], 'purchase_snapshot' => $result['target_purchase_snapshot']],
+                );
 
-            return $result;
-        });
+                return $result;
+            });
+
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Passengers could not be moved. No changes were saved. Please try again.');
+        }
 
         return back()->with('success', count($result['moved_passenger_ids']).' passenger(s) moved successfully.');
     }
@@ -616,6 +634,7 @@ class VoucherController extends Controller
             ->all();
 
         if ($this->access->hidesFinancialData($company->id, request()->user())) {
+            $record->passengers->each->makeHidden(['transport_charge_amount', 'notes']);
             $record->hotel_stays = collect($record->hotel_stays)->map(function (array $stay) {
                 unset(
                     $stay['unit_retail_amount'],
@@ -652,15 +671,25 @@ class VoucherController extends Controller
             && $record->status === Voucher::STATUS_APPROVED && ! $record->superseded_at;
         $capabilities['can_amend'] = $capabilities['can_edit'] && $record->status === Voucher::STATUS_APPROVED && ! $record->superseded_at;
         $capabilities['can_delete'] = $capabilities['can_edit'] && $record->status === Voucher::STATUS_DRAFT;
+        $canMoveApproved = ! $this->access->isAgentMember($company->id, request()->user())
+            && (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_APPROVE);
+        $capabilities['can_move_passengers'] = $capabilities['can_edit'] && ! $record->superseded_at
+            && ! $record->superseded_by_voucher_id
+            && ($record->status === Voucher::STATUS_DRAFT || ($record->status === Voucher::STATUS_APPROVED && $canMoveApproved));
         $moveTargets = Voucher::where('company_id', $company->id)
-            ->where('visa_group_id', $record->visa_group_id)
-            ->where('agent_id', $record->agent_id)
-            ->where('status', Voucher::STATUS_DRAFT)
+            ->whereIn('status', $canMoveApproved ? [Voucher::STATUS_DRAFT, Voucher::STATUS_APPROVED] : [Voucher::STATUS_DRAFT])
+            ->whereNull('superseded_at')->whereNull('superseded_by_voucher_id')
             ->whereKeyNot($record->id)
             ->when($this->access->isAgentMember($company->id, request()->user()), fn ($query) => $query->where('agent_id', $this->linkedAgentId($company->id, request())))
             ->withCount('passengers')
+            ->with(['agent:id,customer_id', 'group:id,group_number'])
             ->orderBy('voucher_number')
-            ->get(['id', 'voucher_number', 'title']);
+            ->get(['id', 'voucher_number', 'title', 'agent_id', 'visa_group_id', 'status', 'service_bundle', 'onward_departure_at', 'hotel_stays'])
+            ->map(function (Voucher $target) {
+                $target->setAttribute('requires_override_reason', $target->status === Voucher::STATUS_APPROVED || $this->access->voucherHasStarted($target));
+
+                return $target->makeHidden(['hotel_stays', 'onward_departure_at']);
+            });
 
         return Inertia::render('Umrah/Vouchers/Show', [
             'company' => $this->companyPayload($company),
@@ -675,13 +704,21 @@ class VoucherController extends Controller
                 : null,
             'canViewAccounting' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_ACCOUNTING_VIEW),
             'moveTargets' => $moveTargets,
+            'hasMixedPassengerSources' => $record->voucherPassengers()->where('visa_group_id', '!=', $record->visa_group_id)->exists(),
             'changeLogs' => $this->access->isAgentMember($company->id, request()->user()) ? [] : ChangeLog::where('company_id', $company->id)
                 ->where('entity_type', 'voucher')
                 ->where('entity_id', $record->id)
                 ->with('user:id,name')
                 ->orderByDesc('created_at')
                 ->limit(50)
-                ->get(),
+                ->get()->each(function (ChangeLog $log) use ($company) {
+                    if ($this->access->hidesFinancialData($company->id, request()->user())
+                        || ! request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_ACCOUNTING_VIEW)) {
+                        $metadata = $log->metadata;
+                        unset($metadata['purchase_snapshot']);
+                        $log->metadata = $metadata;
+                    }
+                }),
         ]);
     }
 

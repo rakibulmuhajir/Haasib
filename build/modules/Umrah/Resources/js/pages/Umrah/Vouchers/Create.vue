@@ -127,6 +127,7 @@ const editableStays = (
 }));
 
 const form = useForm({
+    leader_passenger_id: props.editingVoucher?.leader_passenger_id ?? null as string | null,
     voucher_number:
         props.editingVoucher?.voucher_number || props.nextVoucherNumber,
     visa_group_id: props.selectedGroup?.id || 'none',
@@ -238,6 +239,11 @@ const allSelected = computed(
         props.availablePassengers.length > 0 &&
         selectedPassengerIds.value.length === props.availablePassengers.length,
 );
+watch(selectedPassengerIds, (ids) => {
+    if (form.leader_passenger_id && !ids.includes(form.leader_passenger_id)) {
+        form.leader_passenger_id = null;
+    }
+}, { immediate: true });
 const someSelected = computed(
     () =>
         selectedPassengerIds.value.length > 0 &&
@@ -635,12 +641,11 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card v-if="!editingVoucher" variant="form">
+                <Card variant="form">
                     <CardHeader>
                         <CardTitle>Passengers</CardTitle>
                         <CardDescription
-                            >Select all or some remaining group
-                            members.</CardDescription
+                            >Select the travelling members and check one person as group leader.</CardDescription
                         >
                     </CardHeader>
                     <CardContent class="space-y-3">
@@ -658,6 +663,7 @@ const submit = () => {
                         </div>
                         <template v-else>
                             <div
+                                v-if="!editingVoucher"
                                 class="flex items-center justify-between rounded-md border p-3"
                             >
                                 <div class="flex items-center gap-3">
@@ -688,6 +694,7 @@ const submit = () => {
                                 class="grid gap-3 rounded-md border p-3 md:grid-cols-[32px_minmax(0,1fr)_190px] md:items-center"
                             >
                                 <Checkbox
+                                    v-if="!editingVoucher"
                                     :model-value="
                                         selectedPassengerIds.includes(
                                             passenger.id,
@@ -701,6 +708,7 @@ const submit = () => {
                                             )
                                     "
                                 />
+                                <span v-else aria-hidden="true" />
                                 <div>
                                     <div class="font-medium">
                                         {{ passenger.full_name }}
@@ -716,9 +724,18 @@ const submit = () => {
                                             'No nationality'
                                         }}
                                     </div>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <Checkbox
+                                            :id="`group-leader-${passenger.id}`"
+                                            :model-value="form.leader_passenger_id === passenger.id"
+                                            :disabled="form.processing || !selectedPassengerIds.includes(passenger.id)"
+                                            @update:model-value="form.leader_passenger_id = $event === true ? passenger.id : null"
+                                        />
+                                        <Label :for="`group-leader-${passenger.id}`">Group leader</Label>
+                                    </div>
                                 </div>
                                 <div
-                                    v-if="!hotelOnly"
+                                    v-if="!hotelOnly && !editingVoucher"
                                     class="flex items-center gap-2"
                                 >
                                     <Checkbox
@@ -742,11 +759,12 @@ const submit = () => {
                                         >Transport only</Label
                                     >
                                 </div>
-                                <Badge v-else variant="secondary"
+                                <Badge v-else-if="hotelOnly" variant="secondary"
                                     >Hotel guest</Badge
                                 >
                             </div>
                         </template>
+                        <p v-if="form.errors.leader_passenger_id" class="text-xs text-destructive">{{ form.errors.leader_passenger_id }}</p>
                         <p
                             v-if="form.errors.passenger_ids"
                             class="text-xs text-destructive"

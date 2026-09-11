@@ -9,7 +9,23 @@ use Illuminate\Validation\ValidationException;
 
 class VoucherWorkflowService
 {
-    public function __construct(private UmrahCoreService $core) {}
+    public function __construct(private UmrahCoreService $core, private VoucherServiceOrigins $origins) {}
+
+    public function assertPassengerSourcesReady(Voucher $voucher): void
+    {
+        if ($voucher->leader_passenger_id && ! $voucher->voucherPassengers()->where('passenger_id', $voucher->leader_passenger_id)->exists()) {
+            throw ValidationException::withMessages(['leader_passenger_id' => 'Choose a group leader from the passengers on this voucher.']);
+        }
+        if (! $voucher->voucherPassengers()->exists()) {
+            throw ValidationException::withMessages(['voucher' => 'Add at least one passenger before approving this voucher.']);
+        }
+        if ($this->origins->segments($voucher)->contains(fn (array $segment) => ! $segment['group']
+            || $segment['group']->trashed() || $segment['group']->status === \App\Modules\Umrah\Models\VisaGroup::STATUS_CANCELLED)) {
+            throw ValidationException::withMessages([
+                'voucher' => 'An original passenger purchase group is missing or cancelled. Resolve the original purchase before approving this voucher.',
+            ]);
+        }
+    }
 
     public function createAmendment(Voucher $voucher, string $voucherNumber, ?string $userId): Voucher
     {
@@ -43,7 +59,7 @@ class VoucherWorkflowService
                 VoucherPassenger::create([
                     'company_id' => $voucher->company_id,
                     'voucher_id' => $amendment->id,
-                    'visa_group_id' => $voucher->visa_group_id,
+                    'visa_group_id' => $assignment->visa_group_id,
                     'passenger_id' => $assignment->passenger_id,
                 ]);
             }
@@ -79,6 +95,7 @@ class VoucherWorkflowService
             if ($voucher->status !== Voucher::STATUS_DRAFT) {
                 return $voucher;
             }
+            $this->assertPassengerSourcesReady($voucher);
             if ($voucher->amends_voucher_id) {
                 $previous = Voucher::where('company_id', $voucher->company_id)->lockForUpdate()->findOrFail($voucher->amends_voucher_id);
                 $this->core->reverseVoucherHotelAccounting($previous, "Superseded by {$voucher->voucher_number}");

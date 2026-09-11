@@ -2,9 +2,8 @@
 import DateTimeText from '@/components/DateTimeText.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
-import { formatDateTime } from '@/lib/datetime';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -14,8 +13,14 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -25,22 +30,38 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { formatDateTime, localDateInput } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import {
-    CheckCircle2,
+    Calculator,
     Pencil,
     Plane,
     Plus,
     ScrollText,
     Trash2,
-    WalletCards,
-    Calculator,
     Undo2,
+    WalletCards,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
+
+type CurrentParty = {
+    id: string | null;
+    number: string | null;
+    agent: string | null;
+    status: string | null;
+    elsewhere: boolean;
+};
 
 const props = defineProps<{
     company: { slug: string; base_currency: string };
@@ -51,7 +72,17 @@ const props = defineProps<{
         currency_code: string;
         exchange_rate: string | number;
     }>;
-    passengerStatuses: Record<string, string>;
+    travellingParties: {
+        assignments: Record<string, CurrentParty>;
+        joining: Array<{
+            id: string;
+            name: string;
+            passport: string | null;
+            original_group: string | null;
+            original_group_id: string | null;
+            voucher: CurrentParty;
+        }>;
+    };
     visaVendors: any[];
     transportVendors: any[];
     hotelVendors: any[];
@@ -88,13 +119,13 @@ const passengerForm = useForm({
     nationality: '',
     date_of_birth: '',
     imported_age: '',
-    visa_status: 'received',
+
     notes: '',
     override_reason: '',
 });
 
 const paymentForm = useForm({
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: localDateInput(),
     direction: 'received',
     payee: 'none',
     amount: '',
@@ -102,22 +133,20 @@ const paymentForm = useForm({
     exchange_rate: '',
 });
 
-const bulkForm = useForm({
-    visa_status: 'approved',
-    override_reason: '',
-});
-const singleStatusForm = useForm({
-    visa_status: '',
-    override_reason: '',
-});
-const selectedPassengerIds = ref<string[]>([]);
-const statusOverrideReason = ref('');
 const passengerOpen = ref(false);
 const addPassengerOpen = ref(false);
 const recordPaymentOpen = ref(false);
 const editingPassenger = ref<any>(null);
 const removePassengerTarget = ref<any>(null);
-const editPassengerForm = useForm({ full_name: '', passport_number: '', nationality: '', date_of_birth: '', imported_age: '' as string | number, visa_status: 'received', notes: '', override_reason: '' });
+const editPassengerForm = useForm({
+    full_name: '',
+    passport_number: '',
+    nationality: '',
+    date_of_birth: '',
+    imported_age: '' as string | number,
+    notes: '',
+    override_reason: '',
+});
 
 /*
  * The group answers this once, for everyone in it. A passenger has no
@@ -276,58 +305,7 @@ const passengerAgeText = (passenger: any) => {
             : 'Age not set';
     }
 
-    return `${normalizeDate(passenger.date_of_birth)} · Age ${age}`;
-};
-
-const actionableStatuses = computed(() => {
-    return Object.fromEntries(
-        Object.entries(props.passengerStatuses).filter(([value]) =>
-            ['approved', 'rejected', 'embassy'].includes(value),
-        ),
-    );
-});
-
-const allPassengersSelected = computed(() => {
-    return (
-        passengers.value.length > 0 &&
-        selectedPassengerIds.value.length === passengers.value.length
-    );
-});
-
-const somePassengersSelected = computed(() => {
-    return (
-        selectedPassengerIds.value.length > 0 &&
-        selectedPassengerIds.value.length < passengers.value.length
-    );
-});
-
-const isChecked = (checked: boolean | 'indeterminate') => checked === true;
-
-const togglePassengerSelection = (
-    passengerId: string,
-    checked: boolean | 'indeterminate',
-) => {
-    const shouldSelect = isChecked(checked);
-
-    if (shouldSelect && !selectedPassengerIds.value.includes(passengerId)) {
-        selectedPassengerIds.value = [
-            ...selectedPassengerIds.value,
-            passengerId,
-        ];
-        return;
-    }
-
-    if (!shouldSelect) {
-        selectedPassengerIds.value = selectedPassengerIds.value.filter(
-            (id) => id !== passengerId,
-        );
-    }
-};
-
-const toggleAllPassengers = (checked: boolean | 'indeterminate') => {
-    selectedPassengerIds.value = isChecked(checked)
-        ? passengers.value.map((passenger: any) => passenger.id)
-        : [];
+    return `Age ${age}`;
 };
 
 const addPassenger = () =>
@@ -343,31 +321,11 @@ const addPassenger = () =>
                 preserveScroll: true,
                 onSuccess: () => {
                     passengerForm.reset();
-                    passengerForm.visa_status = 'received';
                     addPassengerOpen.value = false;
                 },
                 onError: () => toast.error('Failed to add passenger'),
             },
         );
-
-const updatePassengerStatus = (passenger: any, status: string) => {
-    if (
-        props.groupCapabilities.requires_override_reason &&
-        statusOverrideReason.value.trim().length < 5
-    ) {
-        toast.error('Enter a reason before changing passenger data');
-        return;
-    }
-    singleStatusForm.visa_status = status;
-    singleStatusForm.override_reason = statusOverrideReason.value;
-    singleStatusForm.put(
-        `/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${passenger.id}/status`,
-        {
-            preserveScroll: true,
-            onError: () => toast.error('Failed to update passenger status'),
-        },
-    );
-};
 
 const openPassenger = (passenger: any) => {
     editingPassenger.value = passenger;
@@ -376,51 +334,45 @@ const openPassenger = (passenger: any) => {
     editPassengerForm.nationality = passenger.nationality || '';
     editPassengerForm.date_of_birth = normalizeDate(passenger.date_of_birth);
     editPassengerForm.imported_age = passenger.imported_age ?? '';
-    editPassengerForm.visa_status = passenger.visa_status;
     editPassengerForm.notes = passenger.notes || '';
-    editPassengerForm.override_reason = statusOverrideReason.value;
+    editPassengerForm.override_reason = '';
     passengerOpen.value = true;
 };
 const updatePassenger = () => {
     if (!editingPassenger.value) return;
-    editPassengerForm.transform((data) => ({ ...data, imported_age: data.imported_age === '' ? null : Number(data.imported_age) }))
-        .put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${editingPassenger.value.id}`, { preserveScroll: true, onSuccess: () => { passengerOpen.value = false; }, onError: () => toast.error('Failed to correct passenger') });
+    editPassengerForm
+        .transform((data) => ({
+            ...data,
+            imported_age:
+                data.imported_age === '' ? null : Number(data.imported_age),
+        }))
+        .put(
+            `/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${editingPassenger.value.id}`,
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    passengerOpen.value = false;
+                },
+                onError: () => toast.error('Failed to correct passenger'),
+            },
+        );
 };
 const removePassenger = (passenger: any) => {
     removePassengerTarget.value = passenger;
     removeForm.reset();
-    removeForm.reason = statusOverrideReason.value;
 };
 const confirmRemovePassenger = () => {
     if (!removePassengerTarget.value) return;
-    removeForm.delete(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${removePassengerTarget.value.id}`, { preserveScroll: true, onSuccess: () => { removePassengerTarget.value = null; }, onError: () => toast.error('Passenger could not be removed') });
-};
-
-const bulkUpdatePassengerStatus = () => {
-    if (
-        props.groupCapabilities.requires_override_reason &&
-        statusOverrideReason.value.trim().length < 5
-    ) {
-        toast.error('Enter a reason before changing passenger data');
-        return;
-    }
-    bulkForm.override_reason = statusOverrideReason.value;
-    bulkForm
-        .transform((data) => ({
-            ...data,
-            passenger_ids: [...selectedPassengerIds.value],
-        }))
-        .put(
-            `/${props.company.slug}/umrah/groups/${props.group.id}/passengers/status`,
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    selectedPassengerIds.value = [];
-                },
-                onError: () =>
-                    toast.error('Failed to update selected passengers'),
+    removeForm.delete(
+        `/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${removePassengerTarget.value.id}`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                removePassengerTarget.value = null;
             },
-        );
+            onError: () => toast.error('Passenger could not be removed'),
+        },
+    );
 };
 
 const addPayment = () => {
@@ -466,9 +418,7 @@ const addPayment = () => {
                 onSuccess: () => {
                     paymentForm.reset('amount');
                     paymentForm.payee = 'none';
-                    paymentForm.payment_date = new Date()
-                        .toISOString()
-                        .slice(0, 10);
+                    paymentForm.payment_date = localDateInput();
                     paymentSubmitAttempted.value = false;
                     recordPaymentOpen.value = false;
                 },
@@ -482,15 +432,12 @@ const addPayment = () => {
     <Head :title="group.group_number" />
     <PageShell
         :title="`${group.group_number} · ${group.name}`"
-        :description="`${group.agent?.name || 'No agent'} · ${group.passenger_count} passengers`"
+        :description="`${group.agent?.name || 'No agent'} · ${passengers.length} ${passengers.length === 1 ? 'passenger' : 'passengers'} in purchase group`"
         :breadcrumbs="breadcrumbs"
         :icon="Plane"
     >
         <template #actions>
-            <Button
-                type="button"
-                @click="addPassengerOpen = true"
-            >
+            <Button type="button" @click="addPassengerOpen = true">
                 <Plus class="mr-2 h-4 w-4" />
                 Add Passenger
             </Button>
@@ -506,7 +453,11 @@ const addPayment = () => {
             <Button
                 v-if="groupCapabilities.can_view_accounting"
                 variant="outline"
-                @click="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)"
+                @click="
+                    router.get(
+                        `/${company.slug}/umrah/groups/${group.id}/accounting`,
+                    )
+                "
             >
                 <Calculator class="mr-2 h-4 w-4" />
                 Adjust charges
@@ -520,7 +471,11 @@ const addPayment = () => {
             <Button
                 v-if="groupCapabilities.can_view_accounting && group.agent_id"
                 variant="outline"
-                @click="router.get(`/${company.slug}/umrah/refunds/create?party_type=agent&party_id=${group.agent_id}&visa_group_id=${group.id}`)"
+                @click="
+                    router.get(
+                        `/${company.slug}/umrah/refunds/create?party_type=agent&party_id=${group.agent_id}&visa_group_id=${group.id}`,
+                    )
+                "
             >
                 <Undo2 class="mr-2 h-4 w-4" />
                 Refund agent
@@ -528,7 +483,11 @@ const addPayment = () => {
             <Button
                 v-if="groupCapabilities.can_view_accounting && group.vendor_id"
                 variant="outline"
-                @click="router.get(`/${company.slug}/umrah/refunds/create?party_type=visa_vendor&party_id=${group.vendor_id}&visa_group_id=${group.id}`)"
+                @click="
+                    router.get(
+                        `/${company.slug}/umrah/refunds/create?party_type=visa_vendor&party_id=${group.vendor_id}&visa_group_id=${group.id}`,
+                    )
+                "
             >
                 <Undo2 class="mr-2 h-4 w-4" />
                 Supplier credit
@@ -563,9 +522,9 @@ const addPayment = () => {
                     ><CardFigure
                         ><MoneyText
                             :amount="group.total_receivable"
-                            :currency="company.base_currency"
-                        /></CardFigure
-                    ></CardContent
+                            :currency="
+                                company.base_currency
+                            " /></CardFigure></CardContent
             ></Card>
             <Card variant="figure"
                 ><CardHeader><CardTitle>Paid</CardTitle></CardHeader
@@ -573,9 +532,9 @@ const addPayment = () => {
                     ><CardFigure
                         ><MoneyText
                             :amount="group.total_paid"
-                            :currency="company.base_currency"
-                        /></CardFigure
-                    ></CardContent
+                            :currency="
+                                company.base_currency
+                            " /></CardFigure></CardContent
             ></Card>
             <Card variant="figure"
                 ><CardHeader><CardTitle>Balance</CardTitle></CardHeader
@@ -583,9 +542,9 @@ const addPayment = () => {
                     ><CardFigure
                         ><MoneyText
                             :amount="group.balance"
-                            :currency="company.base_currency"
-                        /></CardFigure
-                    ></CardContent
+                            :currency="
+                                company.base_currency
+                            " /></CardFigure></CardContent
             ></Card>
             <Card>
                 <CardHeader><CardTitle>Payment Status</CardTitle></CardHeader>
@@ -607,9 +566,9 @@ const addPayment = () => {
                     ><CardFigure
                         ><MoneyText
                             :amount="group.profit"
-                            :currency="company.base_currency"
-                        /></CardFigure
-                    ></CardContent
+                            :currency="
+                                company.base_currency
+                            " /></CardFigure></CardContent
             ></Card>
         </div>
 
@@ -720,9 +679,10 @@ const addPayment = () => {
                             </div>
                             <div
                                 v-if="
-                                    group.transport_mode !== 'none' && (group.driver ||
-                                    group.transport_service?.driver_name ||
-                                    group.transport_service?.number_plate)
+                                    group.transport_mode !== 'none' &&
+                                    (group.driver ||
+                                        group.transport_service?.driver_name ||
+                                        group.transport_service?.number_plate)
                                 "
                                 class="text-xs text-muted-foreground"
                             >
@@ -866,7 +826,10 @@ const addPayment = () => {
                     </CardContent>
                 </Card>
 
-                <Card v-if="group.transport_mode === 'specialized'" variant="form">
+                <Card
+                    v-if="group.transport_mode === 'specialized'"
+                    variant="form"
+                >
                     <CardHeader
                         ><CardTitle>Transport Schedule</CardTitle
                         ><CardDescription
@@ -875,19 +838,6 @@ const addPayment = () => {
                         ></CardHeader
                     >
                     <CardContent class="space-y-3">
-                        <div
-                            v-if="
-                                groupCapabilities.requires_override_reason &&
-                                groupCapabilities.can_modify
-                            "
-                            class="space-y-2"
-                        >
-                            <Label
-                                >Reason for changing passenger data after travel
-                                started</Label
-                            >
-                            <Textarea v-model="statusOverrideReason" required />
-                        </div>
                         <div
                             v-for="item in group.transport_items"
                             :key="item.id"
@@ -913,7 +863,11 @@ const addPayment = () => {
                                     Schedule
                                 </div>
                                 <div>
-                                    {{ item.scheduled_at ? formatDateTime(item.scheduled_at) : 'Not scheduled' }}
+                                    {{
+                                        item.scheduled_at
+                                            ? formatDateTime(item.scheduled_at)
+                                            : 'Not scheduled'
+                                    }}
                                 </div>
                             </div>
                             <div>
@@ -950,165 +904,248 @@ const addPayment = () => {
 
                 <Card variant="form">
                     <CardHeader>
-                        <CardTitle>Passengers</CardTitle>
+                        <CardTitle
+                            >Passengers · {{ passengers.length }}</CardTitle
+                        >
                         <CardDescription
-                            >Update visa status one by one or select multiple
-                            passengers for a bulk change.</CardDescription
+                            >Original purchase group. Visa and transport charges
+                            stay here, even when passengers travel on another
+                            voucher.</CardDescription
                         >
                     </CardHeader>
-                    <CardContent class="space-y-3">
-                        <div
-                            v-if="!group.passengers?.length"
-                            class="text-sm text-muted-foreground"
-                        >
-                            No passengers added yet.
-                        </div>
-                        <div
-                            v-else-if="groupCapabilities.can_modify"
-                            class="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
-                        >
-                            <div class="flex items-center gap-3">
-                                <Checkbox
-                                    v-if="groupCapabilities.can_modify"
-                                    :model-value="
-                                        somePassengersSelected
-                                            ? 'indeterminate'
-                                            : allPassengersSelected
-                                    "
-                                    @update:model-value="toggleAllPassengers"
-                                />
-                                <div class="text-sm text-muted-foreground">
-                                    {{ selectedPassengerIds.length }} selected
-                                </div>
-                            </div>
-                            <div class="grid gap-2 sm:grid-cols-[180px_auto]">
-                                <Select v-model="bulkForm.visa_status">
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="(
-                                                label, value
-                                            ) in actionableStatuses"
-                                            :key="value"
-                                            :value="value"
-                                            >{{ label }}</SelectItem
-                                        >
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    type="button"
-                                    :disabled="
-                                        bulkForm.processing ||
-                                        selectedPassengerIds.length === 0
-                                    "
-                                    @click="bulkUpdatePassengerStatus"
-                                >
-                                    <CheckCircle2 class="mr-2 h-4 w-4" />
-                                    Apply to Selected
-                                </Button>
-                            </div>
-                        </div>
-                        <div
-                            v-for="passenger in group.passengers"
-                            :key="passenger.id"
-                            class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_150px_120px_130px_190px_160px_80px]"
-                        >
-                            <div class="flex items-start pt-1">
-                                <Checkbox
-                                    :model-value="
-                                        selectedPassengerIds.includes(
-                                            passenger.id,
-                                        )
-                                    "
-                                    @update:model-value="
-                                        (checked) =>
-                                            togglePassengerSelection(
-                                                passenger.id,
-                                                checked,
-                                            )
-                                    "
-                                />
-                            </div>
-                            <div>
-                                <div class="font-medium">
-                                    {{ passenger.full_name }}
-                                </div>
-                                <div class="text-xs text-muted-foreground">
-                                    {{ passenger.notes || 'No notes' }}
-                                </div>
-                            </div>
-                            <div>
-                                {{ passenger.passport_number || 'No passport' }}
-                            </div>
-                            <div>{{ passengerAgeText(passenger) }}</div>
-                            <div>
-                                {{
-                                    passenger.nationality ||
-                                    'Nationality not set'
-                                }}
-                            </div>
-                            <div>
-                                <div>{{ groupService }}</div>
-                                <!-- Zero on every passenger entered since the
-                                     group started answering this for everyone.
-                                     Rows that predate it kept a charge of
-                                     their own, and hiding it would understate
-                                     what those groups billed. -->
-                                <div
-                                    v-if="
-                                        Number(
-                                            passenger.transport_charge_amount ||
-                                                0,
-                                        ) > 0
-                                    "
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    <MoneyText
-                                        :amount="
-                                            passenger.transport_charge_amount
+                    <CardContent>
+                        <Table>
+                            <TableHeader
+                                ><TableRow>
+                                    <TableHead>Name</TableHead
+                                    ><TableHead>Passport</TableHead
+                                    ><TableHead>Age</TableHead>
+                                    <TableHead>Current voucher</TableHead
+                                    ><TableHead
+                                        v-if="groupCapabilities.can_modify"
+                                        >Actions</TableHead
+                                    >
+                                </TableRow></TableHeader
+                            >
+                            <TableBody>
+                                <TableRow v-if="!passengers.length"
+                                    ><TableCell
+                                        :colspan="
+                                            groupCapabilities.can_modify ? 5 : 4
                                         "
-                                        :currency="company.base_currency"
-                                    />
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <Badge variant="secondary">{{
-                                    passengerStatuses[passenger.visa_status] ||
-                                    passenger.visa_status
-                                }}</Badge>
-                                <Select
-                                    v-if="groupCapabilities.can_modify"
-                                    :model-value="passenger.visa_status"
-                                    @update:model-value="
-                                        (status) =>
-                                            updatePassengerStatus(
-                                                passenger,
-                                                String(status),
-                                            )
-                                    "
+                                        >No passengers added yet.</TableCell
+                                    ></TableRow
                                 >
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="(
-                                                label, value
-                                            ) in actionableStatuses"
-                                            :key="value"
-                                            :value="value"
-                                            >{{ label }}</SelectItem
+                                <TableRow
+                                    v-for="passenger in passengers"
+                                    :key="passenger.id"
+                                >
+                                    <TableCell
+                                        ><div class="font-medium">
+                                            {{ passenger.full_name }}
+                                        </div>
+                                        <div
+                                            v-if="passenger.notes"
+                                            class="text-xs text-muted-foreground"
                                         >
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div v-if="groupCapabilities.can_modify" class="flex gap-1">
-                                <Button size="icon" variant="ghost" title="Correct passenger" @click="openPassenger(passenger)"><Pencil class="h-4 w-4" /></Button>
-                                <Button size="icon" variant="ghost" title="Remove passenger" @click="removePassenger(passenger)"><Trash2 class="h-4 w-4" /></Button>
-                            </div>
-                        </div>
+                                            {{ passenger.notes }}
+                                        </div></TableCell
+                                    >
+                                    <TableCell>{{
+                                        passenger.passport_number || '—'
+                                    }}</TableCell>
+                                    <TableCell>{{
+                                        passengerAgeText(passenger)
+                                    }}</TableCell>
+                                    <TableCell>
+                                        <template
+                                            v-if="
+                                                travellingParties.assignments[
+                                                    passenger.id
+                                                ]
+                                            "
+                                        >
+                                            <Button
+                                                v-if="
+                                                    travellingParties
+                                                        .assignments[
+                                                        passenger.id
+                                                    ].id
+                                                "
+                                                variant="link"
+                                                class="h-auto p-0"
+                                                @click="
+                                                    router.get(
+                                                        `/${company.slug}/umrah/vouchers/${travellingParties.assignments[passenger.id].id}`,
+                                                    )
+                                                "
+                                                >{{
+                                                    travellingParties
+                                                        .assignments[
+                                                        passenger.id
+                                                    ].number
+                                                }}</Button
+                                            >
+                                            <span v-else
+                                                >Assigned to a voucher</span
+                                            >
+                                            <div
+                                                class="text-xs text-muted-foreground"
+                                            >
+                                                {{
+                                                    travellingParties
+                                                        .assignments[
+                                                        passenger.id
+                                                    ].elsewhere
+                                                        ? 'Travelling with another group'
+                                                        : 'This group’s voucher'
+                                                }}
+                                                <span
+                                                    v-if="
+                                                        travellingParties
+                                                            .assignments[
+                                                            passenger.id
+                                                        ].agent
+                                                    "
+                                                >
+                                                    ·
+                                                    {{
+                                                        travellingParties
+                                                            .assignments[
+                                                            passenger.id
+                                                        ].agent
+                                                    }}</span
+                                                >
+                                                <span
+                                                    v-if="
+                                                        travellingParties
+                                                            .assignments[
+                                                            passenger.id
+                                                        ].status
+                                                    "
+                                                >
+                                                    ·
+                                                    {{
+                                                        travellingParties
+                                                            .assignments[
+                                                            passenger.id
+                                                        ].status === 'draft'
+                                                            ? 'Draft'
+                                                            : 'Approved'
+                                                    }}</span
+                                                >
+                                            </div>
+                                        </template>
+                                        <span
+                                            v-else
+                                            class="text-muted-foreground"
+                                            >Not assigned</span
+                                        >
+                                    </TableCell>
+                                    <TableCell
+                                        v-if="groupCapabilities.can_modify"
+                                    >
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            title="Correct passenger"
+                                            @click="openPassenger(passenger)"
+                                            ><Pencil class="h-4 w-4"
+                                        /></Button>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            title="Remove passenger"
+                                            @click="removePassenger(passenger)"
+                                            ><Trash2 class="h-4 w-4"
+                                        /></Button>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                <Card v-if="travellingParties.joining.length" variant="form">
+                    <CardHeader>
+                        <CardTitle
+                            >Joining from other groups ·
+                            {{ travellingParties.joining.length }}</CardTitle
+                        >
+                        <CardDescription
+                            >Travelling on this group’s vouchers. Their existing
+                            visa and transport purchases remain with their
+                            original purchasing agent.</CardDescription
+                        >
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader
+                                ><TableRow
+                                    ><TableHead>Name</TableHead
+                                    ><TableHead>Passport</TableHead
+                                    ><TableHead
+                                        >Original purchase group</TableHead
+                                    ><TableHead
+                                        >Current voucher</TableHead
+                                    ></TableRow
+                                ></TableHeader
+                            >
+                            <TableBody>
+                                <TableRow
+                                    v-for="passenger in travellingParties.joining"
+                                    :key="passenger.id"
+                                >
+                                    <TableCell class="font-medium">{{
+                                        passenger.name
+                                    }}</TableCell>
+                                    <TableCell>{{
+                                        passenger.passport || '—'
+                                    }}</TableCell>
+                                    <TableCell>
+                                        <Button
+                                            v-if="passenger.original_group_id"
+                                            variant="link"
+                                            class="h-auto p-0"
+                                            @click="
+                                                router.get(
+                                                    `/${company.slug}/umrah/groups/${passenger.original_group_id}`,
+                                                )
+                                            "
+                                            >{{
+                                                passenger.original_group
+                                            }}</Button
+                                        >
+                                        <span v-else
+                                            >Another purchase group</span
+                                        >
+                                    </TableCell>
+                                    <TableCell
+                                        ><Button
+                                            variant="link"
+                                            class="h-auto p-0"
+                                            @click="
+                                                router.get(
+                                                    `/${company.slug}/umrah/vouchers/${passenger.voucher.id}`,
+                                                )
+                                            "
+                                            >{{
+                                                passenger.voucher.number
+                                            }}</Button
+                                        >
+                                        <div
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{
+                                                passenger.voucher.status ===
+                                                'draft'
+                                                    ? 'Draft'
+                                                    : 'Approved'
+                                            }}
+                                        </div></TableCell
+                                    >
+                                </TableRow>
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
 
@@ -1145,7 +1182,12 @@ const addPayment = () => {
                                     >
                                 </div>
                                 <div class="text-sm text-muted-foreground">
-                                    {{ formatDateTime(payment.payment_date, { mode: 'date' }) }} ·
+                                    {{
+                                        formatDateTime(payment.payment_date, {
+                                            mode: 'date',
+                                        })
+                                    }}
+                                    ·
                                     {{
                                         paymentMethods[payment.method] ||
                                         payment.method
@@ -1211,308 +1253,374 @@ const addPayment = () => {
 
             <div class="space-y-6">
                 <Dialog v-model:open="addPassengerOpen">
-                    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                    <DialogContent
+                        class="max-h-[90vh] overflow-y-auto sm:max-w-xl"
+                    >
                         <DialogHeader>
                             <DialogTitle>Add Passenger</DialogTitle>
-                            <DialogDescription>Add one passenger to {{ group.group_number }}. Group visa and transport totals will be recalculated.</DialogDescription>
+                            <DialogDescription
+                                >Add one passenger to {{ group.group_number }}.
+                                Group visa and transport totals will be
+                                recalculated.</DialogDescription
+                            >
                         </DialogHeader>
-                <Card class="border-0 shadow-none" variant="form">
-                    <CardContent>
-                        <form novalidate class="space-y-3" @submit.prevent="addPassenger">
-                            <div class="space-y-2">
-                                <Label>Name</Label
-                                ><Input
-                                    v-model="passengerForm.full_name"
-                                    required
-                                />
-                            </div>
-                            <div class="grid gap-3 md:grid-cols-2">
-                                <div class="space-y-2">
-                                    <Label>Passport #</Label
-                                    ><Input
-                                        v-model="passengerForm.passport_number"
-                                    />
-                                </div>
-                                <div class="space-y-2">
-                                    <Label>Age</Label
-                                    ><Input
-                                        v-model="passengerForm.imported_age"
-                                        type="number"
-                                        min="0"
-                                        max="130"
-                                    />
-                                </div>
-                                <div class="space-y-2">
-                                    <Label>Nationality</Label
-                                    ><Input
-                                        v-model="passengerForm.nationality"
-                                    />
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Status</Label>
-                                <Select v-model="passengerForm.visa_status">
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="(
-                                                label, value
-                                            ) in passengerStatuses"
-                                            :key="value"
-                                            :value="value"
-                                            >{{ label }}</SelectItem
-                                        >
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <!-- Stated, not asked. Whoever joins this group
-                                 takes what the group sells. -->
-                            <div class="space-y-2">
-                                <Label>Service</Label>
-                                <p class="text-sm text-muted-foreground">
-                                    {{ groupService }} — set by the group.
-                                </p>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Notes</Label
-                                ><Textarea v-model="passengerForm.notes" />
-                            </div>
-                            <div
-                                v-if="
-                                    groupCapabilities.requires_override_reason
-                                "
-                                class="space-y-2"
-                            >
-                                <Label>Override reason</Label>
-                                <Textarea
-                                    v-model="passengerForm.override_reason"
-                                    required
-                                />
-                                <p
-                                    v-if="passengerForm.errors.override_reason"
-                                    class="text-xs text-destructive"
+                        <Card class="border-0 shadow-none" variant="form">
+                            <CardContent>
+                                <form
+                                    novalidate
+                                    class="space-y-3"
+                                    @submit.prevent="addPassenger"
                                 >
-                                    {{ passengerForm.errors.override_reason }}
-                                </p>
-                            </div>
-                            <Button
-                                type="submit"
-                                class="w-full"
-                                :disabled="passengerForm.processing"
-                                ><span v-if="passengerForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /><Plus v-else class="mr-2 h-4 w-4" />Add
-                                Passenger</Button
-                            >
-                        </form>
-                    </CardContent>
-                </Card>
+                                    <div class="space-y-2">
+                                        <Label>Name</Label
+                                        ><Input
+                                            v-model="passengerForm.full_name"
+                                            required
+                                        />
+                                    </div>
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <div class="space-y-2">
+                                            <Label>Passport #</Label
+                                            ><Input
+                                                v-model="
+                                                    passengerForm.passport_number
+                                                "
+                                            />
+                                        </div>
+                                        <div class="space-y-2">
+                                            <Label>Age</Label
+                                            ><Input
+                                                v-model="
+                                                    passengerForm.imported_age
+                                                "
+                                                type="number"
+                                                min="0"
+                                                max="130"
+                                            />
+                                        </div>
+                                        <div class="space-y-2">
+                                            <Label>Nationality</Label
+                                            ><Input
+                                                v-model="
+                                                    passengerForm.nationality
+                                                "
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Stated, not asked. Whoever joins this group
+                                 takes what the group sells. -->
+                                    <div class="space-y-2">
+                                        <Label>Service</Label>
+                                        <p
+                                            class="text-sm text-muted-foreground"
+                                        >
+                                            {{ groupService }} — set by the
+                                            group.
+                                        </p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label>Notes</Label
+                                        ><Textarea
+                                            v-model="passengerForm.notes"
+                                        />
+                                    </div>
+                                    <div
+                                        v-if="
+                                            groupCapabilities.requires_override_reason
+                                        "
+                                        class="space-y-2"
+                                    >
+                                        <Label>Override reason</Label>
+                                        <Textarea
+                                            v-model="
+                                                passengerForm.override_reason
+                                            "
+                                            required
+                                        />
+                                        <p
+                                            v-if="
+                                                passengerForm.errors
+                                                    .override_reason
+                                            "
+                                            class="text-xs text-destructive"
+                                        >
+                                            {{
+                                                passengerForm.errors
+                                                    .override_reason
+                                            }}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        class="w-full"
+                                        :disabled="passengerForm.processing"
+                                        ><span
+                                            v-if="passengerForm.processing"
+                                            class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                                        /><Plus
+                                            v-else
+                                            class="mr-2 h-4 w-4"
+                                        />Add Passenger</Button
+                                    >
+                                </form>
+                            </CardContent>
+                        </Card>
                     </DialogContent>
                 </Dialog>
 
                 <Dialog v-model:open="recordPaymentOpen">
-                    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                    <DialogContent
+                        class="max-h-[90vh] overflow-y-auto sm:max-w-xl"
+                    >
                         <DialogHeader>
                             <DialogTitle>Record Payment</DialogTitle>
-                            <DialogDescription>Record money received from the agent or paid to a vendor for this group.</DialogDescription>
-                        </DialogHeader>
-                <Card v-if="groupCapabilities.can_record_payment" class="border-0 shadow-none" variant="form">
-                    <CardContent class="space-y-4 p-0">
-                        <div class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                            {{
-                                paymentForm.direction === 'received'
-                                    ? 'Agent balance'
-                                    : 'Vendor balance'
-                            }}
-                            after payment:
-                            <MoneyText
-                                :amount="remainingAfterPayment"
-                                :currency="company.base_currency"
-                            />
-                        </div>
-                        <form novalidate class="space-y-3" @submit.prevent="addPayment">
-                            <div class="space-y-2">
-                                <Label>Date</Label
-                                ><Input
-                                    v-model="paymentForm.payment_date"
-                                    type="date"
-                                    required
-                                />
-                            </div>
-                            <div v-if="canViewAccounting" class="space-y-2">
-                                <Label>Direction</Label>
-                                <Select
-                                    v-model="paymentForm.direction"
-                                    @update:model-value="
-                                        paymentForm.payee = 'none'
-                                    "
-                                >
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent
-                                        ><SelectItem
-                                            v-for="(
-                                                label, value
-                                            ) in paymentDirections"
-                                            :key="value"
-                                            :value="value"
-                                            >{{ label }}</SelectItem
-                                        ></SelectContent
-                                    >
-                                </Select>
-                            </div>
-                            <div
-                                v-if="paymentForm.direction === 'sent'"
-                                class="space-y-2"
+                            <DialogDescription
+                                >Record money received from the agent or paid to
+                                a vendor for this group.</DialogDescription
                             >
-                                <Label>Paid To</Label>
-                                <Select v-model="paymentForm.payee">
-                                    <SelectTrigger
-                                        ><SelectValue
-                                            placeholder="Select vendor"
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none"
-                                            >Select vendor</SelectItem
-                                        >
-                                        <SelectItem
-                                            v-for="vendor in visaVendors"
-                                            :key="`visa-${vendor.id}`"
-                                            :value="`visa:${vendor.id}`"
-                                            >{{ vendor.name }} · Visa</SelectItem
-                                        >
-                                        <SelectItem
-                                            v-for="vendor in transportVendors"
-                                            :key="`transport-${vendor.id}`"
-                                            :value="`transport:${vendor.id}`"
-                                            >{{ vendor.name }} · Transport<span
-                                                v-if="vendor.is_company_owned"
-                                            >
-                                                · Company-owned</span
-                                            ></SelectItem
-                                        >
-                                        <SelectItem
-                                            v-for="vendor in hotelVendors"
-                                            :key="`hotel-${vendor.id}`"
-                                            :value="`hotel:${vendor.id}`"
-                                            >{{ vendor.name }} ·
-                                            Hotel</SelectItem
-                                        >
-                                    </SelectContent>
-                                </Select>
-                                <p
-                                    v-if="paymentForm.errors.vendor_id"
-                                    class="text-xs text-destructive"
+                        </DialogHeader>
+                        <Card
+                            v-if="groupCapabilities.can_record_payment"
+                            class="border-0 shadow-none"
+                            variant="form"
+                        >
+                            <CardContent class="space-y-4 p-0">
+                                <div
+                                    class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground"
                                 >
-                                    {{ paymentForm.errors.vendor_id }}
-                                </p>
-                            </div>
-                            <div class="grid gap-3 md:grid-cols-2">
-                                <div class="space-y-2">
-                                    <Label>Currency</Label>
-                                    <Select v-model="paymentForm.currency">
-                                        <SelectTrigger
-                                            ><SelectValue
-                                        /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="currency in currencies"
-                                                :key="currency.currency_code"
-                                                :value="currency.currency_code"
-                                            >
-                                                {{ currency.currency_code }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p
-                                        v-if="paymentForm.errors.currency"
-                                        class="text-xs text-destructive"
-                                    >
-                                        {{ paymentForm.errors.currency }}
-                                    </p>
-                                </div>
-                                <div class="space-y-2">
-                                    <Label>Amount</Label>
-                                    <Input
-                                        v-model="paymentForm.amount"
-                                        type="number"
-                                        min="0.000001"
-                                        step="0.000001"
-                                        required
+                                    {{
+                                        paymentForm.direction === 'received'
+                                            ? 'Agent balance'
+                                            : 'Vendor balance'
+                                    }}
+                                    after payment:
+                                    <MoneyText
+                                        :amount="remainingAfterPayment"
+                                        :currency="company.base_currency"
                                     />
-                                    <!-- This message used to sit outside the
+                                </div>
+                                <form
+                                    novalidate
+                                    class="space-y-3"
+                                    @submit.prevent="addPayment"
+                                >
+                                    <div class="space-y-2">
+                                        <Label>Date</Label
+                                        ><Input
+                                            v-model="paymentForm.payment_date"
+                                            type="date"
+                                            required
+                                        />
+                                    </div>
+                                    <div
+                                        v-if="canViewAccounting"
+                                        class="space-y-2"
+                                    >
+                                        <Label>Direction</Label>
+                                        <Select
+                                            v-model="paymentForm.direction"
+                                            @update:model-value="
+                                                paymentForm.payee = 'none'
+                                            "
+                                        >
+                                            <SelectTrigger
+                                                ><SelectValue
+                                            /></SelectTrigger>
+                                            <SelectContent
+                                                ><SelectItem
+                                                    v-for="(
+                                                        label, value
+                                                    ) in paymentDirections"
+                                                    :key="value"
+                                                    :value="value"
+                                                    >{{ label }}</SelectItem
+                                                ></SelectContent
+                                            >
+                                        </Select>
+                                    </div>
+                                    <div
+                                        v-if="paymentForm.direction === 'sent'"
+                                        class="space-y-2"
+                                    >
+                                        <Label>Paid To</Label>
+                                        <Select v-model="paymentForm.payee">
+                                            <SelectTrigger
+                                                ><SelectValue
+                                                    placeholder="Select vendor"
+                                            /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none"
+                                                    >Select vendor</SelectItem
+                                                >
+                                                <SelectItem
+                                                    v-for="vendor in visaVendors"
+                                                    :key="`visa-${vendor.id}`"
+                                                    :value="`visa:${vendor.id}`"
+                                                    >{{ vendor.name }} ·
+                                                    Visa</SelectItem
+                                                >
+                                                <SelectItem
+                                                    v-for="vendor in transportVendors"
+                                                    :key="`transport-${vendor.id}`"
+                                                    :value="`transport:${vendor.id}`"
+                                                    >{{ vendor.name }} ·
+                                                    Transport<span
+                                                        v-if="
+                                                            vendor.is_company_owned
+                                                        "
+                                                    >
+                                                        · Company-owned</span
+                                                    ></SelectItem
+                                                >
+                                                <SelectItem
+                                                    v-for="vendor in hotelVendors"
+                                                    :key="`hotel-${vendor.id}`"
+                                                    :value="`hotel:${vendor.id}`"
+                                                    >{{ vendor.name }} ·
+                                                    Hotel</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <p
+                                            v-if="paymentForm.errors.vendor_id"
+                                            class="text-xs text-destructive"
+                                        >
+                                            {{ paymentForm.errors.vendor_id }}
+                                        </p>
+                                    </div>
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <div class="space-y-2">
+                                            <Label>Currency</Label>
+                                            <Select
+                                                v-model="paymentForm.currency"
+                                            >
+                                                <SelectTrigger
+                                                    ><SelectValue
+                                                /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem
+                                                        v-for="currency in currencies"
+                                                        :key="
+                                                            currency.currency_code
+                                                        "
+                                                        :value="
+                                                            currency.currency_code
+                                                        "
+                                                    >
+                                                        {{
+                                                            currency.currency_code
+                                                        }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <p
+                                                v-if="
+                                                    paymentForm.errors.currency
+                                                "
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{
+                                                    paymentForm.errors.currency
+                                                }}
+                                            </p>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <Label>Amount</Label>
+                                            <Input
+                                                v-model="paymentForm.amount"
+                                                type="number"
+                                                min="0.000001"
+                                                step="0.000001"
+                                                required
+                                            />
+                                            <!-- This message used to sit outside the
                                          field's own column, so a two-column
                                          grid placed it under Currency and it
                                          read as belonging to the wrong field.
                                          An error has to be next to the thing
                                          that caused it. -->
-                                    <p
+                                            <p
+                                                v-if="
+                                                    paymentForm.errors.amount ||
+                                                    paymentAmountIssue
+                                                "
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{
+                                                    paymentForm.errors.amount ||
+                                                    paymentAmountIssue
+                                                }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div
                                         v-if="
-                                            paymentForm.errors.amount ||
-                                            paymentAmountIssue
+                                            paymentForm.currency !==
+                                            company.base_currency
                                         "
-                                        class="text-xs text-destructive"
+                                        class="space-y-2"
                                     >
-                                        {{
-                                            paymentForm.errors.amount ||
-                                            paymentAmountIssue
-                                        }}
-                                    </p>
-                                </div>
-                            </div>
-                            <div
-                                v-if="
-                                    paymentForm.currency !==
-                                    company.base_currency
-                                "
-                                class="space-y-2"
-                            >
-                                <Label>Exchange Rate</Label>
-                                <Input
-                                    v-model="paymentForm.exchange_rate"
-                                    type="number"
-                                    min="0.00000001"
-                                    step="0.00000001"
-                                    required
-                                />
-                                <p class="text-xs text-muted-foreground">
-                                    1 {{ paymentForm.currency }} =
-                                    {{ paymentForm.exchange_rate || 0 }}
-                                    {{ company.base_currency }} · Converted:
-                                    <MoneyText
-                                        :amount="paymentBaseAmount"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
-                                <p
-                                    v-if="paymentForm.errors.exchange_rate"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ paymentForm.errors.exchange_rate }}
-                                </p>
-                            </div>
-                            <!-- A disabled control has to say why. Without
+                                        <Label>Exchange Rate</Label>
+                                        <Input
+                                            v-model="paymentForm.exchange_rate"
+                                            type="number"
+                                            min="0.00000001"
+                                            step="0.00000001"
+                                            required
+                                        />
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            1 {{ paymentForm.currency }} =
+                                            {{ paymentForm.exchange_rate || 0 }}
+                                            {{ company.base_currency }} ·
+                                            Converted:
+                                            <MoneyText
+                                                :amount="paymentBaseAmount"
+                                                :currency="
+                                                    company.base_currency
+                                                "
+                                            />
+                                        </p>
+                                        <p
+                                            v-if="
+                                                paymentForm.errors.exchange_rate
+                                            "
+                                            class="text-xs text-destructive"
+                                        >
+                                            {{
+                                                paymentForm.errors.exchange_rate
+                                            }}
+                                        </p>
+                                    </div>
+                                    <!-- A disabled control has to say why. Without
                                  this the button simply greyed out on a
                                  condition held off-screen. -->
-                            <p
-                                v-if="recordPaymentBlockedReason"
-                                class="text-xs text-muted-foreground"
-                            >
-                                {{ recordPaymentBlockedReason }}
-                            </p>
-                            <Button
-                                type="submit"
-                                class="w-full"
-                                :disabled="
-                                    paymentForm.processing || !canRecordPayment
-                                "
-                                ><span v-if="paymentForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /><WalletCards v-else class="mr-2 h-4 w-4" />Record
-                                Payment</Button
-                            >
-                        </form>
-                    </CardContent>
-                </Card>
+                                    <p
+                                        v-if="recordPaymentBlockedReason"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ recordPaymentBlockedReason }}
+                                    </p>
+                                    <Button
+                                        type="submit"
+                                        class="w-full"
+                                        :disabled="
+                                            paymentForm.processing ||
+                                            !canRecordPayment
+                                        "
+                                        ><span
+                                            v-if="paymentForm.processing"
+                                            class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                                        /><WalletCards
+                                            v-else
+                                            class="mr-2 h-4 w-4"
+                                        />Record Payment</Button
+                                    >
+                                </form>
+                            </CardContent>
+                        </Card>
                     </DialogContent>
                 </Dialog>
             </div>
@@ -1545,24 +1653,119 @@ const addPayment = () => {
                 </div>
             </CardContent>
         </Card>
-        <Dialog v-model:open="passengerOpen"><DialogContent class="max-w-2xl"><DialogHeader><DialogTitle>Correct Passenger</DialogTitle></DialogHeader>
-            <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2"><Label>Full name</Label><Input v-model="editPassengerForm.full_name" /></div>
-                <div class="space-y-2"><Label>Passport number</Label><Input v-model="editPassengerForm.passport_number" /></div>
-                <div class="space-y-2"><Label>Date of birth</Label><Input v-model="editPassengerForm.date_of_birth" type="date" /></div>
-                <div class="space-y-2"><Label>Imported age</Label><Input v-model="editPassengerForm.imported_age" type="number" /></div>
-                <div class="space-y-2"><Label>Nationality</Label><Input v-model="editPassengerForm.nationality" /></div>
-                <div class="space-y-2"><Label>Service</Label><p class="text-sm text-muted-foreground">{{ groupService }} — set by the group.</p></div>
-                <div class="space-y-2"><Label>Visa status</Label><Select v-model="editPassengerForm.visa_status"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem v-for="(label, value) in passengerStatuses" :key="value" :value="value">{{ label }}</SelectItem></SelectContent></Select></div>
-                <div class="space-y-2 md:col-span-2"><Label>Notes</Label><Textarea v-model="editPassengerForm.notes" /></div>
-                <div v-if="groupCapabilities.requires_override_reason" class="space-y-2 md:col-span-2"><Label>Reason for post-travel correction</Label><Textarea v-model="editPassengerForm.override_reason" required /></div>
-            </div>
-            <DialogFooter><Button variant="outline" @click="passengerOpen = false">Cancel</Button><Button :disabled="editPassengerForm.processing" @click="updatePassenger">Save Correction</Button></DialogFooter>
-        </DialogContent></Dialog>
-        <Dialog :open="removePassengerTarget !== null" @update:open="(open) => { if (!open) removePassengerTarget = null; }"><DialogContent><DialogHeader><DialogTitle>Remove Passenger</DialogTitle></DialogHeader>
-            <p class="text-sm text-muted-foreground">Remove {{ removePassengerTarget?.full_name }} and recalculate visa, transport, and group totals. A passenger on an approved voucher cannot be removed.</p>
-            <div class="space-y-2"><Label for="remove-reason">Reason {{ groupCapabilities.requires_override_reason ? '' : '(optional)' }}</Label><Textarea id="remove-reason" v-model="removeForm.reason" /><p v-if="removeForm.errors.reason" class="text-sm text-destructive">{{ removeForm.errors.reason }}</p></div>
-            <DialogFooter><Button variant="outline" @click="removePassengerTarget = null">Keep Passenger</Button><Button variant="destructive" :disabled="removeForm.processing || (groupCapabilities.requires_override_reason && removeForm.reason.trim().length < 5)" @click="confirmRemovePassenger">Remove Passenger</Button></DialogFooter>
-        </DialogContent></Dialog>
+        <Dialog v-model:open="passengerOpen"
+            ><DialogContent class="max-w-2xl"
+                ><DialogHeader
+                    ><DialogTitle>Correct Passenger</DialogTitle></DialogHeader
+                >
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="space-y-2">
+                        <Label>Full name</Label
+                        ><Input v-model="editPassengerForm.full_name" />
+                    </div>
+                    <div class="space-y-2">
+                        <Label>Passport number</Label
+                        ><Input v-model="editPassengerForm.passport_number" />
+                    </div>
+                    <div class="space-y-2">
+                        <Label>Date of birth</Label
+                        ><Input
+                            v-model="editPassengerForm.date_of_birth"
+                            type="date"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <Label>Imported age</Label
+                        ><Input
+                            v-model="editPassengerForm.imported_age"
+                            type="number"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <Label>Nationality</Label
+                        ><Input v-model="editPassengerForm.nationality" />
+                    </div>
+                    <div class="space-y-2">
+                        <Label>Service</Label>
+                        <p class="text-sm text-muted-foreground">
+                            {{ groupService }} — set by the group.
+                        </p>
+                    </div>
+                    <div class="space-y-2 md:col-span-2">
+                        <Label>Notes</Label
+                        ><Textarea v-model="editPassengerForm.notes" />
+                    </div>
+                    <div
+                        v-if="groupCapabilities.requires_override_reason"
+                        class="space-y-2 md:col-span-2"
+                    >
+                        <Label>Reason for post-travel correction</Label
+                        ><Textarea
+                            v-model="editPassengerForm.override_reason"
+                            required
+                        />
+                    </div>
+                </div>
+                <DialogFooter
+                    ><Button variant="outline" @click="passengerOpen = false"
+                        >Cancel</Button
+                    ><Button
+                        :disabled="editPassengerForm.processing"
+                        @click="updatePassenger"
+                        >Save Correction</Button
+                    ></DialogFooter
+                >
+            </DialogContent></Dialog
+        >
+        <Dialog
+            :open="removePassengerTarget !== null"
+            @update:open="
+                (open) => {
+                    if (!open) removePassengerTarget = null;
+                }
+            "
+            ><DialogContent
+                ><DialogHeader
+                    ><DialogTitle>Remove Passenger</DialogTitle></DialogHeader
+                >
+                <p class="text-sm text-muted-foreground">
+                    Remove {{ removePassengerTarget?.full_name }} and
+                    recalculate visa, transport, and group totals. A passenger
+                    on an approved voucher cannot be removed.
+                </p>
+                <div class="space-y-2">
+                    <Label for="remove-reason"
+                        >Reason
+                        {{
+                            groupCapabilities.requires_override_reason
+                                ? ''
+                                : '(optional)'
+                        }}</Label
+                    ><Textarea id="remove-reason" v-model="removeForm.reason" />
+                    <p
+                        v-if="removeForm.errors.reason"
+                        class="text-sm text-destructive"
+                    >
+                        {{ removeForm.errors.reason }}
+                    </p>
+                </div>
+                <DialogFooter
+                    ><Button
+                        variant="outline"
+                        @click="removePassengerTarget = null"
+                        >Keep Passenger</Button
+                    ><Button
+                        variant="destructive"
+                        :disabled="
+                            removeForm.processing ||
+                            (groupCapabilities.requires_override_reason &&
+                                removeForm.reason.trim().length < 5)
+                        "
+                        @click="confirmRemovePassenger"
+                        >Remove Passenger</Button
+                    ></DialogFooter
+                >
+            </DialogContent></Dialog
+        >
     </PageShell>
 </template>

@@ -1,5 +1,7 @@
 # Umrah Module Delivery Todo
 
+> Historical initial plan, not the current delivery checklist. Follow [the reconciled backlog](umrah-prioritized-feature-backlog.md) and [release tracker](umrah-release-tracker.md). In particular, Haasib starts after Nusuk visa processing; the pre-visa tracking ideas below are not current requirements.
+
 ## Core Direction
 
 - [ ] Create a separate `Umrah` module. Do not reuse petrol pump screens, stock deliveries, tank dips, fuel rates, or daily close flows.

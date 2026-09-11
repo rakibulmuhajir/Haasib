@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
@@ -27,9 +28,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import VoucherPreview from '../../../components/VoucherPreview.vue';
+import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
@@ -47,6 +47,7 @@ import {
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
+import VoucherPreview from '../../../components/VoucherPreview.vue';
 
 const props = defineProps<{
     company: {
@@ -83,6 +84,7 @@ const props = defineProps<{
         can_cancel?: boolean;
         can_amend?: boolean;
         can_delete?: boolean;
+        can_move_passengers?: boolean;
     };
     changeLogs: any[];
     moveTargets: Array<{
@@ -90,7 +92,12 @@ const props = defineProps<{
         voucher_number: string;
         title: string;
         passengers_count: number;
+        status: string;
+        requires_override_reason: boolean;
+        agent?: { name: string };
+        group?: { group_number: string };
     }>;
+    hasMixedPassengerSources?: boolean;
     canViewAccounting: boolean;
     openWorkflow?: 'amend' | null;
 }>();
@@ -123,6 +130,19 @@ const separateForm = useForm({
 const canViewAccounting = computed(() => props.canViewAccounting);
 const canApprove = computed(() => props.agentCapabilities.can_approve);
 const canEdit = computed(() => props.agentCapabilities.can_edit);
+const canMovePassengers = computed(
+    () =>
+        props.agentCapabilities.can_move_passengers &&
+        (props.voucher.passengers?.length || 0) > 0,
+);
+const moveRequiresReason = computed(
+    () =>
+        props.agentCapabilities.requires_override_reason ||
+        props.voucher.status === 'approved' ||
+        props.moveTargets.find(
+            (target) => target.id === moveForm.target_voucher_id,
+        )?.requires_override_reason,
+);
 const canReassignPassengers = computed(
     () =>
         props.voucher.status === 'draft' &&
@@ -136,14 +156,15 @@ const canReassignPassengers = computed(
  * for a voucher "Visa + Transport" -- so a self-arranged group produced a
  * voucher advertising a bus nobody booked. transport_mode is the fact.
  */
-const includesTransport = computed(() =>
-    props.voucher.group?.transport_mode !== 'none' &&
-    [
-        'visa_transport',
-        'visa_transport_hotel',
-        'transport',
-        'transport_hotel',
-    ].includes(props.voucher.service_bundle),
+const includesTransport = computed(
+    () =>
+        props.voucher.group?.transport_mode !== 'none' &&
+        [
+            'visa_transport',
+            'visa_transport_hotel',
+            'transport',
+            'transport_hotel',
+        ].includes(props.voucher.service_bundle),
 );
 /*
  * Historical correction, not a live rule: records written before 'visa' and
@@ -199,7 +220,14 @@ const submitMove = () => {
         `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/passengers/move`,
         {
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (page) => {
+                const error = (
+                    page.props.flash as { error?: string } | undefined
+                )?.error;
+                if (error) {
+                    moveForm.setError('target_voucher_id', error);
+                    return;
+                }
                 moveOpen.value = false;
                 moveForm.reset();
             },
@@ -236,7 +264,6 @@ const submitWorkflow = () => {
     if (action === 'delete') workflowForm.delete(url, options);
     else workflowForm.post(`${url}/${action}`, options);
 };
-
 
 const roomBeds = (stay: any) =>
     Number(
@@ -293,10 +320,11 @@ const issuerLines = computed<string[]>(() => {
     ].filter((line): line is string => Boolean(line));
 });
 
-
 const preparingPrint = ref(false);
 const viewTab = ref('voucher');
-const printUrl = computed(() => `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`);
+const printUrl = computed(
+    () => `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`,
+);
 const printVoucher = () => {
     if (preparingPrint.value) return;
     preparingPrint.value = true;
@@ -312,7 +340,11 @@ const printVoucher = () => {
         'load',
         async () => {
             const printWindow = printFrame.contentWindow;
-            if (!printWindow || printWindow.document.body?.dataset.voucherPrint !== props.voucher.id) {
+            if (
+                !printWindow ||
+                printWindow.document.body?.dataset.voucherPrint !==
+                    props.voucher.id
+            ) {
                 preparingPrint.value = false;
                 clearTimeout(printTimeout);
                 printFrame.remove();
@@ -320,7 +352,11 @@ const printVoucher = () => {
                 return;
             }
             await printWindow.document.fonts.ready;
-            await Promise.all(Array.from(printWindow.document.images).map((image) => image.decode().catch(() => undefined)));
+            await Promise.all(
+                Array.from(printWindow.document.images).map((image) =>
+                    image.decode().catch(() => undefined),
+                ),
+            );
             if (!printFrame.isConnected) return;
             clearTimeout(printTimeout);
             preparingPrint.value = false;
@@ -361,99 +397,103 @@ const exportVoucher = () => {
     >
         <template #actions>
             <div class="flex max-w-full flex-wrap gap-2">
-            <Button
-                v-if="canViewAccounting"
-                variant="outline"
-                @click="
-                    router.get(
-                        `/${company.slug}/umrah/vouchers/${voucher.id}/accounting`,
-                    )
-                "
-            >
-                <Calculator class="mr-2 h-4 w-4" />Accounting
-            </Button>
-            <Button variant="outline" :disabled="preparingPrint" @click="printVoucher">
-                <Printer class="mr-2 h-4 w-4" />
-                {{ preparingPrint ? 'Preparing…' : 'Print' }}
-            </Button>
-            <Button variant="outline" @click="exportVoucher">
-                <Download class="mr-2 h-4 w-4" />
-                Export PDF
-            </Button>
-            <Button
-                v-if="voucher.status === 'draft' && canEdit"
-                variant="outline"
-                @click="
-                    router.get(
-                        `/${company.slug}/umrah/vouchers/${voucher.id}/edit`,
-                    )
-                "
-            >
-                <Pencil class="mr-2 h-4 w-4" />
-                Edit
-            </Button>
-            <Button
-                v-if="agentCapabilities.can_amend"
-                variant="outline"
-                @click="workflowOpen = 'amend'"
-            >
-                <FilePenLine class="mr-2 h-4 w-4" />Amend
-            </Button>
-            <Button
-                v-if="agentCapabilities.can_delete"
-                variant="outline"
-                @click="workflowOpen = 'delete'"
-            >
-                <Trash2 class="mr-2 h-4 w-4" />Delete Draft
-            </Button>
-            <Button
-                v-if="agentCapabilities.can_cancel"
-                variant="destructive"
-                @click="workflowOpen = 'cancel'"
-            >
-                <XCircle class="mr-2 h-4 w-4" />Cancel Voucher
-            </Button>
-            <Button
-                v-if="canReassignPassengers && moveTargets.length"
-                variant="outline"
-                @click="moveOpen = true"
-            >
-                <ArrowRightLeft class="mr-2 h-4 w-4" />
-                Move Passengers
-            </Button>
-            <Button
-                v-if="canReassignPassengers"
-                variant="outline"
-                @click="separateOpen = true"
-            >
-                <Scissors class="mr-2 h-4 w-4" />
-                Separate Vouchers
-            </Button>
-            <Button
-                v-if="voucher.status === 'draft' && canApprove"
-                :disabled="
-                    approveForm.processing ||
-                    (agentCapabilities.requires_override_reason &&
-                        approveForm.override_reason.trim().length < 5)
-                "
-                @click="approve"
-                >{{
-                    approveForm.processing
-                        ? 'Approving...'
-                        : 'Approve Voucher'
-                }}</Button
-            >
-            <Button
-                variant="outline"
-                @click="
-                    router.get(
-                        `/${company.slug}/umrah/groups/${voucher.group.id}`,
-                    )
-                "
-            >
-                <Plane class="mr-2 h-4 w-4" />
-                Open Group
-            </Button>
+                <Button
+                    v-if="canViewAccounting"
+                    variant="outline"
+                    @click="
+                        router.get(
+                            `/${company.slug}/umrah/vouchers/${voucher.id}/accounting`,
+                        )
+                    "
+                >
+                    <Calculator class="mr-2 h-4 w-4" />Accounting
+                </Button>
+                <Button
+                    variant="outline"
+                    :disabled="preparingPrint"
+                    @click="printVoucher"
+                >
+                    <Printer class="mr-2 h-4 w-4" />
+                    {{ preparingPrint ? 'Preparing…' : 'Print' }}
+                </Button>
+                <Button variant="outline" @click="exportVoucher">
+                    <Download class="mr-2 h-4 w-4" />
+                    Export PDF
+                </Button>
+                <Button
+                    v-if="voucher.status === 'draft' && canEdit"
+                    variant="outline"
+                    @click="
+                        router.get(
+                            `/${company.slug}/umrah/vouchers/${voucher.id}/edit`,
+                        )
+                    "
+                >
+                    <Pencil class="mr-2 h-4 w-4" />
+                    Edit
+                </Button>
+                <Button
+                    v-if="agentCapabilities.can_amend"
+                    variant="outline"
+                    @click="workflowOpen = 'amend'"
+                >
+                    <FilePenLine class="mr-2 h-4 w-4" />Amend
+                </Button>
+                <Button
+                    v-if="agentCapabilities.can_delete"
+                    variant="outline"
+                    @click="workflowOpen = 'delete'"
+                >
+                    <Trash2 class="mr-2 h-4 w-4" />Delete Draft
+                </Button>
+                <Button
+                    v-if="agentCapabilities.can_cancel"
+                    variant="destructive"
+                    @click="workflowOpen = 'cancel'"
+                >
+                    <XCircle class="mr-2 h-4 w-4" />Cancel Voucher
+                </Button>
+                <Button
+                    v-if="canMovePassengers && moveTargets.length"
+                    variant="outline"
+                    @click="moveOpen = true"
+                >
+                    <ArrowRightLeft class="mr-2 h-4 w-4" />
+                    Move Passengers
+                </Button>
+                <Button
+                    v-if="canReassignPassengers"
+                    variant="outline"
+                    @click="separateOpen = true"
+                >
+                    <Scissors class="mr-2 h-4 w-4" />
+                    Separate Vouchers
+                </Button>
+                <Button
+                    v-if="voucher.status === 'draft' && canApprove"
+                    :disabled="
+                        approveForm.processing ||
+                        (agentCapabilities.requires_override_reason &&
+                            approveForm.override_reason.trim().length < 5)
+                    "
+                    @click="approve"
+                    >{{
+                        approveForm.processing
+                            ? 'Approving...'
+                            : 'Approve Voucher'
+                    }}</Button
+                >
+                <Button
+                    variant="outline"
+                    @click="
+                        router.get(
+                            `/${company.slug}/umrah/groups/${voucher.group.id}`,
+                        )
+                    "
+                >
+                    <Plane class="mr-2 h-4 w-4" />
+                    Open Group
+                </Button>
             </div>
         </template>
 
@@ -465,697 +505,919 @@ const exportVoucher = () => {
             {{ approvalError }}
         </div>
 
-        <Tabs v-model="viewTab" class="mb-4 min-w-0 max-w-full">
+        <Tabs v-model="viewTab" class="mb-4 max-w-full min-w-0">
             <TabsList aria-label="Voucher view">
                 <TabsTrigger value="voucher">Voucher</TabsTrigger>
-                <TabsTrigger value="details">Internal details &amp; history</TabsTrigger>
+                <TabsTrigger value="details"
+                    >Internal details &amp; history</TabsTrigger
+                >
             </TabsList>
-        <TabsContent value="voucher" class="space-y-3">
-            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>Passenger copy · same layout as Print and Export PDF</span>
-                <span>Long vouchers continue beyond one page.</span>
-            </div>
-            <div v-if="voucher.status === 'draft' && canApprove && agentCapabilities.requires_override_reason" class="space-y-2">
-                <Label for="preview-override">Reason for approving after travel started</Label>
-                <Textarea id="preview-override" v-model="approveForm.override_reason" />
-            </div>
-            <VoucherPreview :url="printUrl" :voucher-id="voucher.id" :revision="`${voucher.updated_at}-${voucher.status}`" />
-        </TabsContent>
-
-        <TabsContent value="details" force-mount v-show="viewTab === 'details'" class="space-y-6">
-        <div class="mb-6 flex flex-col items-center text-center">
-            <img
-                v-if="company.logo_url"
-                :src="company.logo_url"
-                :alt="`${company.name} logo`"
-                class="mb-2 max-h-20 max-w-48 object-contain"
-            />
-            <div class="text-xl font-semibold">{{ company.name }}</div>
-            <div
-                v-for="line in issuerLines"
-                :key="line"
-                class="text-sm text-muted-foreground"
-            >
-                {{ line }}
-            </div>
-        </div>
-
-        <div
-            v-if="voucher.source_voucher"
-            class="mb-4 rounded-md border px-4 py-3 text-sm"
-        >
-            Separated from voucher
-            <span class="font-medium">
-                {{ voucher.source_voucher.voucher_number }}
-            </span>
-        </div>
-
-        <div
-            v-if="
-                voucher.amended_voucher ||
-                voucher.superseded_by_voucher ||
-                voucher.cancelled_at
-            "
-            class="mb-4 rounded-md border px-4 py-3 text-sm"
-        >
-            <span v-if="voucher.amended_voucher"
-                >Version {{ voucher.version_number }} amends
-                {{ voucher.amended_voucher.voucher_number }}.</span
-            >
-            <span v-if="voucher.superseded_by_voucher">
-                Superseded by
-                {{ voucher.superseded_by_voucher.voucher_number }}.</span
-            >
-            <span v-if="voucher.cancelled_at">
-                Cancelled: {{ voucher.cancellation_reason }}</span
-            >
-        </div>
-
-        <div
-            v-if="
-                voucher.status === 'draft' &&
-                canApprove &&
-                agentCapabilities.requires_override_reason
-            "
-            class="mb-4 ml-auto max-w-xl space-y-2"
-        >
-            <label class="text-sm font-medium"
-                >Reason for approving after travel started</label
-            >
-            <Textarea v-model="approveForm.override_reason" required />
-            <p
-                v-if="approveForm.errors.override_reason"
-                class="text-xs text-destructive"
-            >
-                {{ approveForm.errors.override_reason }}
-            </p>
-        </div>
-
-        <div class="grid gap-4 md:grid-cols-4">
-            <Card variant="detail"
-                ><CardHeader><CardTitle>Status</CardTitle></CardHeader
-                ><CardContent class="flex flex-wrap gap-2"
-                    ><Badge variant="secondary">{{
-                        statuses[voucher.status] || voucher.status
-                    }}</Badge
-                    ><Badge variant="outline">{{
-                        serviceBundleLabel
-                    }}</Badge></CardContent
-                ></Card
-            >
-            <Card variant="detail"
-                ><CardHeader><CardTitle>Group</CardTitle></CardHeader
-                ><CardContent class="font-medium"
-                    >{{ voucher.group?.group_number }} ·
-                    {{ voucher.group?.name }}</CardContent
-                ></Card
-            >
-            <Card variant="detail"
-                ><CardHeader><CardTitle>Agent</CardTitle></CardHeader
-                ><CardContent class="font-medium">{{
-                    voucher.agent?.name || 'No agent'
-                }}</CardContent></Card
-            >
-            <Card variant="detail"
-                ><CardHeader><CardTitle>Created By</CardTitle></CardHeader
-                ><CardContent class="font-medium">{{
-                    voucher.created_by?.name || 'System'
-                }}</CardContent></Card
-            >
-        </div>
-
-        <Card v-if="changeLogs.length" class="mt-6" variant="detail">
-            <CardHeader
-                ><CardTitle>Change History</CardTitle
-                ><CardDescription
-                    >Company overrides and voucher changes.</CardDescription
-                ></CardHeader
-            >
-            <CardContent class="divide-y p-0">
+            <TabsContent value="voucher" class="space-y-3">
+                <p
+                    v-if="hasMixedPassengerSources"
+                    role="status"
+                    class="border border-border p-3 text-sm"
+                >
+                    This voucher includes passengers from another group. Their
+                    original visa and transport purchases are unchanged.
+                    Passenger services on the travel copy identify their
+                    original providers. New company hotel bookings are billed to
+                    this voucher's agent.
+                </p>
                 <div
-                    v-for="log in changeLogs"
-                    :key="log.id"
-                    class="grid gap-1 px-6 py-3 md:grid-cols-[180px_160px_1fr]"
+                    class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
                 >
-                    <DateTimeText :value="log.created_at" />
-                    <div class="font-medium">
-                        {{ log.user?.name || 'System' }}
-                    </div>
-                    <div>
-                        <span class="capitalize">{{
-                            String(log.action).replaceAll('_', ' ')
-                        }}</span
-                        ><span v-if="log.reason" class="text-muted-foreground">
-                            · {{ log.reason }}</span
-                        >
-                    </div>
+                    <span
+                        >Passenger copy · same layout as Print and Export
+                        PDF</span
+                    >
+                    <span>Long vouchers continue beyond one page.</span>
                 </div>
-            </CardContent>
-        </Card>
-
-        <Dialog
-            :open="workflowOpen !== null"
-            @update:open="
-                (open) => {
-                    if (!open) workflowOpen = null;
-                }
-            "
-        >
-            <DialogContent>
-                <DialogHeader
-                    ><DialogTitle>{{
-                        workflowOpen === 'cancel'
-                            ? 'Cancel Voucher'
-                            : workflowOpen === 'delete'
-                              ? 'Delete Draft Voucher'
-                              : 'Create Voucher Amendment'
-                    }}</DialogTitle></DialogHeader
+                <div
+                    v-if="
+                        voucher.status === 'draft' &&
+                        canApprove &&
+                        agentCapabilities.requires_override_reason
+                    "
+                    class="space-y-2"
                 >
-                <div class="space-y-2">
-                    <Label for="workflow-reason"
-                        >Reason
-                        {{
-                            workflowOpen === 'cancel'
-                                ? ''
-                                : '(optional before travel)'
-                        }}</Label
+                    <Label for="preview-override"
+                        >Reason for approving after travel started</Label
                     >
                     <Textarea
-                        id="workflow-reason"
-                        v-model="workflowForm.reason"
+                        id="preview-override"
+                        v-model="approveForm.override_reason"
                     />
-                    <p
-                        v-if="workflowForm.errors.reason"
-                        class="text-sm text-destructive"
-                    >
-                        {{ workflowForm.errors.reason }}
-                    </p>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" @click="workflowOpen = null"
-                        >Keep Voucher</Button
-                    >
-                    <Button
-                        :variant="
-                            workflowOpen === 'cancel' ||
-                            workflowOpen === 'delete'
-                                ? 'destructive'
-                                : 'default'
-                        "
-                        :disabled="
-                            workflowForm.processing ||
-                            (workflowOpen === 'cancel' &&
-                                workflowForm.reason.trim().length < 5)
-                        "
-                        @click="submitWorkflow"
-                    >
-                        {{
-                            workflowOpen === 'cancel'
-                                ? 'Cancel Voucher'
-                                : workflowOpen === 'delete'
-                                  ? 'Delete Draft'
-                                  : 'Create Amendment'
-                        }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                <VoucherPreview
+                    :url="printUrl"
+                    :voucher-id="voucher.id"
+                    :revision="`${voucher.updated_at}-${voucher.status}`"
+                />
+            </TabsContent>
 
-        <div class="grid gap-6 lg:grid-cols-2">
-            <Card v-if="voucher.service_bundle !== 'hotel'" variant="detail">
-                <CardHeader>
-                    <CardTitle>Flights</CardTitle>
-                    <CardDescription
-                        >Onward and return ticket details.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent class="space-y-4">
-                    <div class="rounded-md border p-3">
-                        <div class="font-medium">
-                            Onward · {{ voucher.onward_airline }} ·
-                            {{ airlines[voucher.onward_airline] || 'Airline' }}
-                            {{ voucher.onward_flight_number || '' }}
-                        </div>
-                        <div class="text-sm font-medium">
-                            {{ voucher.onward_departure_city }} ·
-                            {{
-                                airportCities[voucher.onward_departure_city] ||
-                                'Departure city not set'
-                            }}
-                            →
-                            {{ voucher.onward_arrival_city }} ·
-                            {{
-                                airportCities[voucher.onward_arrival_city] ||
-                                'Arrival city not set'
-                            }}
-                        </div>
-                        <div class="text-sm text-muted-foreground">
-                            Depart
-                            <DateTimeText
-                                :value="voucher.onward_departure_at"
-                                mode="datetime"
-                            />
-                            · Arrive
-                            <DateTimeText
-                                :value="voucher.onward_arrival_at"
-                                mode="datetime"
-                            />
-                        </div>
-                    </div>
-                    <div class="rounded-md border p-3">
-                        <div class="font-medium">
-                            Return · {{ voucher.return_airline }} ·
-                            {{ airlines[voucher.return_airline] || 'Airline' }}
-                            {{ voucher.return_flight_number || '' }}
-                        </div>
-                        <div class="text-sm font-medium">
-                            {{ voucher.return_departure_city }} ·
-                            {{
-                                airportCities[voucher.return_departure_city] ||
-                                'Departure city not set'
-                            }}
-                            →
-                            {{ voucher.return_arrival_city }} ·
-                            {{
-                                airportCities[voucher.return_arrival_city] ||
-                                'Arrival city not set'
-                            }}
-                        </div>
-                        <div class="text-sm text-muted-foreground">
-                            Depart
-                            <DateTimeText
-                                :value="voucher.return_departure_at"
-                                mode="datetime"
-                            />
-                            · Arrive
-                            <DateTimeText
-                                :value="voucher.return_arrival_at"
-                                mode="datetime"
-                            />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card v-if="includesTransport" variant="detail">
-                <CardHeader>
-                    <CardTitle>Transport</CardTitle>
-                    <CardDescription
-                        >Transport included with this voucher.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent class="space-y-3">
+            <TabsContent
+                value="details"
+                force-mount
+                v-show="viewTab === 'details'"
+                class="space-y-6"
+            >
+                <div class="mb-6 flex flex-col items-center text-center">
+                    <img
+                        v-if="company.logo_url"
+                        :src="company.logo_url"
+                        :alt="`${company.name} logo`"
+                        class="mb-2 max-h-20 max-w-48 object-contain"
+                    />
+                    <div class="text-xl font-semibold">{{ company.name }}</div>
                     <div
-                        v-if="!voucher.group?.transport_items?.length"
-                        class="rounded-md border p-3 text-sm"
-                    >
-                        {{
-                            voucher.group?.transport_mode === 'specialized'
-                                ? 'Specialized transport'
-                                : voucher.group?.transport_mode === 'none'
-                                  ? 'Self-arranged transport'
-                                  : 'Standard bus transport'
-                        }}
-                    </div>
-                    <div
-                        v-for="item in voucher.group?.transport_items || []"
-                        :key="item.id"
-                        class="rounded-md border p-3"
-                    >
-                        <div class="font-medium">
-                            {{
-                                item.sector?.name ||
-                                item.description ||
-                                'Transport'
-                            }}
-                        </div>
-                        <div class="text-sm">
-                            {{
-                                item.service?.name ||
-                                item.service?.vehicle_type ||
-                                'Vehicle not assigned'
-                            }}<span v-if="item.service?.number_plate">
-                                · {{ item.service.number_plate }}</span
-                            >
-                        </div>
-                        <div
-                            v-if="item.scheduled_at"
-                            class="text-sm text-muted-foreground"
-                        >
-                            <DateTimeText
-                                :value="item.scheduled_at"
-                                mode="datetime"
-                            />
-                        </div>
-                        <div
-                            v-if="
-                                item.driver?.name || item.service?.driver_name
-                            "
-                            class="text-sm text-muted-foreground"
-                        >
-                            {{ item.driver?.name || item.service?.driver_name }}
-                            ·
-                            {{
-                                item.driver?.phone ||
-                                item.service?.driver_contact ||
-                                'No contact'
-                            }}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card variant="detail">
-                <CardHeader>
-                    <CardTitle>Hotel Stays</CardTitle>
-                    <CardDescription
-                        >Stays included in this voucher.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent class="space-y-3">
-                    <div
-                        v-if="!voucher.hotel_stays?.length"
+                        v-for="line in issuerLines"
+                        :key="line"
                         class="text-sm text-muted-foreground"
                     >
-                        No hotel stays added.
+                        {{ line }}
                     </div>
-                    <div
-                        v-for="(stay, index) in voucher.hotel_stays"
-                        :key="index"
-                        class="rounded-md border p-3"
+                </div>
+
+                <div
+                    v-if="voucher.source_voucher"
+                    class="mb-4 rounded-md border px-4 py-3 text-sm"
+                >
+                    Separated from voucher
+                    <span class="font-medium">
+                        {{ voucher.source_voucher.voucher_number }}
+                    </span>
+                </div>
+
+                <div
+                    v-if="
+                        voucher.amended_voucher ||
+                        voucher.superseded_by_voucher ||
+                        voucher.cancelled_at
+                    "
+                    class="mb-4 rounded-md border px-4 py-3 text-sm"
+                >
+                    <span v-if="voucher.amended_voucher"
+                        >Version {{ voucher.version_number }} amends
+                        {{ voucher.amended_voucher.voucher_number }}.</span
                     >
-                        <div class="font-medium">
-                            {{ stay.hotel_name
-                            }}<span v-if="stay.city"> · {{ stay.city }}</span>
-                        </div>
-                        <div class="text-sm">
-                            {{ stay.room_count || 1 }} × {{ stay.room_type }} ·
-                            {{ roomBeds(stay) }} beds each ·
-                            {{
-                                stay.source === 'company'
-                                    ? 'Company supplied'
-                                    : 'Self arranged'
-                            }}
-                        </div>
-                        <div class="text-sm text-muted-foreground">
-                            <DateTimeText
-                                :value="stay.check_in_date"
-                                mode="date"
-                            />
-                            to
-                            <DateTimeText
-                                :value="stay.check_out_date"
-                                mode="date"
-                            />
-                        </div>
+                    <span v-if="voucher.superseded_by_voucher">
+                        Superseded by
+                        {{
+                            voucher.superseded_by_voucher.voucher_number
+                        }}.</span
+                    >
+                    <span v-if="voucher.cancelled_at">
+                        Cancelled: {{ voucher.cancellation_reason }}</span
+                    >
+                </div>
+
+                <div
+                    v-if="
+                        voucher.status === 'draft' &&
+                        canApprove &&
+                        agentCapabilities.requires_override_reason
+                    "
+                    class="mb-4 ml-auto max-w-xl space-y-2"
+                >
+                    <label class="text-sm font-medium"
+                        >Reason for approving after travel started</label
+                    >
+                    <Textarea v-model="approveForm.override_reason" required />
+                    <p
+                        v-if="approveForm.errors.override_reason"
+                        class="text-xs text-destructive"
+                    >
+                        {{ approveForm.errors.override_reason }}
+                    </p>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-4">
+                    <Card variant="detail"
+                        ><CardHeader><CardTitle>Status</CardTitle></CardHeader
+                        ><CardContent class="flex flex-wrap gap-2"
+                            ><Badge variant="secondary">{{
+                                statuses[voucher.status] || voucher.status
+                            }}</Badge
+                            ><Badge variant="outline">{{
+                                serviceBundleLabel
+                            }}</Badge></CardContent
+                        ></Card
+                    >
+                    <Card variant="detail"
+                        ><CardHeader><CardTitle>Group</CardTitle></CardHeader
+                        ><CardContent class="font-medium"
+                            >{{ voucher.group?.group_number }} ·
+                            {{ voucher.group?.name }}</CardContent
+                        ></Card
+                    >
+                    <Card variant="detail"
+                        ><CardHeader><CardTitle>Agent</CardTitle></CardHeader
+                        ><CardContent class="font-medium">{{
+                            voucher.agent?.name || 'No agent'
+                        }}</CardContent></Card
+                    >
+                    <Card variant="detail"
+                        ><CardHeader
+                            ><CardTitle>Created By</CardTitle></CardHeader
+                        ><CardContent class="font-medium">{{
+                            voucher.created_by?.name || 'System'
+                        }}</CardContent></Card
+                    >
+                </div>
+
+                <Card v-if="changeLogs.length" class="mt-6" variant="detail">
+                    <CardHeader
+                        ><CardTitle>Change History</CardTitle
+                        ><CardDescription
+                            >Company overrides and voucher
+                            changes.</CardDescription
+                        ></CardHeader
+                    >
+                    <CardContent class="divide-y p-0">
                         <div
-                            v-if="
-                                [
-                                    'visa_transport_hotel',
-                                    'transport_hotel',
-                                    'hotel',
-                                ].includes(voucher.service_bundle) &&
-                                stay.source === 'company' &&
-                                !voucher.billing_voucher_id
-                            "
-                            class="text-sm text-muted-foreground"
+                            v-for="log in changeLogs"
+                            :key="log.id"
+                            class="grid gap-1 px-6 py-3 md:grid-cols-[180px_160px_1fr]"
                         >
-                            <!--
+                            <DateTimeText :value="log.created_at" />
+                            <div class="font-medium">
+                                {{ log.user?.name || 'System' }}
+                            </div>
+                            <div>
+                                <span class="capitalize">{{
+                                    String(log.action).replaceAll('_', ' ')
+                                }}</span
+                                ><span
+                                    v-if="log.reason"
+                                    class="text-muted-foreground"
+                                >
+                                    · {{ log.reason }}</span
+                                >
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Dialog
+                    :open="workflowOpen !== null"
+                    @update:open="
+                        (open) => {
+                            if (!open) workflowOpen = null;
+                        }
+                    "
+                >
+                    <DialogContent>
+                        <DialogHeader
+                            ><DialogTitle>{{
+                                workflowOpen === 'cancel'
+                                    ? 'Cancel Voucher'
+                                    : workflowOpen === 'delete'
+                                      ? 'Delete Draft Voucher'
+                                      : 'Create Voucher Amendment'
+                            }}</DialogTitle></DialogHeader
+                        >
+                        <div class="space-y-2">
+                            <Label for="workflow-reason"
+                                >Reason
+                                {{
+                                    workflowOpen === 'cancel'
+                                        ? ''
+                                        : '(optional before travel)'
+                                }}</Label
+                            >
+                            <Textarea
+                                id="workflow-reason"
+                                v-model="workflowForm.reason"
+                            />
+                            <p
+                                v-if="workflowForm.errors.reason"
+                                class="text-sm text-destructive"
+                            >
+                                {{ workflowForm.errors.reason }}
+                            </p>
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                @click="workflowOpen = null"
+                                >Keep Voucher</Button
+                            >
+                            <Button
+                                :variant="
+                                    workflowOpen === 'cancel' ||
+                                    workflowOpen === 'delete'
+                                        ? 'destructive'
+                                        : 'default'
+                                "
+                                :disabled="
+                                    workflowForm.processing ||
+                                    (workflowOpen === 'cancel' &&
+                                        workflowForm.reason.trim().length < 5)
+                                "
+                                @click="submitWorkflow"
+                            >
+                                {{
+                                    workflowOpen === 'cancel'
+                                        ? 'Cancel Voucher'
+                                        : workflowOpen === 'delete'
+                                          ? 'Delete Draft'
+                                          : 'Create Amendment'
+                                }}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <Card
+                        v-if="voucher.service_bundle !== 'hotel'"
+                        variant="detail"
+                    >
+                        <CardHeader>
+                            <CardTitle>Flights</CardTitle>
+                            <CardDescription
+                                >Onward and return ticket
+                                details.</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent class="space-y-4">
+                            <div class="rounded-md border p-3">
+                                <div class="font-medium">
+                                    Onward · {{ voucher.onward_airline }} ·
+                                    {{
+                                        airlines[voucher.onward_airline] ||
+                                        'Airline'
+                                    }}
+                                    {{ voucher.onward_flight_number || '' }}
+                                </div>
+                                <div class="text-sm font-medium">
+                                    {{ voucher.onward_departure_city }} ·
+                                    {{
+                                        airportCities[
+                                            voucher.onward_departure_city
+                                        ] || 'Departure city not set'
+                                    }}
+                                    →
+                                    {{ voucher.onward_arrival_city }} ·
+                                    {{
+                                        airportCities[
+                                            voucher.onward_arrival_city
+                                        ] || 'Arrival city not set'
+                                    }}
+                                </div>
+                                <div class="text-sm text-muted-foreground">
+                                    Depart
+                                    <DateTimeText
+                                        :value="voucher.onward_departure_at"
+                                        mode="datetime"
+                                    />
+                                    · Arrive
+                                    <DateTimeText
+                                        :value="voucher.onward_arrival_at"
+                                        mode="datetime"
+                                    />
+                                </div>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <div class="font-medium">
+                                    Return · {{ voucher.return_airline }} ·
+                                    {{
+                                        airlines[voucher.return_airline] ||
+                                        'Airline'
+                                    }}
+                                    {{ voucher.return_flight_number || '' }}
+                                </div>
+                                <div class="text-sm font-medium">
+                                    {{ voucher.return_departure_city }} ·
+                                    {{
+                                        airportCities[
+                                            voucher.return_departure_city
+                                        ] || 'Departure city not set'
+                                    }}
+                                    →
+                                    {{ voucher.return_arrival_city }} ·
+                                    {{
+                                        airportCities[
+                                            voucher.return_arrival_city
+                                        ] || 'Arrival city not set'
+                                    }}
+                                </div>
+                                <div class="text-sm text-muted-foreground">
+                                    Depart
+                                    <DateTimeText
+                                        :value="voucher.return_departure_at"
+                                        mode="datetime"
+                                    />
+                                    · Arrive
+                                    <DateTimeText
+                                        :value="voucher.return_arrival_at"
+                                        mode="datetime"
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card v-if="includesTransport" variant="detail">
+                        <CardHeader>
+                            <CardTitle>Transport</CardTitle>
+                            <CardDescription
+                                >Transport included with this
+                                voucher.</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent class="space-y-3">
+                            <div
+                                v-if="!voucher.group?.transport_items?.length"
+                                class="rounded-md border p-3 text-sm"
+                            >
+                                {{
+                                    voucher.group?.transport_mode ===
+                                    'specialized'
+                                        ? 'Specialized transport'
+                                        : voucher.group?.transport_mode ===
+                                            'none'
+                                          ? 'Self-arranged transport'
+                                          : 'Standard bus transport'
+                                }}
+                            </div>
+                            <div
+                                v-for="item in voucher.group?.transport_items ||
+                                []"
+                                :key="item.id"
+                                class="rounded-md border p-3"
+                            >
+                                <div class="font-medium">
+                                    {{
+                                        item.sector?.name ||
+                                        item.description ||
+                                        'Transport'
+                                    }}
+                                </div>
+                                <div class="text-sm">
+                                    {{
+                                        item.service?.name ||
+                                        item.service?.vehicle_type ||
+                                        'Vehicle not assigned'
+                                    }}<span v-if="item.service?.number_plate">
+                                        · {{ item.service.number_plate }}</span
+                                    >
+                                </div>
+                                <div
+                                    v-if="item.scheduled_at"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    <DateTimeText
+                                        :value="item.scheduled_at"
+                                        mode="datetime"
+                                    />
+                                </div>
+                                <div
+                                    v-if="
+                                        item.driver?.name ||
+                                        item.service?.driver_name
+                                    "
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    {{
+                                        item.driver?.name ||
+                                        item.service?.driver_name
+                                    }}
+                                    ·
+                                    {{
+                                        item.driver?.phone ||
+                                        item.service?.driver_contact ||
+                                        'No contact'
+                                    }}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card variant="detail">
+                        <CardHeader>
+                            <CardTitle>Hotel Stays</CardTitle>
+                            <CardDescription
+                                >Stays included in this
+                                voucher.</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent class="space-y-3">
+                            <div
+                                v-if="!voucher.hotel_stays?.length"
+                                class="text-sm text-muted-foreground"
+                            >
+                                No hotel stays added.
+                            </div>
+                            <div
+                                v-for="(stay, index) in voucher.hotel_stays"
+                                :key="index"
+                                class="rounded-md border p-3"
+                            >
+                                <div class="font-medium">
+                                    {{ stay.hotel_name
+                                    }}<span v-if="stay.city">
+                                        · {{ stay.city }}</span
+                                    >
+                                </div>
+                                <div class="text-sm">
+                                    {{ stay.room_count || 1 }} ×
+                                    {{ stay.room_type }} ·
+                                    {{ roomBeds(stay) }} beds each ·
+                                    {{
+                                        stay.source === 'company'
+                                            ? 'Company supplied'
+                                            : 'Self arranged'
+                                    }}
+                                </div>
+                                <div class="text-sm text-muted-foreground">
+                                    <DateTimeText
+                                        :value="stay.check_in_date"
+                                        mode="date"
+                                    />
+                                    to
+                                    <DateTimeText
+                                        :value="stay.check_out_date"
+                                        mode="date"
+                                    />
+                                </div>
+                                <div
+                                    v-if="
+                                        [
+                                            'visa_transport_hotel',
+                                            'transport_hotel',
+                                            'hotel',
+                                        ].includes(voucher.service_bundle) &&
+                                        stay.source === 'company' &&
+                                        !voucher.billing_voucher_id
+                                    "
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    <!--
                                 A draft holds no amounts: hotel rates are
                                 taken at approval. Printing the zeros as
                                 money read as "this stay costs nothing",
                                 directly contradicting the figures the
                                 create form had just shown.
                             -->
-                            <template v-if="voucher.status === 'draft'">
-                                Priced on approval
-                            </template>
-                            <template v-else>
-                                Charge
-                                <MoneyText
-                                    :amount="stay.total_retail_amount"
-                                    :currency="company.base_currency"
-                                /><span v-if="canViewAccounting">
-                                    · Cost
-                                    <MoneyText
-                                        :amount="stay.total_cost_amount"
-                                        :currency="company.base_currency"
-                                /></span>
-                            </template>
-                        </div>
-                        <div v-else class="text-sm text-muted-foreground">
-                            <template v-if="voucher.billing_voucher">
-                                Hotel billing retained on
-                                {{ voucher.billing_voucher.voucher_number }}
-                            </template>
-                            <template v-else>
-                                Itinerary only · No hotel charge
-                            </template>
-                        </div>
+                                    <template v-if="voucher.status === 'draft'">
+                                        Priced on approval
+                                    </template>
+                                    <template v-else>
+                                        Charge
+                                        <MoneyText
+                                            :amount="stay.total_retail_amount"
+                                            :currency="company.base_currency"
+                                        /><span v-if="canViewAccounting">
+                                            · Cost
+                                            <MoneyText
+                                                :amount="stay.total_cost_amount"
+                                                :currency="
+                                                    company.base_currency
+                                                "
+                                        /></span>
+                                    </template>
+                                </div>
+                                <div
+                                    v-else
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    <template v-if="voucher.billing_voucher">
+                                        Hotel billing retained on
+                                        {{
+                                            voucher.billing_voucher
+                                                .voucher_number
+                                        }}
+                                    </template>
+                                    <template v-else>
+                                        Itinerary only · No hotel charge
+                                    </template>
+                                </div>
+                                <div
+                                    v-if="stay.notes"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    {{ stay.notes }}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Card variant="detail">
+                    <CardHeader>
+                        <CardTitle>Passengers</CardTitle>
+                        <CardDescription
+                            >Members covered by this voucher.</CardDescription
+                        >
+                    </CardHeader>
+                    <CardContent class="space-y-3">
                         <div
-                            v-if="stay.notes"
-                            class="text-sm text-muted-foreground"
-                        >
-                            {{ stay.notes }}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-
-        <Card variant="detail">
-            <CardHeader>
-                <CardTitle>Passengers</CardTitle>
-                <CardDescription
-                    >Members covered by this voucher.</CardDescription
-                >
-            </CardHeader>
-            <CardContent class="space-y-3">
-                <div
-                    v-for="passenger in voucher.passengers"
-                    :key="passenger.id"
-                    class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_180px_140px_160px]"
-                >
-                    <div>
-                        <div class="font-medium">{{ passenger.full_name }}</div>
-                        <div class="text-sm text-muted-foreground">
-                            {{ passenger.passport_number || 'No passport' }}
-                        </div>
-                    </div>
-                    <div>{{ passenger.nationality || 'No nationality' }}</div>
-                    <div>
-                        {{
-                            passenger.date_of_birth ||
-                            (passenger.imported_age !== null
-                                ? `Age ${passenger.imported_age}`
-                                : 'Age not set')
-                        }}
-                    </div>
-                    <Badge variant="secondary">{{
-                        passenger.visa_status
-                    }}</Badge>
-                </div>
-            </CardContent>
-        </Card>
-
-        <Dialog v-model:open="moveOpen">
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Move Passengers</DialogTitle>
-                </DialogHeader>
-                <form novalidate class="space-y-5" @submit.prevent="submitMove">
-                    <div class="space-y-2">
-                        <Label>Destination voucher</Label>
-                        <Select v-model="moveForm.target_voucher_id">
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select voucher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="target in moveTargets"
-                                    :key="target.id"
-                                    :value="target.id"
-                                >
-                                    {{ target.voucher_number }} ·
-                                    {{ target.title }} ·
-                                    {{ target.passengers_count }} pax
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p
-                            v-if="moveForm.errors.target_voucher_id"
-                            class="text-xs text-destructive"
-                        >
-                            {{ moveForm.errors.target_voucher_id }}
-                        </p>
-                    </div>
-
-                    <div class="space-y-2">
-                        <Label>Passengers</Label>
-                        <label
                             v-for="passenger in voucher.passengers"
                             :key="passenger.id"
-                            class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                            class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_180px_140px_160px]"
                         >
-                            <Checkbox
-                                :model-value="
-                                    moveForm.passenger_ids.includes(
-                                        passenger.id,
-                                    )
-                                "
-                                @update:model-value="
-                                    moveForm.passenger_ids = togglePassenger(
-                                        moveForm.passenger_ids,
-                                        passenger.id,
-                                        $event,
-                                    )
-                                "
-                            />
-                            <span class="min-w-0">
-                                <span class="block truncate font-medium">{{
-                                    passenger.full_name
-                                }}</span>
-                                <span
-                                    class="block truncate text-xs text-muted-foreground"
-                                    >{{
+                            <div>
+                                <div class="font-medium">
+                                    {{ passenger.full_name }}
+                                </div>
+                                <div class="text-sm text-muted-foreground">
+                                    {{
                                         passenger.passport_number ||
                                         'No passport'
-                                    }}</span
-                                >
-                            </span>
-                        </label>
-                        <p
-                            v-if="moveForm.errors.passenger_ids"
-                            class="text-xs text-destructive"
-                        >
-                            {{ moveForm.errors.passenger_ids }}
-                        </p>
-                    </div>
+                                    }}
+                                </div>
+                            </div>
+                            <div>
+                                {{ passenger.nationality || 'No nationality' }}
+                            </div>
+                            <div>
+                                {{
+                                    passenger.date_of_birth ||
+                                    (passenger.imported_age !== null
+                                        ? `Age ${passenger.imported_age}`
+                                        : 'Age not set')
+                                }}
+                            </div>
+                            <Badge variant="secondary">{{
+                                passenger.visa_status
+                            }}</Badge>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                    <div
-                        v-if="agentCapabilities.requires_override_reason"
-                        class="space-y-2"
+                <Dialog v-model:open="moveOpen">
+                    <DialogContent
+                        class="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"
                     >
-                        <Label>Reason for post-travel change</Label>
-                        <Textarea v-model="moveForm.override_reason" required />
-                        <p
-                            v-if="moveForm.errors.override_reason"
-                            class="text-xs text-destructive"
+                        <DialogHeader>
+                            <DialogTitle>Move Passengers</DialogTitle>
+                            <DialogDescription>Choose who is travelling together. Original purchases stay unchanged.</DialogDescription>
+                        </DialogHeader>
+                        <form
+                            novalidate
+                            class="min-w-0 space-y-5"
+                            @submit.prevent="submitMove"
                         >
-                            {{ moveForm.errors.override_reason }}
-                        </p>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="submit"
-                            :disabled="
-                                moveForm.processing ||
-                                !moveForm.target_voucher_id ||
-                                !moveForm.passenger_ids.length
-                            "
-                        >
-                            <ArrowRightLeft class="mr-2 h-4 w-4" />
-                            Move
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-
-        <Dialog v-model:open="separateOpen">
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Separate Vouchers</DialogTitle>
-                </DialogHeader>
-                <form novalidate class="space-y-5" @submit.prevent="submitSeparation">
-                    <div class="space-y-2">
-                        <Label>Individual voucher passengers</Label>
-                        <label
-                            v-for="passenger in voucher.passengers"
-                            :key="passenger.id"
-                            class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
-                        >
-                            <Checkbox
-                                :model-value="
-                                    separateForm.passenger_ids.includes(
-                                        passenger.id,
-                                    )
-                                "
-                                @update:model-value="
-                                    separateForm.passenger_ids =
-                                        togglePassenger(
-                                            separateForm.passenger_ids,
-                                            passenger.id,
-                                            $event,
-                                        )
-                                "
-                            />
-                            <span class="min-w-0">
-                                <span class="block truncate font-medium">{{
-                                    passenger.full_name
-                                }}</span>
-                                <span
-                                    class="block truncate text-xs text-muted-foreground"
-                                    >{{
-                                        passenger.passport_number ||
-                                        'No passport'
-                                    }}</span
+                            <p class="text-sm text-muted-foreground">
+                                Move the travelling party only. Existing visa,
+                                transport, hotel purchases and payments stay
+                                with their purchasing agent. New services belong
+                                to the destination agent. Confirm the
+                                destination itinerary and room capacity before
+                                moving. Moving passengers does not reserve extra
+                                beds or cancel old rooms. Reprint both affected
+                                vouchers after an issued-party change.
+                            </p>
+                            <div class="space-y-2">
+                                <Label>Destination voucher</Label>
+                                <Select v-model="moveForm.target_voucher_id">
+                                    <SelectTrigger class="min-w-0">
+                                        <SelectValue
+                                            placeholder="Select voucher"
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                        class="max-w-[min(40rem,calc(100vw-3rem))]"
+                                    >
+                                        <SelectItem
+                                            v-for="target in moveTargets"
+                                            :key="target.id"
+                                            :value="target.id"
+                                            class="break-words whitespace-normal"
+                                        >
+                                            {{ target.voucher_number }} ·
+                                            {{ target.agent?.name }} ·
+                                            {{ target.group?.group_number }} ·
+                                            {{ target.title }} ·
+                                            {{ target.passengers_count }} pax ·
+                                            {{
+                                                statuses[target.status] ||
+                                                target.status
+                                            }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p
+                                    v-if="moveForm.errors.target_voucher_id"
+                                    class="text-xs text-destructive"
                                 >
-                            </span>
-                        </label>
-                        <p
-                            v-if="separateForm.errors.passenger_ids"
-                            class="text-xs text-destructive"
-                        >
-                            {{ separateForm.errors.passenger_ids }}
-                        </p>
-                    </div>
+                                    {{ moveForm.errors.target_voucher_id }}
+                                </p>
+                            </div>
 
-                    <div
-                        v-if="agentCapabilities.requires_override_reason"
-                        class="space-y-2"
+                            <div class="space-y-2">
+                                <Label>Passengers</Label>
+                                <label
+                                    v-for="passenger in voucher.passengers"
+                                    :key="passenger.id"
+                                    class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                                >
+                                    <Checkbox
+                                        :model-value="
+                                            moveForm.passenger_ids.includes(
+                                                passenger.id,
+                                            )
+                                        "
+                                        @update:model-value="
+                                            moveForm.passenger_ids =
+                                                togglePassenger(
+                                                    moveForm.passenger_ids,
+                                                    passenger.id,
+                                                    $event,
+                                                )
+                                        "
+                                    />
+                                    <span class="min-w-0">
+                                        <span
+                                            class="block truncate font-medium"
+                                            >{{ passenger.full_name }}</span
+                                        >
+                                        <span
+                                            class="block truncate text-xs text-muted-foreground"
+                                            >{{
+                                                passenger.passport_number ||
+                                                'No passport'
+                                            }}</span
+                                        >
+                                    </span>
+                                </label>
+                                <p
+                                    v-if="moveForm.errors.passenger_ids"
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ moveForm.errors.passenger_ids }}
+                                </p>
+                            </div>
+
+                            <div v-if="moveRequiresReason" class="space-y-2">
+                                <Label
+                                    >Reason for issued-party or post-travel
+                                    change</Label
+                                >
+                                <Textarea
+                                    v-model="moveForm.override_reason"
+                                    required
+                                />
+                                <p
+                                    v-if="moveForm.errors.override_reason"
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ moveForm.errors.override_reason }}
+                                </p>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    type="submit"
+                                    :disabled="
+                                        moveForm.processing ||
+                                        !moveForm.target_voucher_id ||
+                                        !moveForm.passenger_ids.length ||
+                                        (moveRequiresReason &&
+                                            moveForm.override_reason.trim()
+                                                .length < 5)
+                                    "
+                                >
+                                    <span v-if="moveForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                    <ArrowRightLeft v-else class="mr-2 h-4 w-4" />
+                                    {{ moveForm.processing ? 'Moving…' : 'Move' }}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog v-model:open="separateOpen">
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Separate Vouchers</DialogTitle>
+                        </DialogHeader>
+                        <form
+                            novalidate
+                            class="space-y-5"
+                            @submit.prevent="submitSeparation"
+                        >
+                            <div class="space-y-2">
+                                <Label>Individual voucher passengers</Label>
+                                <label
+                                    v-for="passenger in voucher.passengers"
+                                    :key="passenger.id"
+                                    class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                                >
+                                    <Checkbox
+                                        :model-value="
+                                            separateForm.passenger_ids.includes(
+                                                passenger.id,
+                                            )
+                                        "
+                                        @update:model-value="
+                                            separateForm.passenger_ids =
+                                                togglePassenger(
+                                                    separateForm.passenger_ids,
+                                                    passenger.id,
+                                                    $event,
+                                                )
+                                        "
+                                    />
+                                    <span class="min-w-0">
+                                        <span
+                                            class="block truncate font-medium"
+                                            >{{ passenger.full_name }}</span
+                                        >
+                                        <span
+                                            class="block truncate text-xs text-muted-foreground"
+                                            >{{
+                                                passenger.passport_number ||
+                                                'No passport'
+                                            }}</span
+                                        >
+                                    </span>
+                                </label>
+                                <p
+                                    v-if="separateForm.errors.passenger_ids"
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ separateForm.errors.passenger_ids }}
+                                </p>
+                            </div>
+
+                            <div
+                                v-if="
+                                    agentCapabilities.requires_override_reason
+                                "
+                                class="space-y-2"
+                            >
+                                <Label>Reason for post-travel change</Label>
+                                <Textarea
+                                    v-model="separateForm.override_reason"
+                                    required
+                                />
+                                <p
+                                    v-if="separateForm.errors.override_reason"
+                                    class="text-xs text-destructive"
+                                >
+                                    {{ separateForm.errors.override_reason }}
+                                </p>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    type="submit"
+                                    :disabled="
+                                        separateForm.processing ||
+                                        !separateForm.passenger_ids.length
+                                    "
+                                >
+                                    <Scissors class="mr-2 h-4 w-4" />
+                                    Create Individual Vouchers
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+                <Card
+                    v-if="
+                        changeLogs.some((log) => log.metadata?.manifest_before)
+                    "
+                    variant="detail"
+                >
+                    <CardHeader
+                        ><CardTitle>Travelling-party history</CardTitle
+                        ><CardDescription
+                            >Passenger changes only. Existing purchases and
+                            payments were retained.</CardDescription
+                        ></CardHeader
                     >
-                        <Label>Reason for post-travel change</Label>
-                        <Textarea
-                            v-model="separateForm.override_reason"
-                            required
-                        />
+                    <CardContent class="space-y-4">
+                        <div
+                            v-for="log in changeLogs.filter(
+                                (entry) => entry.metadata?.manifest_before,
+                            )"
+                            :key="log.id"
+                            class="border-b pb-3 text-sm"
+                        >
+                            <p class="font-medium">
+                                {{
+                                    log.action === 'passengers_moved_out'
+                                        ? 'Passengers moved out'
+                                        : 'Passengers joined'
+                                }}
+                                · {{ log.user?.name }} · {{ log.created_at }}
+                            </p>
+                            <p v-if="log.reason">{{ log.reason }}</p>
+                            <p class="text-muted-foreground">
+                                Before (v{{
+                                    log.metadata.manifest_before.version_number
+                                }}):
+                                {{
+                                    log.metadata.manifest_before.passengers
+                                        .map((pax: any) => pax.full_name)
+                                        .join(', ') || 'No passengers'
+                                }}
+                            </p>
+                            <p>
+                                After (v{{
+                                    log.metadata.manifest_after.version_number
+                                }}):
+                                {{
+                                    log.metadata.manifest_after.passengers
+                                        .map((pax: any) => pax.full_name)
+                                        .join(', ') || 'No passengers'
+                                }}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card
+                    v-if="
+                        voucher.print_details?.contacts?.length ||
+                        voucher.print_details?.footer_text
+                    "
+                    variant="detail"
+                >
+                    <CardHeader
+                        ><CardTitle>Printed contacts &amp; footer</CardTitle
+                        ><CardDescription
+                            >Saved on this voucher; directory changes do not
+                            change this copy.</CardDescription
+                        ></CardHeader
+                    >
+                    <CardContent class="space-y-3">
+                        <div
+                            v-for="(contact, index) in voucher.print_details
+                                .contacts"
+                            :key="index"
+                            class="grid gap-1 border-b py-2 text-sm sm:grid-cols-4"
+                        >
+                            <span
+                                >{{ contact.responsibility }} ·
+                                {{ contact.city }}</span
+                            >
+                            <strong>{{ contact.name }}</strong
+                            ><span>{{ contact.organization }}</span>
+                            <span
+                                >{{ contact.phone
+                                }}<span
+                                    v-if="
+                                        contact.whatsapp &&
+                                        contact.whatsapp !== contact.phone
+                                    "
+                                >
+                                    · WhatsApp {{ contact.whatsapp }}</span
+                                ></span
+                            >
+                        </div>
                         <p
-                            v-if="separateForm.errors.override_reason"
-                            class="text-xs text-destructive"
+                            v-if="voucher.print_details.footer_text"
+                            class="text-sm whitespace-pre-wrap"
                         >
-                            {{ separateForm.errors.override_reason }}
+                            {{ voucher.print_details.footer_text }}
                         </p>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="submit"
-                            :disabled="
-                                separateForm.processing ||
-                                !separateForm.passenger_ids.length
-                            "
-                        >
-                            <Scissors class="mr-2 h-4 w-4" />
-                            Create Individual Vouchers
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-        <Card v-if="voucher.print_details?.contacts?.length || voucher.print_details?.footer_text" variant="detail">
-            <CardHeader><CardTitle>Printed contacts &amp; footer</CardTitle><CardDescription>Saved on this voucher; directory changes do not change this copy.</CardDescription></CardHeader>
-            <CardContent class="space-y-3">
-                <div v-for="(contact, index) in voucher.print_details.contacts" :key="index" class="grid gap-1 border-b py-2 text-sm sm:grid-cols-4">
-                    <span>{{ contact.responsibility }} · {{ contact.city }}</span>
-                    <strong>{{ contact.name }}</strong><span>{{ contact.organization }}</span>
-                    <span>{{ contact.phone }}<span v-if="contact.whatsapp && contact.whatsapp !== contact.phone"> · WhatsApp {{ contact.whatsapp }}</span></span>
-                </div>
-                <p v-if="voucher.print_details.footer_text" class="whitespace-pre-wrap text-sm">{{ voucher.print_details.footer_text }}</p>
-            </CardContent>
-        </Card>
-        </TabsContent>
+                    </CardContent>
+                </Card>
+            </TabsContent>
         </Tabs>
     </PageShell>
 </template>

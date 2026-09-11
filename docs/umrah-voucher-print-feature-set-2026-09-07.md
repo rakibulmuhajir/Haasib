@@ -1,6 +1,6 @@
 # Voucher contacts, footer defaults and compact print
 
-Implemented locally; not deployed.
+Released — user confirmed on 9 September 2026. Exact deployed commit/version and live smoke checks have not been independently verified. See [release tracker](umrah-release-tracker.md). The dated verification notes below retain their historical local-only status.
 
 ## User workflow
 
@@ -15,7 +15,9 @@ Implemented locally; not deployed.
 - Browser Print and Export PDF use the same server-rendered layout and access checks.
 - A4 layout; four header positions for available company, agent, visa and transport logos. Providers outside the voucher's service bundle are not advertised.
 - Passengers, accommodation, side-by-side flights, transport and named journey contacts.
-- Accommodation has optional meals and map QR, date-only check-in/out, final Nights column and aligned total. Clerk-entered stay notes are optional.
+- Accommodation columns: City, Hotel, Location QR, Rooms, Check-in, Checkout, Nights; aligned total nights below. Meals removed from the voucher form/print by user request. Clerk-entered stay notes are optional.
+- Passenger print columns: number, name, passport and age; nationality/date of birth/visa status are not printed. Age uses travel date, with imported age as fallback.
+- New voucher entry starts with three Makkah/Madinah/Makkah stays. Nights and checkout calculate each other; checkout carries into the next check-in while retaining subsequent night counts. Rows remain removable.
 - A verified Google Maps URL is entered on the stay. QR generation is local; it does not guess a hotel entrance or send passengers to a third-party QR service.
 - Local airport times remain unchanged. Empty footer/notes are hidden. Long groups flow to additional pages rather than being clipped.
 - Existing records without a print snapshot remain without one. They are not retroactively assigned today's contacts.

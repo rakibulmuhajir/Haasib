@@ -2,6 +2,19 @@
 
 **Purpose:** Canonical product-priority document for making Haasib genuinely useful to an Umrah travel company.
 
+**Reconciled:** 9 September 2026, against recorded delivery/test evidence and the user's clarified operating workflow. This is not a fresh audit of every feature. Release state is tracked in [Umrah release tracker](umrah-release-tracker.md).
+
+## Product boundary: Haasib starts after visa processing
+
+The user-confirmed workflow is: agents/company handle passport submission, payment/credit authorization and visa processing in Nusuk; agents then download the issued group's Mutamer list and upload it into Haasib's Create Group form. Haasib handles the resulting group's commercial records, accommodation, transport, vouchers, movements and accounting.
+
+- Visa application/processing/approval/rejection queues, bulk visa-status editing and passport handover queues are outside the agreed scope. Do not recreate Nusuk.
+- Issued visa numbers and other supplied Mutamer fields are reference data, not a new approval workflow. Visa sale/cost/payable accounting remains in scope.
+- The same passport may legitimately appear on multiple trips, including several trips in one season. Never impose global or season-wide passport uniqueness.
+- Duplicate safeguards concern accidental repeated rows in the same group/import or duplicate submission of that booking. Compare trip/group context; do not reject a repeat traveller simply because the passport exists elsewhere.
+- Voucher coverage means which passengers on this booking are included in its current applicable vouchers. Draft coverage is not issued coverage; cancelled/superseded versions do not count as current issued copies. This is only actionable where the purchased services require a voucher.
+- Existing visa-status fields/code are legacy implementation, not justification to expand scope. Any removal or migration requires a separate assessed change; this reconciliation does not alter runtime behavior.
+
 **Research basis:** The [eUmrah demo research](research/eumrah-demo/README.md), the [eTravel CRM training-call research](research/etravel-crm-one-session/README.md), and the current Haasib Umrah implementation.
 
 ## How to read this document
@@ -40,7 +53,7 @@ The clerk/dispatcher must immediately see:
 
 Role rules:
 
-- Owner: aggregate `Moving in`, `Moving out`, inter-city, and exception totals; Operations is available but is not the owner's home page.
+- Owner: aggregate movement totals in an Operations tab on the owner dashboard; full clerk-level detail when opening Operations. Operations is not the owner's home page.
 - Clerk/operations: detailed Operations page as the primary working view.
 - Agent: only its own passengers and no supplier cost/driver-private detail.
 - Accountant: source links and financial context without replacing the operational view.
@@ -49,7 +62,7 @@ Time must remain simple: display and group an event using the local clock of the
 
 ### 2. Effective-dated rate books
 
-**Status:** Missing reusable commercial layer; current provider prices are only a foundation.
+**Status:** Present for the tested visa/transport/hotel commercial-pricing scope. See [pricing verification](umrah-commercial-pricing-e2e-2026-09-07.md). Do not rebuild it; future add-ons/packages remain separate scope.
 
 Required behavior:
 
@@ -57,7 +70,7 @@ Required behavior:
 - Optional agent-specific override
 - Named pricing categories only if the business actually uses repeated tiers
 - Effective and end dates
-- Clear precedence: approved booking override, then agent override, then company default
+- Tested rate precedence: agent override, then category override, then dated default, then legacy fallback; overrides do not stack. Saved bookings retain their price snapshots.
 - Separate protected supplier cost and customer sale price
 - Adult/child rules where relevant
 - Transport, hotel, visa, and later add-on service pricing
@@ -88,7 +101,7 @@ A company that does not sell complete packages can skip this setup entirely. Its
 
 ### 4. Quick Booking workspace
 
-**Status:** Missing as a dedicated workflow; current Visa Group creation is capable but too setup/accounting-oriented.
+**Status:** Present and tested for the implemented service-selection and commercial-pricing workflow; see [pricing verification](umrah-commercial-pricing-e2e-2026-09-07.md). Optional reusable package templates are not implied complete. The normal entry point remains Create Group with an issued Mutamer list.
 
 The clerk should first choose **What are you selling?**:
 
@@ -118,12 +131,12 @@ The server must resolve rates, suppliers, costs, and accounting. The package ref
 
 ### 5. Complete booking-to-voucher workflow
 
-**Status:** Partial; universal vouchers and strong approval/amendment controls already exist.
+**Status:** Core workflow present; voucher presentation/contact/date-entry feature set released, as reported by the user. See [voucher feature set](umrah-voucher-print-feature-set-2026-09-07.md). Remaining checklist items need gap verification, not blanket reimplementation.
 
 The booking must become one complete service packet containing:
 
 - Selected passengers
-- Passport and visa status/reference
+- Passport and issued visa reference where supplied; no visa-processing status workflow
 - Onward and return flights
 - Repeating hotel stays
 - Transport routes and assignments
@@ -147,21 +160,20 @@ Approval must clearly explain missing requirements, for example:
 
 Approved vouchers must continue to use Haasib's amendment/supersession workflow rather than being silently edited in place.
 
-### 6. Passenger, passport, and visa workbench
+### 6. Post-visa passenger list usability
 
-**Status:** Partial; passenger identity, age, passport number, service type, and visa status already exist.
+**Status:** Existing passenger/import/move/separate foundations. The previously proposed visa-status workbench is withdrawn. Validate specific post-visa usability gaps before scheduling new work.
 
 Required additions/workflow improvements:
 
 - Fast passenger list editing
-- Bulk visa-status update
-- Structured MOFA/visa reference if the client uses it
-- Duplicate-passport detection and review
+- Preserve issued visa number and relevant reference fields from the Mutamer list where needed
+- Detect accidental duplicate rows within the same group/import; allow repeat trips using the same passport
 - Search by passenger and passport
 - Clear passenger-to-booking and passenger-to-voucher assignment state
 - Existing safe passenger move/separate capability presented as a simple wizard
 
-Passport scans are P1 because they require security, retention, storage, and download-audit rules.
+Passport scans are not a planned next feature; justify any document storage separately against this post-visa boundary.
 
 ### 7. Controlled booking and passenger import
 
@@ -169,15 +181,15 @@ Passport scans are P1 because they require security, retention, storage, and dow
 
 Required workflow:
 
-1. Download versioned Haasib template.
-2. Upload file.
+1. Use the Mutamer list exported from Nusuk; do not require agents to retype it into a proprietary template for their normal workflow.
+2. Upload the list from Create Group.
 3. Parse and preview rows.
-4. Show row-level validation and duplicate conflicts.
-5. Resolve agent, package, hotel, and status mappings.
+4. Show row-level validation and accidental same-group/import duplicates without blocking repeat travellers.
+5. Preserve supplied passenger/issued-visa reference data and identify the agent/group. Hotel/package enrichment is separate from Nusuk visa processing.
 6. Approve the import.
 7. Create draft booking/passenger records.
 
-The preview must never post accounting. A casual `Allow duplicate` checkbox must not bypass passport integrity.
+The preview must never post accounting. Repeated submission of the same booking should not create duplicate passengers/charges. A passport appearing on a different trip is not itself an error.
 
 ### 8. Automatic accounting from Umrah work
 
@@ -204,7 +216,7 @@ Clerks should see `Sale`, `Cost`, `Paid`, `Balance`, and `Profit` where permitte
 Must remain dependable:
 
 - Operations movement report
-- Passenger and visa status
+- Passenger manifest and issued-visa references where needed; no visa-processing queue
 - Departure manifest
 - Hotel rooming
 - Transport dispatch/readiness
@@ -239,7 +251,7 @@ Hiding columns in the browser is insufficient. Restricted fields must be omitted
 
 - BRN/booking reference
 - Confirmation status and confirmation number
-- Meal plan
+- Meal plan is not part of the current voucher form/print; do not reintroduce it without a demonstrated requirement
 - View type where relevant
 - Excluded/free night handling
 - Operational hotel contact
@@ -263,7 +275,7 @@ Use a configurable service model instead of hardcoding two ziyarat checkboxes.
 
 ### 3. Secure passport-document handling
 
-**Status:** Missing.
+**Status:** Deferred pending a specific post-visa need; not a default P1 commitment.
 
 Before implementation, define:
 
@@ -353,6 +365,8 @@ Do not build individual room/floor/bed management merely because it is visible i
 
 ### 2. Passport delivery queue
 
+**Status:** Out of current scope: passport/visa processing and handover precede Haasib in the user-confirmed workflow. Historical ideas below are not scheduled requirements.
+
 - Passports ready for collection/delivery
 - Recipient and handover details
 - Delivered by/date/time
@@ -386,6 +400,8 @@ This is different from the competitor's movement report. Implement only after a 
 A friendly timeline of creation, import, passenger changes, rate source, approval, amendment, service changes, payments, and reversals—backed by existing audit records.
 
 ### 6. Configurable document/branding templates
+
+**Status:** Core logos, voucher-wise contacts/footer defaults and shared print-style preview delivered. Further document variants remain optional.
 
 - Company or agent logo according to role and policy
 - Customer-friendly package summary
@@ -421,7 +437,7 @@ Each is a separate project with its own permissions, privacy, failure handling, 
 - Unrestricted backdated changes
 - Direct agent access to supplier cost or margin
 - Blind imports that immediately create financial postings
-- Easy duplicate-passport bypasses
+- Global/season-wide duplicate-passport bans that prevent legitimate repeat trips
 - Reopening an approved voucher to repair accounting
 - Multiple overlapping reports with different totals
 - Duplicate invoices for the same transaction/currency presentation
@@ -429,21 +445,21 @@ Each is a separate project with its own permissions, privacy, failure handling, 
 
 ---
 
-## Agreed implementation sequence
+## Reconciled implementation sequence
 
-### Next project
+### Delivered foundations — do not rebuild
 
-1. Update the Umrah schema/product contract for independent service rate books, optional packages, and a nullable package reference.
-2. Implement effective-dated default and agent-specific rates for visa, transport, hotels, and later add-ons.
-3. Build Quick Booking with visa-only, visa-and-transport, transport-only, hotel-only, complete-package, and permitted custom modes.
-4. Implement reusable Umrah packages as an optional shortcut for companies that sell them.
-5. Feed every booking mode into the same existing voucher, Operations, and accounting workflows where applicable.
+1. Operations and role-appropriate owner/desk views.
+2. Effective-dated default, category and agent pricing for tested visa, transport and hotel services.
+3. Quick Booking and its tested commercial-pricing integrations.
+4. Voucher contacts/footer defaults, logos, print-style view, compact passenger/accommodation tables and linked stay dates/nights.
 
-### Then
+### Current feature set — travelling-party vouchers across agents
 
-6. Add voucher readiness reasons and validated hotel/MOFA details.
-7. Expand import from passengers-only to controlled full-booking import.
-8. Add universal search, saved views, and spreadsheet exports.
-9. Add P1 finance explanation and integrity controls.
+Authorized on 9 September 2026. A passenger's original visa/transport purchase remains with the purchasing agent even when the passenger joins another agent's travelling-party voucher. Later services are billed to the agent purchasing them. Import groups remain source/purchase references, not a restriction on travelling companions.
+
+Local work now includes cross-agent ordinary-draft membership transfers, original-purchase preservation, role isolation, provider-aware printing/Operations, destination-agent hotel accounting and explicit group-leader selection. Approved-voucher transfers and full cross-agent browser/user acceptance remain outstanding. **Not release-ready.** Follow the [feature-set scope and release gates](umrah-cross-agent-voucher-feature-set-2026-09-09.md).
+
+Other candidates remain optional packages, report exports/saved views and finance explanations/integrity controls. No visa-status workbench or government-processing workflow is planned.
 
 P2 and P3 features remain outside implementation until the P0 workflow is working end-to-end and real operators confirm the need.

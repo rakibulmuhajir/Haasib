@@ -54,6 +54,9 @@ class ApproveVoucherRequest extends UmrahFormRequest
 
             $companyId = app(CompanyContextService::class)->getCompanyId();
             $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+            if ($voucher) {
+                app(\App\Modules\Umrah\Services\VoucherWorkflowService::class)->assertPassengerSourcesReady($voucher);
+            }
             if (! $voucher || ! $this->hasCompleteItinerary($voucher)) {
                 $validator->errors()->add('voucher', 'Complete the flight and hotel itinerary before approving this voucher.');
             }

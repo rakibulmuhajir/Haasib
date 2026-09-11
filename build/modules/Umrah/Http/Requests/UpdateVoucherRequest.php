@@ -48,6 +48,7 @@ class UpdateVoucherRequest extends UmrahFormRequest
             && $access->voucherHasStarted($voucher);
 
         return [
+            'leader_passenger_id' => ['nullable', 'uuid', Rule::in($voucher?->passengers()->pluck('umrah.passengers.id')->all() ?? [])],
             'title' => ['required', 'string', 'max:255'],
             ...\App\Modules\Umrah\Services\VoucherPrintProfiles::rules('print_details'),
             'service_bundle' => ['required', Rule::in(array_keys(Voucher::SERVICE_BUNDLES))],

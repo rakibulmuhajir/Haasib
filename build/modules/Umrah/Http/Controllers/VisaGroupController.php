@@ -20,6 +20,7 @@ use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Modules\Umrah\Services\GroupTravellingParties;
 use App\Modules\Umrah\Services\MutamerSheetImportService;
 use App\Modules\Umrah\Services\TransportCatalogService;
 use App\Modules\Umrah\Services\TravelAccessService;
@@ -41,6 +42,7 @@ class VisaGroupController extends Controller
         private TransportCatalogService $transportCatalog,
         private TravelAccessService $access,
         private TravelChangeLogger $changeLogger,
+        private GroupTravellingParties $travellingParties,
     ) {}
 
     public function index(Request $request): Response
@@ -252,6 +254,7 @@ class VisaGroupController extends Controller
         return Inertia::render('Umrah/Groups/Show', [
             'company' => $this->companyPayload($company),
             'group' => $record,
+            'travellingParties' => $this->travellingParties->forGroup($record, request()->user()),
             'paymentMethods' => GroupPayment::METHODS,
             'paymentDirections' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
             'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),

@@ -57,7 +57,7 @@
 <div class="document-title">Journey Voucher · {{ $voucher->voucher_number }}</div>
 <div class="metadata">
     <strong>{{ $voucher->title }}</strong> · {{ str($voucher->service_bundle)->replace('_', ' ')->title() }} · {{ strtoupper($voucher->status) }}<br>
-    Lead: {{ $voucher->passengers->first()?->full_name ?: 'Not assigned' }}
+    Group leader: {{ $voucher->passengers->firstWhere('id', $voucher->leader_passenger_id)?->full_name ?: 'Not selected' }}
     · Agent: {{ $voucher->agent?->name ?: '—' }}
     · PAX: {{ $voucher->passengers->count() }}
     · Group: {{ $voucher->group?->group_number }}
@@ -118,7 +118,25 @@
 <div class="secondary">Flight times are local to each airport.</div>
 @endif
 
-@if($hasTransport)
+@if($hasExternalSources ?? false)
+<h3 class="section">Passenger services</h3>
+<table class="grid">
+    <thead><tr><th style="width:20%">Passenger #</th><th style="width:40%">Visa provider</th><th style="width:40%">Transport provider</th></tr></thead>
+    <tbody>@foreach($originServices as $origin)
+        <tr><td>{{ $origin['passenger_numbers'] }}</td><td>{{ $origin['visa_provider'] }}</td><td>{{ $origin['transport_provider'] }}@if($origin['transport_mode'])<br><span class="secondary">{{ ucfirst($origin['transport_mode']) }}</span>@endif</td></tr>
+    @endforeach</tbody>
+</table>
+@foreach($originServices as $origin)
+@if(count($origin['transport_items']))
+<h3 class="section">Transport · Passenger # {{ $origin['passenger_numbers'] }}</h3>
+<table class="grid"><thead><tr><th>Schedule</th><th>Provider / vehicle</th><th style="width:30%">Route</th><th>Driver / contact</th></tr></thead><tbody>
+@foreach($origin['transport_items'] as $item)
+<tr><td>{{ $item['scheduled_at'] ?: 'Not scheduled' }}</td><td>{{ $item['provider'] ?: $origin['transport_provider'] }}<br>{{ $item['vehicle'] ?: 'Not assigned' }} × {{ $item['quantity'] ?: 1 }}</td><td>{{ $item['route'] ?: 'Transport' }}</td><td>{{ $item['driver'] ?: 'Not assigned' }}<br>{{ $item['phone'] ?: '—' }}</td></tr>
+@endforeach
+</tbody></table>
+@endif
+@endforeach
+@elseif($hasTransport)
 <h3 class="section">Transport</h3>
 <table class="grid">
     <thead><tr><th>Schedule</th><th>Vehicle / quantity</th><th style="width:30%">Route</th><th>Driver</th><th>Contact</th></tr></thead>

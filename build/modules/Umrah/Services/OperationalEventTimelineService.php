@@ -39,7 +39,7 @@ class OperationalEventTimelineService
         Voucher::SERVICE_TRANSPORT_HOTEL,
     ];
 
-    public function __construct(private TravelAccessService $access) {}
+    public function __construct(private TravelAccessService $access, private VoucherServiceOrigins $origins) {}
 
     /**
      * Build a read-only, role-shaped operational projection.
@@ -151,13 +151,37 @@ class OperationalEventTimelineService
             $this->access->scopeAgentRecords($query, $company->id, $user);
         }
 
-        if ($showsDetails) {
-            $query->with('passengers');
-        } else {
-            $query->withCount('passengers');
-        }
+        $query->with('passengers')->withCount('passengers');
 
-        return $query->get()->flatMap(fn (Voucher $voucher): Collection => $this->eventsFromVoucher($voucher, $showsDetails));
+        return $query->get()->flatMap(function (Voucher $voucher) use ($showsDetails, $company, $user): Collection {
+            if (! $this->origins->hasExternalSources($voucher)) {
+                return $this->eventsFromVoucher($voucher, $showsDetails);
+            }
+            // A hotel stay is one party booking: do not multiply its rooms by
+            // the number of original purchase groups. Movement checks, however,
+            // must use the transport each passenger actually bought.
+            $hotels = $this->eventsFromVoucher($voucher, $showsDetails)
+                ->filter(fn (array $event) => in_array($event['type'], ['hotel_check_in', 'hotel_check_out'], true));
+            $movements = $this->origins->segments($voucher)->flatMap(function (array $segment) use ($voucher, $showsDetails, $company, $user): Collection {
+                $part = clone $voucher;
+                $part->setRelation('group', $segment['group']);
+                $part->setRelation('passengers', $segment['passengers']);
+                $part->passengers_count = $segment['passengers']->count();
+
+                return $this->eventsFromVoucher($part, $showsDetails)
+                    ->reject(fn (array $event) => in_array($event['type'], ['hotel_check_in', 'hotel_check_out'], true))
+                    ->map(function (array $event) use ($segment, $voucher, $company, $user): array {
+                        $event['event_key'] .= ':origin:'.($segment['group']?->id ?? 'missing');
+                        if ($this->access->isAgentMember($company->id, $user) && $segment['group']?->agent_id !== $voucher->agent_id) {
+                            $event['group'] = null;
+                        }
+
+                        return $event;
+                    });
+            });
+
+            return $hotels->concat($movements);
+        });
     }
 
     private function eventsFromVoucher(Voucher $voucher, bool $showsDetails): Collection
@@ -333,7 +357,11 @@ class OperationalEventTimelineService
             }
         }
 
-        return $events;
+        // Keep purchased rooms visible even when everyone has joined another
+        // party, but an empty party cannot arrive, depart or change cities.
+        return $voucher->passengers_count === 0
+            ? $events->filter(fn (array $event) => in_array($event['type'], ['hotel_check_in', 'hotel_check_out'], true))
+            : $events;
     }
 
     private function voucherBase(Voucher $voucher, bool $showsDetails): array
@@ -382,14 +410,11 @@ class OperationalEventTimelineService
         bool $showsDetails,
         bool $denyUnlinkedAgent,
     ): Collection {
-        $with = ['sector', 'service.driver', 'driver', 'transportVendor', 'group.agent', 'group.driver'];
-        if ($showsDetails) {
-            $with['group.vouchers'] = fn ($query) => $query
-                ->where('status', Voucher::STATUS_APPROVED)
-                ->whereNull('superseded_at')
-                ->whereNull('superseded_by_voucher_id')
-                ->with('passengers');
-        }
+        $with = ['sector', 'service.driver', 'driver', 'transportVendor', 'group.agent', 'group.driver', 'group.transportItems.sector'];
+        $activeVoucher = fn ($query) => $query->where('status', Voucher::STATUS_APPROVED)
+            ->whereNull('superseded_at')->whereNull('superseded_by_voucher_id');
+        $with['group.passengers'] = fn ($query) => $query->whereHas('voucherPassengers.voucher', $activeVoucher)
+            ->with(['voucherPassengers.voucher' => $activeVoucher]);
 
         $query = GroupTransportItem::query()
             ->where('company_id', $company->id)
@@ -414,12 +439,30 @@ class OperationalEventTimelineService
                 ? 'city_transfer'
                 : 'transport_pickup';
             $scheduledAt = $this->wallClockDateTime($item->scheduled_at);
-            $passengerCount = (int) ($item->passenger_count ?: $item->group?->passenger_count ?: 0);
+            $passengers = ($item->group?->passengers ?? collect())->filter(fn ($passenger) => $passenger->voucherPassengers
+                ->contains(fn ($assignment) => $assignment->voucher && $this->voucherMatchesPickup($assignment->voucher, $item)))->unique('id');
+            $ambiguous = $passengers->isNotEmpty() && ($item->group?->transportItems ?? collect())
+                ->contains(fn (GroupTransportItem $other) => $other->id !== $item->id
+                    && $other->scheduled_at?->format('Y-m-d') === $item->scheduled_at?->format('Y-m-d')
+                    && $other->sector?->origin === $item->sector?->origin
+                    && $other->sector?->destination === $item->sector?->destination);
+            if ($ambiguous) {
+                $passengers = collect();
+            }
+            $passengerCount = (int) ($item->passenger_count ?: $passengers->count());
             $capacity = $item->service?->pax_capacity
                 ? (int) $item->service->pax_capacity * max((int) $item->quantity, 1)
                 : null;
             $driver = $item->driver ?? $item->service?->driver ?? $item->group?->driver;
             $issues = [];
+
+            if ($ambiguous) {
+                $issues[] = 'Multiple pickups match this itinerary; confirm passenger allocation';
+            } elseif ($passengers->isEmpty()) {
+                $issues[] = 'No approved passenger itinerary matches this pickup';
+            } elseif ($passengerCount !== $passengers->count()) {
+                $issues[] = 'Scheduled headcount differs from itinerary-matched passengers';
+            }
 
             if (! $item->service) {
                 $issues[] = 'Vehicle is not assigned';
@@ -471,7 +514,10 @@ class OperationalEventTimelineService
                     'id' => $item->group->agent->id,
                     'name' => $item->group->agent->name,
                 ] : null,
-                'passengers' => $this->groupPassengerManifest($item->group),
+                'passengers' => $passengers->map(fn ($passenger) => [
+                    'id' => $passenger->id, 'name' => $passenger->full_name,
+                    'passport' => $passenger->passport_number, 'nationality' => $passenger->nationality,
+                ])->values()->all(),
                 'transport' => $this->transportDetails($item),
                 'source_href' => $item->group ? "/umrah/groups/{$item->group->id}" : null,
             ];
@@ -498,7 +544,7 @@ class OperationalEventTimelineService
             $issues[] = $direction === 'arrival' ? 'First stay is missing' : 'Final stay is missing';
         }
 
-        $companyTransport = in_array($voucher->service_bundle, self::TRANSPORT_BUNDLES, true)
+        $companyTransport = ($voucher->service_bundle !== Voucher::SERVICE_HOTEL)
             && $voucher->group
             && $voucher->group->transport_mode !== VisaGroup::TRANSPORT_NONE;
 
@@ -551,23 +597,6 @@ class OperationalEventTimelineService
         ];
     }
 
-    private function groupPassengerManifest(?VisaGroup $group): array
-    {
-        if (! $group?->relationLoaded('vouchers')) {
-            return [];
-        }
-
-        return $group->vouchers
-            ->flatMap(fn (Voucher $voucher) => $voucher->passengers)
-            ->unique('id')
-            ->map(fn ($passenger) => [
-                'id' => $passenger->id,
-                'name' => $passenger->full_name,
-                'passport' => $passenger->passport_number,
-                'nationality' => $passenger->nationality,
-            ])->values()->all();
-    }
-
     private function matchingTransportItem(Voucher $voucher, string $direction, string $scheduledAt, mixed $stay): ?GroupTransportItem
     {
         $date = substr($scheduledAt, 0, 10);
@@ -579,6 +608,38 @@ class OperationalEventTimelineService
             ->filter(fn (GroupTransportItem $item): bool => $this->transportDirectionScore($item, $direction, $airport, $city) > 0)
             ->sortBy(fn (GroupTransportItem $item): int => $this->transportDirectionScore($item, $direction, $airport, $city))
             ->last();
+    }
+
+    private function voucherMatchesPickup(Voucher $voucher, GroupTransportItem $item): bool
+    {
+        $date = $item->scheduled_at?->format('Y-m-d');
+        $stays = collect($voucher->hotel_stays ?? [])->filter(fn ($stay) => is_array($stay))
+            ->sortBy('check_in_date')->values();
+        if ($voucher->service_bundle !== Voucher::SERVICE_HOTEL) {
+            foreach ([['arrival', $voucher->onward_arrival_at, $voucher->onward_arrival_city, $stays->first()],
+                ['departure', $voucher->return_departure_at, $voucher->return_departure_city, $stays->last()]] as [$direction, $flightAt, $airport, $stay]) {
+                if ($flightAt?->format('Y-m-d') === $date
+                    && $this->transportDirectionScore($item, $direction, $airport, $stay['city'] ?? null) > 0) {
+                    return true;
+                }
+            }
+        }
+        foreach ($stays as $index => $stay) {
+            $next = $stays->get($index + 1);
+            if (! $next || empty($stay['check_out_date']) || empty($next['check_in_date'])) {
+                continue;
+            }
+            if ($date >= min($stay['check_out_date'], $next['check_in_date'])
+                && $date <= max($stay['check_out_date'], $next['check_in_date'])
+                && $this->canonicalSaudiCity($item->sector?->origin) !== null
+                && $this->canonicalSaudiCity($item->sector?->destination) !== null
+                && $this->canonicalSaudiCity($item->sector?->origin) === $this->canonicalSaudiCity($stay['city'] ?? null)
+                && $this->canonicalSaudiCity($item->sector?->destination) === $this->canonicalSaudiCity($next['city'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function matchingCityTransferItem(
@@ -609,7 +670,7 @@ class OperationalEventTimelineService
             ? $voucher->passengers->count()
             : (int) $voucher->passengers_count;
         $issues = $passengerCount === 0 ? ['No passengers are assigned'] : [];
-        $companyTransport = in_array($voucher->service_bundle, self::TRANSPORT_BUNDLES, true)
+        $companyTransport = ($voucher->service_bundle !== Voucher::SERVICE_HOTEL)
             && $voucher->group
             && $voucher->group->transport_mode !== VisaGroup::TRANSPORT_NONE;
 

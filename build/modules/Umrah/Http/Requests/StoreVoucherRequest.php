@@ -62,6 +62,7 @@ class StoreVoucherRequest extends UmrahFormRequest
             'status' => ['nullable', Rule::in([Voucher::STATUS_DRAFT, Voucher::STATUS_APPROVED])],
             'passenger_ids' => ['required', 'array', 'min:1'],
             'passenger_ids.*' => ['required', 'uuid'],
+            'leader_passenger_id' => ['nullable', 'uuid', Rule::in((array) $this->input('passenger_ids', []))],
             'passenger_services' => ['required', 'array'],
             'passenger_services.*' => ['required', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
             'onward_airline' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRLINES))],

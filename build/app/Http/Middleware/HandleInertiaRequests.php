@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Facades\CompanyContext;
+use App\Modules\FuelStation\Services\FuelNavigationAccess;
+use App\Services\CurrentCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -118,10 +120,23 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'currentCompany' => $serializeCompany($currentCompany),
                 'currentCompanyRole' => $currentCompanyRole,
-                'fuelNavigation' => fn () => $currentCompany && $request->user()
-                    && ($currentCompany->isModuleEnabled('fuel_station') || ($currentCompany->industry_code ?? $currentCompany->industry) === 'fuel_station')
-                    ? app(\App\Modules\FuelStation\Services\FuelNavigationAccess::class)->forUser($currentCompany, $request->user())
-                    : null,
+                'fuelNavigation' => function () use ($request) {
+                    // Resolve after IdentifyCompany has run. The display fallback above
+                    // can be a stdClass from a different, previously visited company.
+                    $company = app(CurrentCompany::class)->get();
+                    $user = $request->user();
+                    if (! $company || ! $user) {
+                        return null;
+                    }
+
+                    $isFuelStation = $company->isModuleEnabled('fuel_station')
+                        || $company->industry_code === 'fuel_station'
+                        || $company->industry === 'fuel_station';
+
+                    return $isFuelStation
+                        ? app(FuelNavigationAccess::class)->forUser($company, $user)
+                        : null;
+                },
                 'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
             ],

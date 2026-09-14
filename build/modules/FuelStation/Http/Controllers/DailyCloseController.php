@@ -446,6 +446,7 @@ class DailyCloseController extends Controller
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
             ->where('is_active', true)
+            ->whereHas('pump', fn ($query) => $query->where('is_active', true))
             ->with([
                 'pump:id,name',
                 'item:id,name,fuel_category',
@@ -1082,6 +1083,7 @@ class DailyCloseController extends Controller
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
             ->where('is_active', true)
+            ->whereHas('pump', fn ($query) => $query->where('is_active', true))
             ->with([
                 'pump:id,name',
                 'item:id,name,fuel_category',

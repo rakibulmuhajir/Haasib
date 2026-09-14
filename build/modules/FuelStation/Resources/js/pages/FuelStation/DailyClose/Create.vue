@@ -518,6 +518,12 @@ const searchMatches = (value: string | null | undefined, query: string): boolean
 const filteredPartners = computed(() => props.partners.filter(partner => searchMatches(partner.name, partnerSearch.value)))
 const filteredInvestors = computed(() => props.investors.filter(investor => searchMatches(investor.name, investorSearch.value)))
 
+// A deleted pump can leave legacy nozzle rows behind. Never surface those rows
+// as an unnamed pump in a new daily close.
+const configuredNozzles = computed(() =>
+  props.nozzles.filter(nozzle => Boolean(nozzle.pump_id && nozzle.pump_name?.trim()))
+)
+
 // Channels grouped by type for UI sections
 const bankTransferChannels = computed(() => enabledChannels.value.filter(ch => ch.type === 'bank_transfer'))
 const cardPosChannels = computed(() => enabledChannels.value.filter(ch => ch.type === 'card_pos'))
@@ -532,7 +538,7 @@ const nozzlesByPump = computed(() => {
     if (!grouped[pumpId]) {
       grouped[pumpId] = {
         pump_id: pumpId,
-        pump_name: reading.pump_name || 'Unknown Pump',
+        pump_name: reading.pump_name as string,
         fuel_name: reading.fuel_name || '',
         fuel_category: reading.fuel_category || '',
         nozzle_indices: []
@@ -560,7 +566,7 @@ const form = useForm({
   date: props.date,
 
   // Tab 1: Nozzle readings (each nozzle has electronic + optional manual readings)
-  nozzle_readings: props.nozzles.map(nozzle => ({
+  nozzle_readings: configuredNozzles.value.map(nozzle => ({
     nozzle_id: nozzle.id,
     nozzle_code: nozzle.code,
     nozzle_label: nozzle.label,
@@ -673,7 +679,7 @@ const expenseError = (index: number, field: string) =>
 // Reset form to initial empty state (preserving structure from props)
 const resetFormToInitial = () => {
   // Reset nozzle readings - keep structure but clear entered values
-  form.nozzle_readings = props.nozzles.map(nozzle => ({
+  form.nozzle_readings = configuredNozzles.value.map(nozzle => ({
     nozzle_id: nozzle.id,
     nozzle_code: nozzle.code,
     nozzle_label: nozzle.label,
@@ -1008,7 +1014,7 @@ const litersSoldByTank = computed(() => {
   const byTank: Record<string, number> = {}
   form.nozzle_readings.forEach(r => {
     // Find the nozzle's tank from props
-    const nozzle = props.nozzles.find(n => n.id === r.nozzle_id)
+    const nozzle = configuredNozzles.value.find(n => n.id === r.nozzle_id)
     if (nozzle?.tank_id) {
       byTank[nozzle.tank_id] = (byTank[nozzle.tank_id] || 0) + r.liters_sold
     }
@@ -1023,7 +1029,7 @@ const litersSoldByTank = computed(() => {
 })
 
 const tankSalesLabel = (tank: { item_id?: string; tank_id: string }) => {
-  const hasNozzle = props.nozzles.some(nozzle => nozzle.tank_id === tank.tank_id)
+  const hasNozzle = configuredNozzles.value.some(nozzle => nozzle.tank_id === tank.tank_id)
   if (hasNozzle) return 'Meter Sales'
 
   const hasBulkSaleRow = form.other_sales.some(sale => sale.item_id === tank.item_id)

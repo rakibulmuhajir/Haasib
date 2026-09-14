@@ -20,6 +20,21 @@ class Pump extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
+    protected static function booted(): void
+    {
+        static::deleting(function (Pump $pump): void {
+            $nozzles = $pump->nozzles()->withTrashed();
+
+            if ($pump->isForceDeleting()) {
+                $nozzles->forceDelete();
+
+                return;
+            }
+
+            $nozzles->delete();
+        });
+    }
+
     protected $fillable = [
         'company_id',
         'name',

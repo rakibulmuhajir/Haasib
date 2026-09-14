@@ -3,6 +3,7 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\FuelStation\Http\Requests\DestroyPumpRequest;
 use App\Modules\FuelStation\Http\Requests\StorePumpRequest;
 use App\Modules\FuelStation\Http\Requests\UpdatePumpRequest;
 use App\Modules\FuelStation\Models\Nozzle;
@@ -151,7 +152,7 @@ class PumpController extends Controller
         return redirect()->back()->with('success', 'Pump point updated successfully.');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(DestroyPumpRequest $request): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
 
@@ -160,11 +161,11 @@ class PumpController extends Controller
             ->findOrFail($pumpId);
 
         // Check if pump has readings
-        if ($pump->pumpReadings()->exists()) {
+        if ($pump->pumpReadings()->exists() || $pump->nozzles()->whereHas('readings')->exists()) {
             return redirect()->back()->with('error', 'Cannot delete pump with readings. Deactivate it instead.');
         }
 
-        $pump->delete();
+        DB::transaction(fn () => $pump->delete());
 
         return redirect()->back()->with('success', 'Pump point deleted successfully.');
     }

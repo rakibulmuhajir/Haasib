@@ -7,6 +7,7 @@ export interface NavContext {
     isInventoryEnabled: boolean;
     isPayrollEnabled: boolean;
     currentCompanyRole: string | null;
+    fuelNavigation?: { allowed: string[]; hasInvestors: boolean } | null;
     t: (key: string) => string;
 }
 

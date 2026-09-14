@@ -118,6 +118,10 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'currentCompany' => $serializeCompany($currentCompany),
                 'currentCompanyRole' => $currentCompanyRole,
+                'fuelNavigation' => fn () => $currentCompany && $request->user()
+                    && ($currentCompany->isModuleEnabled('fuel_station') || ($currentCompany->industry_code ?? $currentCompany->industry) === 'fuel_station')
+                    ? app(\App\Modules\FuelStation\Services\FuelNavigationAccess::class)->forUser($currentCompany, $request->user())
+                    : null,
                 'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
             ],

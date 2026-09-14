@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 import { Link, usePage } from '@inertiajs/vue3'
 import {
@@ -17,7 +17,8 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
-import { urlIsActive, toUrl } from '@/lib/utils'
+import { toUrl } from '@/lib/utils'
+import { activeNavHref } from '@/navigation/active'
 import type { NavGroup } from '@/types'
 
 const props = defineProps<{
@@ -25,6 +26,8 @@ const props = defineProps<{
 }>()
 
 const page = usePage()
+const activeHref = computed(() => activeNavHref(props.groups, page.url))
+const urlIsActive = (href: Parameters<typeof toUrl>[0]) => toUrl(href) === activeHref.value
 const rootEl = ref<HTMLElement | null>(null)
 const didInitialScroll = ref(false)
 
@@ -33,7 +36,7 @@ const openItems = ref<Record<string, boolean>>({})
 
 // Check if any child is active
 function hasActiveChild(children: NonNullable<NavGroup['items'][0]['children']>): boolean {
-  return children.some(child => child.href && urlIsActive(child.href, page.url))
+  return children.some(child => child.href && urlIsActive(child.href))
 }
 
 // Initialize open state based on active children
@@ -106,7 +109,7 @@ watch(() => page.url, () => {
                   <SidebarMenuSubItem v-for="child in item.children" :key="child.title">
                     <SidebarMenuSubButton
                       as-child
-                      :is-active="child.href ? urlIsActive(child.href, page.url) : false"
+                      :is-active="child.href ? urlIsActive(child.href) : false"
                     >
                       <Link v-if="child.href && !child.external" :href="child.href">
                         <component :is="child.icon" v-if="child.icon" class="size-4" />
@@ -132,7 +135,7 @@ watch(() => page.url, () => {
           <SidebarMenuItem v-else>
             <SidebarMenuButton
               as-child
-              :is-active="item.href ? urlIsActive(item.href, page.url) : false"
+              :is-active="item.href ? urlIsActive(item.href) : false"
               :tooltip="item.title"
             >
               <Link v-if="item.href && !item.external" :href="item.href">

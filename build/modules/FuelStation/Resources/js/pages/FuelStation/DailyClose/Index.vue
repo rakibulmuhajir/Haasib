@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import { computed, ref } from 'vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
@@ -168,6 +169,7 @@ const unlockSingle = (closeId: string) => {
     :icon="Calendar"
     :breadcrumbs="breadcrumbs"
   >
+    <DailyCloseNav :company="company" history />
     <template #actions>
       <div class="flex items-center gap-2">
         <Button v-if="permissions.canLock" variant="outline" @click="lockMonthOpen = true">

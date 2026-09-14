@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
@@ -1776,6 +1777,7 @@ const completedWorkflowSteps = computed(() => {
     :icon="isAmendmentMode ? RotateCcw : Calculator"
     :breadcrumbs="breadcrumbs"
   >
+    <DailyCloseNav :company="company" :history="isAmendmentMode" />
     <template v-if="canFillTestData" #actions>
       <Button type="button" variant="outline" @click="fillDummyDailyCloseData">
         <FileWarning class="mr-2 h-4 w-4" />

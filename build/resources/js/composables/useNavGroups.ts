@@ -72,6 +72,7 @@ export function useNavGroups() {
             isInventoryEnabled: isInventoryEnabled.value,
             isPayrollEnabled: isPayrollEnabled.value,
             currentCompanyRole: authProps.value.currentCompanyRole || null,
+            fuelNavigation: authProps.value.fuelNavigation ?? null,
             t,
         }),
     )

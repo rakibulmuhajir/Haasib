@@ -40,7 +40,8 @@ import { useCompanySwitcher } from '@/composables/useCompanySwitcher';
 import { getInitials } from '@/composables/useInitials';
 import { useNavGroups } from '@/composables/useNavGroups';
 import { usePaletteVisibility } from '@/composables/usePaletteVisibility';
-import { urlIsActive } from '@/lib/utils';
+import { activeNavHref } from '@/navigation/active';
+import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItemType, NavGroup, NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
@@ -53,7 +54,7 @@ import {
     Search,
     SunMedium,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = withDefaults(
     defineProps<{
@@ -65,18 +66,20 @@ const props = withDefaults(
 const page = usePage();
 const auth = computed(() => page.props.auth as any);
 
-const { navGroups } = useNavGroups();
+const { navGroups, isFuelStationCompany } = useNavGroups();
+const mobileNavOpen = ref(false);
+watch(() => page.url, () => { mobileNavOpen.value = false; });
+const mobileShortcuts = computed(() => isFuelStationCompany.value
+    ? navGroups.value.filter(group => ['Daily Close', 'Stock'].includes(group.label)).map(group => ({ ...group.items[0], title: group.label, group }))
+    : []);
 const { currentCompany } = useCompanySwitcher();
 const { appearance, isDark, appearanceLabel, toggleAppearance, setSystem } =
     useAppearanceToggle();
 const { open: openPalette } = usePaletteVisibility();
 
-const isActive = (item: NavItem): boolean => {
-    if (item.href && urlIsActive(item.href, page.url)) return true;
-    return (item.children ?? []).some(
-        (child) => child.href && urlIsActive(child.href, page.url),
-    );
-};
+const activeHref = computed(() => activeNavHref(navGroups.value, page.url));
+const isActive = (item: NavItem): boolean =>
+    (!!item.href && toUrl(item.href) === activeHref.value) || (item.children ?? []).some(isActive);
 
 const groupIsActive = (group: NavGroup) => group.items.some(isActive);
 
@@ -103,12 +106,12 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
             <div class="mx-auto flex h-14 w-full items-center gap-2 px-4 lg:px-8">
                 <!-- Mobile: the whole navigation, flat. NavMainCollapsible is
                      bound to sidebar primitives and cannot come along. -->
-                <Sheet>
+                <Sheet v-model:open="mobileNavOpen">
                     <SheetTrigger as-child>
                         <Button
                             variant="ghost"
                             size="icon"
-                            class="lg:hidden"
+                            class="xl:hidden"
                             aria-label="Open navigation"
                         >
                             <Menu class="size-5" />
@@ -122,7 +125,7 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                             </SheetTitle>
                         </SheetHeader>
 
-                        <nav class="px-2 py-3">
+                        <nav aria-label="Main navigation" class="px-2 py-3">
                             <div v-for="group in navGroups" :key="group.label" class="mb-4">
                                 <p
                                     class="px-2 pb-1 text-[11px] tracking-wide text-text-metadata uppercase"
@@ -178,7 +181,7 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                     <DropdownMenuTrigger as-child>
                         <Button
                             variant="ghost"
-                            class="hidden max-w-48 gap-2 px-2 sm:inline-flex"
+                            class="hidden max-w-36 gap-2 px-2 sm:inline-flex"
                         >
                             <Building2 class="size-4 shrink-0" />
                             <span class="truncate">{{
@@ -192,12 +195,12 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                <nav class="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
+                <nav class="hidden min-w-0 flex-1 items-center gap-0.5 xl:flex">
                     <template v-for="group in navGroups" :key="group.label">
                         <Link
                             v-if="isDirectLink(group)"
                             :href="group.items[0].href!"
-                            class="rounded-none border-b-2 px-3 py-1.5 text-sm hover:bg-surface-sunken"
+                            class="shrink-0 whitespace-nowrap rounded-none border-b-2 px-2 py-1.5 text-sm hover:bg-surface-sunken"
                             :class="
                                 groupIsActive(group)
                                     ? 'border-status-critical font-medium text-text-primary'
@@ -209,9 +212,10 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
 
                         <DropdownMenu v-else>
                             <DropdownMenuTrigger as-child>
-                                <button
+                                <Button
+                                    variant="ghost"
                                     type="button"
-                                    class="flex items-center gap-1 rounded-none border-b-2 px-3 py-1.5 text-sm hover:bg-surface-sunken data-[state=open]:bg-surface-sunken"
+                                    class="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-b-2 px-2 py-1.5 text-sm hover:bg-surface-sunken data-[state=open]:bg-surface-sunken"
                                     :class="
                                         groupIsActive(group)
                                             ? 'border-status-critical font-medium text-text-primary'
@@ -220,7 +224,7 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                                 >
                                     {{ group.label }}
                                     <ChevronDown class="size-3.5 opacity-60" />
-                                </button>
+                                </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" class="min-w-56">
                                 <template v-for="(item, index) in group.items" :key="item.title">
@@ -283,9 +287,9 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                         @click="openPalette"
                     >
                         <Search class="size-4" />
-                        <span class="hidden text-sm md:inline">Search</span>
+                        <span class="hidden text-sm 2xl:inline">Search</span>
                         <kbd
-                            class="hidden rounded-sm border border-rule-subtle px-1.5 font-mono text-[11px] text-text-metadata md:inline"
+                            class="hidden rounded-sm border border-rule-subtle px-1.5 font-mono text-[11px] text-text-metadata 2xl:inline"
                             >{{ shortcut }}</kbd
                         >
                     </Button>
@@ -347,6 +351,13 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                 </div>
             </div>
         </div>
+
+        <nav v-if="isFuelStationCompany" aria-label="Station shortcuts" class="flex items-center gap-2 border-b border-rule-subtle px-4 py-2 xl:hidden">
+            <Button v-for="item in mobileShortcuts" :key="item.title" variant="ghost" as-child>
+                <Link :href="item.href!" :class="groupIsActive(item.group) ? 'bg-surface-sunken font-medium' : ''">{{ item.title }}</Link>
+            </Button>
+            <Button variant="ghost" @click="mobileNavOpen = true" aria-label="More navigation">More <ChevronDown class="ml-1 size-4" /></Button>
+        </nav>
 
         <div v-if="showSecondRow" class="border-b border-rule-subtle bg-surface-canvas">
             <div class="mx-auto flex h-11 w-full items-center gap-4 px-4 lg:px-8">

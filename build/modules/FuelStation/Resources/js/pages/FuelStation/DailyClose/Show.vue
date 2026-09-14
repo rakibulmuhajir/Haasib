@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import { computed } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
@@ -154,6 +155,7 @@ const unlockTransaction = () => {
     :icon="Calculator"
     :breadcrumbs="breadcrumbs"
   >
+    <DailyCloseNav :company="company" history />
     <template #actions>
       <div class="flex items-center gap-2">
         <Button variant="outline" as-child>

@@ -331,6 +331,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `company_id`, `transport_vendor_id`, `transport_service_id`, `transport_sector_id`, `transport_package_id`, `name`, `charging_basis`, `sale_amount`, `cost_amount`, `hajj_terminal_sale_amount`, `hajj_terminal_cost_amount`, `is_active`.
 
 ### umrah.group_transport_items
+- `booking_revision` UUID nullable, server-managed, not fillable. Rotates when operational reservation fields change; null identifies legacy unrecorded items.
+- Operational confirmations: each current item is confirmed separately through the parent group's private `transport_confirmations` metadata. Replacing an item creates a new pending booking; confirmation is not inferred from vehicle/driver assignment.
 - Purpose: Historical transport selection and fare snapshot for a visa group. One item represents either a sector or a complete journey package.
 - Columns:
   - `id` uuid PK.
@@ -412,6 +414,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `standard_bus_billable_passenger_count` integer default 0. Passenger count to which standard-bus rates were applied.
   - `mandatory_transport_cost_amount` numeric(15,2) default 0. Standard-bus cost total assigned to `mandatory_transport_vendor_id`; zero for specialized transport.
   - `transport_quantity` integer default 0.
+  - `transport_booking_revision` UUID nullable, server-managed, hidden and not fillable. Rotates on provider/mode/transport selection changes; null identifies legacy unrecorded standard-bus bookings.
+  - `transport_confirmations` jsonb default `{}`, cast array, hidden and not mass assignable. Operational records keyed by `standard_bus` or transport-item UUID; each stores status, reservation fingerprint, references, private note, cancellation reason/acknowledgement, actor, timestamp and history. No financial postings. Standard-bus confirmation applies to the purchased provider service, not vehicle dispatch. Specialized confirmation is per selected transport item.
   - `transport_pax_capacity` integer nullable. Copied from selected transport service and overrideable on the group.
   - `passenger_count` integer default 0.
   - `visa_sale_amount` numeric(15,2) default 0.
@@ -496,7 +500,10 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
     - Effective-dated stays additionally store a `pricing_breakdown` entry for each occupied date with the default rule, winning agent/category rule, currency, and snapshotted per-bed retail/cost. This supports a stay crossing two rate periods without changing its itinerary shape.
     - Self-arranged stay stores `source = self` and zero retail/cost while preserving itinerary information.
     - A Company stay uses the configured company hotel and is charged; a Self stay is itinerary-only and has zero retail/cost.
+  - Each stay also has server-managed `stay_id` (UUID) and `stay_revision` (UUID). Identity survives reordering; material hotel/date/room/supplier/source changes rotate the revision. Legacy stays receive deterministic identities in read projections without writes.
+  - `hotel_confirmations` jsonb default `{}`, cast array, hidden from automatic model serialization and not mass assignable. Separate operational metadata keyed by stay UUID: `revision`, `status` (`pending`/`confirmed`), nullable `brn`, `confirmation_number`, `internal_note`, `updated_by_user_id`, `updated_by_name`, `updated_at`, and append-only `history` of those snapshots. Updates lock the voucher and require a matching stay revision and confirmation version token. No financial recalculation or posting. Company staff with voucher-update permission may write; agents receive a deliberately limited read projection without notes/history. Self-arranged stays project as Agent-arranged; legacy untouched stays as Not recorded; new company stays as Pending; changed confirmed stays require reconfirmation. Amendments do not inherit confirmation metadata.
   - `hotel_sale_amount`, `hotel_cost_amount` numeric(15,2) default 0.
+  - Hotel confirmation status additionally supports `cancelled`, through an explicit cancellation action requiring `cancellation_reason` and `supplier_acknowledgement` (each max 500). These fields are recorded in private history; no automatic refund or accounting reversal occurs. A cancelled stay on an active journey remains an unresolved accommodation obligation. Refund review and settlement remain separate workflows.
   - `hotel_sale_transaction_id`, `hotel_cost_transaction_id` uuid nullable FK -> `acct.transactions.id`.
   - `notes` text nullable.
   - `created_by_user_id` uuid nullable FK -> `auth.users.id`.

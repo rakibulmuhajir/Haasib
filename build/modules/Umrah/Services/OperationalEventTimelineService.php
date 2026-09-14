@@ -190,7 +190,7 @@ class OperationalEventTimelineService
         $includesHotel = Voucher::bundleIncludesHotel($voucher->service_bundle);
         $hotelOnly = $voucher->service_bundle === Voucher::SERVICE_HOTEL;
         $stays = $includesHotel
-            ? collect($voucher->hotel_stays ?? [])
+            ? collect(app(HotelStayIdentity::class)->project($voucher))
                 ->filter(fn (mixed $stay): bool => is_array($stay))
                 ->sortBy('check_in_date')
                 ->values()
@@ -253,12 +253,24 @@ class OperationalEventTimelineService
             ]);
         }
 
+        $hotelConfirmations = collect(app(HotelConfirmations::class)->rows($voucher))->keyBy('stay_id');
         foreach ($stays as $index => $stay) {
             $previous = $index > 0 ? $stays->get($index - 1) : null;
             $next = $index < $stays->count() - 1 ? $stays->get($index + 1) : null;
             $city = $stay['city'] ?? null;
             $hotel = $stay['hotel_name'] ?? null;
             $hotelReadiness = $this->hotelReadiness($stay);
+            $confirmation = $hotelConfirmations->get($stay['stay_id']);
+            $checkInReadiness = $hotelReadiness;
+            if ($confirmation && in_array($confirmation['status'], ['pending', 'reconfirm', 'cancelled'], true)) {
+                $checkInReadiness['readiness'] = 'needs_attention';
+                $checkInReadiness['readiness_label'] = 'Needs attention';
+                $checkInReadiness['readiness_issues'][] = match ($confirmation['status']) {
+                    'cancelled' => 'Hotel booking cancelled — replacement needed',
+                    'reconfirm' => 'Hotel needs reconfirmation',
+                    default => 'Hotel confirmation is pending',
+                };
+            }
 
             if (! empty($stay['check_in_date'])) {
                 $date = (string) $stay['check_in_date'];
@@ -283,7 +295,8 @@ class OperationalEventTimelineService
                     'city' => $city,
                     'room_type' => $stay['room_type'] ?? null,
                     'room_count' => (int) ($stay['room_count'] ?? 0),
-                    ...$hotelReadiness,
+                    ...$checkInReadiness,
+                    'hotel_confirmation_status' => $confirmation['status_label'] ?? 'Not recorded',
                     '_timezone' => $this->timezoneFor($city),
                 ]);
             }
@@ -939,6 +952,15 @@ class OperationalEventTimelineService
                 'label' => 'Amend voucher',
                 'description' => 'Create a draft amendment while keeping the approved voucher intact.',
                 'href' => "/umrah/vouchers/{$event['voucher']['id']}?workflow=amend&from=operations",
+            ];
+        }
+
+        if ($issues->intersect(['Hotel confirmation is pending', 'Hotel needs reconfirmation', 'Hotel booking cancelled — replacement needed'])->isNotEmpty()
+            && ! empty($event['voucher']['id']) && $user->hasCompanyPermission(Permissions::UMRAH_VOUCHER_UPDATE)) {
+            $event['resolution_actions'][] = [
+                'key' => 'hotel_confirmation', 'label' => 'Update hotel confirmation',
+                'description' => 'Record the hotel booking status and confirmation references.',
+                'href' => "/umrah/vouchers/{$event['voucher']['id']}?tab=details#hotel-confirmations",
             ];
         }
 

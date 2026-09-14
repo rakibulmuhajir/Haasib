@@ -112,6 +112,7 @@ const localDate = (value: unknown) => (value ? String(value).slice(0, 10) : '');
 const editableStays = (
     props.editingVoucher?.hotel_stays ?? props.bookingDefaults?.hotel_stays
 )?.map((stay: any) => ({
+    stay_id: stay.stay_id || null,
     source: stay.source === 'company' ? 'company' : 'self',
     hotel_id: stay.hotel_id || 'none',
     hotel_name: stay.hotel_name || '',
@@ -330,6 +331,7 @@ const toggleAll = (checked: boolean | 'indeterminate') => {
 const addHotelStay = () => {
     const previousCheckout = form.hotel_stays.at(-1)?.check_out_date || '';
     form.hotel_stays.push({
+        stay_id: null,
         source: 'self',
         hotel_id: 'none',
         hotel_name: '',

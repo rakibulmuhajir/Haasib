@@ -90,6 +90,7 @@ class VoucherPassengerAssignmentService
 
             foreach ($assignments as $index => $assignment) {
                 $clone = $source->replicate([
+                    'hotel_confirmations',
                     'voucher_number',
                     'status',
                     'created_by_user_id',

@@ -571,16 +571,26 @@ class UmrahCoreService
             $group->travel_date?->toDateString(),
         );
 
-        $group->transportItems()->delete();
-
+        $remaining = $group->transportItems()->lockForUpdate()->get();
         foreach ($resolved as $item) {
             unset($item['pax_capacity']);
-            GroupTransportItem::create([
-                ...$item,
-                'company_id' => $group->company_id,
-                'visa_group_id' => $group->id,
-            ]);
+            // Preserve an unchanged reservation's identity when a group form
+            // merely updates notes or prices. Replacements start unconfirmed.
+            $match = $remaining->first(function (GroupTransportItem $previous) use ($item): bool {
+                $candidate = clone $previous;
+                $candidate->fill($item);
+
+                return ! $candidate->isDirty(['transport_vendor_id', 'transport_service_id', 'transport_sector_id', 'transport_package_id', 'driver_id', 'description', 'scheduled_at', 'terminal', 'quantity', 'passenger_count']);
+            });
+            if ($match) {
+                $match->update($item);
+                $remaining = $remaining->reject(fn ($old) => $old->id === $match->id);
+            } else {
+                GroupTransportItem::create([...$item, 'company_id' => $group->company_id, 'visa_group_id' => $group->id]);
+            }
         }
+        $remaining->each->delete();
+        $group->unsetRelation('transportItems');
 
         $primary = $resolved[0] ?? null;
 

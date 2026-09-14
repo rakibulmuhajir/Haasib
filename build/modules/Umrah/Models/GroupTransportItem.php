@@ -19,6 +19,17 @@ class GroupTransportItem extends Model
 
     public $incrementing = false;
 
+    protected $hidden = ['booking_revision'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $item): void {
+            if ($item->isDirty(['transport_vendor_id', 'transport_service_id', 'transport_sector_id', 'transport_package_id', 'driver_id', 'description', 'scheduled_at', 'terminal', 'quantity', 'passenger_count'])) {
+                $item->booking_revision = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     protected $fillable = [
         'company_id', 'visa_group_id', 'transport_vendor_id', 'transport_fare_id', 'transport_service_id', 'transport_sector_id',
         'transport_package_id', 'driver_id', 'description', 'scheduled_at', 'terminal', 'charging_basis',
@@ -27,6 +38,7 @@ class GroupTransportItem extends Model
     ];
 
     protected $casts = [
+        'booking_revision' => 'string',
         'company_id' => 'string', 'visa_group_id' => 'string', 'transport_vendor_id' => 'string', 'transport_fare_id' => 'string',
         'transport_service_id' => 'string', 'transport_sector_id' => 'string', 'transport_package_id' => 'string',
         'driver_id' => 'string', 'scheduled_at' => 'datetime', 'quantity' => 'integer', 'passenger_count' => 'integer',

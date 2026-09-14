@@ -2,7 +2,13 @@
 
 Last reconciled: 14 September 2026.
 
+## Current local feature set — hotel confirmations
+
+**14 September — Implemented and tested locally; not deployed.** Per-stay Pending/Confirmed, separate optional BRN and confirmation number, internal notes/history, reconfirmation after material changes, legacy Not recorded and Agent-arranged states. Operations flags pending check-ins and links to the internal voucher tab. No pricing/accounting or passenger-print changes. **197 tests / 2,015 assertions**, build and targeted lint passed; built-in-browser QA save and queue checks completed. Requires one additive voucher-metadata migration (applied locally). See [scope, verification and acceptance checklist](umrah-hotel-confirmations-feature-set.md). User acceptance and explicit deployment authorization remain outstanding.
+
 ## Production release — 14 September 2026
+
+The new hotel-confirmation slice above is **not** included in this already-completed production release. Final local follow-up: 26 focused tests / 138 assertions passed, including legacy blank-row identity; browser Operations action and pending-warning clearance verified.
 
 **Deployed successfully:** application commit `3bec8835d2495fb53bd14c24f7e4ea51628b75f3` at 05:01 UTC (10:01 Asia/Karachi), using the documented server deploy.sh. This release includes the accumulated work authorized below, including commits `c884189f` and `77fdf24f`. Earlier "not deployed" entries below are historical and superseded for these included features; outstanding acceptance limitations are not erased.
 
@@ -43,6 +49,8 @@ User explicitly authorized committing and deploying the accumulated work. Releas
 7. Record live smoke checks without creating unintended approved/accounting transactions.
 
 ## Next feature set
+
+**14 September — Hotel/transport cancellation and owner booking readiness implemented locally; not deployed.** Per-booking Pending/Confirmed/Needs reconfirmation/Cancelled states now record supplier context without changing accounting or automatically issuing refunds. Owner/staff Groups lists show separate green/orange/red/grey readiness based on the current travelling vouchers, original service ownership and the 72-hour arrival threshold. Transport provider confirmation remains separate from vehicle/driver dispatch. **209 tests / 2,104 assertions** passed across the focused regression; production build and targeted lint passed. See [scope and verification](umrah-booking-readiness-feature-set.md). User acceptance and explicit deployment authorization remain outstanding.
 
 **14 September browser acceptance update:** user checked import and partial search. Built-in browser checks passed scoped search examples, seeded-agent isolation, saved-view replacement/persistence/privacy/removal, and screen/print report agreement. **CSV delivery remains unverified:** clicks produced no new observable Downloads file. Do not mark the full browser checklist complete. See [exact evidence and remaining checks](umrah-browser-acceptance-2026-09-14.md). Nothing deployed.
 

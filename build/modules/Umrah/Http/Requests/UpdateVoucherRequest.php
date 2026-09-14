@@ -65,6 +65,7 @@ class UpdateVoucherRequest extends UmrahFormRequest
             'return_departure_at' => ['nullable', 'date', 'after:onward_arrival_at'],
             'return_arrival_at' => ['nullable', 'date', 'after:return_departure_at'],
             'hotel_stays' => ['required', 'array', 'min:1'],
+            'hotel_stays.*.stay_id' => ['nullable', 'uuid', 'distinct'],
             'hotel_stays.*.hotel_name' => ['nullable', 'string', 'max:255'],
             'hotel_stays.*.city' => ['nullable', 'string', 'max:100'],
             'hotel_stays.*.source' => ['nullable', Rule::in(['company', 'self'])],

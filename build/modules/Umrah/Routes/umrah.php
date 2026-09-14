@@ -30,6 +30,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
     ->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('umrah.dashboard');
         Route::get('operations', [OperationsController::class, 'index'])->name('umrah.operations.index');
+        Route::post('vouchers/{voucher}/hotel-confirmations', [\App\Modules\Umrah\Http\Controllers\HotelConfirmationController::class, 'store'])->name('umrah.vouchers.hotel-confirmations.store');
+        Route::post('groups/{group}/transport-confirmations', [\App\Modules\Umrah\Http\Controllers\HotelConfirmationController::class, 'transport'])->name('umrah.groups.transport-confirmations.store');
         Route::post('operations/views', [OperationsController::class, 'saveView'])->name('umrah.operations.views.store');
         Route::delete('operations/views/{view}', [OperationsController::class, 'saveView'])->name('umrah.operations.views.destroy');
         Route::get('operations/report', [OperationsController::class, 'report'])->name('umrah.operations.report');

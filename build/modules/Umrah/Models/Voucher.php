@@ -144,6 +144,18 @@ class Voucher extends Model
 
     public $incrementing = false;
 
+    protected $hidden = ['hotel_confirmations'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $voucher): void {
+            if ($voucher->isDirty('hotel_stays')) {
+                $voucher->id ??= (string) \Illuminate\Support\Str::uuid();
+                app(\App\Modules\Umrah\Services\HotelStayIdentity::class)->normalize($voucher);
+            }
+        });
+    }
+
     protected $fillable = [
         'leader_passenger_id',
         'print_details',
@@ -185,6 +197,7 @@ class Voucher extends Model
     ];
 
     protected $casts = [
+        'hotel_confirmations' => 'array',
         'leader_passenger_id' => 'string',
         'print_details' => 'array',
         'company_id' => 'string',

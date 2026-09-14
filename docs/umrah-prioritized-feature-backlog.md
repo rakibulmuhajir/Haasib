@@ -247,7 +247,7 @@ Hiding columns in the browser is insufficient. Restricted fields must be omitted
 
 ### 1. Hotel fulfillment details
 
-**Status:** Missing structured data.
+**Status:** First confirmation slice implemented locally on 14 September 2026; awaiting acceptance, not deployed. Per-stay confirmation, BRN/reference, internal history and Operations attention links are included. Remaining items below are not all implemented. See [scope and testing](umrah-hotel-confirmations-feature-set.md).
 
 - BRN/booking reference
 - Confirmation status and confirmation number

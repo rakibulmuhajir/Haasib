@@ -72,7 +72,14 @@ class VisaGroupController extends Controller
             ->through(fn (VisaGroup $group) => $group->makeHidden('status'))
             ->withQueryString();
 
+        $canViewReadiness = ! $this->isMember($company->id, $request);
+        if ($canViewReadiness) {
+            $readiness = app(\App\Modules\Umrah\Services\GroupBookingReadiness::class)->forGroups($company->id, $groups->getCollection());
+            $groups->getCollection()->each(fn ($group) => $group->setAttribute('booking_readiness', $readiness[$group->id]));
+        }
+
         return Inertia::render('Umrah/Groups/Index', [
+            'canViewReadiness' => $canViewReadiness,
             'company' => $this->companyPayload($company),
             'groups' => $groups,
             'filters' => ['search' => $search],
@@ -271,6 +278,9 @@ class VisaGroupController extends Controller
             ->get();
 
         return Inertia::render('Umrah/Groups/Show', [
+            'transportConfirmations' => app(\App\Modules\Umrah\Services\TransportConfirmations::class)->rows($record, ! $isMember),
+            'canManageTransportConfirmations' => app(\App\Modules\Umrah\Services\TransportConfirmations::class)->canManage($record, request()->user()),
+            'canReviewBookingRefunds' => ! $isMember && request()->user()->hasCompanyPermission(\App\Constants\Permissions::UMRAH_REFUND_VIEW),
             'company' => $this->companyPayload($company),
             'group' => $record,
             'travellingParties' => $this->travellingParties->forGroup($record, request()->user()),

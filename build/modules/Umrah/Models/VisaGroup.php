@@ -24,6 +24,17 @@ class VisaGroup extends Model
 
     protected $appends = ['payment_status'];
 
+    protected $hidden = ['transport_confirmations', 'transport_booking_revision'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $group): void {
+            if ($group->isDirty(['transport_mode', 'mandatory_transport_vendor_id', 'transport_service_id', 'driver_id', 'transport_quantity', 'transport_pax_capacity'])) {
+                $group->transport_booking_revision = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_PASSPORTS_RECEIVED = 'passports_received';
@@ -118,6 +129,8 @@ class VisaGroup extends Model
     ];
 
     protected $casts = [
+        'transport_confirmations' => 'array',
+        'transport_booking_revision' => 'string',
         'company_id' => 'string',
         'agent_id' => 'string',
         'vendor_id' => 'string',

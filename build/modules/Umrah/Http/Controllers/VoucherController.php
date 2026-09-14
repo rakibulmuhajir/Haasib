@@ -337,7 +337,7 @@ class VoucherController extends Controller
             'groups' => collect([$record->group]), 'selectedGroup' => $record->group,
             'availablePassengers' => $record->passengers, 'assignedPassengers' => collect(),
             'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::bundlesForGroup($record->group), 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
-            'hotels' => $hotels, 'editingVoucher' => $record, 'bookingDefaults' => null, 'agentCapabilities' => $capabilities,
+            'hotels' => $hotels, 'editingVoucher' => $record->setAttribute('hotel_stays', app(\App\Modules\Umrah\Services\HotelStayIdentity::class)->project($record)), 'bookingDefaults' => null, 'agentCapabilities' => $capabilities,
             'printDefaults' => ['footer_text' => '', 'contacts' => []],
             'contactProfiles' => $this->printProfiles->catalog($company, $record->agent_id),
         ]);
@@ -658,7 +658,7 @@ class VoucherController extends Controller
         if ($record->status !== Voucher::STATUS_DRAFT) {
             $record->setRelation('passengers', $record->allPassengers()->orderBy('sort_order')->orderBy('created_at')->get());
         }
-        $record->hotel_stays = collect($record->hotel_stays ?? [])
+        $record->hotel_stays = collect(app(\App\Modules\Umrah\Services\HotelStayIdentity::class)->project($record))
             ->filter(fn (array $stay): bool => $this->isMeaningfulHotelStay($stay))
             ->values()
             ->all();
@@ -726,6 +726,10 @@ class VoucherController extends Controller
             });
 
         return Inertia::render('Umrah/Vouchers/Show', [
+            'hotelConfirmations' => app(\App\Modules\Umrah\Services\HotelConfirmations::class)->rows($record, ! $this->access->isAgentMember($company->id, $request->user())),
+            'canManageHotelConfirmations' => app(\App\Modules\Umrah\Services\HotelConfirmations::class)->canManage($record, $request->user()),
+            'canReviewBookingRefunds' => ! $this->access->isAgentMember($company->id, $request->user()) && $request->user()->hasCompanyPermission(Permissions::UMRAH_REFUND_VIEW),
+            'openDetails' => $request->query('tab') === 'details',
             'company' => $this->companyPayload($company),
             'voucher' => $record,
             'statuses' => Voucher::STATUSES,

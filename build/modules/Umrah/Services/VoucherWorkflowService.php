@@ -53,6 +53,7 @@ class VoucherWorkflowService
                 'hotel_cost_transaction_id' => null,
                 'created_by_user_id' => $userId,
             ]);
+            $amendment->hotel_confirmations = [];
             $amendment->save();
             $assignments->each->delete();
             foreach ($assignments as $assignment) {

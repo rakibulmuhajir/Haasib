@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import HotelConfirmations, { type HotelConfirmationRow } from '../../../components/HotelConfirmations.vue';
 import DateTimeText from '@/components/DateTimeText.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -51,6 +52,10 @@ import VoucherPreview from '../../../components/VoucherPreview.vue';
 import AddExistingPassengers from '../../../components/AddExistingPassengers.vue';
 
 const props = defineProps<{
+    hotelConfirmations: HotelConfirmationRow[];
+    canManageHotelConfirmations: boolean;
+    canReviewBookingRefunds: boolean;
+    openDetails?: boolean;
     company: {
         slug: string;
         name: string;
@@ -324,7 +329,7 @@ const issuerLines = computed<string[]>(() => {
 });
 
 const preparingPrint = ref(false);
-const viewTab = ref('voucher');
+const viewTab = ref(props.openDetails ? 'details' : 'voucher');
 const printUrl = computed(
     () => `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`,
 );
@@ -576,6 +581,7 @@ const exportVoucher = () => {
                 v-show="viewTab === 'details'"
                 class="space-y-6"
             >
+                <HotelConfirmations :company="company.slug" :voucher="voucher.id" :rows="hotelConfirmations" :can-manage="canManageHotelConfirmations" :can-review-refunds="canReviewBookingRefunds" />
                 <div class="mb-6 flex flex-col items-center text-center">
                     <img
                         v-if="company.logo_url"

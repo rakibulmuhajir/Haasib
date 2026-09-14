@@ -1,10 +1,21 @@
 # Umrah release tracker
 
-Last reconciled: 13 September 2026.
+Last reconciled: 14 September 2026.
+
+## Production release — 14 September 2026
+
+**Deployed successfully:** application commit `3bec8835d2495fb53bd14c24f7e4ea51628b75f3` at 05:01 UTC (10:01 Asia/Karachi), using the documented server deploy.sh. This release includes the accumulated work authorized below, including commits `c884189f` and `77fdf24f`. Earlier "not deployed" entries below are historical and superseded for these included features; outstanding acceptance limitations are not erased.
+
+- Fresh pre-release regression: 159 tests / 1,841 assertions passed; 16 payment-entry frontend tests passed; targeted ESLint and production build passed.
+- Production PostgreSQL backup created with private file permissions and archive listing checked before deployment (path below).
+- Group-leader and personal Operations-view migrations ran in production batch 27.
+- Permission/role sync, production cache rebuild and queue restart completed; maintenance mode exited.
+- Server HEAD confirmed as the application release above, with clean worktree. Live homepage, login and built JavaScript asset returned HTTP 200.
+- No authenticated production booking/payment mutations were performed for smoke testing. CSV/PDF browser download delivery remains unverified; do not call this exhaustive live acceptance.
 
 ## 14 September release authorization
 
-User explicitly authorized committing and deploying the accumulated work. Release includes payment-allocation safeguards, travelling-party vouchers/direct joins and group notices, Mutamer import preview/retry protection, scoped list search, Operations CSV and personal saved views. Production preflight found a clean main checkout at `138b825ad1aae5ea9c9ee10e1de43d9e31caef22`. Private PostgreSQL backup created and archive listing validated at `/home/ubuntu/haasib-backups/pre-umrah-20260914.dump` before deployment. Two migrations are expected: voucher group leader and operation_views. CSV/PDF browser download delivery remains an explicitly unverified acceptance item; earlier automated results are not a substitute. Deployment outcome and exact release hash will be recorded after execution.
+User explicitly authorized committing and deploying the accumulated work. Release includes payment-allocation safeguards, travelling-party vouchers/direct joins and group notices, Mutamer import preview/retry protection, scoped list search, Operations CSV and personal saved views. Production preflight found a clean main checkout at `138b825ad1aae5ea9c9ee10e1de43d9e31caef22`. Private PostgreSQL backup created and archive listing validated at `/home/ubuntu/haasib-backups/pre-umrah-20260914.dump` before deployment. Deployment outcome is recorded above. CSV/PDF browser download delivery remains an explicitly unverified acceptance item; earlier automated results are not a substitute.
 
 ## Sources of truth
 

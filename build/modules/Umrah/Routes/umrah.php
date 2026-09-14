@@ -30,8 +30,11 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
     ->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('umrah.dashboard');
         Route::get('operations', [OperationsController::class, 'index'])->name('umrah.operations.index');
+        Route::post('operations/views', [OperationsController::class, 'saveView'])->name('umrah.operations.views.store');
+        Route::delete('operations/views/{view}', [OperationsController::class, 'saveView'])->name('umrah.operations.views.destroy');
         Route::get('operations/report', [OperationsController::class, 'report'])->name('umrah.operations.report');
         Route::get('operations/report/pdf', [OperationsController::class, 'pdf'])->name('umrah.operations.report.pdf');
+        Route::get('operations/report/csv', [OperationsController::class, 'csv'])->name('umrah.operations.report.csv');
 
         Route::get('agents', [AgentController::class, 'index'])->name('umrah.agents.index');
         Route::get('agents/create', [AgentController::class, 'create'])->name('umrah.agents.create');
@@ -118,6 +121,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers/{voucher}/amend', [VoucherController::class, 'amend'])->whereUuid('voucher')->name('umrah.vouchers.amend');
         Route::post('vouchers/{voucher}/cancel', [VoucherController::class, 'cancel'])->whereUuid('voucher')->name('umrah.vouchers.cancel');
         Route::post('vouchers/{voucher}/passengers/move', [VoucherController::class, 'movePassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.move');
+        Route::post('vouchers/{voucher}/passengers/join', [VoucherController::class, 'joinExistingPassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.join');
         Route::post('vouchers/{voucher}/passengers/separate', [VoucherController::class, 'separatePassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.separate');
         Route::get('vouchers/{voucher}/accounting', [VoucherAccountingController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.accounting.show');
         Route::get('vouchers/{voucher}/pdf', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.pdf');

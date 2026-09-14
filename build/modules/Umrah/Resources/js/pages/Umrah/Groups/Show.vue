@@ -54,6 +54,7 @@ import {
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import TravellingPartyNotices from '../../../components/TravellingPartyNotices.vue';
 
 type CurrentParty = {
     id: string | null;
@@ -73,6 +74,7 @@ const props = defineProps<{
         exchange_rate: string | number;
     }>;
     travellingParties: {
+        notices?: Array<{ name: string; direction: string; group_number: string | null }>;
         assignments: Record<string, CurrentParty>;
         joining: Array<{
             id: string;
@@ -515,6 +517,7 @@ const addPayment = () => {
             </Button>
         </template>
 
+        <TravellingPartyNotices :notices="travellingParties?.notices ?? []" />
         <div class="grid gap-4 md:grid-cols-4">
             <Card variant="figure"
                 ><CardHeader><CardTitle>Receivable</CardTitle></CardHeader

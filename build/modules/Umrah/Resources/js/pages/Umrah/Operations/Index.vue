@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import EmptyState from '@/components/EmptyState.vue';
+import OperationSavedViews from '../../../components/OperationSavedViews.vue';
 import MetaChip from '@/components/MetaChip.vue';
 import PageShell from '@/components/PageShell.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -107,6 +108,7 @@ type EventRow = {
 
 const props = defineProps<{
     company: { id: string; name: string; slug: string };
+    savedViews: { id: string; name: string; filters: Record<string, string | null> }[];
     operationsData: {
         profile: string;
         shows_details: boolean;
@@ -235,9 +237,13 @@ const drillIntoSummary = (item: SummaryCard) => {
     applyFilters();
 };
 
-const reportUrl = (pdf = false) => {
-    const params = new URLSearchParams(query()).toString();
-    const suffix = pdf ? '/pdf' : '';
+const reportUrl = (format: 'print' | 'pdf' | 'csv' = 'print') => {
+    // Export the displayed result, not date/filter edits that have not been applied.
+    const applied = Object.fromEntries(
+        Object.entries(props.operationsData.filters).filter((entry): entry is [string, string] => entry[1] !== null),
+    );
+    const params = new URLSearchParams(applied).toString();
+    const suffix = format === 'print' ? '' : `/${format}`;
     return `/${props.company.slug}/umrah/operations/report${suffix}?${params}`;
 };
 
@@ -248,10 +254,19 @@ const openPrintReport = () => {
 
 const downloadReport = () => {
     if (customDateError.value) return;
-    window.location.href = reportUrl(true);
+    window.location.href = reportUrl('pdf');
 };
 
 const pageActions = computed(() => [
+    {
+        label: 'Export CSV',
+        icon: Download,
+        variant: 'outline' as const,
+        disabled: loading.value || customDateError.value !== null,
+        onClick: () => {
+            if (!customDateError.value) window.location.href = reportUrl('csv');
+        },
+    },
     {
         label: 'Print report',
         icon: Printer,
@@ -375,6 +390,7 @@ const serviceLabel = (event: EventRow) => {
         compact
     >
         <div class="flex flex-col gap-3">
+            <OperationSavedViews :company-slug="company.slug" :views="savedViews" :applied="operationsData.filters" />
             <section class="border-y border-rule-default bg-surface-1">
                 <div class="flex flex-wrap items-center gap-1.5 px-2 py-2">
                     <Button

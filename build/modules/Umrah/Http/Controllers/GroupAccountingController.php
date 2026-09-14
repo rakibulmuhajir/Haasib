@@ -31,6 +31,7 @@ class GroupAccountingController extends Controller
         return Inertia::render('Umrah/Groups/Accounting', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             ...$this->accounting->summary($record),
+            'travellingNotices' => app(\App\Modules\Umrah\Services\GroupTravellingParties::class)->forGroup($record, $request->user())['notices'],
             'vendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('service_type', '!=', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orderByDesc('is_default')->orderByName()->get(['id', 'vendor_id', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id']),
             'transportVendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->where(fn ($query) => $query->where('service_type', VisaVendor::SERVICE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))->orderByName()->get(['id', 'vendor_id', 'is_company_owned', 'provides_mandatory_transport']),
             'canUpdate' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_GROUP_ACCOUNTING_UPDATE),

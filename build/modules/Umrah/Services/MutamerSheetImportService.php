@@ -29,6 +29,13 @@ class MutamerSheetImportService
         }
 
         try {
+            $expanded = 0;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $expanded += $zip->statIndex($i)['size'] ?? 0;
+            }
+            if ($zip->numFiles > 2000 || $expanded > 20 * 1024 * 1024) {
+                throw ValidationException::withMessages(['mutamers_file' => 'This workbook is too large when unpacked. Export a list of at most 500 passengers.']);
+            }
             $sharedStrings = $this->sharedStrings($zip);
             $sheetPath = $this->firstWorksheetPath($zip);
             $rows = $this->worksheetRows($zip, $sheetPath, $sharedStrings);
@@ -42,8 +49,16 @@ class MutamerSheetImportService
             ]);
         }
 
-        $headerRow = array_shift($rows);
-        $headerMap = $this->headerMap($headerRow);
+        $headerMap = [];
+        $headerIndex = null;
+        foreach (array_slice($rows, 0, 20, true) as $index => $row) {
+            $candidate = $this->headerMap($row);
+            if (count($candidate) === count(self::REQUIRED_HEADERS)) {
+                $headerMap = $candidate;
+                $headerIndex = $index;
+                break;
+            }
+        }
         $missing = array_diff(array_keys(self::REQUIRED_HEADERS), array_keys($headerMap));
 
         if ($missing !== []) {
@@ -53,23 +68,48 @@ class MutamerSheetImportService
         }
 
         $mutamers = [];
-        foreach ($rows as $row) {
+        $seen = [];
+        foreach (array_slice($rows, ($headerIndex ?? 0) + 1) as $row) {
             $name = trim((string) ($row[$headerMap['mutamer name']] ?? ''));
-
-            if ($name === '') {
-                continue;
+            $passport = trim((string) ($row[$headerMap['passport number']] ?? ''));
+            $age = $row[$headerMap['mutamer age']] ?? '';
+            $errors = [];
+            $nationality = $this->nationality($row[$headerMap['nationality']] ?? null);
+            if (! array_key_exists($nationality, Agent::COUNTRIES)) {
+                $errors[] = 'Nationality is missing or not recognized. Correct it in the workbook.';
             }
-
+            if ($name === '' || mb_strlen($name) > 255) {
+                $errors[] = 'Name is required and must be at most 255 characters.';
+            }
+            if ($passport === '' || mb_strlen($passport) > 100) {
+                $errors[] = 'Passport is required and must be at most 100 characters.';
+            }
+            if ($age === '' || ! is_numeric($age) || (float) $age < 0 || (float) $age > 130 || floor((float) $age) != (float) $age) {
+                $errors[] = 'Age must be a whole number from 0 to 130.';
+            }
+            $key = mb_strtoupper(preg_replace('/\s+/u', '', $passport));
+            if ($key !== '' && isset($seen[$key])) {
+                $errors[] = 'Duplicate passport; first appears on row '.$seen[$key].'.';
+            }
+            if ($key !== '') {
+                $seen[$key] ??= $row['_source_row'];
+            }
             $mutamers[] = [
+                'source_row' => $row['_source_row'],
+                'errors' => $errors,
                 'full_name' => $name,
-                'passport_number' => trim((string) ($row[$headerMap['passport number']] ?? '')),
+                'passport_number' => $passport,
                 'imported_age' => $this->age($row[$headerMap['mutamer age']] ?? null),
                 'date_of_birth' => null,
                 'service_type' => 'visa_transport',
                 'transport_charge_amount' => 0,
-                'nationality' => $this->nationality($row[$headerMap['nationality']] ?? null),
+                'nationality' => $nationality,
                 'visa_status' => 'received',
             ];
+        }
+
+        if (count($mutamers) > 500) {
+            throw ValidationException::withMessages(['mutamers_file' => 'Import at most 500 passengers per group. Split this workbook into smaller lists.']);
         }
 
         if ($mutamers === []) {
@@ -165,15 +205,18 @@ class MutamerSheetImportService
                 }
 
                 $columnIndex = $this->columnIndex($cell->getAttribute('r'));
-                while (count($row) < $columnIndex) {
-                    $row[] = '';
+                if ($columnIndex > 100) {
+                    continue;
                 }
-
-                $row[] = $this->cellValue($xpath, $cell, $sharedStrings);
+                $row[$columnIndex] = $this->cellValue($xpath, $cell, $sharedStrings);
             }
 
             if (array_filter($row, fn ($value) => trim((string) $value) !== '') !== []) {
+                $row['_source_row'] = (int) $rowNode->getAttribute('r');
                 $rows[] = $row;
+                if (count($rows) > 520) {
+                    throw ValidationException::withMessages(['mutamers_file' => 'Import at most 500 passengers per group.']);
+                }
             }
         }
 
@@ -182,6 +225,9 @@ class MutamerSheetImportService
 
     private function cellValue(DOMXPath $xpath, DOMElement $cell, array $sharedStrings): string
     {
+        if ($xpath->query('./x:f', $cell)->length > 0) {
+            throw ValidationException::withMessages(['mutamers_file' => 'The workbook contains formulas. Export passenger values only, then upload again.']);
+        }
         $type = $cell->getAttribute('t');
 
         if ($type === 'inlineStr') {
@@ -219,7 +265,7 @@ class MutamerSheetImportService
 
     private function age(mixed $value): ?int
     {
-        if ($value === null || $value === '') {
+        if ($value === null || $value === '' || ! is_numeric($value) || floor((float) $value) != (float) $value) {
             return null;
         }
 
@@ -238,7 +284,7 @@ class MutamerSheetImportService
             }
         }
 
-        return 'Pakistan';
+        return $nationality;
     }
 
     private function columnIndex(string $cellReference): int
@@ -256,8 +302,19 @@ class MutamerSheetImportService
 
     private function dom(string $xml): DOMDocument
     {
+        if (stripos($xml, '<!DOCTYPE') !== false || stripos($xml, '<!ENTITY') !== false) {
+            throw ValidationException::withMessages(['mutamers_file' => 'The workbook contains unsupported XML declarations.']);
+        }
         $dom = new DOMDocument;
-        $dom->loadXML($xml, LIBXML_NONET);
+        $previous = libxml_use_internal_errors(true);
+        try {
+            if (! $dom->loadXML($xml, LIBXML_NONET)) {
+                throw ValidationException::withMessages(['mutamers_file' => 'The workbook contains damaged worksheet data. Export it again.']);
+            }
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
 
         return $dom;
     }

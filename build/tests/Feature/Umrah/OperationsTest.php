@@ -229,6 +229,172 @@ function operationsFilters(string $period = 'today'): array
     ];
 }
 
+function operationsCsvRows(string $csv): array
+{
+    $stream = fopen('php://temp', 'w+');
+    fwrite($stream, substr($csv, 3));
+    rewind($stream);
+    $rows = [];
+    while (($row = fgetcsv($stream, null, ',', '"', '')) !== false) {
+        $rows[] = $row;
+    }
+    fclose($stream);
+
+    return $rows;
+}
+
+test('personal operation views save applied filters update by name and remain private', function () {
+    $f = operationsFixture();
+    $base = '/'.$f['company']->slug.'/umrah/operations';
+    $this->actingAs($f['operations'])->from($base)->post($base.'/views', [
+        ...operationsFilters('tomorrow'), 'name' => 'Tomorrow arrivals', 'event_type' => 'airport_arrival',
+    ])->assertRedirect($base)->assertSessionHasNoErrors()->assertSessionHas('success');
+    $row = DB::table('umrah.operation_views')->sole();
+    expect(json_decode($row->filters, true))->not->toHaveKey('date');
+    $this->get($base)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->has('savedViews', 1)->where('savedViews.0.name', 'Tomorrow arrivals'));
+    $this->post($base.'/views', [...operationsFilters('today'), 'name' => 'Tomorrow arrivals'])->assertSessionHasNoErrors();
+    expect(DB::table('umrah.operation_views')->count())->toBe(1)
+        ->and(DB::table('umrah.operation_views')->sole()->id)->toBe($row->id);
+    $this->actingAs($f['owner'])->get($base)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('savedViews', 0));
+    $this->delete($base.'/views/'.$row->id)->assertSessionHasErrors('name');
+    expect(DB::table('umrah.operation_views')->count())->toBe(1);
+    $this->actingAs($f['operations'])->delete($base.'/views/'.$row->id)->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(DB::table('umrah.operation_views')->count())->toBe(0);
+});
+
+test('saved operation views reject invalid filters and unauthorized users', function (array $invalid, string $field) {
+    $f = operationsFixture();
+    $base = '/'.$f['company']->slug.'/umrah/operations';
+    $this->actingAs($f['operations'])->from($base)->post($base.'/views', [...operationsFilters(), 'name' => 'Test', ...$invalid])->assertSessionHasErrors($field);
+    expect(DB::table('umrah.operation_views')->count())->toBe(0);
+})->with([
+    'blank' => [['name' => '  '], 'name'],
+    'long' => [['name' => str_repeat('a', 81)], 'name'],
+    'period' => [['period' => 'forever'], 'period'],
+    'dates' => [['period' => 'custom', 'start' => '2026-10-02', 'end' => '2026-10-01'], 'end'],
+    'event' => [['event_type' => 'secret'], 'event_type'],
+    'agent' => [['agent_id' => 'not-a-uuid'], 'agent_id'],
+]);
+
+test('saved operation periods roll forward and custom dates stay fixed across screen and export', function () {
+    $f = operationsFixture();
+    $f['voucher']->update(['onward_arrival_at' => '2026-09-06 21:30:00']);
+    $base = '/'.$f['company']->slug.'/umrah/operations';
+    $this->actingAs($f['operations'])->from($base)->post($base.'/views', [...operationsFilters('tomorrow'), 'name' => 'Rolling'])->assertSessionHasNoErrors();
+    $filters = json_decode(DB::table('umrah.operation_views')->sole()->filters, true);
+    $this->get($base.'?'.http_build_query($filters))->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->where('operationsData.events', fn ($events) => collect($events)->contains(fn ($event) => $event['type'] === 'airport_arrival')));
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-06 12:00:00', 'UTC'));
+    $url = http_build_query($filters);
+    $this->get($base.'?'.$url)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->where('operationsData.period_label', 'Tomorrow')->where('operationsData.events', []));
+    $this->get($base.'/report?'.$url)->assertOk();
+    $this->get($base.'/report/csv?'.$url)->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    $this->post($base.'/views', [...operationsFilters('custom'), 'name' => 'Fixed', 'start' => '2026-09-05', 'end' => '2026-09-07'])->assertSessionHasNoErrors();
+    $fixed = json_decode(DB::table('umrah.operation_views')->where('name', 'Fixed')->sole()->filters, true);
+    expect($fixed['start'])->toBe('2026-09-05')->and($fixed['end'])->toBe('2026-09-07');
+});
+
+test('operation views require permission and cannot be deleted from another company', function () {
+    $f = operationsFixture();
+    $base = '/'.$f['company']->slug.'/umrah/operations';
+    $this->actingAs($f['operations'])->post($base.'/views', [...operationsFilters(), 'name' => 'Private'])->assertSessionHasNoErrors();
+    $id = DB::table('umrah.operation_views')->sole()->id;
+    $denied = User::factory()->withoutTwoFactor()->create();
+    operationsAddRawMember($f['company'], $denied);
+    $this->actingAs($denied)->post($base.'/views', [...operationsFilters(), 'name' => 'Denied'])->assertForbidden();
+    $this->delete($base.'/views/'.$id)->assertForbidden();
+    $other = operationsFixture();
+    operationsAddMember($other['company'], $f['operations'], 'operations');
+    $otherBase = '/'.$other['company']->slug.'/umrah/operations';
+    $this->actingAs($f['operations'])->get($otherBase)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('savedViews', 0));
+    $this->delete($otherBase.'/views/'.$id)->assertSessionHasErrors('name');
+    CompanyContext::setContext($f['company']);
+    expect(DB::table('umrah.operation_views')->where('id', $id)->exists())->toBeTrue();
+});
+
+test('movement csv matches the authorized report projection and filtered counts', function (array $extra) {
+    $f = operationsFixture();
+    $filters = [...operationsFilters(), ...$extra];
+    $this->actingAs($f['operations']);
+    $expected = app(MovementReportService::class)->build($f['company'], $f['operations'], $filters);
+    $before = DB::table('umrah.vouchers')->orderBy('id')->get()->toJson();
+    $journals = DB::table('acct.transactions')->count();
+    $response = $this->get('/'.$f['company']->slug.'/umrah/operations/report/csv?'.http_build_query($filters))
+        ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8')
+        ->assertHeader('x-content-type-options', 'nosniff');
+    expect($response->getContent())->toStartWith("\xEF\xBB\xBF")
+        ->and($response->headers->get('cache-control'))->toContain('no-store')
+        ->and($response->headers->get('content-disposition'))->toContain('.csv');
+    $rows = collect(operationsCsvRows($response->getContent()));
+    $events = $rows->filter(fn ($row) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $row[0] ?? ''))->values();
+    expect($events)->toHaveCount(count($expected['events']));
+    foreach ($expected['events'] as $index => $event) {
+        expect($events[$index][0])->toBe($event['scheduled_date'])
+            ->and($events[$index][1])->toBe($event['is_all_day'] ? '' : (string) $event['scheduled_time'])
+            ->and($events[$index][2])->toBe($event['type_label'])
+            ->and((int) $events[$index][13])->toBe($event['passenger_count']);
+    }
+    foreach ($expected['summary'] as $summary) {
+        expect($rows->first(fn ($row) => $row[0] === $summary['label'])[1])->toBe((string) $summary['value']);
+    }
+    expect($rows->first(fn ($row) => $row[0] === 'Filtered event count')[1])->toBe((string) count($expected['events']))
+        ->and($rows->first(fn ($row) => str_starts_with($row[0] ?? '', 'Filtered passenger movements'))[1])->toBe((string) array_sum(array_column($expected['events'], 'passenger_count')))
+        ->and(DB::table('umrah.vouchers')->orderBy('id')->get()->toJson())->toBe($before)
+        ->and(DB::table('acct.transactions')->count())->toBe($journals);
+})->with([
+    'all' => [[]],
+    'arrival' => [['event_type' => 'airport_arrival']],
+    'attention' => [['readiness' => 'needs_attention']],
+    'custom' => [['period' => 'custom', 'start' => '2026-09-05', 'end' => '2026-09-15']],
+    'empty' => [['date' => '2027-01-01']],
+]);
+
+test('movement csv respects summary roles agent privacy and tenant isolation', function () {
+    $f = operationsFixture();
+    $foreign = operationsFixture();
+    $foreign['agent']->update(['name' => 'FOREIGN EXPORT AGENT']);
+    $accountant = User::factory()->withoutTwoFactor()->create();
+    operationsAddMember($f['company'], $accountant, 'accountant');
+    $agentUser = User::factory()->withoutTwoFactor()->create();
+    operationsAddMember($f['company'], $agentUser, 'agent');
+    $f['agent']->update(['user_id' => $agentUser->id]);
+    CompanyContext::setContext($f['company']);
+    $url = '/'.$f['company']->slug.'/umrah/operations/report/csv?'.http_build_query(operationsFilters());
+    $summary = $this->actingAs($accountant)->get($url)->assertOk()->getContent();
+    expect($summary)->toContain('Movement totals only')->not->toContain('Ayesha', 'PAK100001', 'Ready Driver', 'Makkah Gate', 'FOREIGN EXPORT AGENT');
+    $agentCsv = $this->actingAs($agentUser)->get($url)->assertOk()->getContent();
+    expect($agentCsv)->toContain('Ayesha', 'PAK100001')->not->toContain('Ready Driver', '+966500000001', 'FOREIGN EXPORT AGENT');
+    $ownerCsv = $this->actingAs($f['owner'])->get($url)->assertOk()->getContent();
+    expect($ownerCsv)->toContain('Ready Driver')->not->toContain('FOREIGN EXPORT AGENT');
+    $this->get($url.'&agent_id='.$foreign['agent']->id)->assertSessionHasErrors('agent_id');
+    $this->get($url.'&agent_id='.$f['agent']->id)->assertOk();
+});
+
+test('movement csv preserves unicode quoting and neutralizes spreadsheet formulas', function () {
+    $f = operationsFixture();
+    $report = app(MovementReportService::class)->build($f['company'], $f['operations'], operationsFilters());
+    $report['events'][0]['headline'] = "محمد, \"Family\"\nSecond line";
+    $payloads = ['=1+1', '+SUM(1)', '-1+1', '@SUM(1)', "\t=1", '  =1', "\n=1", "\u{FEFF}=1"];
+    foreach ($payloads as $payload) {
+        $csv = app(\App\Modules\Umrah\Services\MovementCsvExporter::class)->export($report, $payload);
+        $rows = collect(operationsCsvRows($csv));
+        expect($rows[0][1])->toBe("'".$payload)
+            ->and($rows->first(fn ($row) => preg_match('/^\d{4}-/', $row[0] ?? ''))[6])->toBe("محمد, \"Family\"\nSecond line");
+    }
+});
+
+test('movement csv invalid filters and export failures do not create partial downloads', function () {
+    $f = operationsFixture();
+    $url = '/'.$f['company']->slug.'/umrah/operations/report/csv';
+    $this->actingAs($f['operations'])->get($url.'?event_type=unknown')->assertSessionHasErrors('event_type');
+    $this->get($url.'?period=custom&start=2026-09-10&end=2026-09-01')->assertSessionHasErrors('end');
+    $this->mock(\App\Modules\Umrah\Services\MovementCsvExporter::class)->shouldReceive('export')->once()->andThrow(new RuntimeException('Synthetic export failure'));
+    $this->get($url.'?'.http_build_query(operationsFilters()))->assertRedirect()
+        ->assertSessionHas('error', 'The movement CSV could not be prepared. Please try again.');
+});
+
 afterEach(function (): void {
     CarbonImmutable::setTestNow();
 });
@@ -504,6 +670,7 @@ test('all operations endpoints enforce authentication permission and module acce
         "/{$fixture['company']->slug}/umrah/operations?{$query}",
         "/{$fixture['company']->slug}/umrah/operations/report?{$query}",
         "/{$fixture['company']->slug}/umrah/operations/report/pdf?{$query}",
+        "/{$fixture['company']->slug}/umrah/operations/report/csv?{$query}",
     ];
 
     foreach ($paths as $path) {

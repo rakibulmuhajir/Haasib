@@ -41,6 +41,34 @@ use Inertia\Response;
 
 class VoucherController extends Controller
 {
+    public function joinExistingPassengers(\App\Modules\Umrah\Http\Requests\JoinExistingPassengersRequest $request, string $companySlug, string $voucher): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = $this->voucherForUpdate($company->id, $request, $voucher);
+        try {
+            DB::transaction(function () use ($request, $record) {
+                $joined = Bus::dispatch(new \App\Modules\Umrah\Commands\JoinExistingPassengers($record, $request->validated('passenger_ids')));
+                $this->changeLogger->log($request, $record, 'voucher', 'existing_passengers_joined', [], ['joined' => $joined], null, ['original_purchases_preserved' => true]);
+                $this->changeLogger->log($request, $record->group, 'visa_group', 'travelling_passengers_joined', [], ['joined' => $joined], null, ['voucher_id' => $record->id, 'original_purchases_preserved' => true]);
+                foreach (collect($joined)->groupBy('original_group_id') as $groupId => $rows) {
+                    if ($groupId !== $record->visa_group_id) {
+                        $sourceGroup = VisaGroup::where('company_id', $record->company_id)->findOrFail($groupId);
+                        $this->changeLogger->log($request, $sourceGroup, 'visa_group', 'passengers_travelling_elsewhere', [], ['passengers' => $rows->all()], null,
+                            ['target_group_id' => $record->visa_group_id, 'target_voucher_id' => $record->id, 'original_purchases_preserved' => true]);
+                    }
+                }
+            });
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Passengers could not be added. No changes were saved. Please try again.');
+        }
+
+        return back()->with('success', 'Passengers added. Original visa and transport purchases are unchanged. Review the rooms/beds before buying hotels.');
+    }
+
     public function __construct(
         private UmrahCoreService $service,
         private HotelStayPricingCalculator $hotelPricing,
@@ -50,6 +78,7 @@ class VoucherController extends Controller
         private VoucherPassengerAssignmentService $passengerAssignments,
         private VoucherWorkflowService $workflow,
         private \App\Modules\Umrah\Services\VoucherPrintProfiles $printProfiles,
+        private \App\Modules\Umrah\Services\UmrahListSearch $listSearch,
     ) {}
 
     public function index(Request $request): Response
@@ -57,6 +86,7 @@ class VoucherController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_VIEW), 403);
         $search = trim((string) $request->input('search', ''));
+        $pattern = $this->listSearch->pattern($search);
         $isMember = $this->currentCompanyRole($company->id, $request) === 'agent';
         $memberAgentId = $isMember ? $this->linkedAgentId($company->id, $request) : null;
 
@@ -67,15 +97,15 @@ class VoucherController extends Controller
                 ? $query->where('agent_id', $memberAgentId)
                 : $query->whereRaw('1 = 0'))
             ->when($search !== '', fn ($query) => $query->where(fn ($inner) => $inner
-                ->where('voucher_number', 'ilike', "%{$search}%")
-                ->orWhere('title', 'ilike', "%{$search}%")
-                ->orWhereHas('agent', fn ($agent) => $agent->where('name', 'ilike', "%{$search}%"))
+                ->where('voucher_number', 'ilike', $pattern)
+                ->orWhere('title', 'ilike', $pattern)
+                ->orWhereHas('agent.customer', fn ($customer) => $customer->where('acct.customers.name', 'ilike', $pattern))
                 ->orWhereHas('group', fn ($group) => $group
-                    ->where('group_number', 'ilike', "%{$search}%")
-                    ->orWhere('name', 'ilike', "%{$search}%"))
+                    ->where('group_number', 'ilike', $pattern)
+                    ->orWhere('name', 'ilike', $pattern))
                 ->orWhereHas('passengers', fn ($passenger) => $passenger->where(fn ($match) => $match
-                    ->where('full_name', 'ilike', "%{$search}%")
-                    ->orWhere('passport_number', 'ilike', "%{$search}%")))))
+                    ->where('full_name', 'ilike', $pattern)
+                    ->orWhere('passport_number', 'ilike', $pattern)))))
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();
@@ -676,6 +706,10 @@ class VoucherController extends Controller
         $capabilities['can_move_passengers'] = $capabilities['can_edit'] && ! $record->superseded_at
             && ! $record->superseded_by_voucher_id
             && ($record->status === Voucher::STATUS_DRAFT || ($record->status === Voucher::STATUS_APPROVED && $canMoveApproved));
+        $canJoinExisting = $capabilities['can_edit']
+            && ! $this->access->isAgentMember($company->id, $request->user())
+            && app(\App\Modules\Umrah\Services\ExistingPassengerJoinService::class)->canJoin($record);
+        $capabilities['can_join_existing'] = $canJoinExisting;
         $moveTargets = Voucher::where('company_id', $company->id)
             ->whereIn('status', $canMoveApproved ? [Voucher::STATUS_DRAFT, Voucher::STATUS_APPROVED] : [Voucher::STATUS_DRAFT])
             ->whereNull('superseded_at')->whereNull('superseded_by_voucher_id')
@@ -704,6 +738,8 @@ class VoucherController extends Controller
                 : null,
             'canViewAccounting' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_ACCOUNTING_VIEW),
             'moveTargets' => $moveTargets,
+            'joiningCandidates' => $canJoinExisting
+                ? app(\App\Modules\Umrah\Services\ExistingPassengerJoinService::class)->search($record, $request->string('passenger_search')->toString()) : [],
             'hasMixedPassengerSources' => $record->voucherPassengers()->where('visa_group_id', '!=', $record->visa_group_id)->exists(),
             'changeLogs' => $this->access->isAgentMember($company->id, request()->user()) ? [] : ChangeLog::where('company_id', $company->id)
                 ->where('entity_type', 'voucher')

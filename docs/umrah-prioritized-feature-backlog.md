@@ -177,7 +177,7 @@ Passport scans are not a planned next feature; justify any document storage sepa
 
 ### 7. Controlled booking and passenger import
 
-**Status:** Partial; Haasib imports Mutamer rows into group creation but does not yet import a complete booking.
+**Status:** Passenger preview/reliability slice implemented and tested locally on 13 September 2026; not deployed. Create Group previews row errors and same-file/current-form duplicates, supports explicit exclusions, paginates results, enforces size/row limits and protects save retries from duplicate charges. See [scope and evidence](umrah-import-preview-feature-set.md). Complete booking import and issued visa/MOFA field mapping remain outside this slice.
 
 Required workflow:
 
@@ -288,7 +288,9 @@ Before implementation, define:
 
 ### 4. Universal Umrah search
 
-**Status:** Missing.
+**Status:** Not planned — user explicitly chose search within Groups and Vouchers on 13 September 2026. Retain those existing scoped searches; do not build a universal passenger search.
+
+Scoped correction implemented locally: incoming travelling-party passenger matches on Groups, corrected agent-name lookup, literal wildcard handling and regression coverage. See [scoped search evidence](umrah-scoped-search-feature-set.md). Not deployed.
 
 Search within the permitted scope by:
 
@@ -304,7 +306,7 @@ Results should open the exact working record and must respect role scoping.
 
 ### 5. Spreadsheet export and saved report views
 
-**Status:** Missing/partial.
+**Status:** Operations CSV export implemented and locally tested on 13 September 2026; other spreadsheet exports and saved views remain outstanding. See [feature-set evidence](umrah-operations-csv-feature-set.md). Not deployed.
 
 - XLSX or CSV from the same report service used by screen/PDF
 - Preserved filters and totals

@@ -25,11 +25,17 @@ class StoreVisaGroupRequest extends UmrahFormRequest
         $companyId = app(CompanyContextService::class)->getCompanyId();
 
         return [
+            'idempotency_key' => ['nullable', 'uuid'],
             'group_number' => [
                 'nullable',
                 'string',
                 'max:50',
-                $this->uniqueForCompany(VisaGroup::class, 'group_number', 'This group number is already used.'),
+                function ($attribute, $value, $fail) use ($companyId) {
+                    $existing = VisaGroup::where('company_id', $companyId)->where('group_number', $value)->first();
+                    if ($existing && (! $this->input('idempotency_key') || $existing->idempotency_key !== $this->input('idempotency_key'))) {
+                        $fail('This group number is already used.');
+                    }
+                },
             ],
             'name' => ['nullable', 'string', 'max:255'],
             'agent_id' => ['required', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
@@ -74,7 +80,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'visa_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'transport_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
-            'passengers' => ['nullable', 'array'],
+            'passengers' => ['nullable', 'array', 'max:500'],
             'passengers.*.full_name' => ['nullable', 'string', 'max:255'],
             'passengers.*.passport_number' => ['nullable', 'string', 'max:100'],
             'passengers.*.nationality' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
@@ -105,5 +111,25 @@ class StoreVisaGroupRequest extends UmrahFormRequest
     protected function prepareForValidation(): void
     {
         $this->deriveGroupServiceFields();
+    }
+
+    public function after(): array
+    {
+        return [function (\Illuminate\Validation\Validator $validator) {
+            $seen = [];
+            foreach ((array) $this->input('passengers', []) as $index => $passenger) {
+                if (! is_array($passenger) || ! is_string($passenger['passport_number'] ?? null)) {
+                    continue;
+                }
+                $key = mb_strtoupper(preg_replace('/\s+/u', '', $passenger['passport_number']));
+                if ($key === '') {
+                    continue;
+                }
+                if (isset($seen[$key])) {
+                    $validator->errors()->add("passengers.{$index}.passport_number", 'This passport is repeated in this group (first passenger '.($seen[$key] + 1).'). Repeat journeys in other groups are allowed.');
+                }
+                $seen[$key] ??= $index;
+            }
+        }];
     }
 }

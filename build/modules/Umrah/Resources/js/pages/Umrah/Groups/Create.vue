@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import MoneyText from '@/components/MoneyText.vue';
+import MutamerImportPreview from '../../../components/MutamerImportPreview.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -97,6 +98,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const form = useForm({
+    idempotency_key: crypto.randomUUID(),
     group_number: '',
     name: '',
     agent_id: props.agents.length === 1 ? props.agents[0].id : '',
@@ -149,6 +151,8 @@ const importForm = useForm<{ mutamers_file: File | null }>({
     mutamers_file: null,
 });
 const appliedImportSignature = ref('');
+const importInputVersion = ref(0);
+const importPreview = ref<any[]>([]);
 
 const agentForm = useForm({
     agent_number: '',
@@ -487,7 +491,7 @@ watch(
 );
 
 const appendImportedMutamers = (rows: any[]) => {
-    if (form.passengers.length === 1 && !form.passengers[0].full_name.trim()) {
+    if (form.passengers.length === 1 && !form.passengers[0].full_name.trim() && !form.passengers[0].passport_number.trim() && !form.passengers[0].imported_age && !form.passengers[0].date_of_birth) {
         form.passengers.splice(0, 1);
     }
 
@@ -537,7 +541,7 @@ watch(
         if (signature === appliedImportSignature.value) return;
 
         appliedImportSignature.value = signature;
-        appendImportedMutamers(rows);
+        importPreview.value = rows;
     },
     { immediate: true },
 );
@@ -548,13 +552,15 @@ const handleMutamersFileChange = (event: Event) => {
 };
 
 const importMutamers = () => {
-    if (!importForm.mutamers_file) return;
+    if (!importForm.mutamers_file || importForm.processing) return;
+    appliedImportSignature.value = '';
 
     importForm.post(`/${props.company.slug}/umrah/groups/import-mutamers`, {
         forceFormData: true,
         preserveScroll: true,
         onSuccess: () => {
             importForm.reset();
+            importInputVersion.value++;
         },
         onError: () => toast.error('Failed to import mutamers'),
     });
@@ -607,6 +613,11 @@ const createVendor = () => {
 };
 
 const submit = () => {
+    if (form.processing || importForm.processing) return;
+    if (form.passengers.some(p => !p.full_name.trim() && (p.passport_number.trim() || p.imported_age || p.date_of_birth))) {
+        toast.error('A passenger has details but no name. Add the name or remove that row before saving.');
+        return;
+    }
     form.transform((data) => ({
         ...data,
         includes_visa: data.includes_visa,
@@ -1531,6 +1542,7 @@ const submit = () => {
                                     <div class="space-y-2">
                                         <Label>Mutamer List Import</Label>
                                         <Input
+                                            :key="importInputVersion"
                                             type="file"
                                             accept=".xlsx"
                                             @change="handleMutamersFileChange"
@@ -1556,10 +1568,11 @@ const submit = () => {
                                         @click="importMutamers"
                                     >
                                         <Upload class="mr-2 h-4 w-4" />
-                                        Import
+                                        {{ importForm.processing ? 'Reading…' : 'Preview import' }}
                                     </Button>
                                 </div>
                             </div>
+                            <MutamerImportPreview :rows="importPreview" :existing-passports="form.passengers.map(p => p.passport_number)" :existing-count="form.passengers.filter(p => p.full_name.trim()).length" @add="rows => { appendImportedMutamers(rows); toast.success(`${rows.length} passengers added to the form. Save the group when ready.`); }" />
                             <div
                                 v-for="(passenger, index) in form.passengers"
                                 :key="passenger.row_id"

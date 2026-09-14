@@ -23,6 +23,7 @@ import { ArrowLeft, Calculator, Save, Undo2 } from 'lucide-vue-next';
 import RateBasis from '@/components/RateBasis.vue';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import TravellingPartyNotices from '../../../components/TravellingPartyNotices.vue';
 
 type Vendor = {
     id: string;
@@ -36,6 +37,7 @@ type Vendor = {
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
     group: any;
+    travellingNotices?: Array<{ name: string; direction: string; group_number: string | null }>;
     adjustmentReasons: Record<string, string>;
     passengerSummary: { total: number; adults: number; children: number; infants: number; visa: number; transport_only: number };
     services: Array<{ stage: 'group' | 'voucher'; service: string; quantity: number; charge: number }>;
@@ -300,6 +302,7 @@ const submit = () => {
             </Button>
         </template>
 
+        <TravellingPartyNotices :notices="travellingNotices ?? []" />
         <div class="grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-3 xl:grid-cols-6">
             <div v-for="item in [
                 ['Total pax', passengerSummary.total],

@@ -1,5 +1,17 @@
 # Schema Contract - Umrah Visa Operations (umrah)
 
+## Personal Operations saved views (13 September 2026)
+
+`umrah.operation_views`: UUID `id` primary key; UUID `company_id` FK auth.companies cascade; UUID `user_id` FK auth.users cascade; `name` varchar(80); `filters` jsonb; timestamps. Unique (company_id, user_id, name). Company RLS enabled and forced, using current_setting('app.current_company_id', true). Application reads/writes additionally require the current user ID and Operations-view permission. No sharing or accounting effects. Filters allow only validated period, event_type, readiness, agent_id and custom start/end; relative views never persist an anchor date. Saving an existing personal name updates it. Deletion is permanent but the filters can be saved again.
+
+## Direct travelling-party joins (13 September 2026)
+
+- Company staff with voucher update permission can add an existing, unassigned passenger directly to an ordinary draft voucher, including across purchase groups/agents within the company. Agent logins cannot search or perform this cross-agent action.
+- This is preparation for the next service, not a cancellation or rebilling operation. No source voucher is required. Preserve `passengers.visa_group_id`, service type, original charges/payments and transport purchases. The new `voucher_passengers` row keeps the passenger's original purchase group.
+- Reject assigned passengers, cancelled/deleted purchase groups, approved/historical/amendment/shared-billing destination vouchers and foreign-company IDs. Check again under locks; a repeated submit must not create duplicate membership.
+- Group detail and group accounting show outgoing/joining names and permitted group references before financial tables. These are current travelling-party notices, not changes to historical purchase quantities. Destination hotel charges use its booked rooms/beds/nights and destination rates, not the original import-group headcount.
+- Record the join in voucher and both groups' audit history. No new columns or accounting entries are needed for the join itself.
+
 Single source of truth for Umrah visa groups, agents, passports, visa vendors, transport requirements, payments, and earnings. Read this before touching Umrah migrations, models, services, or controllers.
 
 **Module Location:** `modules/Umrah/`
@@ -26,6 +38,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Visa and transport providers have separate CRUDs and independent default retail/cost amounts. Visa vendor adult and child amounts are used for visa pricing from passenger DOB. A transport provider supplies standard-bus retail/cost per chargeable passenger and controls whether children are charged. Users may override copied transport prices/costs per group where the accounting workflow permits it.
 
 ## Guardrails
+
+- Operations CSV export is read-only and serializes the existing authorized movement-report projection. It must not query extra passenger/private fields, mutate accounting, or bypass Operations permission/agent isolation. Summary-only output excludes detail; period summaries and filtered movement totals must be labelled separately. Exported cells neutralize spreadsheet formulas; schedules retain their event-local clock.
 
 - Schema: `umrah` on `pgsql`.
 - UUID primary keys with `public.gen_random_uuid()` default.
@@ -387,7 +401,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `hotel_info` jsonb nullable.
   - `pricing_snapshot` jsonb default `{}`. Immutable source details for resolved visa and transport rates, including service date, currency, default rule, winning agent/category rule, and unit sale/cost values. No supplier cost is exposed in agent-facing payloads.
   - `includes_hotel` boolean default false. Records whether accommodation is part of the sale; hotel prices and accounting remain owned by approved vouchers.
-  - `idempotency_key` uuid nullable, unique per company. Used by Quick Booking to make repeated form submissions return the original group instead of creating a duplicate.
+  - `idempotency_key` uuid nullable, unique per company. Used by Quick Booking and Create Group to make repeated form submissions return the original group instead of creating duplicate passengers or postings. Create Group locks by company/key and rejects reuse for a different agent or cancelled/deleted booking.
   - `transport_required` boolean default false.
   - `transport_mode` varchar(30) default `standard_bus`. Values: `none`, `standard_bus`, `specialized`. `transport_required` must be false only for `none`; no transport references, fare items, revenue, or cost may remain on a `none` group.
   - `included_bus_cost_per_passenger` numeric(15,2) default 0. Legacy historical snapshot only.

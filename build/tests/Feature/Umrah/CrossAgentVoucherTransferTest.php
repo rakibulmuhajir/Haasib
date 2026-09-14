@@ -17,6 +17,156 @@ use Illuminate\Validation\ValidationException;
 
 require_once __DIR__.'/TicketingFixtures.php';
 
+test('scoped list search finds original and current parties without crossing agent boundaries', function () {
+    $f = crossAgentFixture();
+    $pax = $f->A->passengers->first();
+    $pax->update(['full_name' => 'Unique محمد Traveller', 'passport_number' => '001XYZ']);
+    Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [$pax->id]));
+    $base = '/'.$f->company->slug.'/umrah/';
+    foreach (['001xyz', ' محمد ', 'unique'] as $term) {
+        $this->actingAs($f->user)->get($base.'groups?'.http_build_query(['search' => $term]))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('groups.data', 2));
+        $this->get($base.'vouchers?'.http_build_query(['search' => $term]))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('vouchers.data', 1)->where('vouchers.data.0.id', $f->B->voucher->id));
+    }
+    foreach (['A', 'B'] as $party) {
+        $user = crossAgentLogin($f, $party);
+        $this->actingAs($user)->get($base.'groups?search=001XYZ')->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('groups.data', 1)->where('groups.data.0.id', $f->{$party}->group->id));
+        $this->get($base.'vouchers?search=001XYZ')->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('vouchers.data', $party === 'B' ? 1 : 0));
+    }
+});
+
+test('scoped list search uses literal text and existing reference numbers', function () {
+    $f = crossAgentFixture();
+    $base = '/'.$f->company->slug.'/umrah/';
+    $this->actingAs($f->user);
+    foreach (['groups', 'vouchers'] as $list) {
+        foreach (['%', '_', 'absent-passport'] as $term) {
+            $this->get($base.$list.'?'.http_build_query(['search' => $term]))->assertOk()
+                ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has($list.'.data', 0));
+        }
+        foreach (['group-a', 'Agent A'] as $term) {
+            $this->get($base.$list.'?'.http_build_query(['search' => $term]))->assertOk()
+                ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has($list.'.data', 1));
+        }
+        $this->get($base.$list.'?search=')->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has($list.'.data', 2));
+    }
+    $this->get($base.'vouchers?search=cross-b')->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('vouchers.data', 1)->where('vouchers.data.0.id', $f->B->voucher->id));
+});
+
+test('scoped group search excludes historical incoming membership', function (string $state) {
+    $f = crossAgentFixture();
+    $pax = $f->A->passengers->first();
+    Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [$pax->id]));
+    match ($state) {
+        'cancelled' => $f->B->voucher->update(['status' => 'cancelled']),
+        'superseded' => $f->B->voucher->update(['superseded_by_voucher_id' => $f->A->voucher->id]),
+        'amendment' => $f->B->voucher->update(['amends_voucher_id' => $f->A->voucher->id]),
+        'deleted' => $f->B->voucher->delete(),
+        'released' => VoucherPassenger::where('passenger_id', $pax->id)->delete(),
+    };
+    $this->actingAs($f->user)->get('/'.$f->company->slug.'/umrah/groups?search=A1')->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('groups.data', 1)->where('groups.data.0.id', $f->A->group->id));
+})->with(['cancelled', 'superseded', 'amendment', 'deleted', 'released']);
+
+test('scoped searches exclude other companies and never modify accounting', function () {
+    $f = crossAgentFixture();
+    $other = crossAgentFixture();
+    $other->A->passengers->first()->update(['passport_number' => 'FOREIGN-ONLY']);
+    CompanyContext::setContext($f->company);
+    $before = [];
+    foreach (['umrah.visa_groups', 'umrah.group_payments', 'umrah.payment_allocations', 'acct.transactions'] as $table) {
+        $before[$table] = DB::table($table)->orderBy('id')->get()->toJson();
+    }
+    foreach (['groups', 'vouchers'] as $list) {
+        $this->actingAs($f->user)->get('/'.$f->company->slug.'/umrah/'.$list.'?search=FOREIGN-ONLY')->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has($list.'.data', 0));
+        $this->get('/'.$f->company->slug.'/umrah/'.$list.'?search=group-a')->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has($list.'.data', 1));
+    }
+    foreach ($before as $table => $rows) {
+        expect(DB::table($table)->orderBy('id')->get()->toJson())->toBe($rows);
+    }
+});
+
+test('direct join needs no source voucher and both accounting pages explain the party change without changing purchases', function () {
+    $f = crossAgentFixture();
+    $f->A->voucher->voucherPassengers()->delete();
+    $f->A->voucher->delete();
+    $pax = $f->A->passengers->first();
+    $before = [];
+    foreach (['visa_groups', 'agents', 'visa_vendors', 'group_payments', 'payment_allocations', 'passengers'] as $table) {
+        $before[$table] = DB::table('umrah.'.$table)->orderBy('id')->get()->toJson();
+    }
+    $journals = DB::table('acct.transactions')->count();
+    $url = '/'.$f->company->slug.'/umrah/vouchers/'.$f->B->voucher->id;
+    $this->actingAs($f->user)->get($url.'?passenger_search=A1')->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->where('agentCapabilities.can_join_existing', true)->has('joiningCandidates', 1)
+        ->where('joiningCandidates.0.id', $pax->id)->where('joiningCandidates.0.group_number', 'GROUP-A')
+        ->missing('joiningCandidates.0.notes')->missing('joiningCandidates.0.transport_charge_amount'));
+    $this->post($url.'/passengers/join', ['passenger_ids' => [$pax->id]])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect($f->B->voucher->passengers()->count())->toBe(3);
+    $assignment = VoucherPassenger::where('passenger_id', $pax->id)->sole();
+    expect($assignment->visa_group_id)->toBe($f->A->group->id)->and($assignment->voucher_id)->toBe($f->B->voucher->id);
+    foreach ($before as $table => $rows) {
+        expect(DB::table('umrah.'.$table)->orderBy('id')->get()->toJson())->toBe($rows);
+    }
+    expect(DB::table('acct.transactions')->count())->toBe($journals);
+    foreach (['A' => ['out', 'GROUP-B'], 'B' => ['in', 'GROUP-A']] as $party => [$direction, $number]) {
+        $groupUrl = '/'.$f->company->slug.'/umrah/groups/'.$f->{$party}->group->id;
+        $this->get($groupUrl)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('travellingParties.notices.0.name', $pax->full_name)->where('travellingParties.notices.0.direction', $direction)
+            ->where('travellingParties.notices.0.group_number', $number));
+        $this->get($groupUrl.'/accounting')->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('travellingNotices.0.name', $pax->full_name)->where('travellingNotices.0.group_number', $number)
+            ->where('passengerSummary.total', 2));
+        expect(\App\Modules\Umrah\Models\ChangeLog::where('entity_id', $f->{$party}->group->id)->count())->toBe(1);
+    }
+    $this->post($url.'/passengers/join', ['passenger_ids' => [$pax->id]])->assertSessionHasErrors('passenger_ids');
+    expect($f->B->voucher->passengers()->count())->toBe(3)
+        ->and(\App\Modules\Umrah\Models\ChangeLog::where('entity_id', $f->B->voucher->id)->count())->toBe(1);
+});
+
+test('direct join rejects unavailable passengers atomically', function (string $scenario) {
+    $f = crossAgentFixture();
+    $pax = $f->A->passengers->first();
+    VoucherPassenger::where('passenger_id', $pax->id)->delete();
+    $ids = [$pax->id];
+    match ($scenario) {
+        'assigned' => $ids[] = $f->A->passengers->last()->id,
+        'missing' => $ids[] = (string) str()->uuid(),
+        'duplicate' => $ids[] = $pax->id,
+        'malformed' => $ids[] = 'invalid',
+        'cancelled group' => $f->A->group->update(['status' => 'cancelled']),
+        'deleted passenger' => $pax->delete(),
+        'approved target' => $f->B->voucher->update(['status' => 'approved']),
+        'amendment target' => $f->B->voucher->update(['amends_voucher_id' => $f->A->voucher->id]),
+        'shared target' => $f->B->voucher->update(['billing_voucher_id' => $f->A->voucher->id]),
+    };
+    $this->actingAs($f->user)->post('/'.$f->company->slug.'/umrah/vouchers/'.$f->B->voucher->id.'/passengers/join', ['passenger_ids' => $ids])->assertSessionHasErrors();
+    expect($f->B->voucher->passengers()->count())->toBe(2)
+        ->and(\App\Modules\Umrah\Models\ChangeLog::where('entity_id', $f->B->voucher->id)->count())->toBe(0);
+})->with(['assigned', 'missing', 'duplicate', 'malformed', 'cancelled group', 'deleted passenger', 'approved target', 'amendment target', 'shared target']);
+
+test('direct join search and write are denied to agent logins and foreign company passengers', function () {
+    $f = crossAgentFixture();
+    $pax = $f->A->passengers->first();
+    VoucherPassenger::where('passenger_id', $pax->id)->delete();
+    $agent = crossAgentLogin($f, 'B');
+    $url = '/'.$f->company->slug.'/umrah/vouchers/'.$f->B->voucher->id;
+    $this->actingAs($agent)->get($url.'?passenger_search=A1')->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->has('joiningCandidates', 0)->where('agentCapabilities.can_join_existing', false));
+    $this->post($url.'/passengers/join', ['passenger_ids' => [$pax->id]])->assertForbidden();
+    $foreign = crossAgentFixture();
+    $foreignPax = $foreign->A->passengers->first();
+    $this->actingAs($f->user)->post($url.'/passengers/join', ['passenger_ids' => [$pax->id, $foreignPax->id]])->assertSessionHasErrors();
+    expect(VoucherPassenger::where('passenger_id', $pax->id)->exists())->toBeFalse();
+});
+
 test('both group pages show current parties without moving purchases and follow the return move', function () {
     $f = crossAgentFixture();
     $pax = $f->A->passengers->first();
@@ -490,7 +640,7 @@ test('empty selection is rejected by the transfer command itself', function () {
     expect(fn () => Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [])))->toThrow(ValidationException::class);
 });
 
-test('mixed party hotel approval uses destination agent rate and cancellation leaves original purchases untouched', function () {
+test('mixed party hotel approval uses destination agent rate and cancellation leaves original purchases untouched', function (bool $directJoin) {
     $f = crossAgentFixture();
     foreach ([['1100', 'Receivable', 'asset', 'accounts_receivable', 'debit'], ['2000', 'Payable', 'liability', 'accounts_payable', 'credit'], ['4120', 'Hotels', 'revenue', 'revenue', 'credit'], ['5120', 'Hotel cost', 'cogs', 'cogs', 'debit']] as [$code, $name, $type, $subtype, $normal]) {
         \App\Modules\Accounting\Models\Account::firstOrCreate(['company_id' => $f->company->id, 'code' => $code], ['name' => $name, 'type' => $type, 'subtype' => $subtype, 'normal_balance' => $normal]);
@@ -501,7 +651,13 @@ test('mixed party hotel approval uses destination agent rate and cancellation le
     foreach (['A' => 50, 'B' => 80] as $party => $rate) {
         \App\Modules\Umrah\Models\CommercialRate::create(['company_id' => $f->company->id, 'service_type' => 'hotel_room', 'hotel_room_rate_id' => $room->id, 'scope_type' => 'agent', 'agent_id' => $f->{$party}->agent->id, 'calculation_type' => 'set_price', 'amount' => $rate, 'currency' => 'PKR', 'effective_from' => '2026-01-01', 'effective_until' => '2026-12-31', 'is_active' => true]);
     }
-    Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [$f->A->passengers->first()->id]));
+    if ($directJoin) {
+        $f->A->voucher->voucherPassengers()->where('passenger_id', $f->A->passengers->first()->id)->delete();
+        $this->actingAs($f->user)->post('/'.$f->company->slug.'/umrah/vouchers/'.$f->B->voucher->id.'/passengers/join',
+            ['passenger_ids' => [$f->A->passengers->first()->id]])->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('success');
+    } else {
+        Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [$f->A->passengers->first()->id]));
+    }
     $f->B->voucher->update(['service_bundle' => Voucher::SERVICE_HOTEL, 'hotel_stays' => [['source' => 'company', 'hotel_id' => $hotel->id, 'hotel_name' => $hotel->name, 'city' => 'Makkah', 'room_type' => 'double', 'room_count' => 1, 'check_in_date' => '2026-10-01', 'check_out_date' => '2026-10-03']]]);
     $original = $f->A->group->fresh()->getAttributes();
     $payments = DB::table('umrah.payment_allocations')->orderBy('id')->get()->toJson();
@@ -546,7 +702,7 @@ test('mixed party hotel approval uses destination agent rate and cancellation le
         ->and((float) $supplier->fresh()->balance)->toBe(0.0)
         ->and($f->A->group->fresh()->getAttributes())->toBe($original)
         ->and(DB::table('umrah.payment_allocations')->orderBy('id')->get()->toJson())->toBe($payments);
-});
+})->with(['voucher transfer' => false, 'direct unassigned join' => true]);
 
 test('mixed party operations counts people once and keeps original transport passenger manifests', function () {
     $f = crossAgentFixture();

@@ -25,11 +25,12 @@ class GroupTravellingParties
                 ->where(fn ($current) => $current->where('status', Voucher::STATUS_APPROVED)->orWhereNull('amends_voucher_id')))
             ->where(fn ($query) => $query->where('visa_group_id', $group->id)
                 ->orWhereHas('voucher', fn ($voucher) => $voucher->where('visa_group_id', $group->id)))
-            ->with(['voucher.agent', 'passenger', 'group'])
+            ->with(['voucher.agent', 'voucher.group', 'passenger', 'group'])
             ->orderBy('created_at')->orderBy('id')->get();
 
         $own = [];
         $joining = [];
+        $notices = [];
         foreach ($assignments as $assignment) {
             if (! $assignment->passenger) {
                 continue;
@@ -47,7 +48,13 @@ class GroupTravellingParties
 
             if ($assignment->visa_group_id === $group->id) {
                 $own[$assignment->passenger_id] = $party;
+                if ($voucher->visa_group_id !== $group->id) {
+                    $notices[] = ['name' => $assignment->passenger->full_name, 'direction' => 'out',
+                        'group_number' => $visible ? $voucher->group?->group_number : null];
+                }
             } elseif ($visible && $voucher->visa_group_id === $group->id) {
+                $notices[] = ['name' => $assignment->passenger->full_name, 'direction' => 'in',
+                    'group_number' => ! $isAgent ? $assignment->group?->group_number : null];
                 $joining[] = [
                     'id' => $assignment->passenger_id,
                     'name' => $assignment->passenger->full_name,
@@ -59,6 +66,6 @@ class GroupTravellingParties
             }
         }
 
-        return ['assignments' => (object) $own, 'joining' => $joining];
+        return ['assignments' => (object) $own, 'joining' => $joining, 'notices' => $notices];
     }
 }

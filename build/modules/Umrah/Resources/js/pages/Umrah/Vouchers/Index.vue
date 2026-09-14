@@ -80,7 +80,7 @@ const serviceDate = (voucher: any) => voucher.service_bundle === 'hotel' ? vouch
     <div class="grid max-w-3xl gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
       <div class="relative">
         <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input v-model="search" class="pl-10" placeholder="Group number, name, passenger, or passport" @keyup.enter="applySearch" />
+        <Input v-model="search" class="pl-10" placeholder="Voucher/group number, name, or passport" @keyup.enter="applySearch" />
       </div>
       <Button variant="secondary" :disabled="searching" @click="applySearch">
         <LoaderCircle v-if="searching" class="mr-2 h-4 w-4 animate-spin" />

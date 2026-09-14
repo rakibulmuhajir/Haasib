@@ -43,6 +43,7 @@ class VisaGroupController extends Controller
         private TravelAccessService $access,
         private TravelChangeLogger $changeLogger,
         private GroupTravellingParties $travellingParties,
+        private \App\Modules\Umrah\Services\UmrahListSearch $listSearch,
     ) {}
 
     public function index(Request $request): Response
@@ -51,18 +52,21 @@ class VisaGroupController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_VIEW), 403);
         $this->transportCatalog->ensureDefaultSectors($company->id);
         $search = trim((string) $request->input('search', ''));
+        $pattern = $this->listSearch->pattern($search);
         $memberAgentId = $this->memberAgentId($company->id, $request);
 
         $groups = VisaGroup::where('company_id', $company->id)
             ->with(['agent:id,customer_id', 'vendor:id,vendor_id', 'visaService:id,name', 'transportService:id,name,vehicle_type,pax_capacity', 'driver:id,name,phone'])
             ->when($this->isMember($company->id, $request), fn ($q) => $memberAgentId ? $q->where('agent_id', $memberAgentId) : $q->whereRaw('1 = 0'))
             ->when($search !== '', fn ($q) => $q->where(fn ($inner) => $inner
-                ->where('name', 'ilike', "%{$search}%")
-                ->orWhere('group_number', 'ilike', "%{$search}%")
+                ->where('name', 'ilike', $pattern)
+                ->orWhere('group_number', 'ilike', $pattern)
                 ->orWhereHas('passengers', fn ($passenger) => $passenger->where(fn ($match) => $match
-                    ->where('full_name', 'ilike', "%{$search}%")
-                    ->orWhere('passport_number', 'ilike', "%{$search}%")))
-                ->orWhereHas('agent', fn ($agent) => $agent->where('name', 'ilike', "%{$search}%"))))
+                    ->where('full_name', 'ilike', $pattern)
+                    ->orWhere('passport_number', 'ilike', $pattern)))
+                ->when($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_VOUCHER_VIEW),
+                    fn ($matches) => $this->listSearch->incoming($matches, $company->id, $pattern, $memberAgentId))
+                ->orWhereHas('agent.customer', fn ($customer) => $customer->where('acct.customers.name', 'ilike', $pattern))))
             ->orderByDesc('created_at')
             ->paginate(20)
             ->through(fn (VisaGroup $group) => $group->makeHidden('status'))
@@ -143,8 +147,15 @@ class VisaGroupController extends Controller
             $data['agent_id'] = $this->memberAgentId($company->id, $request) ?? abort(403, 'Agent login is not linked.');
             $data['discount_amount'] = 0;
         }
-        $data = $this->service->resolveGroupVendors($company->id, $data, $isAgent);
-        $group = $this->service->createGroup($company->id, $data);
+        try {
+            $group = \Illuminate\Support\Facades\Bus::dispatch(new \App\Modules\Umrah\Commands\CreateImportedGroup($company->id, $data, $isAgent));
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'The group could not be saved. Please try again; a retry will not duplicate this booking.');
+        }
 
         return redirect()->route('umrah.groups.show', ['company' => $company->slug, 'group' => $group->id])
             ->with('success', 'Visa group created successfully.');
@@ -152,11 +163,19 @@ class VisaGroupController extends Controller
 
     public function importMutamers(ImportMutamersRequest $request): RedirectResponse
     {
-        $mutamers = $this->mutamerImporter->import($request->file('mutamers_file'));
+        try {
+            $mutamers = $this->mutamerImporter->import($request->file('mutamers_file'));
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'The workbook could not be read. No passengers were added. Please try again.');
+        }
         $count = count($mutamers);
 
         return back()
-            ->with('success', "{$count} mutamers imported.")
+            ->with('success', "{$count} rows ready for preview. Review them before adding passengers.")
             ->with('umrah_imported_mutamers', $mutamers);
     }
 

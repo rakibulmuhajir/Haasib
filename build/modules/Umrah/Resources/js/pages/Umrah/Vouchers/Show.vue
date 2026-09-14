@@ -48,6 +48,7 @@ import {
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import VoucherPreview from '../../../components/VoucherPreview.vue';
+import AddExistingPassengers from '../../../components/AddExistingPassengers.vue';
 
 const props = defineProps<{
     company: {
@@ -85,6 +86,7 @@ const props = defineProps<{
         can_amend?: boolean;
         can_delete?: boolean;
         can_move_passengers?: boolean;
+        can_join_existing?: boolean;
     };
     changeLogs: any[];
     moveTargets: Array<{
@@ -98,6 +100,7 @@ const props = defineProps<{
         group?: { group_number: string };
     }>;
     hasMixedPassengerSources?: boolean;
+    joiningCandidates?: Array<{ id: string; name: string; passport: string | null; group_number: string }>;
     canViewAccounting: boolean;
     openWorkflow?: 'amend' | null;
 }>();
@@ -325,6 +328,12 @@ const viewTab = ref('voucher');
 const printUrl = computed(
     () => `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/print`,
 );
+// Membership changes update the pivot, not necessarily the voucher timestamp.
+const previewRevision = computed(() => JSON.stringify([
+    props.voucher.updated_at,
+    props.voucher.status,
+    (props.voucher.passengers ?? []).map((passenger: { id: string }) => passenger.id),
+]));
 const printVoucher = () => {
     if (preparingPrint.value) return;
     preparingPrint.value = true;
@@ -396,6 +405,11 @@ const exportVoucher = () => {
         :icon="ScrollText"
     >
         <template #actions>
+            <AddExistingPassengers
+                v-if="agentCapabilities.can_join_existing"
+                :url="`/${company.slug}/umrah/vouchers/${voucher.id}`"
+                :candidates="joiningCandidates ?? []"
+            />
             <div class="flex max-w-full flex-wrap gap-2">
                 <Button
                     v-if="canViewAccounting"
@@ -552,7 +566,7 @@ const exportVoucher = () => {
                 <VoucherPreview
                     :url="printUrl"
                     :voucher-id="voucher.id"
-                    :revision="`${voucher.updated_at}-${voucher.status}`"
+                    :revision="previewRevision"
                 />
             </TabsContent>
 

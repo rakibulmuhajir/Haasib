@@ -76,6 +76,7 @@
     <div class="toolbar">
         <button class="primary" type="button" onclick="window.print()">Print report</button>
         <a href="{{ $pdfUrl }}">Download PDF</a>
+        <a href="{{ route('umrah.operations.report.csv', ['company' => $company->slug, ...$report['filters']]) }}">Export CSV</a>
     </div>
 @endunless
 

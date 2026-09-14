@@ -1,6 +1,10 @@
 # Umrah release tracker
 
-Last reconciled: 11 September 2026.
+Last reconciled: 13 September 2026.
+
+## 14 September release authorization
+
+User explicitly authorized committing and deploying the accumulated work. Release includes payment-allocation safeguards, travelling-party vouchers/direct joins and group notices, Mutamer import preview/retry protection, scoped list search, Operations CSV and personal saved views. Production preflight found a clean main checkout at `138b825ad1aae5ea9c9ee10e1de43d9e31caef22`. Private PostgreSQL backup created and archive listing validated at `/home/ubuntu/haasib-backups/pre-umrah-20260914.dump` before deployment. Two migrations are expected: voucher group leader and operation_views. CSV/PDF browser download delivery remains an explicitly unverified acceptance item; earlier automated results are not a substitute. Deployment outcome and exact release hash will be recorded after execution.
 
 ## Sources of truth
 
@@ -29,7 +33,23 @@ Last reconciled: 11 September 2026.
 
 ## Next feature set
 
+**14 September browser acceptance update:** user checked import and partial search. Built-in browser checks passed scoped search examples, seeded-agent isolation, saved-view replacement/persistence/privacy/removal, and screen/print report agreement. **CSV delivery remains unverified:** clicks produced no new observable Downloads file. Do not mark the full browser checklist complete. See [exact evidence and remaining checks](umrah-browser-acceptance-2026-09-14.md). Nothing deployed.
+
+**13 September — Personal saved Operations views implemented locally, not deployed.** Save/open/remove and same-name replacement; rolling periods versus fixed custom ranges; current user/company isolation. Browser checks, Operations regression, build and targeted lint passed. Requires the new operation_views migration, applied locally only. See [scope and release notes](umrah-saved-operations-views.md). No specific city-direction filter or shared views in this slice.
+
+**13 September — Scoped Groups/Vouchers search corrected and tested locally; not deployed.** Existing name/passport/group-number search retained; Group search now includes permitted current incoming passengers. Fixed stale agent-name lookup that could fail Voucher searches; wildcard characters are literal. **70 travelling-party/search tests / 1,017 assertions** passed. No accounting changes or migration. See [scope and evidence](umrah-scoped-search-feature-set.md).
+
+**13 September — Mutamer import preview and reliability implemented locally and tested; awaiting user acceptance, not deployed.** Create Group now previews rows before adding them, shows row errors and same-file/current-form duplicate passports, allows explicit exclusions, and paginates 50 rows with a 500-passenger limit. Malformed/oversized workbooks are rejected; save retries preserve the original group and charges. Search remains scoped to Groups/Vouchers; no universal passenger search. **35 tests / 186 assertions**, targeted lint, PHP formatting, production build and synthetic-workbook browser checks passed. Tests include a posted visa purchase replay with unchanged transaction IDs and balances. No migration required. Issued visa/MOFA mapping remains separate pending a representative Nusuk workbook. See [scope and evidence](umrah-import-preview-feature-set.md).
+
+## Other locally tested feature set awaiting acceptance
+
+**13 September — Operations CSV export implemented locally and tested; awaiting user acceptance, not deployed.** This is the next bounded feature set authorized after the direct passenger-join work. Export CSV on Operations and its printable report reuses the same authorized projection, labels date-window summaries separately from filtered movement totals, retains local clocks and protects spreadsheet cells from formula injection. Applied filters are used rather than unsaved filter edits. **45 Operations tests / 533 assertions**, targeted lint, PHP formatting, production build and real browser download checks passed. See [scope and evidence](umrah-operations-csv-feature-set.md). Saved views, other reports and packages remain separate.
+
+## Previous feature set awaiting release acceptance
+
 **Selected: travelling-party vouchers across import groups and agents. In progress locally; not release-ready.**
+
+13 September clarification: the primary workflow is joining another travelling party **before buying its hotel service**, not cancelling a previously purchased hotel. Added direct selection of existing unassigned passengers on an ordinary draft voucher; a source voucher is not required. Both purchase-group detail and service-accounting pages now show outgoing/incoming passenger notices above the calculations. Original visa/transport purchase membership, charges and payments stay unchanged; later hotels use the receiving voucher's agent and booked rooms/beds/nights. No new migration. See [direct-join verification](umrah-direct-join-2026-09-13.md). Not deployed; user acceptance remains required.
 
 11 September payment acceptance: normal browser transfer, hotel approval, separate agent receipts, supplier payment and statements reconciled correctly. **Two discovered payment defects are now fixed locally:** negative/malformed allocations are rejected rather than saved as credit, and both payment-entry forms use the local calendar day. Browser retesting confirmed rejected attempts create no receipt and valid partial allocation/remaining credit still works. Regression rerun: **85 backend tests / 712 assertions**, plus **20 frontend tests**; build and targeted lint passed. See [payment browser test evidence](umrah-payment-browser-test-2026-09-11.md) for exact records, amounts and remaining scope. These two blockers are cleared; user acceptance and the remaining feature-set gates still apply. Not deployed.
 

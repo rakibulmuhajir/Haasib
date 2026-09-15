@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import InputError from '@/components/InputError.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
@@ -213,7 +213,7 @@ const props = defineProps<{
   pumps: PumpRow[]
   rateChanges: RateChangeRow[]
   openingReadings: OpeningReadingRow[]
-  openingBalances: Record<string, any>
+  openingBalances: { as_of_date: string | null; locked_at: string | null; row_count: number; assets: number; liabilities: number; url: string } | null
   dipSticks: Array<{ id: string; code: string }>
   stationSettings?: {
     id?: string
@@ -437,7 +437,7 @@ const stepReloadMap: Record<string, string[]> = {
   rates: ['wizard', 'fuelItems', 'rateChanges'],
   lubricants: ['wizard', 'lubricants'],
   initial_stock: ['wizard', 'tanks', 'openingReadings', 'fuelItems'],
-  opening_cash: ['wizard', 'openingBalances', 'bankAccounts', 'company'],
+  opening_cash: ['wizard', 'openingBalances', 'company'],
   complete: ['wizard', 'company'],
 }
 
@@ -949,14 +949,6 @@ const hasFuelCategory = (category: string) =>
 
 const hasBulkLubricant = computed(() => hasFuelCategory('lubricant'))
 
-const bankAccountLabels = computed(() => {
-  const map = new Map<string, string>()
-  props.bankAccounts.forEach((account) => {
-    map.set(account.id, account.name)
-  })
-  return map
-})
-
 const tanksForm = useForm({
   tanks: [] as TankRow[],
 })
@@ -1219,41 +1211,6 @@ watch(
 
 const stockReadingRowError = (index: number, field: string) =>
   (openingStockForm.errors as Record<string, string>)[`tank_readings.${index}.${field}`]
-
-const openingCashForm = useForm({
-  as_of_date: todayLocal(),
-  cash_on_hand: '',
-  bank_balance: '',
-  bank_balances: [] as Array<{ account_id: string; balance: number | string }>,
-})
-
-const applyOpeningCashPrefill = () => {
-  const openingBalances = props.openingBalances || {}
-  const cash = openingBalances.cash_on_hand
-  const banks = openingBalances.banks || {}
-
-  openingCashForm.cash_on_hand = cash?.amount ?? ''
-  openingCashForm.as_of_date = cash?.as_of_date || openingCashForm.as_of_date
-
-  const primaryBank = props.bankAccounts.find((account) => account.code === '1000')
-  openingCashForm.bank_balance = primaryBank ? banks[primaryBank.id]?.amount ?? '' : ''
-
-  openingCashForm.bank_balances = props.bankAccounts
-    .filter((account) => account.id !== primaryBank?.id)
-    .map((account) => ({
-      account_id: account.id,
-      balance: banks[account.id]?.amount ?? '',
-    }))
-}
-
-watch(
-  () => [props.openingBalances, props.bankAccounts],
-  () => applyOpeningCashPrefill(),
-  { immediate: true }
-)
-
-const bankBalanceRowError = (index: number, field: string) =>
-  (openingCashForm.errors as Record<string, string>)[`bank_balances.${index}.${field}`]
 
 const formatNumber = (value: number | string) => {
   const numberValue = Number(value || 0)
@@ -1567,31 +1524,6 @@ const submitOpeningStock = () => {
       // without this the InputError tags on this step stay blank no matter what the
       // server said.
       onError: (errors) => openingStockForm.setError(errors as Record<string, string>),
-    }
-  )
-}
-
-const submitOpeningCash = () => {
-  router.post(
-    `/${companySlug.value}/fuel/onboarding/opening-cash`,
-    {
-      as_of_date: openingCashForm.as_of_date,
-      cash_on_hand: Number(openingCashForm.cash_on_hand || 0),
-      bank_balance: openingCashForm.bank_balance ? Number(openingCashForm.bank_balance) : 0,
-      bank_balances: openingCashForm.bank_balances.map((row) => ({
-        account_id: row.account_id,
-        balance: Number(row.balance || 0),
-      })),
-    },
-    {
-      preserveScroll: true,
-      preserveState: true,
-      onSuccess: () => nextStep(),
-      // Each step posts through router, not the step form, because the payload is
-      // reshaped on the way out. Inertia hands the 422 to the visit rather than to
-      // the form, so without this the InputError tags on this step stay blank no
-      // matter what the server said.
-      onError: (errors) => openingCashForm.setError(errors as Record<string, string>),
     }
   )
 }
@@ -2939,51 +2871,26 @@ onMounted(() => {
             <!-- Opening Cash -->
             <div v-if="activeStepId === 'opening_cash'" class="space-y-6">
               <p class="text-sm text-text-secondary">
-                Record opening balances for cash and bank accounts. Values can be reconciled later.
+                Cash, bank balances, customer udhaar, amanat deposits, supplier dues and employee advances as of the day before entries start. These are entered once on the Accounting opening-balances page.
               </p>
-
-              <div class="space-y-2">
-                <Label>As of Date</Label>
-                <Input v-model="openingCashForm.as_of_date" type="date" />
-                <InputError :message="openingCashForm.errors.as_of_date" />
-              </div>
-
-              <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Cash on Hand ({{ currencyCode }})</Label>
-                  <Input v-model="openingCashForm.cash_on_hand" type="number" step="0.01" />
-                  <InputError :message="openingCashForm.errors.cash_on_hand" />
-                </div>
-                <div class="space-y-2">
-                  <Label>Operating Bank Balance ({{ currencyCode }})</Label>
-                  <Input v-model="openingCashForm.bank_balance" type="number" step="0.01" />
-                  <InputError :message="openingCashForm.errors.bank_balance" />
-                </div>
-              </div>
-
-              <div class="space-y-4">
-                <div class="text-sm font-semibold">Other Bank Balances</div>
-                <div class="grid gap-4 md:grid-cols-2">
-                  <div
-                    v-for="(row, index) in openingCashForm.bank_balances"
-                    :key="row.account_id"
-                    class="space-y-2"
-                  >
-                    <Label>{{ bankAccountLabels.get(row.account_id) || 'Bank Account' }}</Label>
-                    <Input v-model="row.balance" type="number" step="0.01" />
-                    <InputError :message="bankBalanceRowError(index, 'balance')" />
+              <Card>
+                <CardContent class="flex flex-wrap items-center justify-between gap-4 p-4">
+                  <div v-if="props.openingBalances?.as_of_date" class="space-y-1 text-sm">
+                    <div class="font-medium">{{ props.openingBalances.row_count }} lines as of {{ props.openingBalances.as_of_date }}<span v-if="props.openingBalances.locked_at"> · locked</span></div>
+                    <div class="text-muted-foreground">Assets <MoneyText :amount="props.openingBalances.assets" :currency="currencyCode" :fraction-digits="0" /> · Liabilities <MoneyText :amount="props.openingBalances.liabilities" :currency="currencyCode" :fraction-digits="0" /></div>
                   </div>
-                </div>
-                <InputError :message="openingCashForm.errors.bank_balances" />
-              </div>
+                  <div v-else class="text-sm text-muted-foreground">Not set yet.</div>
+                  <Button as-child variant="outline"><Link :href="props.openingBalances?.url ?? `/${companySlug}/accounting/opening-balances`">{{ props.openingBalances?.as_of_date ? 'Review opening balances' : 'Enter opening balances' }}</Link></Button>
+                </CardContent>
+              </Card>
 
               <div class="flex items-center justify-between pt-6 border-t">
                 <Button type="button" variant="outline" @click="previousStep">
                   <ArrowLeft class="mr-2 h-4 w-4" />
                   Previous
                 </Button>
-                <Button type="button" :disabled="openingCashForm.processing" @click="submitOpeningCash">
-                  Save & Continue
+                <Button type="button" @click="nextStep">
+                  Continue
                   <ArrowRight class="ml-2 h-4 w-4" />
                 </Button>
               </div>

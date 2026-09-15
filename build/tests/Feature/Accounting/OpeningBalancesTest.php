@@ -586,3 +586,24 @@ test('the opening balances page requires the view permission and store requires 
 
     expect(ledgerBalance($f['accounts']['cash']))->toBe(5.0);
 });
+
+test('credit customer index reports the opening receivable as current balance', function () {
+    $f = openingBalanceHttpFixture();
+    $f['company']->enableModule('fuel_station');
+    $customer = openingCustomer($f, 'Truck Company');
+    CustomerProfile::getOrCreateForCustomer($f['company']->id, $customer->id)->update(['is_credit_customer' => true]);
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]]]);
+
+    $response = $this->actingAs($f['user'])->get("/{$f['company']->slug}/fuel/credit-customers");
+    $response->assertOk();
+    $customers = $response->viewData('page')['props']['customers'];
+    expect(collect($customers)->firstWhere('id', $customer->id)['current_balance'])->toBe(42000.0);
+});
+
+test('the fuel onboarding opening-cash route is gone', function () {
+    $f = openingBalanceHttpFixture();
+    $f['company']->enableModule('fuel_station');
+    $this->actingAs($f['user'])
+        ->post("/{$f['company']->slug}/fuel/onboarding/opening-cash", ['as_of_date' => '2026-08-31', 'cash_on_hand' => 1])
+        ->assertNotFound();
+});

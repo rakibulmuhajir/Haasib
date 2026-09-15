@@ -20,6 +20,13 @@ class CreditCustomerController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
 
+        $openBalances = \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)
+            ->whereNotIn('status', ['void', 'draft'])
+            ->where('balance', '>', 0)
+            ->selectRaw('customer_id, SUM(balance) as balance')
+            ->groupBy('customer_id')
+            ->pluck('balance', 'customer_id');
+
         // Get customers from acct.customers
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
@@ -32,7 +39,7 @@ class CreditCustomerController extends Controller
                 'phone' => $c->phone,
                 'email' => $c->email,
                 'credit_limit' => (float) ($c->credit_limit ?? 0),
-                'current_balance' => 0, // TODO: Calculate from transactions
+                'current_balance' => (float) ($openBalances[$c->id] ?? 0),
                 'is_credit_blocked' => false, // TODO: Add to customer model
             ]);
 
@@ -65,6 +72,12 @@ class CreditCustomerController extends Controller
         if (!$customerData) {
             abort(404);
         }
+
+        $openBalance = (float) (\App\Modules\Accounting\Models\Invoice::where('company_id', $companyModel->id)
+            ->where('customer_id', $customerData->id)
+            ->whereNotIn('status', ['void', 'draft'])
+            ->where('balance', '>', 0)
+            ->sum('balance'));
 
         // Get credit transactions from daily close metadata
         $transactions = DB::table('acct.transactions')
@@ -135,7 +148,7 @@ class CreditCustomerController extends Controller
                 'email' => $customerData->email,
                 'address' => $address,
                 'credit_limit' => (float) ($customerData->credit_limit ?? 0),
-                'current_balance' => 0, // TODO: Calculate from transactions
+                'current_balance' => $openBalance,
                 'is_credit_blocked' => false,
             ],
             'transactions' => $allTransactions,

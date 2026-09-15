@@ -50,7 +50,6 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('onboarding/rates', [FuelStationOnboardingController::class, 'setupRates'])->name('fuel.onboarding.rates');
     Route::post('onboarding/lubricants', [FuelStationOnboardingController::class, 'setupLubricants'])->name('fuel.onboarding.lubricants');
     Route::post('onboarding/initial-stock', [FuelStationOnboardingController::class, 'setupInitialStock'])->name('fuel.onboarding.initial-stock');
-    Route::post('onboarding/opening-cash', [FuelStationOnboardingController::class, 'setupOpeningCash'])->name('fuel.onboarding.opening-cash');
     Route::post('onboarding/complete', [FuelStationOnboardingController::class, 'complete'])->name('fuel.onboarding.complete');
 
     // Dashboard

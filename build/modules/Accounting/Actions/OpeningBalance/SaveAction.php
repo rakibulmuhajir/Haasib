@@ -17,6 +17,7 @@ use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\SalaryAdvance;
+use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -91,6 +92,9 @@ class SaveAction implements PaletteAction
                 $create($entryIdsByLine);
             }
 
+            $invoiceIds = $this->createOpeningInvoices($company, $params, $accounts, $asOf, $currency);
+            $billIds = $this->createOpeningBills($company, $params, $accounts, $asOf, $currency);
+
             $settings = $company->settings ?? [];
             $settings['opening_balances'] = [
                 'as_of_date' => $asOf,
@@ -102,7 +106,7 @@ class SaveAction implements PaletteAction
 
             return [
                 'message' => 'Opening balances saved as of '.$asOf,
-                'data' => ['journal_id' => $journalId, 'invoice_ids' => [], 'bill_ids' => []],
+                'data' => ['journal_id' => $journalId, 'invoice_ids' => $invoiceIds, 'bill_ids' => $billIds],
             ];
         });
     }
@@ -291,5 +295,75 @@ class SaveAction implements PaletteAction
                 ]);
             };
         }
+    }
+
+    private function createOpeningInvoices($company, array $params, array $accounts, string $asOf, string $currency): array
+    {
+        $rows = array_filter($params['credit_customers'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return [];
+        }
+        if (! $accounts['ar']) {
+            throw ValidationException::withMessages(['credit_customers' => 'Set up account 1100 (Accounts Receivable) first.']);
+        }
+        $bus = app(CommandBus::class);
+        $ids = [];
+        foreach ($rows as $row) {
+            $customer = Customer::where('company_id', $company->id)->findOrFail($row['customer_id']);
+            $result = $bus->dispatch('invoice.create', [
+                'customer' => $customer->id,
+                'currency' => $currency,
+                'date' => $asOf,
+                'due' => $asOf,
+                'send_immediately' => true,
+                'internal_notes' => self::MARK,
+                'description' => 'Opening balance as of '.$asOf,
+                'line_items' => [[
+                    'description' => 'Opening balance as of '.$asOf,
+                    'quantity' => 1,
+                    'unit_price' => round((float) $row['amount'], 2),
+                    'tax_rate' => 0,
+                    'income_account_id' => $accounts['equity'],
+                ]],
+            ], Auth::user(), true);
+            $ids[] = $result['data']['id'];
+        }
+
+        return $ids;
+    }
+
+    private function createOpeningBills($company, array $params, array $accounts, string $asOf, string $currency): array
+    {
+        $rows = array_filter($params['suppliers'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return [];
+        }
+        if (! $accounts['ap']) {
+            throw ValidationException::withMessages(['suppliers' => 'Set up account 2100 (Accounts Payable) first.']);
+        }
+        $bus = app(CommandBus::class);
+        $ids = [];
+        foreach ($rows as $row) {
+            Vendor::where('company_id', $company->id)->findOrFail($row['vendor_id']);
+            $result = $bus->dispatch('bill.create', [
+                'vendor_id' => $row['vendor_id'],
+                'bill_date' => $asOf,
+                'due_date' => $asOf,
+                'status' => 'received',
+                'currency' => $currency,
+                'base_currency' => $currency,
+                'internal_notes' => self::MARK,
+                'line_items' => [[
+                    'description' => 'Opening balance as of '.$asOf,
+                    'quantity' => 1,
+                    'unit_price' => round((float) $row['amount'], 2),
+                    'tax_rate' => 0,
+                    'expense_account_id' => $accounts['equity'],
+                ]],
+            ], Auth::user(), true);
+            $ids[] = $result['data']['id'];
+        }
+
+        return $ids;
     }
 }

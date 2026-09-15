@@ -6,9 +6,12 @@ use App\Models\PartnerTransaction;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
@@ -199,4 +202,47 @@ test('amanat, employee advance and partner capital openings create sub-records l
     $equity = Account::where('company_id', $f['company']->id)->where('code', '3080')->first();
     // assets 5000 − liabilities 1,030,000 = −1,025,000 → 3080 carries a debit of 1,025,000
     expect(ledgerBalance($equity))->toBe(1025000.0);
+});
+
+test('credit customer and supplier openings become posted invoices and bills against opening balance equity', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'Truck Company');
+    $vendor = Vendor::create([
+        'company_id' => $f['company']->id,
+        'vendor_number' => 'VEND-0001',
+        'name' => 'PSO Depot',
+        'base_currency' => 'PKR',
+        'is_active' => true,
+        'ap_account_id' => $f['accounts']['ap']->id,
+        'created_by_user_id' => $f['user']->id,
+    ]);
+
+    $result = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],
+        'suppliers' => [['vendor_id' => $vendor->id, 'amount' => 250000]],
+    ]);
+
+    expect($result['data']['journal_id'])->toBeNull();
+
+    $invoice = Invoice::find($result['data']['invoice_ids'][0]);
+    expect($invoice->customer_id)->toBe($customer->id)
+        ->and((float) $invoice->total_amount)->toBe(42000.0)
+        ->and((float) $invoice->balance)->toBe(42000.0)
+        ->and($invoice->internal_notes)->toBe('OPENING')
+        ->and($invoice->transaction_id)->not->toBeNull()
+        ->and($invoice->invoice_date->toDateString())->toBe('2026-08-31');
+    $equity = Account::where('company_id', $f['company']->id)->where('code', '3080')->first();
+    expect($invoice->lineItems->first()->income_account_id)->toBe($equity->id);
+
+    $bill = Bill::find($result['data']['bill_ids'][0]);
+    expect($bill->vendor_id)->toBe($vendor->id)
+        ->and((float) $bill->balance)->toBe(250000.0)
+        ->and($bill->internal_notes)->toBe('OPENING')
+        ->and($bill->transaction_id)->not->toBeNull()
+        ->and($bill->lineItems->first()->expense_account_id)->toBe($equity->id);
+
+    expect(ledgerBalance($f['accounts']['ar']))->toBe(42000.0)
+        ->and(ledgerBalance($f['accounts']['ap']))->toBe(-250000.0)
+        ->and(ledgerBalance($equity))->toBe(208000.0);
 });

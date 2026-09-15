@@ -428,7 +428,7 @@ enum VarianceReason: string {
   - `fuel_item_id` uuid nullable FK → `inv.items.id` (SET NULL/CASCADE) — if fuel_purchase.
   - `fuel_quantity` numeric(10,2) nullable — liters if fuel_purchase.
   - `reference` varchar(100) nullable.
-  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE).
+  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE) (added by migration 2026_09_15_000001).
   - `recorded_by_user_id` uuid not null FK → `auth.users.id` (SET NULL/CASCADE).
   - `notes` text nullable.
   - `created_at`, `updated_at` timestamps.

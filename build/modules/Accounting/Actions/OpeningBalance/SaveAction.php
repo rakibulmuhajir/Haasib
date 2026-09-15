@@ -6,13 +6,18 @@ use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Partner;
+use App\Models\PartnerTransaction;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
+use App\Modules\FuelStation\Models\AmanatTransaction;
+use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\SalaryAdvance;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -76,8 +81,15 @@ class SaveAction implements PaletteAction
             $lines = []; // journal entries: ['account_id','type','amount','description']
 
             $this->addCashAndBankLines($company->id, $params, $accounts, $lines);
+            $pending = [];   // closures run after the journal exists, receiving its per-line entry ids
+            $this->addAmanatLines($company->id, $params, $accounts, $lines, $pending);
+            $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
 
-            $journalId = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
+            [$journalId, $entryIdsByLine] = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
+            foreach ($pending as $create) {
+                $create($entryIdsByLine);
+            }
 
             $settings = $company->settings ?? [];
             $settings['opening_balances'] = [
@@ -142,11 +154,16 @@ class SaveAction implements PaletteAction
         }
     }
 
-    /** Posts the lines plus a single 3080 line that makes them balance. Returns null if there are no lines. */
-    private function postJournal(string $companyId, string $currency, string $asOf, string $equityId, array $lines): ?string
+    /**
+     * Posts the lines plus a single 3080 line that makes them balance.
+     * Returns [journal id, entry ids ordered to match $lines (0-based)] or [null, []] if there are no lines.
+     *
+     * @return array{0: ?string, 1: array<int, string>}
+     */
+    private function postJournal(string $companyId, string $currency, string $asOf, string $equityId, array $lines): array
     {
         if (empty($lines)) {
-            return null;
+            return [null, []];
         }
 
         $debits = 0.0;
@@ -172,6 +189,107 @@ class SaveAction implements PaletteAction
             'reference_id' => null,
         ], $lines);
 
-        return $transaction->id;
+        $entryIdsByLine = $transaction->journalEntries()->orderBy('line_number')->pluck('id')->values()->all();
+
+        return [$transaction->id, $entryIdsByLine];
+    }
+
+    private function addAmanatLines(string $companyId, array $params, array $accounts, array &$lines, array &$pending): void
+    {
+        $rows = array_filter($params['amanat'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+        if (! $accounts['amanat']) {
+            throw ValidationException::withMessages(['amanat' => 'Set up account 2200 (Customer Amanat Deposits) first.']);
+        }
+        foreach ($rows as $row) {
+            $customer = Customer::where('company_id', $companyId)->findOrFail($row['customer_id']);
+            $amount = round((float) $row['amount'], 2);
+            $lineIndex = count($lines);
+            $lines[] = ['account_id' => $accounts['amanat'], 'type' => 'credit', 'amount' => $amount, 'description' => "Opening amanat — {$customer->name}"];
+            $pending[] = function (array $entryIdsByLine) use ($companyId, $customer, $amount, $lineIndex) {
+                $profile = CustomerProfile::getOrCreateForCustomer($companyId, $customer->id);
+                if (! $profile->is_amanat_holder) {
+                    $profile->update(['is_amanat_holder' => true]);
+                }
+                AmanatTransaction::create([
+                    'company_id' => $companyId,
+                    'customer_id' => $customer->id,
+                    'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
+                    'amount' => $amount,
+                    'reference' => self::MARK,
+                    'notes' => 'Opening balance',
+                    'recorded_by_user_id' => Auth::id(),
+                    'journal_entry_id' => $entryIdsByLine[$lineIndex],
+                ]);
+                $profile->adjustAmanatBalance($amount);
+            };
+        }
+    }
+
+    private function addEmployeeAdvanceLines(string $companyId, array $params, array $accounts, string $asOf, array &$lines, array &$pending): void
+    {
+        $rows = array_filter($params['employees'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+        if (! $accounts['employee_advances']) {
+            throw ValidationException::withMessages(['employees' => 'Set up account 1150 (Employee Advances) first.']);
+        }
+        foreach ($rows as $row) {
+            $amount = round((float) $row['amount'], 2);
+            $employeeId = $row['employee_id'];
+            $lineIndex = count($lines);
+            $lines[] = ['account_id' => $accounts['employee_advances'], 'type' => 'debit', 'amount' => $amount, 'description' => 'Opening employee advance'];
+            $pending[] = function (array $entryIdsByLine) use ($companyId, $employeeId, $amount, $asOf, $accounts, $lineIndex) {
+                SalaryAdvance::create([
+                    'company_id' => $companyId,
+                    'employee_id' => $employeeId,
+                    'advance_date' => $asOf,
+                    'amount' => $amount,
+                    'amount_recovered' => 0,
+                    'amount_outstanding' => $amount,
+                    'reason' => 'Opening balance',
+                    'status' => 'pending',
+                    'payment_method' => 'cash',
+                    'reference' => self::MARK,
+                    'journal_entry_id' => $entryIdsByLine[$lineIndex],
+                    'advance_account_id' => $accounts['employee_advances'],
+                    'recorded_by_user_id' => Auth::id(),
+                ]);
+            };
+        }
+    }
+
+    private function addPartnerLines(string $companyId, array $params, array $accounts, string $asOf, array &$lines, array &$pending): void
+    {
+        $rows = array_filter($params['partners'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+        if (! $accounts['partner_deposits']) {
+            throw ValidationException::withMessages(['partners' => 'Set up account 2210 (Investor Deposits) first.']);
+        }
+        foreach ($rows as $row) {
+            $amount = round((float) $row['amount'], 2);
+            $partnerId = $row['partner_id'];
+            $lineIndex = count($lines);
+            $lines[] = ['account_id' => $accounts['partner_deposits'], 'type' => 'credit', 'amount' => $amount, 'description' => 'Opening partner capital'];
+            $pending[] = function (array $entryIdsByLine) use ($companyId, $partnerId, $amount, $asOf, $lineIndex) {
+                PartnerTransaction::create([
+                    'company_id' => $companyId,
+                    'partner_id' => $partnerId,
+                    'transaction_date' => $asOf,
+                    'transaction_type' => 'investment',
+                    'amount' => $amount,
+                    'description' => 'Opening balance',
+                    'reference' => self::MARK,
+                    'payment_method' => 'cash',
+                    'journal_entry_id' => $entryIdsByLine[$lineIndex],
+                    'recorded_by_user_id' => Auth::id(),
+                ]);
+            };
+        }
     }
 }

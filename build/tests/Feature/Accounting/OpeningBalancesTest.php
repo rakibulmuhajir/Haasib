@@ -1,11 +1,18 @@
 <?php
 
 use App\Models\Company;
+use App\Models\Partner;
+use App\Models\PartnerTransaction;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\FuelStation\Models\AmanatTransaction;
+use App\Modules\FuelStation\Models\CustomerProfile;
+use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\DB;
@@ -116,4 +123,80 @@ test('saving cash and bank opening balances posts one balanced journal against o
     $settings = $f['company']->fresh()->settings;
     expect($settings['opening_balances']['as_of_date'])->toBe('2026-08-31')
         ->and($settings['opening_balances']['locked_at'])->toBeNull();
+});
+
+function openingCustomer(array $f, string $name): Customer
+{
+    return Customer::create([
+        'company_id' => $f['company']->id,
+        'customer_number' => 'CUST-'.str()->upper(str()->random(5)),
+        'name' => $name,
+        'customer_type' => 'business',
+        'base_currency' => 'PKR',
+        'ar_account_id' => $f['accounts']['ar']->id,
+    ]);
+}
+
+test('amanat, employee advance and partner capital openings create sub-records linked to the journal', function () {
+    $f = openingBalanceFixture();
+    $depositor = openingCustomer($f, 'Haji Saab');
+    $employee = Employee::create([
+        'company_id' => $f['company']->id,
+        'employee_number' => 'EMP-001',
+        'first_name' => 'Ali',
+        'last_name' => 'Khan',
+        'hire_date' => '2025-01-01',
+        'currency' => 'PKR',
+    ]);
+    $partner = Partner::create([
+        'company_id' => $f['company']->id,
+        'name' => 'Owner One',
+        'profit_share_percentage' => 100,
+    ]);
+
+    $result = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'amanat' => [['customer_id' => $depositor->id, 'amount' => 30000]],
+        'employees' => [['employee_id' => $employee->id, 'amount' => 5000]],
+        'partners' => [['partner_id' => $partner->id, 'amount' => 1000000]],
+    ]);
+
+    $journalId = $result['data']['journal_id'];
+    $entries = Transaction::find($journalId)->journalEntries;
+
+    $amanatEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['amanat']->id && (float) $e->credit_amount === 30000.0);
+    $advanceEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['advances']->id && (float) $e->debit_amount === 5000.0);
+    $partnerEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['partner']->id && (float) $e->credit_amount === 1000000.0);
+    expect($amanatEntry)->not->toBeNull()
+        ->and($advanceEntry)->not->toBeNull()
+        ->and($partnerEntry)->not->toBeNull();
+
+    $amanat = AmanatTransaction::where('customer_id', $depositor->id)->first();
+    expect($amanat)->not->toBeNull()
+        ->and($amanat->transaction_type)->toBe(AmanatTransaction::TYPE_DEPOSIT)
+        ->and((float) $amanat->amount)->toBe(30000.0)
+        ->and($amanat->reference)->toBe('OPENING')
+        ->and($amanat->journal_entry_id)->toBe($amanatEntry->id);
+    expect((float) CustomerProfile::where('customer_id', $depositor->id)->first()->amanat_balance)->toBe(30000.0);
+
+    $advance = SalaryAdvance::where('employee_id', $employee->id)->first();
+    expect($advance)->not->toBeNull()
+        ->and((float) $advance->amount_outstanding)->toBe(5000.0)
+        ->and($advance->status)->toBe('pending')
+        ->and($advance->reference)->toBe('OPENING')
+        ->and($advance->journal_entry_id)->toBe($advanceEntry->id);
+
+    $capital = PartnerTransaction::where('partner_id', $partner->id)->first();
+    expect($capital)->not->toBeNull()
+        ->and($capital->transaction_type)->toBe('investment')
+        ->and((float) $capital->amount)->toBe(1000000.0)
+        ->and($capital->journal_entry_id)->toBe($partnerEntry->id);
+
+    expect(ledgerBalance($f['accounts']['amanat']))->toBe(-30000.0)
+        ->and(ledgerBalance($f['accounts']['advances']))->toBe(5000.0)
+        ->and(ledgerBalance($f['accounts']['partner']))->toBe(-1000000.0);
+
+    $equity = Account::where('company_id', $f['company']->id)->where('code', '3080')->first();
+    // assets 5000 − liabilities 1,030,000 = −1,025,000 → 3080 carries a debit of 1,025,000
+    expect(ledgerBalance($equity))->toBe(1025000.0);
 });

@@ -45,6 +45,7 @@ class AmanatTransaction extends Model
         'fuel_quantity',
         'reference',
         'notes',
+        'journal_entry_id',
         'recorded_by_user_id',
     ];
 
@@ -54,6 +55,7 @@ class AmanatTransaction extends Model
         'amount' => 'decimal:2',
         'fuel_item_id' => 'string',
         'fuel_quantity' => 'decimal:2',
+        'journal_entry_id' => 'string',
         'recorded_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

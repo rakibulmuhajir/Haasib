@@ -243,9 +243,12 @@ function lock() {
               <div v-for="(row, i) in form.credit_customers" :key="'cc-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
                   <Label :id="`credit_customers-${i}-customer_id-label`" :class="i === 0 ? undefined : 'sr-only'">Customer</Label>
-                  <div :aria-labelledby="`credit_customers-${i}-customer_id-label`">
-                    <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
-                  </div>
+                  <EntitySearch
+                    v-model="row.customer_id"
+                    entity-type="customer"
+                    :disabled="!editable"
+                    :aria-labelledby="`credit_customers-${i}-customer_id-label`"
+                  />
                   <InputError :message="err(`credit_customers.${i}.customer_id`)" />
                 </div>
                 <div class="grid gap-1">
@@ -322,9 +325,12 @@ function lock() {
               <div v-for="(row, i) in form.amanat" :key="'am-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
                   <Label :id="`amanat-${i}-customer_id-label`" :class="i === 0 ? undefined : 'sr-only'">Depositor</Label>
-                  <div :aria-labelledby="`amanat-${i}-customer_id-label`">
-                    <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
-                  </div>
+                  <EntitySearch
+                    v-model="row.customer_id"
+                    entity-type="customer"
+                    :disabled="!editable"
+                    :aria-labelledby="`amanat-${i}-customer_id-label`"
+                  />
                   <InputError :message="err(`amanat.${i}.customer_id`)" />
                 </div>
                 <div class="grid gap-1">
@@ -361,9 +367,12 @@ function lock() {
               <div v-for="(row, i) in form.suppliers" :key="'sup-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
                   <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Supplier</Label>
-                  <div :aria-labelledby="`suppliers-${i}-vendor_id-label`">
-                    <EntitySearch v-model="row.vendor_id" entity-type="vendor" :disabled="!editable" />
-                  </div>
+                  <EntitySearch
+                    v-model="row.vendor_id"
+                    entity-type="vendor"
+                    :disabled="!editable"
+                    :aria-labelledby="`suppliers-${i}-vendor_id-label`"
+                  />
                   <InputError :message="err(`suppliers.${i}.vendor_id`)" />
                 </div>
                 <div class="grid gap-1">

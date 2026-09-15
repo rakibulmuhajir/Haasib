@@ -52,6 +52,10 @@ export interface EntitySearchProps {
   disabled?: boolean
   error?: string
   class?: string
+  /** Forwarded to the trigger button, so a Label elsewhere can point at it. */
+  id?: string
+  /** Forwarded to the trigger button as its accessible name, for a Label that can't use `for` (e.g. one wrapping a description, or one that isn't a native label target). */
+  ariaLabelledby?: string
 }
 
 // Props
@@ -305,9 +309,11 @@ onMounted(() => {
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
         <Button
+          :id="id"
           variant="outline"
           role="combobox"
           :aria-expanded="open"
+          :aria-labelledby="ariaLabelledby"
           :disabled="disabled"
           :class="cn(
             'w-full justify-between font-normal',

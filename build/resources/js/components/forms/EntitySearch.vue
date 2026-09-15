@@ -218,8 +218,11 @@ const loadSelectedEntity = async () => {
     })
 
     if (response.ok) {
-      const data = await response.json()
-      selectedEntity.value = data[props.entityType] || data.data || data
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        selectedEntity.value = data[props.entityType] || data.data || data
+      }
     }
   } catch (error) {
     console.error(`[EntitySearch] Failed to load entity:`, error)

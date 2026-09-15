@@ -290,6 +290,7 @@ const saveAndPay = () => {
             <EntitySearch
               v-model="form.vendor_id"
               entity-type="vendor"
+              :initial-entity="selectedVendor"
               :placeholder="t('searchVendors')"
               @entity-selected="handleVendorSelected"
               @quick-add-click="showQuickAdd = true"

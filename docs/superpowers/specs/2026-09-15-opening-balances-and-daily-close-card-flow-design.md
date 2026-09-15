@@ -94,7 +94,7 @@ No new tables. Identification and reload:
   ```
   The figures themselves are read back from the records; settings only hold the date and lock.
 
-Schema contract: add an "Opening balances" section to `docs/contracts/acct-schema.md` describing the tagging above and the 3080 account requirement.
+Schema contract: add an "Opening balances" section to `docs/contracts/gl-core-schema.md` describing the tagging above and the 3080 account requirement.
 
 ### Backend
 

@@ -117,6 +117,8 @@ const form = useForm({
   line_items: [lineItemTemplate()],
 })
 
+const selectedVendor = computed(() => props.vendors.find(v => v.id === form.vendor_id) ?? null)
+
 // Watch vendor selection to auto-fill payment terms
 watch(() => form.vendor_id, (newVendorId) => {
   const vendor = props.vendors.find(v => v.id === newVendorId)
@@ -244,6 +246,7 @@ const handleSubmit = () => {
             <EntitySearch
               v-model="form.vendor_id"
               entity-type="vendor"
+              :initial-entity="selectedVendor"
               placeholder="Select or create a vendor"
               @quick-add-click="handleQuickAddClick"
             />

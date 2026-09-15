@@ -108,7 +108,9 @@ class Invoice extends Model
         $last = DB::connection('pgsql')->table('acct.invoices')
             ->where('company_id', $companyId)
             ->whereNotNull('invoice_number')
+            ->lockForUpdate()
             ->orderByDesc('created_at')
+            ->orderByDesc('invoice_number')
             ->value('invoice_number');
 
         $next = $startNumber;

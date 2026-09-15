@@ -38,7 +38,7 @@ class ViewAction implements PaletteAction
         $company = CompanyContext::requireCompany();
         $companyId = $company->id;
         $opening = ($company->settings ?? [])['opening_balances'] ?? [];
-        $accounts = $this->accounts->resolve($companyId);
+        $accounts = $this->accounts->resolve($companyId, false);
 
         // The current generation's journal is looked up by the id tracked in settings — not by
         // scanning for transaction_type = 'opening_balance', which would also match a retired

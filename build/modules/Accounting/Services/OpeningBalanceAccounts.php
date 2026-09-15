@@ -13,7 +13,7 @@ class OpeningBalanceAccounts
 {
     public const EQUITY_CODE = '3080';
 
-    public function resolve(string $companyId): array
+    public function resolve(string $companyId, bool $createEquity = true): array
     {
         $active = fn () => Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true);
         $byCode = fn (string $code) => (clone $active())->where('code', $code)->value('id');
@@ -26,7 +26,7 @@ class OpeningBalanceAccounts
             'amanat' => $byCode('2200'),
             'partner_deposits' => $byCode('2210'),
             'employee_advances' => $byCode('1150'),
-            'equity' => $this->ensureEquity($companyId),
+            'equity' => $createEquity ? $this->ensureEquity($companyId) : $byCode(self::EQUITY_CODE),
         ];
     }
 

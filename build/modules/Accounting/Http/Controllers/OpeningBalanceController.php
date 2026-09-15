@@ -31,7 +31,12 @@ class OpeningBalanceController extends Controller
     public function store(StoreOpeningBalancesRequest $request): RedirectResponse
     {
         $company = CompanyContext::getCompany();
-        $result = app(CommandBus::class)->dispatch('opening_balance.save', $request->validated(), $request->user());
+
+        try {
+            $result = app(CommandBus::class)->dispatch('opening_balance.save', $request->validated(), $request->user());
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('accounting.opening-balances.show', ['company' => $company->slug])
@@ -42,7 +47,12 @@ class OpeningBalanceController extends Controller
     {
         $company = CompanyContext::getCompany();
         abort_unless($request->user()->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE), 403);
-        $result = app(CommandBus::class)->dispatch('opening_balance.lock', [], $request->user());
+
+        try {
+            $result = app(CommandBus::class)->dispatch('opening_balance.lock', [], $request->user());
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('accounting.opening-balances.show', ['company' => $company->slug])

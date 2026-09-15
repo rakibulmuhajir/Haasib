@@ -240,6 +240,43 @@ test('amanat, employee advance and partner capital openings create sub-records l
     expect(ledgerBalance($equity))->toBe(1025000.0);
 });
 
+test('an employee or partner belonging to another company is refused and nothing is written', function () {
+    $f = openingBalanceFixture();
+
+    $otherCompany = Company::create([
+        'name' => 'Other Company',
+        'slug' => 'other-company-'.str()->lower(str()->random(8)),
+        'base_currency' => 'PKR',
+    ]);
+    $otherEmployee = Employee::create([
+        'company_id' => $otherCompany->id,
+        'employee_number' => 'EMP-OTHER-1',
+        'first_name' => 'Not',
+        'last_name' => 'Ours',
+        'hire_date' => '2025-01-01',
+        'currency' => 'PKR',
+    ]);
+    $otherPartner = Partner::create([
+        'company_id' => $otherCompany->id,
+        'name' => 'Not Our Partner',
+        'profit_share_percentage' => 100,
+    ]);
+
+    expect(fn () => dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'employees' => [['employee_id' => $otherEmployee->id, 'amount' => 5000]],
+    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+    expect(fn () => dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'partners' => [['partner_id' => $otherPartner->id, 'amount' => 5000]],
+    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+    expect(SalaryAdvance::where('employee_id', $otherEmployee->id)->count())->toBe(0);
+    expect(PartnerTransaction::where('partner_id', $otherPartner->id)->count())->toBe(0);
+    expect($f['company']->fresh()->settings['opening_balances'] ?? null)->toBeNull();
+});
+
 test('credit customer and supplier openings become posted invoices and bills against opening balance equity', function () {
     $f = openingBalanceFixture();
     $customer = openingCustomer($f, 'Truck Company');
@@ -281,6 +318,30 @@ test('credit customer and supplier openings become posted invoices and bills aga
     expect(ledgerBalance($f['accounts']['ar']))->toBe(42000.0)
         ->and(ledgerBalance($f['accounts']['ap']))->toBe(-250000.0)
         ->and(ledgerBalance($equity))->toBe(208000.0);
+});
+
+test('saving three credit customers in one go numbers every opening invoice uniquely', function () {
+    $f = openingBalanceFixture();
+    $one = openingCustomer($f, 'Customer One');
+    $two = openingCustomer($f, 'Customer Two');
+    $three = openingCustomer($f, 'Customer Three');
+
+    $result = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'credit_customers' => [
+            ['customer_id' => $one->id, 'amount' => 10000],
+            ['customer_id' => $two->id, 'amount' => 20000],
+            ['customer_id' => $three->id, 'amount' => 30000],
+        ],
+    ]);
+
+    $invoices = Invoice::whereIn('id', $result['data']['invoice_ids'])->where('status', '!=', 'void')->get();
+    expect($invoices)->toHaveCount(3);
+
+    $numbers = $invoices->pluck('invoice_number')->unique();
+    expect($numbers)->toHaveCount(3);
+
+    expect(ledgerBalance($f['accounts']['ar']))->toBe(60000.0);
 });
 
 test('re-saving replaces the previous opening records without duplicating balances', function () {
@@ -543,6 +604,18 @@ test('locking prevents further saves', function () {
     expect($f['company']->fresh()->settings['opening_balances']['locked_at'])->not->toBeNull();
     expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 20]]))
         ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+test('viewing opening balances on a fresh company creates no equity account, saving does', function () {
+    $f = openingBalanceFixture();
+
+    $view = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true));
+    expect($view['rows']['cash']['amount'])->toBe(0.0);
+    expect(Account::where('company_id', $f['company']->id)->where('code', '3080')->exists())->toBeFalse();
+
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 10]]);
+
+    expect(Account::where('company_id', $f['company']->id)->where('code', '3080')->exists())->toBeTrue();
 });
 
 test('the opening balances page requires the view permission and store requires manage', function () {

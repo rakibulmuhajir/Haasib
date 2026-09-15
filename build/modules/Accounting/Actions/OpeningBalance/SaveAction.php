@@ -408,10 +408,12 @@ class SaveAction implements PaletteAction
             throw ValidationException::withMessages(['employees' => 'Set up account 1150 (Employee Advances) first.']);
         }
         foreach ($rows as $row) {
+            $employee = Employee::where('company_id', $companyId)->findOrFail($row['employee_id']);
             $amount = round((float) $row['amount'], 2);
-            $employeeId = $row['employee_id'];
+            $employeeId = $employee->id;
+            $employeeName = trim(($employee->first_name ?? '').' '.($employee->last_name ?? ''));
             $lineIndex = count($lines);
-            $lines[] = ['account_id' => $accounts['employee_advances'], 'type' => 'debit', 'amount' => $amount, 'description' => 'Opening employee advance'];
+            $lines[] = ['account_id' => $accounts['employee_advances'], 'type' => 'debit', 'amount' => $amount, 'description' => "Opening employee advance — {$employeeName}"];
             $pending[] = function (array $entryIdsByLine) use ($companyId, $employeeId, $amount, $asOf, $accounts, $lineIndex) {
                 SalaryAdvance::create([
                     'company_id' => $companyId,
@@ -442,10 +444,11 @@ class SaveAction implements PaletteAction
             throw ValidationException::withMessages(['partners' => 'Set up account 2210 (Investor Deposits) first.']);
         }
         foreach ($rows as $row) {
+            $partner = Partner::where('company_id', $companyId)->findOrFail($row['partner_id']);
             $amount = round((float) $row['amount'], 2);
-            $partnerId = $row['partner_id'];
+            $partnerId = $partner->id;
             $lineIndex = count($lines);
-            $lines[] = ['account_id' => $accounts['partner_deposits'], 'type' => 'credit', 'amount' => $amount, 'description' => 'Opening partner capital'];
+            $lines[] = ['account_id' => $accounts['partner_deposits'], 'type' => 'credit', 'amount' => $amount, 'description' => "Opening partner capital — {$partner->name}"];
             $pending[] = function (array $entryIdsByLine) use ($companyId, $partnerId, $amount, $asOf, $lineIndex) {
                 PartnerTransaction::create([
                     'company_id' => $companyId,

@@ -790,7 +790,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `CustomerProfile::getOrCreateForCustomer(string $companyId, string $customerId): CustomerProfile`, `CustomerProfile::adjustAmanatBalance(float)`, `AmanatTransaction::TYPE_DEPOSIT`, `SalaryAdvance` (`status = 'pending'`), `PartnerTransaction` (`transaction_type = 'investment'`).
-- Produces: sub-records tagged `reference = 'OPENING'` and linked to the journal by `transaction_id` (amanat) / `journal_entry_id` (advance, partner).
+- Produces: sub-records tagged `reference = 'OPENING'`, each linked by `journal_entry_id` to ITS OWN line of the opening journal (`journal_entry_id` is an FK to `acct.journal_entries`, the line table, on all three sub-record tables — a transaction id cannot be stored there).
 
 - [ ] **Step 1: Failing test**
 
@@ -1316,7 +1316,9 @@ At the start of the `DB::transaction` closure in `handle()`, before resolving ac
             ->with('journalEntries')
             ->get();
         foreach ($journals as $journal) {
-            foreach (AmanatTransaction::where('transaction_id', $journal->id)->get() as $amanat) {
+            // Sub-records link to their own journal LINE (journal_entry_id is an FK to acct.journal_entries).
+            $entryIds = $journal->journalEntries->pluck('id')->all();
+            foreach (AmanatTransaction::whereIn('journal_entry_id', $entryIds)->get() as $amanat) {
                 $profile = CustomerProfile::getOrCreateForCustomer($companyId, $amanat->customer_id);
                 if ((float) $profile->amanat_balance < (float) $amanat->amount) {
                     throw ValidationException::withMessages(['amanat' => 'An opening amanat balance has already been drawn down; cannot re-enter opening balances.']);
@@ -1324,13 +1326,13 @@ At the start of the `DB::transaction` closure in `handle()`, before resolving ac
                 $profile->adjustAmanatBalance(-(float) $amanat->amount);
                 $amanat->delete();
             }
-            foreach (SalaryAdvance::where('journal_entry_id', $journal->id)->get() as $advance) {
+            foreach (SalaryAdvance::whereIn('journal_entry_id', $entryIds)->get() as $advance) {
                 if ((float) $advance->amount_recovered > 0) {
                     throw ValidationException::withMessages(['employees' => 'An opening employee advance has already been partly recovered; cannot re-enter opening balances.']);
                 }
                 $advance->delete();
             }
-            PartnerTransaction::where('journal_entry_id', $journal->id)->delete();
+            PartnerTransaction::whereIn('journal_entry_id', $entryIds)->delete();
 
             $reversal = [];
             foreach ($journal->journalEntries as $entry) {
@@ -1474,11 +1476,12 @@ class ViewAction implements PaletteAction
             }
         }
 
-        $amanat = $journal ? AmanatTransaction::where('transaction_id', $journal->id)->with('customer:id,name')->get()
+        $entryIds = $journal ? $journal->journalEntries->pluck('id')->all() : [];
+        $amanat = $journal ? AmanatTransaction::whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
             ->map(fn ($t) => ['customer_id' => $t->customer_id, 'customer_name' => $t->customer?->name, 'amount' => (float) $t->amount])->values()->all() : [];
-        $employees = $journal ? SalaryAdvance::where('journal_entry_id', $journal->id)->with('employee:id,first_name,last_name')->get()
+        $employees = $journal ? SalaryAdvance::whereIn('journal_entry_id', $entryIds)->with('employee:id,first_name,last_name')->get()
             ->map(fn ($a) => ['employee_id' => $a->employee_id, 'employee_name' => trim(($a->employee?->first_name ?? '').' '.($a->employee?->last_name ?? '')), 'amount' => (float) $a->amount, 'recovered' => (float) $a->amount_recovered])->values()->all() : [];
-        $partners = $journal ? PartnerTransaction::where('journal_entry_id', $journal->id)->with('partner:id,name')->get()
+        $partners = $journal ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
             ->map(fn ($p) => ['partner_id' => $p->partner_id, 'partner_name' => $p->partner?->name, 'amount' => (float) $p->amount])->values()->all() : [];
 
         $creditCustomers = Invoice::where('company_id', $companyId)->where('internal_notes', SaveAction::MARK)->where('status', '!=', 'void')

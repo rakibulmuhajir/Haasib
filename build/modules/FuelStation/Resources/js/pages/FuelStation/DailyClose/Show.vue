@@ -66,6 +66,11 @@ interface TransactionData {
     payroll_payouts?: number
     expenses?: number
     partner_deposits?: number
+    amanat_deposits?: number
+    other_deposits?: number
+    cash_bill_payments?: number
+    amanat_disbursements?: number
+    payment_receipt_postings?: Array<{ channel_code: string; channel_label: string; channel_type: string; account_id: string | null; amount: number }>
   }
 }
 
@@ -122,6 +127,25 @@ const statusConfig = computed(() => {
 const hasAmendmentChain = computed(() => props.amendmentChain.length > 1)
 
 const metadata = computed(() => props.transaction.metadata || {})
+
+// Sales that were paid by card/transfer/fuel card went straight to a bank or
+// clearing account, so they never reached the drawer — they belong under Money Out.
+const channelOutRows = computed(() => {
+  const postings = metadata.value.payment_receipt_postings ?? []
+  return postings.filter(p => Number(p.amount) > 0)
+})
+const totalChannelOut = computed(() => channelOutRows.value.reduce((s, p) => s + Number(p.amount), 0))
+
+const totalMoneyIn = computed(() => {
+  const m = metadata.value
+  return Number(m.opening_cash || 0) + Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
+})
+
+const totalMoneyOut = computed(() => {
+  const m = metadata.value
+  return totalChannelOut.value + Number(m.bank_deposits || 0) + Number(m.partner_withdrawals || 0) + Number(m.employee_advances || 0)
+    + Number(m.payroll_payouts || 0) + Number(m.cash_bill_payments || 0) + Number(m.amanat_disbursements || 0) + Number(m.expenses || 0)
+})
 
 const fuelSalesEntries = computed(() => {
   const sales = metadata.value.fuel_sales || {}
@@ -358,12 +382,32 @@ const unlockTransaction = () => {
               <span>Partner Deposits</span>
               <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.partner_deposits" :currency="currency" :fraction-digits="0" /></span>
             </div>
+            <div v-if="metadata.amanat_deposits" class="flex justify-between items-center py-2">
+              <span>Amanat Deposits</span>
+              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.amanat_deposits" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div v-if="metadata.other_deposits" class="flex justify-between items-center py-2">
+              <span>Other Cash In</span>
+              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.other_deposits" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div class="flex justify-between items-center py-2">
+              <span>Total Sales</span>
+              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.total_revenue" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div class="flex justify-between items-center py-2 font-semibold">
+              <span>Total Money In</span>
+              <span><MoneyText :amount="totalMoneyIn" :currency="currency" :fraction-digits="0" /></span>
+            </div>
           </div>
 
           <Separator />
 
           <!-- Cash Out -->
           <div class="space-y-2">
+            <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">
+              <span>{{ row.channel_label }} → bank / card account</span>
+              <span class="font-semibold text-status-critical">-<MoneyText :amount="row.amount" :currency="currency" :fraction-digits="0" /></span>
+            </div>
             <div v-if="metadata.bank_deposits" class="flex justify-between items-center py-2">
               <span>Bank Deposits</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.bank_deposits" :currency="currency" :fraction-digits="0" /></span>
@@ -380,9 +424,21 @@ const unlockTransaction = () => {
               <span>Approved Salaries</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.payroll_payouts" :currency="currency" :fraction-digits="0" /></span>
             </div>
+            <div v-if="metadata.cash_bill_payments" class="flex justify-between items-center py-2">
+              <span>Supplier Bill Payments (station cash)</span>
+              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.cash_bill_payments" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div v-if="metadata.amanat_disbursements" class="flex justify-between items-center py-2">
+              <span>Amanat Disbursements</span>
+              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.amanat_disbursements" :currency="currency" :fraction-digits="0" /></span>
+            </div>
             <div v-if="metadata.expenses" class="flex justify-between items-center py-2">
               <span>Expenses</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.expenses" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div class="flex justify-between items-center py-2 font-semibold">
+              <span>Total Money Out</span>
+              <span class="text-status-critical">-<MoneyText :amount="totalMoneyOut" :currency="currency" :fraction-digits="0" /></span>
             </div>
           </div>
 

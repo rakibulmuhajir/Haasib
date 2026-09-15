@@ -5,10 +5,14 @@ namespace App\Modules\Accounting\Actions\OpeningBalance;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
+use App\Models\Partner;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
+use App\Modules\Payroll\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -35,19 +39,19 @@ class SaveAction implements PaletteAction
             'banks.*.account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
             'banks.*.amount' => 'required|numeric|min:0',
             'credit_customers' => 'nullable|array',
-            'credit_customers.*.customer_id' => 'required|uuid|exists:acct.customers,id',
+            'credit_customers.*.customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
             'credit_customers.*.amount' => 'required|numeric|gt:0',
             'employees' => 'nullable|array',
-            'employees.*.employee_id' => 'required|uuid|exists:payroll.employees,id',
+            'employees.*.employee_id' => ['required', 'uuid', Rule::exists(Employee::class, 'id')],
             'employees.*.amount' => 'required|numeric|gt:0',
             'amanat' => 'nullable|array',
-            'amanat.*.customer_id' => 'required|uuid|exists:acct.customers,id',
+            'amanat.*.customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
             'amanat.*.amount' => 'required|numeric|gt:0',
             'suppliers' => 'nullable|array',
-            'suppliers.*.vendor_id' => 'required|uuid|exists:acct.vendors,id',
+            'suppliers.*.vendor_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')],
             'suppliers.*.amount' => 'required|numeric|gt:0',
             'partners' => 'nullable|array',
-            'partners.*.partner_id' => 'required|uuid|exists:auth.partners,id',
+            'partners.*.partner_id' => ['required', 'uuid', Rule::exists(Partner::class, 'id')],
             'partners.*.amount' => 'required|numeric|gt:0',
         ];
     }
@@ -69,8 +73,7 @@ class SaveAction implements PaletteAction
             $accounts = $this->accounts->resolve($company->id);
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
 
-            $lines = [];   // journal entries: ['account_id','type','amount','description']
-            $debits = 0.0; // running totals to compute the 3080 line
+            $lines = []; // journal entries: ['account_id','type','amount','description']
 
             $this->addCashAndBankLines($company->id, $params, $accounts, $lines);
 

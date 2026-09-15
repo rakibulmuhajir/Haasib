@@ -20,6 +20,7 @@ use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
+use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -79,6 +80,38 @@ function openingBalanceFixture(): array
     ];
 
     return compact('company', 'user', 'accounts');
+}
+
+function openingBalanceHttpFixture(): array
+{
+    $f = openingBalanceFixture();
+    $company = $f['company'];
+    $user = $f['user'];
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+
+    app(CompanyRbacBootstrapper::class)->bootstrap($company);
+
+    DB::table('auth.company_user')->insert([
+        'company_id' => $company->id,
+        'user_id' => $user->id,
+        'role' => 'owner',
+        'joined_at' => now(),
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    app(CompanyContextService::class)->withContext(
+        $company,
+        fn () => app(CompanyContextService::class)->assignRole($user, 'owner'),
+    );
+
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    return $f;
 }
 
 function dispatchOpeningBalance(array $fixture, array $params): array
@@ -510,4 +543,46 @@ test('locking prevents further saves', function () {
     expect($f['company']->fresh()->settings['opening_balances']['locked_at'])->not->toBeNull();
     expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 20]]))
         ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+test('the opening balances page requires the view permission and store requires manage', function () {
+    $f = openingBalanceHttpFixture();
+    $slug = $f['company']->slug;
+
+    $this->actingAs($f['user'])
+        ->get("/{$slug}/accounting/opening-balances")
+        ->assertOk();
+
+    // The stranger must belong to some company (any company) so that
+    // CheckFirstTimeUser's "no memberships anywhere" redirect to /welcome
+    // does not preempt the permission check this test targets. They are not
+    // a member of $f['company'], which is what should trigger the 403.
+    $stranger = User::factory()->create();
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$stranger->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    $strangerCompany = Company::create([
+        'name' => 'Stranger Co',
+        'slug' => 'stranger-co-'.str()->lower(str()->random(8)),
+        'base_currency' => 'PKR',
+    ]);
+    DB::table('auth.company_user')->insert([
+        'company_id' => $strangerCompany->id,
+        'user_id' => $stranger->id,
+        'role' => 'owner',
+        'joined_at' => now(),
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+
+    $this->actingAs($stranger)
+        ->post("/{$slug}/accounting/opening-balances", ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 5]])
+        ->assertForbidden();
+
+    $this->actingAs($f['user'])
+        ->post("/{$slug}/accounting/opening-balances", ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 5]])
+        ->assertRedirect("/{$slug}/accounting/opening-balances");
+
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(5.0);
 });

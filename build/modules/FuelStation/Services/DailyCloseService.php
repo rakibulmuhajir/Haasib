@@ -34,7 +34,48 @@ class DailyCloseService
 
     private function getOpeningBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
     {
-        return app(TankCloseBalance::class)->opening($companyId, $tankId, $itemId, $date);
+        $previousReading = TankReading::where('company_id', $companyId)
+            ->where('tank_id', $tankId)
+            ->where('reading_date', '<', $date)
+            ->orderByDesc('reading_date')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($previousReading) {
+            return [
+                'liters' => (float) $previousReading->dip_measurement_liters,
+                'date' => $previousReading->reading_date?->toDateString(),
+                'created_at' => $previousReading->created_at,
+            ];
+        }
+
+        $stockMovement = StockMovement::where('company_id', $companyId)
+            ->where('warehouse_id', $tankId)
+            ->where('item_id', $itemId)
+            ->whereDate('movement_date', '<=', $date)
+            ->orderByDesc('movement_date')
+            ->orderByDesc('created_at')
+            ->first(['movement_date', 'created_at']);
+
+        if (! $stockMovement) {
+            return [
+                'liters' => 0.0,
+                'date' => null,
+                'created_at' => null,
+            ];
+        }
+
+        $movementDate = $stockMovement->movement_date?->toDateString();
+
+        return [
+            'liters' => (float) StockMovement::where('company_id', $companyId)
+                ->where('warehouse_id', $tankId)
+                ->where('item_id', $itemId)
+                ->whereDate('movement_date', '<=', $movementDate)
+                ->sum('quantity'),
+            'date' => $movementDate,
+            'created_at' => $stockMovement->created_at,
+        ];
     }
 
     /**
@@ -257,7 +298,7 @@ class DailyCloseService
                     }
 
                     // Calculate system expected liters:
-                    // Morning inventory precedes today’s receipts and sales.
+                    // Opening (previous closing dip, or stock baseline for first close) + Receipts - Sales = Expected
                     $openingBaseline = $this->getOpeningBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
                     $openingLiters = $openingBaseline['liters'];
 
@@ -274,15 +315,23 @@ class DailyCloseService
                         }
                     }
 
-                    $balanceService = app(TankCloseBalance::class);
-                    $todaysReceipts = $balanceService->movementsDuringDay($companyId, $tankData['tank_id'], $itemId, $date);
-                    // Legacy submissions and amendments without timing remain closing readings.
-                    $readingType = $tankData['reading_type'] ?? TankReading::TYPE_CLOSING;
+                    $todaysReceipts = 0.0;
+                    if ($openingBaseline['date']) {
+                        $todaysReceipts = (float) StockMovement::where('company_id', $companyId)
+                            ->where('warehouse_id', $tankData['tank_id'])
+                            ->where('item_id', $itemId)
+                            ->whereDate('movement_date', '>', $openingBaseline['date'])
+                            ->whereDate('movement_date', '<=', $date)
+                            ->where(function ($query) {
+                                $query->whereNull('reference_type')
+                                    ->orWhere('reference_type', '!=', 'fuel.daily_close');
+                            })
+                            ->sum('quantity');
+                    }
+
+                    $systemCalculatedLiters = round($openingLiters + $todaysReceipts - $todaysSales, 2);
                     $dipMeasurement = (float) $tankData['liters'];
-                    $balance = $balanceService->calculate($readingType, $dipMeasurement, $openingLiters,
-                        $openingBaseline['date'] !== null, $todaysReceipts, $todaysSales);
-                    $systemCalculatedLiters = $balance['expected'];
-                    $varianceLiters = $balance['variance'];
+                    $varianceLiters = round($dipMeasurement - $systemCalculatedLiters, 2);
 
                     // Determine variance type
                     $varianceType = 'none';
@@ -338,8 +387,8 @@ class DailyCloseService
                     $ledgerLiters = (float) (StockLevel::where('company_id', $companyId)
                         ->where('warehouse_id', $tankData['tank_id'])
                         ->where('item_id', $itemId)
-                        ->value('quantity') ?? 0);
-                    $ledgerDeltaToDip = round($balance['closing'] - $ledgerLiters, 3);
+                        ->value('quantity') ?? $systemCalculatedLiters);
+                    $ledgerDeltaToDip = round($dipMeasurement - $ledgerLiters, 3);
 
                     if (abs($ledgerDeltaToDip) >= 0.001) {
                         $totalCost = round(abs($ledgerDeltaToDip) * $avgCost, 2);
@@ -350,22 +399,21 @@ class DailyCloseService
                             'unit_cost' => $avgCost,
                             'total_cost' => $ledgerDeltaToDip > 0 ? $totalCost : -$totalCost,
                             'movement_type' => $ledgerDeltaToDip > 0 ? 'adjustment_in' : 'adjustment_out',
-                            'reason' => 'Daily close stock reconciliation',
-                            'notes' => "Daily close {$date}: stock ledger reconciled using {$readingType} dip and daily trading",
+                            'reason' => 'Daily close physical dip',
+                            'notes' => "Daily close {$date}: stock ledger reconciled to physical tank dip",
                         ];
                     }
 
-                    // Keep the onboarding opening dip intact; this is the close’s own measurement.
+                    // Save tank reading with calculated values
                     TankReading::updateOrCreate(
                         [
                             'company_id' => $companyId,
                             'tank_id' => $tankData['tank_id'],
                             'reading_date' => $date,
-                            'reading_type' => $readingType,
-                            'notes' => 'Daily close dip',
                         ],
                         [
                             'item_id' => $itemId,
+                            'reading_type' => 'closing',
                             'stick_reading' => $tankData['stick_reading'] ?? null,
                             'dip_measurement_liters' => $dipMeasurement,
                             'system_calculated_liters' => $systemCalculatedLiters,

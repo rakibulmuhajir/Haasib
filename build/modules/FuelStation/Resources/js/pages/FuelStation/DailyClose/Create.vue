@@ -278,7 +278,6 @@ const props = defineProps<{
       amount: number
     }>
     tank_readings?: Array<{
-      reading_type?: 'opening' | 'closing'
       tank_id: string
       stick_reading: number
       liters: number
@@ -593,7 +592,6 @@ const form = useForm({
     const prevReading = props.previousTankReadings?.find(r => r.tank_id === tank.id)
     return {
       tank_id: tank.id,
-      reading_type: 'opening' as 'opening' | 'closing',
       item_id: tank.linked_item_id,
       tank_name: tank.name,
       tank_code: tank.code,
@@ -708,7 +706,6 @@ const resetFormToInitial = () => {
     const prevReading = props.previousTankReadings?.find(r => r.tank_id === tank.id)
     return {
       tank_id: tank.id,
-      reading_type: 'opening' as 'opening' | 'closing',
       item_id: tank.linked_item_id,
       tank_name: tank.name,
       tank_code: tank.code,
@@ -852,7 +849,6 @@ const hydrateFormForAmendment = () => {
       if (origTank) {
         form.tank_readings[idx].stick_reading = origTank.stick_reading ?? 0
         form.tank_readings[idx].liters = origTank.liters ?? 0
-        form.tank_readings[idx].reading_type = origTank.reading_type ?? 'closing'
       }
     })
   }
@@ -1046,9 +1042,9 @@ const stockMovementLabel = (liters: number) => {
   return liters > 0 ? 'Stock added since opening' : 'Stock removed since opening'
 }
 
-const expectedTankClosingLiters = (tank: { reading_type?: string; liters?: number; previous_liters: number; stock_movements_since_baseline_liters?: number | null; tank_id: string }) => {
+const expectedTankClosingLiters = (tank: { previous_liters: number; stock_movements_since_baseline_liters?: number | null; tank_id: string }) => {
   const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0
-  return Number(tank.reading_type === 'opening' ? tank.liters || 0 : tank.previous_liters || 0)
+  return Number(tank.previous_liters || 0)
     + Number(tank.stock_movements_since_baseline_liters || 0)
     - soldFromTank
 }
@@ -1060,10 +1056,7 @@ const tankVariances = computed(() => {
   return form.tank_readings.map(tank => {
     const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0
     const expectedClosing = expectedTankClosingLiters(tank)
-    const expectedAtDip = tank.reading_type === 'opening'
-      ? (tank.previous_as_of ? tank.previous_liters : tank.liters)
-      : expectedClosing
-    const variance = expectedAtDip - tank.liters // Positive = loss, negative = gain
+    const variance = expectedClosing - tank.liters // Positive = loss, Negative = gain
     const usageFromDip = tank.previous_liters
       + Number(tank.stock_movements_since_baseline_liters || 0)
       - tank.liters
@@ -1351,7 +1344,7 @@ const fillDummyDailyCloseData = () => {
 
   form.tank_readings.forEach((tank, index) => {
     const sold = litersSoldByTank.value[tank.tank_id] || 0
-    const expected = tank.reading_type === 'opening' ? tank.previous_liters : expectedTankClosingLiters(tank)
+    const expected = expectedTankClosingLiters(tank)
     const variance = ((seed + index) % 5) - 2
     tank.liters = Math.max(0, Math.round(expected + variance))
     tank.stick_reading = Math.max(0, Number(tank.previous_stick || 0) + ((seed + index) % 4))
@@ -2174,7 +2167,7 @@ const completedWorkflowSteps = computed(() => {
         <Card>
           <CardHeader>
             <CardTitle>Tank Dip</CardTitle>
-            <CardDescription>Choose when the dip was taken. Morning dips precede today’s receipts and sales.</CardDescription>
+            <CardDescription>Enter physical tank measurements and review stock variance.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
             <!-- Empty State: No tanks configured -->
@@ -2216,20 +2209,6 @@ const completedWorkflowSteps = computed(() => {
               </div>
 
               <div class="p-4 space-y-4">
-                <div class="max-w-sm space-y-2">
-                  <Label :for="`dip-timing-${index}`">Dip taken</Label>
-                  <Select v-model="tank.reading_type">
-                    <SelectTrigger :id="`dip-timing-${index}`"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opening">Morning — before today’s trading</SelectItem>
-                      <SelectItem value="closing">Evening — after today’s trading</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p v-if="tank.reading_type === 'opening'" class="text-xs text-muted-foreground">
-                    Today’s sales are deducted after this dip. On the first day, this establishes opening stock;
-                    a later dip is needed to measure trading gain or loss.
-                  </p>
-                </div>
                 <!-- Readings Row -->
                 <div class="grid grid-cols-12 gap-4">
                   <!-- Opening baseline -->
@@ -2252,7 +2231,7 @@ const completedWorkflowSteps = computed(() => {
                         Expected closing stock: {{ formatLiters(expectedTankClosingLiters(tank)) }} L
                       </div>
                       <div class="text-muted-foreground">
-                        {{ formatLiters(tank.reading_type === 'opening' ? tank.liters : tank.previous_liters) }} L opening
+                        {{ formatLiters(tank.previous_liters) }} L opening
                         <span v-if="Math.abs(tank.stock_movements_since_baseline_liters || 0) >= 0.001">
                           {{ (tank.stock_movements_since_baseline_liters || 0) > 0 ? '+' : '-' }}
                           {{ formatLiters(Math.abs(tank.stock_movements_since_baseline_liters || 0)) }} L stock
@@ -2277,7 +2256,7 @@ const completedWorkflowSteps = computed(() => {
                     <InputError :message="tankReadingError(index, 'stick_reading')" />
                   </div>
                   <div class="col-span-2">
-                    <Label class="text-xs">{{ tank.reading_type === 'opening' ? 'Morning Dip (L)' : 'Closing Dip (L)' }}</Label>
+                    <Label class="text-xs">Today's Closing (L)</Label>
                     <Input v-model.number="tank.liters" type="number" step="1" class="mt-1" />
                     <InputError :message="tankReadingError(index, 'liters')" />
                   </div>
@@ -2286,7 +2265,7 @@ const completedWorkflowSteps = computed(() => {
                   <div class="col-span-2">
                     <Label class="text-xs text-muted-foreground">Usage (Dip)</Label>
                     <div class="text-base font-medium mt-1">
-                      {{ tank.reading_type === 'closing' && tank.previous_as_of ? formatLiters(tankVariances[index]?.usage_from_dip || 0) : '—' }} L
+                      {{ tank.previous_liters > 0 && tank.liters > 0 ? formatLiters(tank.previous_liters - tank.liters) : '—' }} L
                     </div>
                   </div>
                   <div class="col-span-2">
@@ -2299,7 +2278,7 @@ const completedWorkflowSteps = computed(() => {
                   <!-- Variance -->
                   <div class="col-span-1">
                     <Label class="text-xs text-muted-foreground">Variance</Label>
-                    <div v-if="tank.previous_as_of" class="mt-1">
+                    <div v-if="tank.previous_liters > 0 && tank.liters > 0" class="mt-1">
                       <span
                         :class="[
                           'text-base font-semibold',

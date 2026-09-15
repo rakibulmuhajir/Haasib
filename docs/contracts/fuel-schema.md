@@ -285,6 +285,7 @@ This keeps the core accounting module industry-agnostic.
   - `variance_reason`: nullable|in:evaporation,leak_suspected,meter_fault,dip_error,temperature,theft_suspected,unknown.
   - `status`: required|in:draft,confirmed,posted.
 - Business rules:
+  - Timing: the station dips each tank once every morning. The dip taken on the morning after day D is stored on day D's daily close with `reading_date = D`, `reading_type = 'closing'`. It is both the closing stock of D and the opening baseline of D+1 (`DailyCloseService::openingBaselineForTank` picks the latest posted reading dated before the close). Expected stock for D = baseline + stock movements dated within (baseline, D] excluding `fuel.daily_close` adjustments − sales on D. A close is refused for a tank with neither a previous dip nor any stock movement (`has_baseline = false`).
   - item_id derived from tank→linked_item_id at creation.
   - variance_liters = dip_measurement_liters - system_calculated_liters.
   - variance_type = 'loss' if negative, 'gain' if positive, 'none' if zero.

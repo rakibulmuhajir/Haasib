@@ -387,7 +387,9 @@ class DailyCloseController extends Controller
         $company = app(CurrentCompany::class)->get();
         $companyId = $company->id;
 
-        $date = $request->get('date', now()->toDateString());
+        // The close is a morning ritual: today's dip closes yesterday. Before noon, default to yesterday.
+        $defaultDate = now()->hour < 12 ? now()->subDay()->toDateString() : now()->toDateString();
+        $date = $request->get('date', $defaultDate);
 
         // Get fuel items with current rates
         $priceColumns = DB::table('information_schema.columns')

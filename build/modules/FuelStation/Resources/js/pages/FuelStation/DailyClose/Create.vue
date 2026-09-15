@@ -1521,6 +1521,11 @@ const baselineLabel = (tank: { previous_source_label?: string | null; previous_a
   if (!tank.previous_source_label) return ''
 
   const date = formatBaselineDate(tank.previous_as_of)
+
+  if (tank.previous_source_label === 'Tank dip') {
+    return date ? `Yesterday morning's dip · ${date}` : `Yesterday morning's dip`
+  }
+
   return date ? `${tank.previous_source_label} · ${date}` : tank.previous_source_label
 }
 
@@ -1837,6 +1842,7 @@ const completedWorkflowSteps = computed(() => {
             <div class="space-y-1.5">
               <Label>Date</Label>
               <Input v-model="form.date" type="date" />
+              <p class="text-xs text-muted-foreground">Close each day the next morning, after the tank dip.</p>
               <InputError :message="form.errors.date" />
             </div>
             <div class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -2210,7 +2216,7 @@ const completedWorkflowSteps = computed(() => {
                 <div class="grid grid-cols-12 gap-4">
                   <!-- Opening baseline -->
                   <div class="col-span-3">
-                    <Label class="text-xs text-muted-foreground">Opening baseline for {{ formatBaselineDate(form.date) }} (L)</Label>
+                    <Label class="text-xs text-muted-foreground">Opening stock on {{ formatBaselineDate(form.date) }} (L)</Label>
                     <div class="text-lg font-semibold mt-1">
                       {{ tank.previous_liters > 0 ? formatLiters(tank.previous_liters) : '—' }}
                     </div>
@@ -2218,14 +2224,14 @@ const completedWorkflowSteps = computed(() => {
                       {{ baselineLabel(tank) }}
                     </div>
                     <div v-else class="text-xs text-status-attention">
-                      No stock entry before this close date.
+                      No opening stock yet — record opening stock in Fuel setup, or post the previous day's close.
                     </div>
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
                       Stick: {{ tank.previous_stick }} cm
                     </div>
                     <div class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs">
                       <div class="font-medium text-foreground">
-                        Expected closing stock: {{ formatLiters(expectedTankClosingLiters(tank)) }} L
+                        Expected this morning: {{ formatLiters(expectedTankClosingLiters(tank)) }} L
                       </div>
                       <div class="text-muted-foreground">
                         {{ formatLiters(tank.previous_liters) }} L opening
@@ -2253,14 +2259,15 @@ const completedWorkflowSteps = computed(() => {
                     <InputError :message="tankReadingError(index, 'stick_reading')" />
                   </div>
                   <div class="col-span-2">
-                    <Label class="text-xs">Today's Closing (L)</Label>
+                    <Label class="text-xs">Dip this morning (L)</Label>
                     <Input v-model.number="tank.liters" type="number" step="1" class="mt-1" />
+                    <p class="text-xs text-muted-foreground mt-1">Taken the morning after {{ formatBaselineDate(form.date) }}. It closes that day and opens the next.</p>
                     <InputError :message="tankReadingError(index, 'liters')" />
                   </div>
 
                   <!-- Calculated Values -->
                   <div class="col-span-2">
-                    <Label class="text-xs text-muted-foreground">Usage (Dip)</Label>
+                    <Label class="text-xs text-muted-foreground">Used since yesterday's dip</Label>
                     <div class="text-base font-medium mt-1">
                       {{ tank.previous_liters > 0 && tank.liters > 0 ? formatLiters(tank.previous_liters - tank.liters) : '—' }} L
                     </div>

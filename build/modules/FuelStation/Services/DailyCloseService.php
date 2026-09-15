@@ -32,7 +32,7 @@ class DailyCloseService
         private readonly PayrollPostingService $payrollPostingService,
     ) {}
 
-    private function getOpeningBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
+    public function openingBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
     {
         $previousReading = TankReading::where('company_id', $companyId)
             ->where('tank_id', $tankId)
@@ -46,6 +46,7 @@ class DailyCloseService
                 'liters' => (float) $previousReading->dip_measurement_liters,
                 'date' => $previousReading->reading_date?->toDateString(),
                 'created_at' => $previousReading->created_at,
+                'has_baseline' => true,
             ];
         }
 
@@ -62,6 +63,7 @@ class DailyCloseService
                 'liters' => 0.0,
                 'date' => null,
                 'created_at' => null,
+                'has_baseline' => false,
             ];
         }
 
@@ -75,6 +77,7 @@ class DailyCloseService
                 ->sum('quantity'),
             'date' => $movementDate,
             'created_at' => $stockMovement->created_at,
+            'has_baseline' => true,
         ];
     }
 
@@ -299,7 +302,13 @@ class DailyCloseService
 
                     // Calculate system expected liters:
                     // Opening (previous closing dip, or stock baseline for first close) + Receipts - Sales = Expected
-                    $openingBaseline = $this->getOpeningBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+                    $openingBaseline = $this->openingBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+
+                    if (! $openingBaseline['has_baseline']) {
+                        $tankName = $tank?->name ?? 'this tank';
+                        throw new \RuntimeException("No opening stock for {$tankName}. Record opening stock in Fuel setup (or post the previous day's close) before closing {$date}.");
+                    }
+
                     $openingLiters = $openingBaseline['liters'];
 
                     // Get today's sales for this tank's item from nozzle readings and open/bulk product sales.

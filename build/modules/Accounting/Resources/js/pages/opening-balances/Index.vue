@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
@@ -53,16 +53,53 @@ const editable = computed(() => props.canManage && !locked.value)
 const baseCurrency = useBaseCurrency()
 const currency = computed(() => baseCurrency.value ?? 'PKR')
 
-const form = useForm({
-  as_of_date: props.opening.as_of_date ?? '',
-  cash: { amount: props.opening.rows.cash.amount ?? 0 },
-  banks: props.opening.rows.banks.map(r => ({ account_id: r.account_id, amount: r.amount })),
-  credit_customers: props.opening.rows.credit_customers.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
-  employees: props.opening.rows.employees.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
-  amanat: props.opening.rows.amanat.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
-  suppliers: props.opening.rows.suppliers.map(r => ({ vendor_id: r.vendor_id, amount: r.amount })),
-  partners: props.opening.rows.partners.map(r => ({ partner_id: r.partner_id, amount: r.amount })),
-})
+function fieldsFromOpening(o: Opening) {
+  return {
+    as_of_date: o.as_of_date ?? '',
+    cash: { amount: o.rows.cash.amount ?? 0 },
+    banks: o.rows.banks.map(r => ({ account_id: r.account_id, amount: r.amount })),
+    credit_customers: o.rows.credit_customers.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
+    employees: o.rows.employees.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
+    amanat: o.rows.amanat.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
+    suppliers: o.rows.suppliers.map(r => ({ vendor_id: r.vendor_id, amount: r.amount })),
+    partners: o.rows.partners.map(r => ({ partner_id: r.partner_id, amount: r.amount })),
+  }
+}
+
+const form = useForm(fieldsFromOpening(props.opening))
+
+/**
+ * Re-seeds the form from fresh `opening` props — needed because `SaveAction`
+ * drops zero-amount bank rows and rounds amounts, and `LockAction`/`SaveAction`
+ * redirects reload `opening` from what the server actually persisted. Without
+ * this the page re-renders with new props but `useForm`'s local state keeps
+ * the stale, pre-save rows.
+ */
+function seedFromOpening(o: Opening) {
+  const fields = fieldsFromOpening(o)
+  form.as_of_date = fields.as_of_date
+  form.cash = fields.cash
+  form.banks = fields.banks
+  form.credit_customers = fields.credit_customers
+  form.employees = fields.employees
+  form.amanat = fields.amanat
+  form.suppliers = fields.suppliers
+  form.partners = fields.partners
+}
+
+/** Only the parts of `opening` that feed the form — options (dropdown lists)
+ * can change (e.g. a customer created elsewhere) without the form needing to
+ * reseed, so they're deliberately excluded from this comparison. */
+const openingFormSnapshot = (o: Opening) => JSON.stringify({ as_of_date: o.as_of_date, locked_at: o.locked_at, rows: o.rows })
+
+watch(
+  () => props.opening,
+  (next, prev) => {
+    if (prev && openingFormSnapshot(next) === openingFormSnapshot(prev)) return
+    seedFromOpening(next)
+  },
+  { deep: true },
+)
 
 const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + Number(r.amount || 0), 0)
 const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees))
@@ -154,18 +191,18 @@ function lock() {
             <CardContent class="space-y-3">
               <div class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label>Cash on hand</Label>
+                  <Label for="cash-amount">Cash on hand</Label>
                   <p class="text-sm text-muted-foreground">Account 1050</p>
                 </div>
-                <Input v-model.number="form.cash.amount" type="number" min="0" step="1" :disabled="!editable" />
+                <Input id="cash-amount" v-model.number="form.cash.amount" type="number" min="0" step="1" :disabled="!editable" />
                 <span />
               </div>
               <InputError :message="err('cash.amount')" />
               <div v-for="(row, i) in form.banks" :key="'bank-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Bank account</Label>
+                  <Label :for="`banks-${i}-account_id`" :class="i === 0 ? undefined : 'sr-only'">Bank account</Label>
                   <Select v-model="row.account_id" :disabled="!editable">
-                    <SelectTrigger><SelectValue placeholder="Choose bank account" /></SelectTrigger>
+                    <SelectTrigger :id="`banks-${i}-account_id`"><SelectValue placeholder="Choose bank account" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem v-for="a in opening.options.bank_accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</SelectItem>
                     </SelectContent>
@@ -173,8 +210,8 @@ function lock() {
                   <InputError :message="err(`banks.${i}.account_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Balance</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`banks-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Balance</Label>
+                  <Input :id="`banks-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`banks.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.banks.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
@@ -205,13 +242,15 @@ function lock() {
               <InputError :message="err('credit_customers')" />
               <div v-for="(row, i) in form.credit_customers" :key="'cc-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Customer</Label>
-                  <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
+                  <Label :id="`credit_customers-${i}-customer_id-label`" :class="i === 0 ? undefined : 'sr-only'">Customer</Label>
+                  <div :aria-labelledby="`credit_customers-${i}-customer_id-label`">
+                    <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
+                  </div>
                   <InputError :message="err(`credit_customers.${i}.customer_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Owes</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`credit_customers-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Owes</Label>
+                  <Input :id="`credit_customers-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`credit_customers.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.credit_customers.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
@@ -242,16 +281,16 @@ function lock() {
               <InputError :message="err('employees')" />
               <div v-for="(row, i) in form.employees" :key="'emp-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Employee</Label>
+                  <Label :for="`employees-${i}-employee_id`" :class="i === 0 ? undefined : 'sr-only'">Employee</Label>
                   <Select v-model="row.employee_id" :disabled="!editable">
-                    <SelectTrigger><SelectValue placeholder="Choose employee" /></SelectTrigger>
+                    <SelectTrigger :id="`employees-${i}-employee_id`"><SelectValue placeholder="Choose employee" /></SelectTrigger>
                     <SelectContent><SelectItem v-for="e in opening.options.employees" :key="e.id" :value="e.id">{{ e.name }}</SelectItem></SelectContent>
                   </Select>
                   <InputError :message="err(`employees.${i}.employee_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Outstanding</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`employees-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Outstanding</Label>
+                  <Input :id="`employees-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`employees.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.employees.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
@@ -282,13 +321,15 @@ function lock() {
               <InputError :message="err('amanat')" />
               <div v-for="(row, i) in form.amanat" :key="'am-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Depositor</Label>
-                  <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
+                  <Label :id="`amanat-${i}-customer_id-label`" :class="i === 0 ? undefined : 'sr-only'">Depositor</Label>
+                  <div :aria-labelledby="`amanat-${i}-customer_id-label`">
+                    <EntitySearch v-model="row.customer_id" entity-type="customer" :disabled="!editable" />
+                  </div>
                   <InputError :message="err(`amanat.${i}.customer_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Held</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`amanat-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Held</Label>
+                  <Input :id="`amanat-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`amanat.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.amanat.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
@@ -319,13 +360,15 @@ function lock() {
               <InputError :message="err('suppliers')" />
               <div v-for="(row, i) in form.suppliers" :key="'sup-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Supplier</Label>
-                  <EntitySearch v-model="row.vendor_id" entity-type="vendor" :disabled="!editable" />
+                  <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Supplier</Label>
+                  <div :aria-labelledby="`suppliers-${i}-vendor_id-label`">
+                    <EntitySearch v-model="row.vendor_id" entity-type="vendor" :disabled="!editable" />
+                  </div>
                   <InputError :message="err(`suppliers.${i}.vendor_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Owed</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`suppliers-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Owed</Label>
+                  <Input :id="`suppliers-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`suppliers.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.suppliers.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
@@ -356,16 +399,16 @@ function lock() {
               <InputError :message="err('partners')" />
               <div v-for="(row, i) in form.partners" :key="'pt-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Partner</Label>
+                  <Label :for="`partners-${i}-partner_id`" :class="i === 0 ? undefined : 'sr-only'">Partner</Label>
                   <Select v-model="row.partner_id" :disabled="!editable">
-                    <SelectTrigger><SelectValue placeholder="Choose partner" /></SelectTrigger>
+                    <SelectTrigger :id="`partners-${i}-partner_id`"><SelectValue placeholder="Choose partner" /></SelectTrigger>
                     <SelectContent><SelectItem v-for="p in opening.options.partners" :key="p.id" :value="p.id">{{ p.name }}</SelectItem></SelectContent>
                   </Select>
                   <InputError :message="err(`partners.${i}.partner_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label v-if="i === 0">Capital</Label>
-                  <Input v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <Label :for="`partners-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Capital</Label>
+                  <Input :id="`partners-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
                   <InputError :message="err(`partners.${i}.amount`)" />
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.partners.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>

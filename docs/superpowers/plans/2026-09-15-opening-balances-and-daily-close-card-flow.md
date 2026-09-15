@@ -2210,3 +2210,165 @@ Expected: PASS (the removed `fuel.onboarding.opening-cash` route must not be ref
 git status --short
 # commit any fixups with a message describing them, ending with the Co-Authored-By line
 ```
+
+---
+
+## Part 3 — Morning dip closes yesterday
+
+### Task 12: Dip timing — labels, default date, first-close baseline guard
+
+**Context (the domain rule):** the station dips each tank **once, every morning**. That dip is the *closing* stock of the previous day and the *opening* stock of the new day. Daily close for day D is therefore entered on the morning of D+1 with that morning's dip. The service already computes `expected = previous dip + receipts − sales` and compares it with the dip entered in the close (`DailyCloseService.php:300–335`), and the next day picks the same dip up as its opening (`getOpeningBaselineForTank`, lines 35–79). **Do not change the formula.** What is wrong: the screen calls the input "Today's Closing (L)", the close date defaults to today, and a tank with no baseline at all is silently treated as 0 L.
+
+**Files:**
+- Modify: `build/modules/FuelStation/Services/DailyCloseService.php` (`getOpeningBaselineForTank` → public `openingBaselineForTank`, add `has_baseline` flag; guard at the call site ~line 302)
+- Modify: `build/modules/FuelStation/Http/Controllers/DailyCloseController.php:390` (default date)
+- Modify: `build/modules/FuelStation/Resources/js/pages/FuelStation/DailyClose/Create.vue` (tank card ~2214–2270, `baselineLabel` ~1523, page intro near the date picker)
+- Modify: `docs/contracts/fuel-schema.md` (tank readings business rules, ~line 285)
+- Create: `build/tests/Feature/FuelStation/DailyCloseTankBaselineTest.php`
+
+**Interfaces:**
+- Produces: `DailyCloseService::openingBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array{liters: float, date: ?string, created_at: mixed, has_baseline: bool}`.
+
+- [ ] **Step 1: Failing tests**
+
+`build/tests/Feature/FuelStation/DailyCloseTankBaselineTest.php`:
+
+```php
+<?php
+
+use App\Models\Company;
+use App\Models\User;
+use App\Modules\FuelStation\Models\TankReading;
+use App\Modules\FuelStation\Services\DailyCloseService;
+use App\Modules\Inventory\Models\StockMovement;
+use Illuminate\Support\Str;
+
+function tankBaselineFixture(): array
+{
+    $user = User::factory()->create();
+    $company = Company::create([
+        'name' => 'Tank Baseline Test',
+        'slug' => 'tank-baseline-'.str()->lower(str()->random(8)),
+        'owner_id' => $user->id,
+        'base_currency' => 'PKR',
+    ]);
+    return ['company' => $company, 'user' => $user, 'tank_id' => (string) Str::uuid(), 'item_id' => (string) Str::uuid()];
+}
+
+test('a tank with neither a dip nor opening stock has no baseline', function () {
+    $f = tankBaselineFixture();
+    $baseline = app(DailyCloseService::class)->openingBaselineForTank($f['company']->id, $f['tank_id'], $f['item_id'], '2026-09-01');
+    expect($baseline['has_baseline'])->toBeFalse()->and($baseline['liters'])->toBe(0.0);
+});
+
+test("yesterday's close dip is today's opening baseline", function () {
+    $f = tankBaselineFixture();
+    TankReading::create([
+        'company_id' => $f['company']->id,
+        'tank_id' => $f['tank_id'],
+        'item_id' => $f['item_id'],
+        'reading_date' => '2026-09-01',
+        'reading_type' => 'closing',
+        'stick_reading' => 120,
+        'dip_measurement_liters' => 8400,
+        'system_calculated_liters' => 8400,
+        'variance_liters' => 0,
+        'variance_type' => 'none',
+        'status' => 'posted',
+        'recorded_by_user_id' => $f['user']->id,
+    ]);
+
+    $baseline = app(DailyCloseService::class)->openingBaselineForTank($f['company']->id, $f['tank_id'], $f['item_id'], '2026-09-02');
+    expect($baseline['has_baseline'])->toBeTrue()
+        ->and($baseline['liters'])->toBe(8400.0)
+        ->and($baseline['date'])->toBe('2026-09-01');
+});
+
+test('opening stock from setup is the baseline for the first close', function () {
+    $f = tankBaselineFixture();
+    StockMovement::create([
+        'company_id' => $f['company']->id,
+        'warehouse_id' => $f['tank_id'],
+        'item_id' => $f['item_id'],
+        'movement_date' => '2026-08-31',
+        'movement_type' => 'opening',
+        'quantity' => 10000,
+        'unit_cost' => 250,
+        'total_cost' => 2500000,
+        'created_by_user_id' => $f['user']->id,
+    ]);
+
+    $baseline = app(DailyCloseService::class)->openingBaselineForTank($f['company']->id, $f['tank_id'], $f['item_id'], '2026-09-01');
+    expect($baseline['has_baseline'])->toBeTrue()->and($baseline['liters'])->toBe(10000.0);
+});
+```
+
+If `fuel.tank_readings.tank_id` / `.item_id` or `inv.stock_movements.warehouse_id` / `.item_id` carry foreign keys, create the real rows in the fixture (`App\Modules\Inventory\Models\Warehouse` with `company_id`, `name`, `code`, `linked_item_id`; `App\Modules\Inventory\Models\Item` with `company_id`, `name`, `sku`/`code`) and use their ids — read the migrations under `build/modules/FuelStation/Database/Migrations` and `build/modules/Inventory/Database/Migrations` for the required columns.
+
+- [ ] **Step 2: Run to see them fail**
+
+Run: `cd build && ./vendor/bin/pest tests/Feature/FuelStation/DailyCloseTankBaselineTest.php`
+Expected: FAIL — `openingBaselineForTank` undefined.
+
+- [ ] **Step 3: Service change**
+
+Rename `private function getOpeningBaselineForTank` to `public function openingBaselineForTank` (update the single call site ~line 302), and add `'has_baseline'` to each of the three return arrays: `true` in the previous-reading branch and the stock-movement branch, `false` in the empty branch.
+
+At the call site, immediately after `$openingBaseline = $this->openingBaselineForTank(...)`, add:
+
+```php
+                    if (! $openingBaseline['has_baseline']) {
+                        $tankName = $tank?->name ?? 'this tank';
+                        throw new \RuntimeException("No opening stock for {$tankName}. Record opening stock in Fuel setup (or post the previous day's close) before closing {$date}.");
+                    }
+```
+
+- [ ] **Step 4: Run the tests**
+
+Run: `cd build && ./vendor/bin/pest tests/Feature/FuelStation/DailyCloseTankBaselineTest.php`
+Expected: 3 PASS.
+
+- [ ] **Step 5: Default close date to yesterday in the morning**
+
+`DailyCloseController::create`, line 390, replace `$date = $request->get('date', now()->toDateString());` with:
+
+```php
+        // The close is a morning ritual: today's dip closes yesterday. Before noon, default to yesterday.
+        $defaultDate = now()->hour < 12 ? now()->subDay()->toDateString() : now()->toDateString();
+        $date = $request->get('date', $defaultDate);
+```
+
+- [ ] **Step 6: Labels in `Create.vue`**
+
+In the tank card:
+- `Opening baseline for {{ formatBaselineDate(form.date) }} (L)` → `Opening stock on {{ formatBaselineDate(form.date) }} (L)`.
+- In `baselineLabel` (~line 1523): when `tank.previous_source_label === 'Tank dip'` return `` `Yesterday morning's dip · ${date}` `` (or just `Yesterday morning's dip` when there is no date); otherwise keep the existing behaviour.
+- `No stock entry before this close date.` → `No opening stock yet — record opening stock in Fuel setup, or post the previous day's close.`
+- `Expected closing stock:` → `Expected this morning:`; keep the `opening + stock − sales` breakdown.
+- `<Label class="text-xs">Today's Closing (L)</Label>` → `<Label class="text-xs">Dip this morning (L)</Label>`, and directly under that `<Input>` add `<p class="text-xs text-muted-foreground mt-1">Taken the morning after {{ formatBaselineDate(form.date) }}. It closes that day and opens the next.</p>`.
+- `Usage (Dip)` → `Used since yesterday's dip`.
+- Tab label `Tank Dip` stays.
+
+Near the date picker in the page header (search the template for the `form.date` input), add one helper line: `<p class="text-xs text-muted-foreground">Close each day the next morning, after the tank dip.</p>`.
+
+- [ ] **Step 7: Schema contract**
+
+In `docs/contracts/fuel-schema.md`, under the tank readings business rules (after the line `status: required|in:draft,confirmed,posted.`), add:
+
+```markdown
+  - Timing: the station dips each tank once every morning. The dip taken on the morning after day D is stored on day D's daily close with `reading_date = D`, `reading_type = 'closing'`. It is both the closing stock of D and the opening baseline of D+1 (`DailyCloseService::openingBaselineForTank` picks the latest posted reading dated before the close). Expected stock for D = baseline + stock movements dated within (baseline, D] excluding `fuel.daily_close` adjustments − sales on D. A close is refused for a tank with neither a previous dip nor any stock movement (`has_baseline = false`).
+```
+
+- [ ] **Step 8: Build, run tests, commit**
+
+Run: `cd build && ./vendor/bin/pest tests/Feature/FuelStation && npm run build 2>&1 | tail -3`
+Expected: PASS; build success.
+
+```bash
+git add build/modules/FuelStation/Services/DailyCloseService.php build/modules/FuelStation/Http/Controllers/DailyCloseController.php build/modules/FuelStation/Resources/js/pages/FuelStation/DailyClose/Create.vue docs/contracts/fuel-schema.md build/tests/Feature/FuelStation/DailyCloseTankBaselineTest.php
+git commit -m "Treat the morning dip as yesterday's close and refuse closes without a stock baseline
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+Then repeat Task 11 (full regression run).

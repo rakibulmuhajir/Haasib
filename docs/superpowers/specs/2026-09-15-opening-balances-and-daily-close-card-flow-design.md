@@ -7,7 +7,9 @@ Scope: two independent pieces that came out of a session with the petrol pump ma
 1. **Daily close — card / bank receipts shown as Money Out.** Presentation-only change to the Daily Close screens.
 2. **Opening balances.** A real Accounting feature replacing the settings-JSON stub in fuel onboarding.
 
-Out of scope (tracked separately): credit-sale (udhaar) entry in daily close; the one-way vs two-way question between daily close and the other forms; morning-vs-evening dip timing.
+3. **Morning dip closes yesterday.** Labels, default date and a baseline guard on the tank-dip step; no formula change. See Part 3 at the end.
+
+Out of scope (tracked separately): credit-sale (udhaar) entry in daily close; the one-way vs two-way question between daily close and the other forms.
 
 ---
 
@@ -162,6 +164,33 @@ Feature tests (Pest, `build/tests/Feature/Accounting/OpeningBalancesTest.php`):
 ## Delivery order
 
 1. Part 1 (small, independent, frontend only).
-2. Part 2 backend (actions, request, permissions, routes, AmanatService change, tests).
+2. Part 2 backend (actions, request, permissions, routes, tests).
 3. Part 2 frontend page.
 4. Fuel onboarding hand-off + `CreditCustomerController` balance.
+5. Part 3 (dip timing).
+
+---
+
+## Part 3 — Morning dip closes yesterday
+
+### The rule
+
+The station dips each tank once every morning. That dip is the closing stock of the previous day **and** the opening stock of the new day. Daily close for day D is entered on the morning of D+1 with that morning's dip:
+
+```
+morning D    dip0 ─┐  day D: sales S, deliveries R
+morning D+1  dip1 ─┘  expected = dip0 + R − S ;  variance = dip1 − expected
+```
+
+`DailyCloseService` already does exactly this (`getOpeningBaselineForTank` + `expected = opening + receipts − sales`), so **the formula does not change**. The reverted commit `97ad0a30` introduced separate opening/closing reading types; that is not needed.
+
+### Change
+
+- Close date defaults to **yesterday** when the page is opened before noon.
+- Tank card wording: "Opening stock on {date}", "Yesterday morning's dip", input "Dip this morning (L)" with helper "Taken the morning after {date}. It closes that day and opens the next.", "Expected this morning".
+- A tank with neither a previous dip nor any stock movement is **refused** ("No opening stock for {tank} …") instead of being treated as 0 L. `getOpeningBaselineForTank` becomes public `openingBaselineForTank` and returns `has_baseline`.
+- `docs/contracts/fuel-schema.md` gains the timing rule.
+
+### Testing
+
+`tests/Feature/FuelStation/DailyCloseTankBaselineTest.php`: no baseline → `has_baseline = false`; a posted reading dated D is the baseline for D+1; an `opening` stock movement is the baseline for the first close.

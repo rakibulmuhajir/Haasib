@@ -1237,7 +1237,8 @@ const totalExpenses = computed(() => {
   return form.expenses.reduce((sum, e) => sum + e.amount, 0)
 })
 
-// Total of all non-cash payment receipts
+// Total of all non-cash payment receipts (cards, transfers, fuel cards, wallets).
+// These are sales that left the drawer for a bank/clearing account, so they are Money Out.
 const totalNonCashReceipts = computed(() => {
   let total = 0
   for (const channelCode of Object.keys(form.payment_receipts)) {
@@ -1246,21 +1247,27 @@ const totalNonCashReceipts = computed(() => {
   return total
 })
 
-const cashSales = computed(() => {
-  return totalSales.value - totalNonCashReceipts.value
-})
-
+// Money In = opening cash + every cash deposit + TOTAL sales (cash, card, transfer — all of it)
 const totalMoneyIn = computed(() => {
-  const partnerDeposits = form.partner_deposits.reduce((sum, d) => sum + d.amount, 0)
-  const amanatDeposits = form.amanat_deposits.reduce((sum, d) => sum + d.amount, 0)
-  const otherDeposits = form.other_deposits.reduce((sum, d) => sum + d.amount, 0)
-  return form.opening_cash + partnerDeposits + amanatDeposits + otherDeposits + totalSales.value
+  return form.opening_cash + totalPartnerDeposits.value + totalAmanatDeposits.value + totalOtherDeposits.value + totalSales.value
 })
 
-const totalCardAndBank = computed(() => {
-  return totalNonCashReceipts.value
+// One row per enabled non-cash channel with a value, labelled "channel → destination account"
+const channelOutRows = computed(() => {
+  return enabledChannels.value
+    .filter(ch => ch.type !== 'cash' && getChannelTotal(ch.code) > 0)
+    .map(ch => {
+      const accountId = ch.clearing_account_id || ch.bank_account_id
+      const account = props.bankAccounts.find(a => a.id === accountId)
+      return {
+        code: ch.code,
+        label: account ? `${ch.label} → ${account.name}` : ch.label,
+        amount: getChannelTotal(ch.code),
+      }
+    })
 })
 
+// Money Out = everything that left the drawer, including sales that went straight to bank/card accounts
 const totalMoneyOut = computed(() => {
   const bankDeposits = form.bank_deposits.reduce((sum, d) => sum + d.amount, 0)
   const partnerWithdrawals = form.partner_withdrawals.reduce((sum, w) => sum + w.amount, 0)
@@ -1270,22 +1277,12 @@ const totalMoneyOut = computed(() => {
   const amanat = form.amanat_disbursements.reduce((sum, a) => sum + a.amount, 0)
   const expenses = form.expenses.reduce((sum, e) => sum + e.amount, 0)
 
-  return bankDeposits + partnerWithdrawals + employeeAdvances + payrollPayouts + cashBillPayments + amanat + expenses
+  return totalNonCashReceipts.value + bankDeposits + partnerWithdrawals + employeeAdvances + payrollPayouts + cashBillPayments + amanat + expenses
 })
 
-const expectedClosingCash = computed(() => {
-  const cashIn = form.opening_cash +
-    form.partner_deposits.reduce((sum, d) => sum + d.amount, 0) +
-    form.amanat_deposits.reduce((sum, d) => sum + d.amount, 0) +
-    form.other_deposits.reduce((sum, d) => sum + d.amount, 0) +
-    (totalSales.value - totalCardAndBank.value)
+const expectedClosingCash = computed(() => totalMoneyIn.value - totalMoneyOut.value)
 
-  return cashIn - totalMoneyOut.value
-})
-
-const cashVariance = computed(() => {
-  return form.closing_cash - expectedClosingCash.value
-})
+const cashVariance = computed(() => form.closing_cash - expectedClosingCash.value)
 
 // Watch for closing reading changes to auto-calculate liters (from electronic readings)
 watch(
@@ -2363,13 +2360,12 @@ const completedWorkflowSteps = computed(() => {
             <div class="p-4 rounded-lg border">
               <div class="flex items-center justify-between">
                 <div>
-                  <Label>Cash Sales (calculated)</Label>
-                  <p class="text-xs text-muted-foreground">Fuel + other sales minus non-cash receipts</p>
+                  <Label>Total Sales</Label>
+                  <p class="text-xs text-muted-foreground">Fuel + other sales, including card / bank sales (moved to Money Out)</p>
                   <p class="text-xs text-muted-foreground">{{ accountingHints.fuelSales }}</p>
                 </div>
                 <div class="text-right">
-                  <div class="text-lg font-semibold"><MoneyText :amount="cashSales" :currency="currencyCode" :fraction-digits="0" /></div>
-                  <p v-if="cashSales < 0" class="text-xs text-destructive">Non-cash receipts exceed total sales</p>
+                  <div class="text-lg font-semibold"><MoneyText :amount="totalSales" :currency="currencyCode" :fraction-digits="0" /></div>
                 </div>
               </div>
             </div>
@@ -2536,56 +2532,6 @@ const completedWorkflowSteps = computed(() => {
 
             <Separator />
 
-            <!-- Dynamic Payment Channels -->
-            <template v-for="channel in enabledChannels" :key="channel.code">
-              <div v-if="channel.type !== 'cash'" class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h4 class="font-medium">{{ channel.label }}</h4>
-                    <p class="text-xs text-muted-foreground">
-                      {{ channel.type === 'bank_transfer' ? 'Bank transfer payments received' : '' }}
-                      {{ channel.type === 'card_pos' ? 'Credit/debit card swipes' : '' }}
-                      {{ channel.type === 'fuel_card' ? `${fuelCardLabel} sales (goes to clearing)` : '' }}
-                      {{ channel.type === 'mobile_wallet' ? 'Mobile wallet payments' : '' }}
-                    </p>
-                    <p class="text-xs text-muted-foreground">{{ accountingHints.nonCashReceipt }}</p>
-                  </div>
-                  <Button variant="outline" size="sm" @click="addPaymentEntry(channel.code)">
-                    <Plus class="h-4 w-4 mr-1" /> Add
-                  </Button>
-                </div>
-
-                <div v-for="(entry, index) in form.payment_receipts[channel.code]?.entries || []" :key="index" class="flex gap-4 items-end">
-                  <!-- Reference field varies by type -->
-                  <div v-if="channel.type === 'card_pos'" class="w-32">
-                    <Label class="text-xs">Last 4 Digits</Label>
-                    <Input v-model="entry.last_four" maxlength="4" placeholder="1234" />
-                    <InputError :message="paymentReceiptError(channel.code, index, 'last_four')" />
-                  </div>
-                  <div v-else class="flex-1">
-                    <Label class="text-xs">{{ channel.type === 'bank_transfer' ? 'Customer / Reference' : 'Card / Reference' }}</Label>
-                    <Input v-model="entry.reference" :placeholder="channel.type === 'bank_transfer' ? 'Customer name or slip #' : 'Card #'" />
-                    <InputError :message="paymentReceiptError(channel.code, index, 'reference')" />
-                  </div>
-                  <div class="w-32">
-                    <Label class="text-xs">Amount</Label>
-                    <Input v-model.number="entry.amount" type="number" />
-                    <InputError :message="paymentReceiptError(channel.code, index, 'amount')" />
-                  </div>
-                  <Button variant="ghost" size="icon" @click="removePaymentEntry(channel.code, index)">
-                    <Trash2 class="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-
-                <!-- Channel subtotal -->
-                <div v-if="(form.payment_receipts[channel.code]?.entries?.length || 0) > 0" class="text-right text-sm text-muted-foreground">
-                  Subtotal: <MoneyText :amount="getChannelTotal(channel.code)" :currency="currencyCode" :fraction-digits="0" />
-                </div>
-
-                <Separator />
-              </div>
-            </template>
-
             <template v-if="features.has_investors && investors.length > 0">
               <Separator />
 
@@ -2616,12 +2562,10 @@ const completedWorkflowSteps = computed(() => {
             <div class="p-4 rounded-lg bg-muted/30 space-y-3">
               <h4 class="font-semibold text-sm">Money In Summary</h4>
               <div class="space-y-2">
-                <!-- Opening Cash -->
                 <div class="flex justify-between text-sm">
                   <span>Opening Cash</span>
                   <span class="font-medium"><MoneyText :amount="form.opening_cash" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
-                <!-- Partner Deposits -->
                 <div v-if="totalPartnerDeposits > 0" class="flex justify-between text-sm">
                   <span>Partner Deposits</span>
                   <span class="font-medium"><MoneyText :amount="totalPartnerDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
@@ -2634,34 +2578,13 @@ const completedWorkflowSteps = computed(() => {
                   <span>Other Cash In</span>
                   <span class="font-medium"><MoneyText :amount="totalOtherDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
-                <!-- Cash Sales -->
                 <div class="flex justify-between text-sm">
-                  <span>Cash Sales</span>
-                  <span class="font-medium"><MoneyText :amount="cashSales" :currency="currencyCode" :fraction-digits="0" /></span>
+                  <span>Total Sales</span>
+                  <span class="font-medium"><MoneyText :amount="totalSales" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <Separator />
-                <!-- Total Cash Available -->
-                <div class="flex justify-between text-sm font-semibold">
-                  <span>Total Cash Available</span>
-                  <span><MoneyText :amount="form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + cashSales" :currency="currencyCode" :fraction-digits="0" /></span>
-                </div>
-                <Separator class="my-2" />
-                <!-- Non-Cash Section -->
-                <div class="text-xs text-muted-foreground mb-1">Non-Cash Receipts (goes directly to bank/clearing)</div>
-                <template v-for="channel in enabledChannels" :key="'summary-' + channel.code">
-                  <div v-if="channel.type !== 'cash' && getChannelTotal(channel.code) > 0" class="flex justify-between text-sm text-muted-foreground">
-                    <span>{{ channel.label }}</span>
-                    <span><MoneyText :amount="getChannelTotal(channel.code)" :currency="currencyCode" :fraction-digits="0" /></span>
-                  </div>
-                </template>
-                <div v-if="totalNonCashReceipts > 0" class="flex justify-between text-sm">
-                  <span>Total Non-Cash</span>
-                  <span class="font-medium"><MoneyText :amount="totalNonCashReceipts" :currency="currencyCode" :fraction-digits="0" /></span>
-                </div>
-                <Separator />
-                <!-- Grand Total -->
                 <div class="flex justify-between text-base font-semibold">
-                  <span>Total Money In (All Sources)</span>
+                  <span>Total Money In</span>
                   <span><MoneyText :amount="totalMoneyIn" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
               </div>
@@ -2687,6 +2610,62 @@ const completedWorkflowSteps = computed(() => {
             <CardDescription>Bank deposits, withdrawals, advances, amanat, and expenses.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
+            <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
+            <div class="space-y-4">
+              <div>
+                <h4 class="font-semibold text-sm">Sales that went to bank / card accounts</h4>
+                <p class="text-xs text-muted-foreground">Card swipes, transfers and fuel-card sales are already inside Total Sales. Enter them here so they are taken out of expected cash.</p>
+              </div>
+              <template v-for="channel in enabledChannels" :key="channel.code">
+                <div v-if="channel.type !== 'cash'" class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="font-medium">{{ channel.label }}</h4>
+                      <p class="text-xs text-muted-foreground">
+                        {{ channel.type === 'bank_transfer' ? 'Bank transfer payments received' : '' }}
+                        {{ channel.type === 'card_pos' ? 'Credit/debit card swipes' : '' }}
+                        {{ channel.type === 'fuel_card' ? `${fuelCardLabel} sales (goes to clearing)` : '' }}
+                        {{ channel.type === 'mobile_wallet' ? 'Mobile wallet payments' : '' }}
+                      </p>
+                      <p class="text-xs text-muted-foreground">{{ accountingHints.nonCashReceipt }}</p>
+                    </div>
+                    <Button variant="outline" size="sm" @click="addPaymentEntry(channel.code)">
+                      <Plus class="h-4 w-4 mr-1" /> Add
+                    </Button>
+                  </div>
+
+                  <div v-for="(entry, index) in form.payment_receipts[channel.code]?.entries || []" :key="index" class="flex gap-4 items-end">
+                    <!-- Reference field varies by type -->
+                    <div v-if="channel.type === 'card_pos'" class="w-32">
+                      <Label class="text-xs">Last 4 Digits</Label>
+                      <Input v-model="entry.last_four" maxlength="4" placeholder="1234" />
+                      <InputError :message="paymentReceiptError(channel.code, index, 'last_four')" />
+                    </div>
+                    <div v-else class="flex-1">
+                      <Label class="text-xs">{{ channel.type === 'bank_transfer' ? 'Customer / Reference' : 'Card / Reference' }}</Label>
+                      <Input v-model="entry.reference" :placeholder="channel.type === 'bank_transfer' ? 'Customer name or slip #' : 'Card #'" />
+                      <InputError :message="paymentReceiptError(channel.code, index, 'reference')" />
+                    </div>
+                    <div class="w-32">
+                      <Label class="text-xs">Amount</Label>
+                      <Input v-model.number="entry.amount" type="number" />
+                      <InputError :message="paymentReceiptError(channel.code, index, 'amount')" />
+                    </div>
+                    <Button variant="ghost" size="icon" @click="removePaymentEntry(channel.code, index)">
+                      <Trash2 class="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+
+                  <!-- Channel subtotal -->
+                  <div v-if="(form.payment_receipts[channel.code]?.entries?.length || 0) > 0" class="text-right text-sm text-muted-foreground">
+                    Subtotal: <MoneyText :amount="getChannelTotal(channel.code)" :currency="currencyCode" :fraction-digits="0" />
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <Separator />
+
             <!-- Bank Deposits -->
             <div class="space-y-4">
               <div class="flex items-center justify-between">
@@ -3013,6 +2992,11 @@ const completedWorkflowSteps = computed(() => {
             <div class="p-4 rounded-lg bg-muted/30 space-y-3">
               <h4 class="font-semibold text-sm">Money Out Summary</h4>
               <div class="space-y-2">
+                <!-- Card / bank sales -->
+                <div v-for="row in channelOutRows" :key="'out-' + row.code" class="flex justify-between text-sm">
+                  <span>{{ row.label }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="row.amount" :currency="currencyCode" :fraction-digits="0" /></span>
+                </div>
                 <!-- Bank Deposits -->
                 <div v-if="totalBankDeposits > 0" class="flex justify-between text-sm">
                   <span>Bank Deposits (Vendor Payments)</span>
@@ -3093,9 +3077,9 @@ const completedWorkflowSteps = computed(() => {
                     <span>Opening Cash</span>
                     <span><MoneyText :amount="form.opening_cash" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
-                  <div class="flex justify-between">
+                  <div v-if="totalPartnerDeposits > 0" class="flex justify-between">
                     <span>+ Partner Deposits</span>
-                    <span><MoneyText :amount="form.partner_deposits.reduce((s, d) => s + d.amount, 0)" :currency="currencyCode" :fraction-digits="0" /></span>
+                    <span><MoneyText :amount="totalPartnerDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div v-if="totalAmanatDeposits > 0" class="flex justify-between">
                     <span>+ Amanat Deposits</span>
@@ -3106,16 +3090,16 @@ const completedWorkflowSteps = computed(() => {
                     <span><MoneyText :amount="totalOtherDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div class="flex justify-between">
-                    <span>+ Cash Sales</span>
-                    <span><MoneyText :amount="totalSales - totalCardAndBank" :currency="currencyCode" :fraction-digits="0" /></span>
+                    <span>+ Total Sales</span>
+                    <span><MoneyText :amount="totalSales" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <Separator />
                   <div class="flex justify-between font-medium">
-                    <span>Total Cash Available</span>
-                    <span><MoneyText :amount="form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + totalSales - totalCardAndBank" :currency="currencyCode" :fraction-digits="0" /></span>
+                    <span>Total Money In</span>
+                    <span><MoneyText :amount="totalMoneyIn" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div class="flex justify-between text-destructive">
-                    <span>- Money Out</span>
+                    <span>− Money Out (incl. card / bank sales)</span>
                     <span><MoneyText :amount="totalMoneyOut" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <Separator />

@@ -423,3 +423,12 @@ Company settings needed for auto-posting:
 - Add new transaction_type values here first.
 - Dimension fields (1-3) can be used for cost centers, projects, locations.
 - Consider adding `acct.dimension_values` table for controlled values in future.
+
+## Opening balances
+
+- Opening figures are ordinary records dated `as_of_date` with the counter-entry on account `3080 Opening Balance Equity` (created on demand: type `equity`, subtype `equity`, normal balance credit).
+- The cash/bank/amanat/advance/partner journal is one `acct.transactions` row: `transaction_type = 'opening_balance'`, `reference_type = 'acct.opening_balances'`, `reference_id = null`. Its reversal (on re-save) is `transaction_type = 'opening_balance_reversal'`.
+- Opening receivables are `acct.invoices` with a single line whose `income_account_id = 3080`, `internal_notes = 'OPENING'`. Opening payables are `acct.bills` with a single line whose `expense_account_id = 3080`, `internal_notes = 'OPENING'`.
+- `fuel.amanat_transactions`, `payroll.salary_advances` and `auth.partner_transactions` created as opening rows carry `reference = 'OPENING'` and point at the opening journal via `transaction_id` / `journal_entry_id`.
+- `company.settings.opening_balances = { as_of_date, locked_at, locked_by_user_id }`. Nothing else is stored in settings.
+- `as_of_date` must be strictly earlier than the earliest posted non-opening transaction for the company.

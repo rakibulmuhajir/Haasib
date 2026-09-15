@@ -96,6 +96,10 @@ class Permissions
 
     public const JOURNAL_VIEW = 'journal.view';
 
+    public const OPENING_BALANCE_VIEW = 'opening_balance.view';
+
+    public const OPENING_BALANCE_MANAGE = 'opening_balance.manage';
+
     // Posting Templates
     public const POSTING_TEMPLATE_CREATE = 'posting_template.create';
 

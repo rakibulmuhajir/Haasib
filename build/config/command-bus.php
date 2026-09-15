@@ -106,4 +106,9 @@ return [
 
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,
+
+    // General Ledger - Opening Balances
+    'opening_balance.view' => \App\Modules\Accounting\Actions\OpeningBalance\ViewAction::class,
+    'opening_balance.save' => \App\Modules\Accounting\Actions\OpeningBalance\SaveAction::class,
+    'opening_balance.lock' => \App\Modules\Accounting\Actions\OpeningBalance\LockAction::class,
 ];

@@ -10,8 +10,10 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\PostingService;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
@@ -399,11 +401,51 @@ test('re-saving every category across three generations never leaks balances or 
         ->and($view['totals']['liabilities'])->toBe(1192000.0)
         ->and($view['totals']['equity'])->toBe(-816000.0);
 
+    // A genuine, unrelated transaction dated 2026-09-01 that is later reversed must still bound
+    // as_of_date — reversal must not erase real history from the guard.
+    $period9 = AccountingPeriod::where('company_id', $f['company']->id)->where('period_number', 9)->first();
+    $unrelated = Transaction::create([
+        'company_id' => $f['company']->id,
+        'transaction_number' => 'JE-9001',
+        'transaction_type' => 'journal',
+        'transaction_date' => '2026-09-01',
+        'posting_date' => '2026-09-01',
+        'fiscal_year_id' => $period9->fiscal_year_id,
+        'period_id' => $period9->id,
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'status' => 'posted',
+        'description' => 'unrelated real transaction',
+    ]);
+    JournalEntry::create([
+        'company_id' => $f['company']->id,
+        'transaction_id' => $unrelated->id,
+        'account_id' => $f['accounts']['cash']->id,
+        'line_number' => 1,
+        'debit_amount' => 500,
+        'credit_amount' => 0,
+    ]);
+    JournalEntry::create([
+        'company_id' => $f['company']->id,
+        'transaction_id' => $unrelated->id,
+        'account_id' => $f['accounts']['ar']->id,
+        'line_number' => 2,
+        'debit_amount' => 0,
+        'credit_amount' => 500,
+    ]);
+    app(PostingService::class)->reverseTransaction($unrelated, 'unwinding for test');
+
     // A third save must succeed: the guard is not poisoned by prior generations' now-voided
     // opening invoice/bill postings or by the reversed opening journal.
     $third = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1]]);
     expect($third['data']['journal_id'])->not->toBeNull();
     expect($strayInvoice->fresh()->status)->not->toBe('void');
+
+    // But the reversed unrelated transaction still really happened on 2026-09-01, so it must
+    // still bound as_of_date going forward.
+    expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-01', 'cash' => ['amount' => 2]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
 });
 
 test('as_of_date on or after the first posted transaction is rejected', function () {

@@ -74,12 +74,13 @@ class SaveAction implements PaletteAction
     {
         $company = CompanyContext::requireCompany();
         $asOf = $params['as_of_date'];
+        $priorOpening = $company->settings['opening_balances'] ?? [];
 
         $this->guardNotLocked($company);
-        $this->guardDate($company->id, $asOf, $company->settings['opening_balances'] ?? []);
+        $this->guardDate($company->id, $asOf, $priorOpening);
 
-        return DB::transaction(function () use ($company, $params, $asOf) {
-            $this->reversePrevious($company);
+        return DB::transaction(function () use ($company, $params, $asOf, $priorOpening) {
+            $this->reversePrevious($company, $priorOpening);
 
             $accounts = $this->accounts->resolve($company->id);
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
@@ -100,6 +101,22 @@ class SaveAction implements PaletteAction
             $invoiceIds = $this->createOpeningInvoices($company, $params, $accounts, $asOf, $currency);
             $billIds = $this->createOpeningBills($company, $params, $accounts, $asOf, $currency);
 
+            // Every outgoing generation's ids are retired (kept, deduplicated) so the date
+            // guard and view can permanently exclude their now-void/reversed postings without
+            // ever mistaking a genuine, unrelated transaction for one of this feature's own.
+            $retiredInvoiceIds = array_values(array_unique(array_merge(
+                $priorOpening['retired_invoice_ids'] ?? [],
+                $priorOpening['invoice_ids'] ?? []
+            )));
+            $retiredBillIds = array_values(array_unique(array_merge(
+                $priorOpening['retired_bill_ids'] ?? [],
+                $priorOpening['bill_ids'] ?? []
+            )));
+            $retiredJournalIds = array_values(array_unique(array_merge(
+                $priorOpening['retired_journal_ids'] ?? [],
+                array_filter([$priorOpening['journal_id'] ?? null])
+            )));
+
             $settings = $company->settings ?? [];
             $settings['opening_balances'] = [
                 'as_of_date' => $asOf,
@@ -107,6 +124,10 @@ class SaveAction implements PaletteAction
                 'locked_by_user_id' => null,
                 'invoice_ids' => $invoiceIds,
                 'bill_ids' => $billIds,
+                'journal_id' => $journalId,
+                'retired_invoice_ids' => $retiredInvoiceIds,
+                'retired_bill_ids' => $retiredBillIds,
+                'retired_journal_ids' => $retiredJournalIds,
             ];
             $company->settings = $settings;
             $company->save();
@@ -143,26 +164,46 @@ class SaveAction implements PaletteAction
      * that count as "real" activity for the date guard and for the "earliest transaction"
      * display. Shared by SaveAction::guardDate and ViewAction.
      *
-     * Excludes:
-     *  - every 'opening_balance' journal, current or historical (the type never changes
-     *    across generations, so this alone covers both the live journal and old reversed ones);
-     *  - anything already reversed (reversed_by_id set) — a superseded opening invoice/bill
-     *    posting from a prior generation, once voided, must not keep poisoning the guard;
-     *  - reversal transactions themselves (reversal_of_id set) — pure undo postings, not new
-     *    independent activity;
-     *  - the CURRENT generation's live opening invoice/bill postings, identified by id via
-     *    settings (never by the internal_notes marker, which void actions can overwrite).
+     * A genuinely real transaction that later gets reversed (by anything, opening balances or
+     * not) still happened and must still bound as_of_date — so this must NOT exclude
+     * transactions merely for being reversed/a reversal in general. It excludes exactly:
+     *  (a) every 'opening_balance' journal, current or any retired generation (the type never
+     *      changes across generations, so this alone covers all of them, live or reversed);
+     *  (b) every opening invoice/bill posting, current or retired generation, identified by id
+     *      via settings — never by the internal_notes marker, which void actions can overwrite —
+     *      matched by reference_id;
+     *  (c) any transaction whose reversal_of_id points at a transaction matching (a) or (b) —
+     *      i.e. the void reversal of an opening invoice/bill/journal — via a sub-select, so this
+     *      holds even if a future reverseTransaction() stops copying reference_id.
      */
     public static function nonOpeningTransactions(string $companyId, array $opening)
     {
-        $excludedReferenceIds = array_merge($opening['invoice_ids'] ?? [], $opening['bill_ids'] ?? []);
+        $excludedReferenceIds = array_values(array_unique(array_merge(
+            $opening['invoice_ids'] ?? [],
+            $opening['retired_invoice_ids'] ?? [],
+            $opening['bill_ids'] ?? [],
+            $opening['retired_bill_ids'] ?? []
+        )));
+
+        $openingTransactionIds = fn () => Transaction::where('company_id', $companyId)
+            ->where(function ($q) use ($excludedReferenceIds) {
+                $q->where('transaction_type', self::JOURNAL_TYPE);
+                if (! empty($excludedReferenceIds)) {
+                    $q->orWhereIn('reference_id', $excludedReferenceIds);
+                }
+            })
+            ->select('id');
 
         return Transaction::where('company_id', $companyId)
             ->where('transaction_type', '!=', self::JOURNAL_TYPE)
-            ->whereNull('reversed_by_id')
-            ->whereNull('reversal_of_id')
             ->where(function ($q) use ($excludedReferenceIds) {
-                $q->whereNull('reference_id')->orWhereNotIn('reference_id', $excludedReferenceIds);
+                $q->whereNull('reference_id');
+                if (! empty($excludedReferenceIds)) {
+                    $q->orWhereNotIn('reference_id', $excludedReferenceIds);
+                }
+            })
+            ->where(function ($q) use ($openingTransactionIds) {
+                $q->whereNull('reversal_of_id')->orWhereNotIn('reversal_of_id', $openingTransactionIds());
             });
     }
 
@@ -173,25 +214,29 @@ class SaveAction implements PaletteAction
      * Two passes: the first only checks (throws before anything is mutated), the second
      * mutates — so a mid-way refusal never leaves a half-reversed state.
      */
-    private function reversePrevious($company): void
+    private function reversePrevious($company, array $opening): void
     {
         $companyId = $company->id;
         $bus = app(CommandBus::class);
-        $opening = $company->settings['opening_balances'] ?? [];
         $reversalDate = $opening['as_of_date'] ?? null;
 
         $invoiceIds = $opening['invoice_ids'] ?? [];
         $billIds = $opening['bill_ids'] ?? [];
+        $journalId = $opening['journal_id'] ?? null;
 
         $invoices = empty($invoiceIds) ? collect() : Invoice::where('company_id', $companyId)->whereIn('id', $invoiceIds)->where('status', '!=', 'void')->get();
         $bills = empty($billIds) ? collect() : Bill::where('company_id', $companyId)->whereIn('id', $billIds)->where('status', '!=', 'void')->get();
 
-        $journals = Transaction::where('company_id', $companyId)
-            ->where('transaction_type', self::JOURNAL_TYPE)
-            ->whereNull('reversed_by_id')
-            ->whereNull('reversal_of_id') // exclude reversal transactions themselves — only reverse live opening journals
-            ->with('journalEntries')
-            ->get();
+        // The prior generation's own journal, identified by the id tracked in settings — not by
+        // scanning for "any transaction_type = opening_balance row", which would also match
+        // already-retired generations' journals.
+        $journals = collect();
+        if ($journalId) {
+            $journal = Transaction::where('company_id', $companyId)->where('id', $journalId)->whereNull('reversed_by_id')->with('journalEntries')->first();
+            if ($journal) {
+                $journals->push($journal);
+            }
+        }
 
         $amanatByJournal = [];
         $advancesByJournal = [];

@@ -21,6 +21,7 @@ use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 function openingBalanceFixture(): array
 {
@@ -468,6 +469,37 @@ test('as_of_date on or after the first posted transaction is rejected', function
 
     expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-01', 'cash' => ['amount' => 1]]))
         ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+test('a real invoice posting with no opening records saved yet still bounds the first save', function () {
+    // Regression: nonOpeningTransactions() must not compile its reference_id exclusion to
+    // "reference_id IS NULL" when invoice_ids/bill_ids are empty (a fresh company, before the
+    // first opening-balance save has ever run) — that would hide every real invoice/bill/
+    // payment posting (they all carry a non-null reference_id) from the date guard.
+    $f = openingBalanceFixture();
+    $period = AccountingPeriod::where('company_id', $f['company']->id)->where('period_number', 9)->first();
+    Transaction::create([
+        'company_id' => $f['company']->id,
+        'transaction_number' => 'JE-9002',
+        'transaction_type' => 'invoice',
+        'transaction_date' => '2026-09-01',
+        'posting_date' => '2026-09-01',
+        'fiscal_year_id' => $period->fiscal_year_id,
+        'period_id' => $period->id,
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'status' => 'posted',
+        'description' => 'a real invoice, unrelated to opening balances',
+        'reference_type' => 'acct.invoices',
+        'reference_id' => (string) Str::uuid(),
+    ]);
+
+    expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-05', 'cash' => ['amount' => 1]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    $result = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1]]);
+    expect($result['data']['journal_id'])->not->toBeNull();
 });
 
 test('locking prevents further saves', function () {

@@ -40,15 +40,26 @@ class ViewAction implements PaletteAction
         $opening = ($company->settings ?? [])['opening_balances'] ?? [];
         $accounts = $this->accounts->resolve($companyId);
 
-        // No 'reversals' relation exists on Transaction; the current (un-superseded)
-        // opening journal is the one nothing has reversed yet.
-        $journal = Transaction::where('company_id', $companyId)
-            ->where('transaction_type', SaveAction::JOURNAL_TYPE)
-            ->whereNull('reversed_by_id')
-            ->whereNull('reversal_of_id') // exclude reversal transactions — they carry the same transaction_type
-            ->with('journalEntries.account')
-            ->latest('created_at')
-            ->first();
+        // The current generation's journal is looked up by the id tracked in settings — not by
+        // scanning for transaction_type = 'opening_balance', which would also match a retired
+        // generation's (reversed) journal. Fall back to the scan only when no id is on record
+        // (settings written before this key existed).
+        $journal = null;
+        if (! empty($opening['journal_id'])) {
+            $journal = Transaction::where('company_id', $companyId)
+                ->where('id', $opening['journal_id'])
+                ->whereNull('reversed_by_id')
+                ->with('journalEntries.account')
+                ->first();
+        } else {
+            $journal = Transaction::where('company_id', $companyId)
+                ->where('transaction_type', SaveAction::JOURNAL_TYPE)
+                ->whereNull('reversed_by_id')
+                ->whereNull('reversal_of_id') // exclude reversal transactions — they carry the same transaction_type
+                ->with('journalEntries.account')
+                ->latest('created_at')
+                ->first();
+        }
 
         $cash = 0.0;
         $banks = [];

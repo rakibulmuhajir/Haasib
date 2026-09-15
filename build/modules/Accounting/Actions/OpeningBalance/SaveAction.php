@@ -185,22 +185,22 @@ class SaveAction implements PaletteAction
             $opening['retired_bill_ids'] ?? []
         )));
 
+        // Laravel compiles an empty whereIn to "0 = 1" and an empty whereNotIn to "1 = 1", so
+        // these must be called unconditionally — wrapping them in `if (! empty(...))` collapses
+        // the whereNotIn branch to nothing on a fresh company (no opening invoices/bills yet),
+        // which leaves only `whereNull('reference_id')` and wrongly hides every real posting
+        // that carries a reference_id (invoices, bills, payments, ...) from the date guard.
         $openingTransactionIds = fn () => Transaction::where('company_id', $companyId)
             ->where(function ($q) use ($excludedReferenceIds) {
-                $q->where('transaction_type', self::JOURNAL_TYPE);
-                if (! empty($excludedReferenceIds)) {
-                    $q->orWhereIn('reference_id', $excludedReferenceIds);
-                }
+                $q->where('transaction_type', self::JOURNAL_TYPE)
+                    ->orWhereIn('reference_id', $excludedReferenceIds);
             })
             ->select('id');
 
         return Transaction::where('company_id', $companyId)
             ->where('transaction_type', '!=', self::JOURNAL_TYPE)
             ->where(function ($q) use ($excludedReferenceIds) {
-                $q->whereNull('reference_id');
-                if (! empty($excludedReferenceIds)) {
-                    $q->orWhereNotIn('reference_id', $excludedReferenceIds);
-                }
+                $q->whereNull('reference_id')->orWhereNotIn('reference_id', $excludedReferenceIds);
             })
             ->where(function ($q) use ($openingTransactionIds) {
                 $q->whereNull('reversal_of_id')->orWhereNotIn('reversal_of_id', $openingTransactionIds());

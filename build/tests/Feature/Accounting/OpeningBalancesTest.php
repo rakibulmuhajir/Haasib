@@ -251,12 +251,36 @@ test('re-saving replaces the previous opening records without duplicating balanc
     $f = openingBalanceFixture();
     $customer = openingCustomer($f, 'Truck Company');
 
+    // A normal invoice that happens to carry the same internal_notes marker text the feature
+    // uses. Selection by stored id (not by marker) must never touch it.
+    $strayInvoice = Invoice::create([
+        'company_id' => $f['company']->id,
+        'customer_id' => $customer->id,
+        'invoice_number' => 'INV-STRAY-0001',
+        'invoice_date' => '2026-08-15',
+        'due_date' => '2026-08-15',
+        'status' => 'sent',
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'subtotal' => 5000,
+        'tax_amount' => 0,
+        'discount_amount' => 0,
+        'total_amount' => 5000,
+        'paid_amount' => 0,
+        'balance' => 5000,
+        'internal_notes' => 'OPENING',
+    ]);
+    // Invoice::generateInvoiceNumber() orders by created_at, so keep the stray invoice
+    // unambiguously oldest to avoid a timestamp tie with the invoices created below.
+    $strayInvoice->forceFill(['created_at' => now()->subYears(2)])->save();
+
     dispatchOpeningBalance($f, [
         'as_of_date' => '2026-08-31',
         'cash' => ['amount' => 150000],
         'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],
     ]);
-    $second = dispatchOpeningBalance($f, [
+    dispatchOpeningBalance($f, [
         'as_of_date' => '2026-08-31',
         'cash' => ['amount' => 120000],
         'credit_customers' => [['customer_id' => $customer->id, 'amount' => 40000]],
@@ -264,7 +288,9 @@ test('re-saving replaces the previous opening records without duplicating balanc
 
     expect(ledgerBalance($f['accounts']['cash']))->toBe(120000.0)
         ->and(ledgerBalance($f['accounts']['ar']))->toBe(40000.0);
-    expect(Invoice::where('company_id', $f['company']->id)->where('status', '!=', 'void')->count())->toBe(1);
+    $openingSettings = $f['company']->fresh()->settings['opening_balances'];
+    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->where('status', '!=', 'void')->count())->toBe(1);
+    expect($strayInvoice->fresh()->status)->not->toBe('void');
     // reverseTransaction() preserves the original transaction_type, so the reversal is
     // identified by reversal_of_id rather than by a distinct 'opening_balance_reversal' type.
     $journal = Transaction::where('company_id', $f['company']->id)
@@ -277,6 +303,107 @@ test('re-saving replaces the previous opening records without duplicating balanc
     expect($view['rows']['cash']['amount'])->toBe(120000.0)
         ->and($view['rows']['credit_customers'][0]['amount'])->toBe(40000.0)
         ->and($view['totals']['assets'])->toBe(160000.0);
+});
+
+test('re-saving every category across three generations never leaks balances or poisons the guard', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'Truck Company');
+    $depositor = openingCustomer($f, 'Haji Saab');
+    $employee = Employee::create([
+        'company_id' => $f['company']->id,
+        'employee_number' => 'EMP-002',
+        'first_name' => 'Bilal',
+        'last_name' => 'Ahmed',
+        'hire_date' => '2025-01-01',
+        'currency' => 'PKR',
+    ]);
+    $vendor = Vendor::create([
+        'company_id' => $f['company']->id,
+        'vendor_number' => 'VEND-0002',
+        'name' => 'PSO Depot',
+        'base_currency' => 'PKR',
+        'is_active' => true,
+        'ap_account_id' => $f['accounts']['ap']->id,
+        'created_by_user_id' => $f['user']->id,
+    ]);
+    $partner = Partner::create([
+        'company_id' => $f['company']->id,
+        'name' => 'Owner Two',
+        'profit_share_percentage' => 100,
+    ]);
+
+    // A normal invoice that happens to carry the same internal_notes marker; must survive all
+    // three saves untouched, since selection is by stored id, never by marker.
+    $strayInvoice = Invoice::create([
+        'company_id' => $f['company']->id,
+        'customer_id' => $customer->id,
+        'invoice_number' => 'INV-STRAY-0002',
+        'invoice_date' => '2026-08-15',
+        'due_date' => '2026-08-15',
+        'status' => 'sent',
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'subtotal' => 5000,
+        'tax_amount' => 0,
+        'discount_amount' => 0,
+        'total_amount' => 5000,
+        'paid_amount' => 0,
+        'balance' => 5000,
+        'internal_notes' => 'OPENING',
+    ]);
+    $strayInvoice->forceFill(['created_at' => now()->subYears(2)])->save();
+
+    $everyCategory = fn (float $cash, float $bank, float $ar, float $advance, float $amanat, float $ap, float $partnerAmount) => [
+        'as_of_date' => '2026-08-31',
+        'cash' => ['amount' => $cash],
+        'banks' => [['account_id' => $f['accounts']['bank']->id, 'amount' => $bank]],
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => $ar]],
+        'employees' => [['employee_id' => $employee->id, 'amount' => $advance]],
+        'amanat' => [['customer_id' => $depositor->id, 'amount' => $amanat]],
+        'suppliers' => [['vendor_id' => $vendor->id, 'amount' => $ap]],
+        'partners' => [['partner_id' => $partner->id, 'amount' => $partnerAmount]],
+    ];
+
+    dispatchOpeningBalance($f, $everyCategory(100000, 200000, 42000, 5000, 30000, 250000, 1000000));
+    dispatchOpeningBalance($f, $everyCategory(120000, 210000, 40000, 6000, 32000, 260000, 900000));
+
+    $openingSettings = $f['company']->fresh()->settings['opening_balances'];
+    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->where('status', '!=', 'void')->count())->toBe(1)
+        ->and(Bill::whereIn('id', $openingSettings['bill_ids'])->where('status', '!=', 'void')->count())->toBe(1)
+        ->and($strayInvoice->fresh()->status)->not->toBe('void');
+
+    expect((float) CustomerProfile::where('customer_id', $depositor->id)->first()->amanat_balance)->toBe(32000.0);
+    expect(SalaryAdvance::where('employee_id', $employee->id)->count())->toBe(1)
+        ->and((float) SalaryAdvance::where('employee_id', $employee->id)->first()->amount)->toBe(6000.0);
+    expect(PartnerTransaction::where('partner_id', $partner->id)->count())->toBe(1)
+        ->and((float) PartnerTransaction::where('partner_id', $partner->id)->first()->amount)->toBe(900000.0);
+
+    expect(Transaction::where('company_id', $f['company']->id)
+        ->where('transaction_type', 'opening_balance')
+        ->whereNull('reversed_by_id')
+        ->whereNull('reversal_of_id')
+        ->count())->toBe(1);
+
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(120000.0)
+        ->and(ledgerBalance($f['accounts']['bank']))->toBe(210000.0)
+        ->and(ledgerBalance($f['accounts']['ar']))->toBe(40000.0)
+        ->and(ledgerBalance($f['accounts']['advances']))->toBe(6000.0)
+        ->and(ledgerBalance($f['accounts']['amanat']))->toBe(-32000.0)
+        ->and(ledgerBalance($f['accounts']['ap']))->toBe(-260000.0)
+        ->and(ledgerBalance($f['accounts']['partner']))->toBe(-900000.0);
+
+    $view = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true));
+    expect($view['rows']['credit_customers'])->toHaveCount(1)
+        ->and($view['totals']['assets'])->toBe(376000.0)
+        ->and($view['totals']['liabilities'])->toBe(1192000.0)
+        ->and($view['totals']['equity'])->toBe(-816000.0);
+
+    // A third save must succeed: the guard is not poisoned by prior generations' now-voided
+    // opening invoice/bill postings or by the reversed opening journal.
+    $third = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1]]);
+    expect($third['data']['journal_id'])->not->toBeNull();
+    expect($strayInvoice->fresh()->status)->not->toBe('void');
 });
 
 test('as_of_date on or after the first posted transaction is rejected', function () {

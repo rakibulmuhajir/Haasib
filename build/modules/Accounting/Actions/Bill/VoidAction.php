@@ -17,6 +17,7 @@ class VoidAction implements PaletteAction
         return [
             'id' => 'required|string',
             'reason' => 'nullable|string',
+            'reversal_date' => 'nullable|date',
         ];
     }
 
@@ -61,7 +62,7 @@ class VoidAction implements PaletteAction
         }
 
         if ($transaction) {
-            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null, $params['reversal_date'] ?? null);
         }
 
         // Reverse stock movements for inventory items (if module enabled)

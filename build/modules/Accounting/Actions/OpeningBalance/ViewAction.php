@@ -70,26 +70,24 @@ class ViewAction implements PaletteAction
         $partners = $journal ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
             ->map(fn ($p) => ['partner_id' => $p->partner_id, 'partner_name' => $p->partner?->name, 'amount' => (float) $p->amount])->values()->all() : [];
 
-        $creditCustomers = Invoice::where('company_id', $companyId)->where('internal_notes', SaveAction::MARK)->where('status', '!=', 'void')
+        // Opening invoices/bills are identified by the ids stored in settings — never by the
+        // internal_notes marker, which a void action can overwrite (Bill\VoidAction appends
+        // the void reason into internal_notes) and which a user's own unrelated invoice could
+        // coincidentally match.
+        $invoiceIds = $opening['invoice_ids'] ?? [];
+        $billIds = $opening['bill_ids'] ?? [];
+
+        $creditCustomers = empty($invoiceIds) ? [] : Invoice::where('company_id', $companyId)->whereIn('id', $invoiceIds)->where('status', '!=', 'void')
             ->with('customer:id,name')->get()
             ->map(fn ($i) => ['customer_id' => $i->customer_id, 'customer_name' => $i->customer?->name, 'amount' => (float) $i->total_amount, 'invoice_id' => $i->id, 'paid_amount' => (float) $i->paid_amount])->values()->all();
-        $suppliers = Bill::where('company_id', $companyId)->where('internal_notes', SaveAction::MARK)->where('status', '!=', 'void')
+        $suppliers = empty($billIds) ? [] : Bill::where('company_id', $companyId)->whereIn('id', $billIds)->where('status', '!=', 'void')
             ->with('vendor:id,name')->get()
             ->map(fn ($b) => ['vendor_id' => $b->vendor_id, 'vendor_name' => $b->vendor?->name, 'amount' => (float) $b->total_amount, 'bill_id' => $b->id, 'paid_amount' => (float) $b->paid_amount])->values()->all();
 
         $assets = $cash + array_sum(array_column($banks, 'amount')) + array_sum(array_column($creditCustomers, 'amount')) + array_sum(array_column($employees, 'amount'));
         $liabilities = array_sum(array_column($amanat, 'amount')) + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount'));
 
-        // Same exclusion as SaveAction::guardDate — opening invoices/bills post real
-        // 'invoice'/'bill' transactions and must not count as "the first real transaction".
-        $openingReferenceIds = Invoice::where('company_id', $companyId)->where('internal_notes', SaveAction::MARK)->pluck('id')
-            ->merge(Bill::where('company_id', $companyId)->where('internal_notes', SaveAction::MARK)->pluck('id'))
-            ->all();
-
-        $earliest = Transaction::where('company_id', $companyId)
-            ->whereNotIn('transaction_type', [SaveAction::JOURNAL_TYPE, SaveAction::REVERSAL_TYPE])
-            ->where(fn ($q) => $q->whereNull('reference_type')->orWhere('reference_type', '!=', SaveAction::REFERENCE_TYPE))
-            ->where(fn ($q) => $q->whereNull('reference_id')->orWhereNotIn('reference_id', $openingReferenceIds))
+        $earliest = SaveAction::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
             ->min('transaction_date');
 

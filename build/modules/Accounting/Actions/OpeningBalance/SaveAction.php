@@ -29,7 +29,6 @@ use Illuminate\Validation\ValidationException;
 class SaveAction implements PaletteAction
 {
     public const JOURNAL_TYPE = 'opening_balance';
-    public const REVERSAL_TYPE = 'opening_balance_reversal';
     public const REFERENCE_TYPE = 'acct.opening_balances';
     public const MARK = 'OPENING';
 
@@ -77,7 +76,7 @@ class SaveAction implements PaletteAction
         $asOf = $params['as_of_date'];
 
         $this->guardNotLocked($company);
-        $this->guardDate($company->id, $asOf);
+        $this->guardDate($company->id, $asOf, $company->settings['opening_balances'] ?? []);
 
         return DB::transaction(function () use ($company, $params, $asOf) {
             $this->reversePrevious($company);
@@ -106,6 +105,8 @@ class SaveAction implements PaletteAction
                 'as_of_date' => $asOf,
                 'locked_at' => null,
                 'locked_by_user_id' => null,
+                'invoice_ids' => $invoiceIds,
+                'bill_ids' => $billIds,
             ];
             $company->settings = $settings;
             $company->save();
@@ -124,23 +125,9 @@ class SaveAction implements PaletteAction
         }
     }
 
-    private function guardDate(string $companyId, string $asOf): void
+    private function guardDate(string $companyId, string $asOf, array $opening): void
     {
-        // The opening invoices/bills themselves post real 'invoice'/'bill' transactions
-        // (reference_type acct.invoices/acct.bills, not acct.opening_balances), so they
-        // must be excluded from "first posted transaction" by id, not just by type/reference_type.
-        $openingReferenceIds = Invoice::where('company_id', $companyId)->where('internal_notes', self::MARK)->pluck('id')
-            ->merge(Bill::where('company_id', $companyId)->where('internal_notes', self::MARK)->pluck('id'))
-            ->all();
-
-        $earliest = Transaction::where('company_id', $companyId)
-            ->whereNotIn('transaction_type', [self::JOURNAL_TYPE, self::REVERSAL_TYPE])
-            ->where(function ($q) {
-                $q->whereNull('reference_type')->orWhere('reference_type', '!=', self::REFERENCE_TYPE);
-            })
-            ->where(function ($q) use ($openingReferenceIds) {
-                $q->whereNull('reference_id')->orWhereNotIn('reference_id', $openingReferenceIds);
-            })
+        $earliest = self::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
             ->min('transaction_date');
 
@@ -152,29 +139,52 @@ class SaveAction implements PaletteAction
     }
 
     /**
+     * Transactions that do NOT belong to the opening-balances feature itself, i.e. the ones
+     * that count as "real" activity for the date guard and for the "earliest transaction"
+     * display. Shared by SaveAction::guardDate and ViewAction.
+     *
+     * Excludes:
+     *  - every 'opening_balance' journal, current or historical (the type never changes
+     *    across generations, so this alone covers both the live journal and old reversed ones);
+     *  - anything already reversed (reversed_by_id set) — a superseded opening invoice/bill
+     *    posting from a prior generation, once voided, must not keep poisoning the guard;
+     *  - reversal transactions themselves (reversal_of_id set) — pure undo postings, not new
+     *    independent activity;
+     *  - the CURRENT generation's live opening invoice/bill postings, identified by id via
+     *    settings (never by the internal_notes marker, which void actions can overwrite).
+     */
+    public static function nonOpeningTransactions(string $companyId, array $opening)
+    {
+        $excludedReferenceIds = array_merge($opening['invoice_ids'] ?? [], $opening['bill_ids'] ?? []);
+
+        return Transaction::where('company_id', $companyId)
+            ->where('transaction_type', '!=', self::JOURNAL_TYPE)
+            ->whereNull('reversed_by_id')
+            ->whereNull('reversal_of_id')
+            ->where(function ($q) use ($excludedReferenceIds) {
+                $q->whereNull('reference_id')->orWhereNotIn('reference_id', $excludedReferenceIds);
+            });
+    }
+
+    /**
      * Opening balances are re-entered as a whole: every earlier opening record is
      * reversed/voided first. Refuses when any opening record has been used since.
+     *
+     * Two passes: the first only checks (throws before anything is mutated), the second
+     * mutates — so a mid-way refusal never leaves a half-reversed state.
      */
     private function reversePrevious($company): void
     {
         $companyId = $company->id;
         $bus = app(CommandBus::class);
+        $opening = $company->settings['opening_balances'] ?? [];
+        $reversalDate = $opening['as_of_date'] ?? null;
 
-        $invoices = Invoice::where('company_id', $companyId)->where('internal_notes', self::MARK)->where('status', '!=', 'void')->get();
-        foreach ($invoices as $invoice) {
-            if ((float) $invoice->paid_amount > 0) {
-                throw ValidationException::withMessages(['credit_customers' => "Opening invoice {$invoice->invoice_number} already has payments; cannot re-enter opening balances."]);
-            }
-            $bus->dispatch('invoice.void', ['id' => $invoice->id, 'reason' => 'Opening balances re-entered'], Auth::user(), true);
-        }
+        $invoiceIds = $opening['invoice_ids'] ?? [];
+        $billIds = $opening['bill_ids'] ?? [];
 
-        $bills = Bill::where('company_id', $companyId)->where('internal_notes', self::MARK)->where('status', '!=', 'void')->get();
-        foreach ($bills as $bill) {
-            if ((float) $bill->paid_amount > 0) {
-                throw ValidationException::withMessages(['suppliers' => "Opening bill {$bill->bill_number} already has payments; cannot re-enter opening balances."]);
-            }
-            $bus->dispatch('bill.void', ['id' => $bill->id, 'reason' => 'Opening balances re-entered'], Auth::user(), true);
-        }
+        $invoices = empty($invoiceIds) ? collect() : Invoice::where('company_id', $companyId)->whereIn('id', $invoiceIds)->where('status', '!=', 'void')->get();
+        $bills = empty($billIds) ? collect() : Bill::where('company_id', $companyId)->whereIn('id', $billIds)->where('status', '!=', 'void')->get();
 
         $journals = Transaction::where('company_id', $companyId)
             ->where('transaction_type', self::JOURNAL_TYPE)
@@ -183,29 +193,64 @@ class SaveAction implements PaletteAction
             ->with('journalEntries')
             ->get();
 
+        $amanatByJournal = [];
+        $advancesByJournal = [];
+
+        // ---- Pass 1: validate only, mutate nothing ----
+        foreach ($invoices as $invoice) {
+            if ((float) $invoice->paid_amount > 0 || ((float) $invoice->total_amount - (float) $invoice->balance) > 0.005) {
+                throw ValidationException::withMessages(['credit_customers' => "Opening invoice {$invoice->invoice_number} already has payments; cannot re-enter opening balances."]);
+            }
+        }
+        foreach ($bills as $bill) {
+            if ((float) $bill->paid_amount > 0 || ((float) $bill->total_amount - (float) $bill->balance) > 0.005) {
+                throw ValidationException::withMessages(['suppliers' => "Opening bill {$bill->bill_number} already has payments; cannot re-enter opening balances."]);
+            }
+        }
         foreach ($journals as $journal) {
             // Sub-records link to their own journal LINE (journal_entry_id is an FK to acct.journal_entries).
             $entryIds = $journal->journalEntries->pluck('id')->all();
 
-            foreach (AmanatTransaction::whereIn('journal_entry_id', $entryIds)->get() as $amanat) {
-                $profile = CustomerProfile::getOrCreateForCustomer($companyId, $amanat->customer_id);
-                if ((float) $profile->amanat_balance < (float) $amanat->amount) {
+            $amanats = AmanatTransaction::whereIn('journal_entry_id', $entryIds)->get();
+            foreach ($amanats as $amanat) {
+                $profile = CustomerProfile::where('company_id', $companyId)->where('customer_id', $amanat->customer_id)->first();
+                $balance = $profile ? (float) $profile->amanat_balance : 0.0;
+                if ($balance < (float) $amanat->amount) {
                     throw ValidationException::withMessages(['amanat' => 'An opening amanat balance has already been drawn down; cannot re-enter opening balances.']);
                 }
+            }
+            $amanatByJournal[$journal->id] = $amanats;
+
+            $advances = SalaryAdvance::whereIn('journal_entry_id', $entryIds)->get();
+            foreach ($advances as $advance) {
+                if ((float) $advance->amount_recovered > 0) {
+                    throw ValidationException::withMessages(['employees' => 'An opening employee advance has already been partly recovered; cannot re-enter opening balances.']);
+                }
+            }
+            $advancesByJournal[$journal->id] = $advances;
+        }
+
+        // ---- Pass 2: mutate ----
+        foreach ($invoices as $invoice) {
+            $bus->dispatch('invoice.void', ['id' => $invoice->id, 'reason' => 'Opening balances re-entered', 'reversal_date' => $reversalDate], Auth::user(), true);
+        }
+        foreach ($bills as $bill) {
+            $bus->dispatch('bill.void', ['id' => $bill->id, 'reason' => 'Opening balances re-entered', 'reversal_date' => $reversalDate], Auth::user(), true);
+        }
+        foreach ($journals as $journal) {
+            foreach ($amanatByJournal[$journal->id] as $amanat) {
+                $profile = CustomerProfile::getOrCreateForCustomer($companyId, $amanat->customer_id);
                 $profile->adjustAmanatBalance(-(float) $amanat->amount);
                 $amanat->delete();
             }
 
-            foreach (SalaryAdvance::whereIn('journal_entry_id', $entryIds)->get() as $advance) {
-                if ((float) $advance->amount_recovered > 0) {
-                    throw ValidationException::withMessages(['employees' => 'An opening employee advance has already been partly recovered; cannot re-enter opening balances.']);
-                }
+            foreach ($advancesByJournal[$journal->id] as $advance) {
                 // SalaryAdvance uses SoftDeletes; a soft-deleted row would still be found by a
                 // later scoped query, so it must be force-deleted on re-entry.
                 $advance->forceDelete();
             }
 
-            PartnerTransaction::whereIn('journal_entry_id', $entryIds)->delete();
+            PartnerTransaction::whereIn('journal_entry_id', $journal->journalEntries->pluck('id')->all())->delete();
 
             $this->postingService->reverseTransaction($journal, 'Opening balances re-entered', $journal->transaction_date);
         }

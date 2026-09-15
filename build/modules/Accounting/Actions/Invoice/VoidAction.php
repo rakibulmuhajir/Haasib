@@ -18,6 +18,7 @@ class VoidAction implements PaletteAction
         return [
             'id' => 'required|string|max:255',
             'reason' => 'nullable|string|max:500',
+            'reversal_date' => 'nullable|date',
         ];
     }
 
@@ -75,7 +76,7 @@ class VoidAction implements PaletteAction
         }
 
         if ($transaction) {
-            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null, $params['reversal_date'] ?? null);
         }
 
         // Update invoice status

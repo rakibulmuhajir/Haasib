@@ -72,7 +72,7 @@ Every opening figure becomes the same kind of record the system already understa
 |---|---|---|---|
 | Cash on hand | line in the opening journal | Dr 1050, Cr 3080 | |
 | Each bank / card settlement account (`subtype = bank`) | line in the opening journal | Dr bank, Cr 3080 | |
-| Amanat depositor | `AmanatTransaction` (type deposit) via `AmanatService`, new `source = 'opening'` | Dr 3080, Cr 2200 | `AmanatService::deposit` gains an optional `date` and `counter_account_id`; profile `amanat_balance` is adjusted as today |
+| Amanat depositor | `AmanatTransaction` (type deposit) created directly, `reference = 'OPENING'`, `transaction_id` = opening journal — the same pattern `DailyCloseService` uses | Dr 3080, Cr 2200 (line in the opening journal) | profile `amanat_balance` is adjusted via `adjustAmanatBalance()`; `AmanatService` is untouched |
 | Credit customer (udhaar) | `Invoice` via `Invoice\CreateAction`: one line "Opening balance as of {date}", `income_account_id = 3080`, no tax, `status = posted`/sent, `due_date = as_of_date` | Dr AR, Cr 3080 | Customer payments settle it through the existing Payments module |
 | Supplier | `Bill` via `Bill\CreateAction`: one line, `expense_account_id = 3080`, no tax | Dr 3080, Cr AP | Bill payments settle it as usual |
 | Employee advance outstanding | `SalaryAdvance` with `amount = amount_outstanding = X`, `amount_recovered = 0`, `status = approved`, `advance_date = as_of_date`, `advance_account_id = 1150` | Dr 1150, Cr 3080 | Payroll recovery works unchanged |
@@ -103,7 +103,7 @@ Schema contract: add an "Opening balances" section to `docs/contracts/gl-core-sc
 - `Actions/OpeningBalance/SaveAction.php` — dispatched via `Bus::dispatch()`. Input: validated array from `StoreOpeningBalancesRequest`. Runs in one DB transaction:
   1. Guard: `as_of_date` must be strictly before the earliest posted non-opening transaction for the company; refuse with a validation error otherwise. Refuse everything if `locked_at` is set.
   2. Resolve 3080 by code; create it (equity / `subtype = equity`, name "Opening Balance Equity") if the company's pack lacks it.
-  3. Diff incoming rows against existing opening records (keyed by section + entity id / account id). Unchanged rows: skip. Changed or removed rows: void the previous record through the module's own void path (`Invoice\VoidAction`, `Bill\VoidAction`, reversing journal for GL-only lines, amanat withdrawal-reversal via `AmanatService`, delete unrecovered `SalaryAdvance`, reversing `PartnerTransaction`) and create fresh. New rows: create.
+  3. Opening balances are re-entered as a whole: every earlier opening record is reversed first — invoices and bills through `invoice.void` / `bill.void`, the opening journal through a reversing `opening_balance_reversal` transaction, amanat rows deleted with `amanat_balance` reduced, unrecovered `SalaryAdvance` and `PartnerTransaction` rows deleted — then the submitted rows are created fresh. Refused with a validation error if any opening invoice/bill has payments, any opening advance has recoveries, or any opening amanat balance has been drawn down.
   4. Post the cash/bank journal as one `Transaction` with one line per account plus the 3080 balancing line, via `GlPostingService::postBalancedTransaction`.
   5. Persist `as_of_date` in settings.
 - `Actions/OpeningBalance/LockAction.php` — sets `locked_at` / `locked_by_user_id`. Locking is a separate explicit step; unlocking is not offered in v1.
@@ -117,7 +117,6 @@ Schema contract: add an "Opening balances" section to `docs/contracts/gl-core-sc
 - `Http/Controllers/OpeningBalanceController.php` — `show`, `store`, `lock`. Inertia page `accounting/opening-balances/Index`.
 - Routes (`build/routes/web.php`, accounting group): `GET /{company}/accounting/opening-balances`, `POST …`, `POST …/lock`; middleware `['auth', 'identify.company']`.
 - Permissions: add `OPENING_BALANCES_VIEW` / `OPENING_BALANCES_MANAGE` to `app/Constants/Permissions.php`, `config/role-permissions.php` (owner, admin, accountant), then `rbac:sync-permissions` and `rbac:sync-role-permissions`.
-- `AmanatService::deposit` — accept optional `date` (defaults `now()`), `counter_account_id` (defaults cash) and `source`. No behaviour change for existing callers.
 
 `build/modules/FuelStation/`
 
@@ -150,14 +149,13 @@ Fuel onboarding `Onboarding/Index.vue`: replace the `opening_cash` step body wit
 Feature tests (Pest, `build/tests/Feature/Accounting/OpeningBalancesTest.php`):
 
 1. Full save creates: one `opening_balance` transaction with cash + 2 banks + 3080 line that balances; one invoice per credit customer with `income_account_id = 3080`; one bill per supplier; `AmanatTransaction` + profile balance per depositor; `SalaryAdvance` per employee; `PartnerTransaction` per partner. Trial balance after save: assets − liabilities = 3080 balance.
-2. Re-save with one amount changed and one row removed → old records voided/reversed, new ones created, totals correct, no duplicates.
+2. Re-save with one amount changed → old records voided/reversed, new ones created, totals correct, no duplicates; the view reflects the new figures.
 3. Guard: `as_of_date` on/after the first posted daily close → 422.
 4. Locked → store returns 403-style validation error; lock endpoint sets `locked_at`.
 5. Permissions: user without `OPENING_BALANCES_MANAGE` gets 403.
 6. `CreditCustomerController` index shows the opening receivable as `current_balance`.
 7. Fuel onboarding page no longer exposes `fuel.onboarding.opening-cash`; the summary card reflects the saved state.
 
-Unit test for `AmanatService::deposit` with `counter_account_id` and `date` overrides.
 
 ---
 

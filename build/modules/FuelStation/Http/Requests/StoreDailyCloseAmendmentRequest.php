@@ -40,6 +40,7 @@ class StoreDailyCloseAmendmentRequest extends BaseFormRequest
             // Tab 2: Tank readings
             'tank_readings' => ['nullable', 'array'],
             'tank_readings.*.tank_id' => ['required', 'uuid'],
+            'tank_readings.*.reading_type' => ['nullable', 'in:opening,closing'],
             'tank_readings.*.stick_reading' => ['required', 'numeric', 'min:0'],
             'tank_readings.*.liters' => ['required', 'numeric', 'min:0'],
 

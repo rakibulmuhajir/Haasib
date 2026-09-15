@@ -246,3 +246,67 @@ test('credit customer and supplier openings become posted invoices and bills aga
         ->and(ledgerBalance($f['accounts']['ap']))->toBe(-250000.0)
         ->and(ledgerBalance($equity))->toBe(208000.0);
 });
+
+test('re-saving replaces the previous opening records without duplicating balances', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'Truck Company');
+
+    dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'cash' => ['amount' => 150000],
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],
+    ]);
+    $second = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'cash' => ['amount' => 120000],
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 40000]],
+    ]);
+
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(120000.0)
+        ->and(ledgerBalance($f['accounts']['ar']))->toBe(40000.0);
+    expect(Invoice::where('company_id', $f['company']->id)->where('status', '!=', 'void')->count())->toBe(1);
+    // reverseTransaction() preserves the original transaction_type, so the reversal is
+    // identified by reversal_of_id rather than by a distinct 'opening_balance_reversal' type.
+    $journal = Transaction::where('company_id', $f['company']->id)
+        ->where('transaction_type', 'opening_balance')
+        ->whereNotNull('reversed_by_id')
+        ->first();
+    expect($journal)->not->toBeNull();
+    expect(Transaction::where('reversal_of_id', $journal->id)->count())->toBe(1);
+    $view = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true));
+    expect($view['rows']['cash']['amount'])->toBe(120000.0)
+        ->and($view['rows']['credit_customers'][0]['amount'])->toBe(40000.0)
+        ->and($view['totals']['assets'])->toBe(160000.0);
+});
+
+test('as_of_date on or after the first posted transaction is rejected', function () {
+    $f = openingBalanceFixture();
+    $period = AccountingPeriod::where('company_id', $f['company']->id)->where('period_number', 9)->first();
+    Transaction::create([
+        'company_id' => $f['company']->id,
+        'transaction_number' => 'JE-0001',
+        'transaction_type' => 'journal',
+        'transaction_date' => '2026-09-01',
+        'posting_date' => '2026-09-01',
+        'fiscal_year_id' => $period->fiscal_year_id,
+        'period_id' => $period->id,
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'status' => 'posted',
+        'description' => 'first close',
+    ]);
+
+    expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-01', 'cash' => ['amount' => 1]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+test('locking prevents further saves', function () {
+    $f = openingBalanceFixture();
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 10]]);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
+
+    expect($f['company']->fresh()->settings['opening_balances']['locked_at'])->not->toBeNull();
+    expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 20]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+});

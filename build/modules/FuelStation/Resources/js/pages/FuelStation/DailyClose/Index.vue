@@ -35,8 +35,6 @@ import {
   RotateCcw,
   MoreHorizontal,
   Eye,
-  Edit,
-  GitBranch,
   CalendarDays,
 } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -52,8 +50,6 @@ interface DailyClose {
   variance: number
   status: 'posted' | 'locked' | 'reversed' | 'reversal' | 'correction'
   is_locked?: boolean
-  is_amendable?: boolean
-  has_amendments?: boolean
   has_post_close_activity?: boolean
 }
 
@@ -62,7 +58,6 @@ const props = defineProps<{
   closes: DailyClose[]
   parkedCloses?: Array<{ business_date: string; updated_at: string }>
   permissions: {
-    canAmend: boolean
     canLock: boolean
     canUnlock: boolean
   }
@@ -228,10 +223,6 @@ const unlockSingle = (closeId: string) => {
                   >
                     {{ formatDate(close.date) }}
                   </Link>
-                  <Badge v-if="close.has_amendments" variant="outline" class="text-xs">
-                    <GitBranch class="h-3 w-3 mr-1" />
-                    Amended
-                  </Badge>
                 </div>
                 <div class="text-sm text-muted-foreground font-mono">
                   {{ close.transaction_number }} <Badge v-if="close.has_post_close_activity" variant="destructive">Post-close activity</Badge>
@@ -285,15 +276,6 @@ const unlockSingle = (closeId: string) => {
                     </Link>
                   </DropdownMenuItem>
 
-                  <template v-if="permissions.canAmend && close.is_amendable && close.status === 'posted' && !close.is_locked">
-                    <DropdownMenuItem as-child>
-                      <Link :href="`/${company.slug}/fuel/daily-close/${close.id}/amend`" class="flex items-center">
-                        <Edit class="h-4 w-4 mr-2" />
-                        Amend
-                      </Link>
-                    </DropdownMenuItem>
-                  </template>
-
                   <DropdownMenuSeparator />
 
                   <template v-if="permissions.canLock && !close.is_locked && close.status === 'posted'">
@@ -323,7 +305,7 @@ const unlockSingle = (closeId: string) => {
         <DialogHeader>
           <DialogTitle>Lock Month</DialogTitle>
           <DialogDescription>
-            Lock all daily closes for a specific month. This will prevent any amendments to those entries.
+            Lock all daily closes for a specific month. This will prevent post-close corrections to those entries.
           </DialogDescription>
         </DialogHeader>
 

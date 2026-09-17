@@ -30,9 +30,8 @@ Product rule: operators should be able to run daily work without accounting know
 - [ ] Daily close validates that payment totals, cash expected, and readings are understandable before posting.
 - [ ] Daily close posts one balanced journal entry or a clearly linked journal group.
 - [ ] Posted daily closes are read-only.
-- [ ] Duplicate posting for the same station/date is prevented unless using amendment flow.
-- [ ] Corrections reverse the old posting instead of editing/deleting posted GL entries.
-- [ ] Amendment chain is visible from daily close list and detail.
+- [x] Duplicate posting for the same station/date is prevented outright (no amendment/reversal flow exists; see below).
+- [x] Corrections are dated adjustments layered on the posted close (declared expenses, reading corrections, late canonical activity), never editing/deleting/reversing posted GL entries.
 - [ ] Daily close screen shows inline hints for account impact, for example cash sale increases Cash on Hand and Fuel Sales.
 - [ ] Operators see plain-English descriptions first; debit/credit detail is available but not dominant.
 
@@ -201,7 +200,7 @@ Product rule: operators should be able to run daily work without accounting know
 - [ ] Create daily close with credit customer sale.
 - [ ] Create daily close with salary advance and partner drawing.
 - [ ] Post daily close and verify all double entries.
-- [ ] Reverse/amend daily close and verify reversal journals.
+- [x] Reversing/amending a posted Daily Close is refused (owner decision, 2026-09-17): PostingService::reverseTransaction and Transaction::isAmendable() both refuse fuel_daily_close unconditionally. Verify instead that a dated correction (expense/reading correction) reconciles correctly against the frozen snapshot.
 - [ ] Settle POS/fuel-card clearing and verify clearing balance.
 - [ ] Run payroll with salary advance recovery.
 - [ ] Verify reports match journal and stock ledgers.

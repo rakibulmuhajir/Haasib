@@ -92,12 +92,9 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('daily-close', [DailyCloseController::class, 'store'])->name('fuel.daily-close.store');
     Route::get('daily-close/history', [DailyCloseController::class, 'index'])->name('fuel.daily-close.index');
     Route::get('daily-close/{transaction}', [DailyCloseController::class, 'show'])->name('fuel.daily-close.show');
-    Route::get('daily-close/{transaction}/amend', [DailyCloseController::class, 'amend'])->name('fuel.daily-close.amend');
-    Route::post('daily-close/{transaction}/amend', [DailyCloseController::class, 'storeAmendment'])->name('fuel.daily-close.amend.store');
     Route::post('daily-close/{transaction}/lock', [DailyCloseController::class, 'lock'])->name('fuel.daily-close.lock');
     Route::post('daily-close/{transaction}/unlock', [DailyCloseController::class, 'unlock'])->name('fuel.daily-close.unlock');
     Route::post('daily-close/lock-month', [DailyCloseController::class, 'lockMonth'])->name('fuel.daily-close.lock-month');
-    Route::get('daily-close/{transaction}/amendment-chain', [DailyCloseController::class, 'amendmentChain'])->name('fuel.daily-close.amendment-chain');
 
     // Investors
     Route::get('investors', [InvestorController::class, 'index'])->name('fuel.investors.index');

@@ -162,14 +162,15 @@ class Transaction extends Model
 
     /**
      * Check if this transaction can be amended.
+     *
+     * Every Daily Close is now a snapshot close (posting_snapshot is always present);
+     * the legacy reversal+correction amendment path this once guarded for a close
+     * without one has been removed (see DailyCloseAmendmentService's removal). Nothing
+     * else in this codebase uses amendment, so this always refuses.
      */
     public function isAmendable(): bool
     {
-        return !isset($this->metadata['posting_snapshot'])
-            && !$this->is_locked
-            && !$this->reversed_by_id
-            && !$this->voided_at
-            && in_array($this->transaction_type, ['fuel_daily_close']);
+        return false;
     }
 
     /**

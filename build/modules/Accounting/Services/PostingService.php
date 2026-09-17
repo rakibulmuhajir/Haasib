@@ -410,7 +410,10 @@ class PostingService
     public function reverseTransaction(Transaction $original, ?string $reason = null, Carbon|string|null $date = null): Transaction
     {
         app(OpeningBalanceGuard::class)->assertMutable($original->company_id, 'journal', $original->id);
-        if ($original->transaction_type === 'fuel_daily_close' && isset($original->metadata['posting_snapshot'])) {
+        // Every Daily Close is a snapshot close now (the legacy amendment/reversal path
+        // for one posted without a snapshot has been removed), so this refuses
+        // unconditionally rather than only when a posting_snapshot happens to be present.
+        if ($original->transaction_type === 'fuel_daily_close') {
             throw new \RuntimeException('A posted Daily Close cannot be reversed. Record a separate dated correction.');
         }
         $original->loadMissing(['journalEntries']);

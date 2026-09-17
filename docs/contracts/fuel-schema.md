@@ -929,3 +929,25 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   for display. A bill paid inside the same close already carries a `transaction_id`, so it
   is excluded from `pendingBillPayments` by the same `whereNull('transaction_id')` filter
   that list already uses.
+
+### Legacy Daily Close amendment removed (2026-09-17)
+- Owner decision: nothing was ever in production with a close lacking a `posting_snapshot`,
+  and a posted Daily Close is never reversed and re-posted. Every close is a snapshot close.
+- Removed entirely: `DailyCloseAmendmentService` (the `amendDailyClose()`/reversal+correction
+  path and `getAmendmentChain()`), the `/{transaction}/amend` and `/{transaction}/amendment-chain`
+  routes and controller methods, `StoreDailyCloseAmendmentRequest`, the `AmendmentChain.vue`
+  component, and the "Amend"/"Amendment History" UI in Show.vue and Index.vue.
+  `Transaction::isAmendable()` now always returns `false`; `PostingService::reverseTransaction`
+  refuses `fuel_daily_close` unconditionally (previously only when a `posting_snapshot` was
+  present). Lock/unlock/lock-month is a separate, unrelated feature and was kept, now in
+  `DailyCloseLockService` (renamed from `DailyCloseAmendmentService`, which no longer amends
+  anything).
+- `fuel.capture_post_close_activity()`'s whitelist for `fuel_daily_close_reversal` transactions
+  (nothing creates that type anymore) was dropped via a new migration
+  (`2026_09_17_230000_drop_legacy_close_reversal_support`) that re-creates the function with
+  `CREATE OR REPLACE`, rather than editing the original `2026_09_15_220000_audit_post_close_activity`
+  migration in place (that one has already run in production).
+- Post-close corrections remain exactly as documented above (declared expenses, reading
+  corrections, late canonical activity captured in `fuel.daily_close_activity`) — nothing
+  about that mechanism changed. What was removed is the alternate, unused path of reversing
+  the whole close and re-posting a correction transaction linked via `corrects_transaction_id`.

@@ -47,7 +47,7 @@ class DailyCloseReconciliationService
                 })->orWhereHas('reversalOf', fn ($original) => $original->where('company_id', $companyId)->whereDate('transaction_date', $date));
             })->whereIn('status', ['posted', 'locked'])
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
-            ->whereNotIn('transaction_type', ['fuel_daily_close', 'fuel_daily_close_reversal'])
+            ->where('transaction_type', '!=', 'fuel_daily_close')
             ->with('journalEntries')->orderBy('id')->get();
         $accountTypes = DB::table('acct.accounts')->where('company_id', $companyId)->pluck('type', 'id');
         $sources = [];
@@ -98,9 +98,11 @@ class DailyCloseReconciliationService
     public function view(Transaction $close): array
     {
         $metadata = $close->metadata ?? [];
+        // Every Daily Close is a snapshot close; the legacy branch for a close posted
+        // without one (pre-snapshot code) has been removed — see docs/contracts/fuel-schema.md.
         $snapshot = $metadata['posting_snapshot'] ?? null;
         if (!$snapshot) {
-            return ['legacy' => true, 'activity' => [], 'current' => null];
+            throw new \RuntimeException('This Daily Close has no posting snapshot and cannot be reconciled.');
         }
         // Old snapshots stored cash-only flows. Normalize the read model, never the frozen record.
         if (($snapshot['version'] ?? 1) < 2) {
@@ -173,7 +175,6 @@ class DailyCloseReconciliationService
         return [
             'audit_events' => $audit,
             'has_post_close_activity' => !empty($activity) || !empty($audit) || !empty($corrections['list']),
-            'legacy' => false,
             'snapshot' => $snapshot,
             'current' => $current,
             'activity' => $activity,

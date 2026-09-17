@@ -426,7 +426,6 @@ test('HTTP park resume post and late expense show snapshot current totals and hi
     expect($page['reconciliation']['has_post_close_activity'])->toBeTrue();
     $history = test()->get($url.'/history')->assertOk()->viewData('page')['props'];
     expect($history['closes'][0]['has_post_close_activity'])->toBeTrue();
-    test()->get($url.'/'.$close->id.'/amend')->assertRedirect();
 });
 
 test('HTTP workflow refuses unauthorized users and other-company close ids', function () {
@@ -534,44 +533,6 @@ test('a notes-only invoice or bill edit leaves the posted journal untouched', fu
     expect($original->fresh()->reversed_by_id)->toBeNull();
     expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', $kind)->count())->toBe(1);
 })->with(['invoice', 'bill']);
-
-
-test('a legacy close without a posting_snapshot remains amendable and reversible', function () {
-    $f = closeWorkflowFixture();
-
-    // A legacy close: posted directly (as pre-snapshot code did), with no
-    // metadata['posting_snapshot'] key at all.
-    $legacy = app(GlPostingService::class)->postBalancedTransaction([
-        'company_id' => $f['company']->id, 'transaction_number' => 'FDC-LEGACY-1', 'transaction_type' => 'fuel_daily_close',
-        'date' => '2026-09-15', 'currency' => 'PKR', 'metadata' => ['opening_cash' => 420000, 'closing_cash' => 410000],
-    ], [
-        ['account_id' => $f['accounts']['6180']->id, 'type' => 'debit', 'amount' => 10000],
-        ['account_id' => $f['accounts']['1050']->id, 'type' => 'credit', 'amount' => 10000],
-    ]);
-
-    expect($legacy->isAmendable())->toBeTrue();
-
-    $result = app(\App\Modules\FuelStation\Services\DailyCloseAmendmentService::class)->amendDailyClose(
-        $legacy, $f['payload'], $f['user'], 'Corrected a typo in the original entry'
-    );
-
-    $reversal = Transaction::findOrFail($result['reversal_id']);
-    expect($reversal->transaction_type)->toBe('fuel_daily_close_reversal');
-    expect($legacy->fresh()->reversed_by_id)->toBe($reversal->id);
-    expect(Transaction::findOrFail($result['correction_id'])->corrects_transaction_id)->toBe($legacy->id);
-});
-
-test('a snapshot close cannot be amended or reversed through the legacy amendment path', function () {
-    $f = closeWorkflowFixture();
-    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
-    $close = Transaction::findOrFail($posted['transaction_id']);
-
-    expect($close->isAmendable())->toBeFalse();
-    expect(fn () => app(\App\Modules\FuelStation\Services\DailyCloseAmendmentService::class)->amendDailyClose(
-        $close, $f['payload'], $f['user'], 'Attempted correction'
-    ))->toThrow(\RuntimeException::class);
-    expect(fn () => app(PostingService::class)->reverseTransaction($close, 'Attempted reversal', '2026-09-15'))->toThrow(\RuntimeException::class);
-});
 
 test('posted close journal cannot be altered or reversed through ordinary accounting paths', function () {
     $f = closeWorkflowFixture();

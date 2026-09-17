@@ -1025,8 +1025,25 @@ class DailyCloseService
             $metadata['credit_sales_total'] = $creditTotal;
             $metadata['credit_sale_details'] = $creditDetails;
             $cashFromSales = $totalRevenue - $totalNonCashReceipts - $creditTotal;
+
+            // Payments received: a buyer settling a credit invoice, entered inline instead
+            // of at /payments. Each row is posted through the existing Payment\CreateAction
+            // (see DailyClosePaymentsReceivedService); a cash-account row raises expected
+            // drawer cash exactly like a standalone payment would, a bank-account row does
+            // not.
+            $paymentsReceivedDetails = app(DailyClosePaymentsReceivedService::class)->prepare(
+                $companyId, $date, $data['payments_received'] ?? [], $user
+            );
+            $paymentsReceivedCashTotal = round(array_sum(array_map(
+                fn ($detail) => $detail['affects_cash_drawer'] ? $detail['amount'] : 0,
+                $paymentsReceivedDetails
+            )), 2);
+            $metadata['payments_received_total'] = round(array_sum(array_column($paymentsReceivedDetails, 'amount')), 2);
+            $metadata['payments_received_details'] = $paymentsReceivedDetails;
             $totalCashIn = $openingCash + $partnerDepositsTotal + $amanatDepositsTotal + $otherDepositsTotal + $cashFromSales;
             $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal + $cashBillPaymentsTotal;
+
+            $totalCashIn += $paymentsReceivedCashTotal;
 
             // Debit: Cash on Hand (opening + deposits + cash sales - withdrawals)
             $closingCash = (float) $data['closing_cash'];
@@ -1047,6 +1064,7 @@ class DailyCloseService
                 'other_deposits' => $data['other_deposits'] ?? [],
                 'payment_receipts' => $data['payment_receipts'] ?? [],
                 'credit_sales' => $data['credit_sales'] ?? [],
+                'payments_received' => $data['payments_received'] ?? [],
                 'bank_deposits' => $data['bank_deposits'] ?? [],
                 'partner_withdrawals' => $data['partner_withdrawals'] ?? [],
                 'employee_advances' => $data['employee_advances'] ?? [],
@@ -1092,7 +1110,10 @@ class DailyCloseService
                 $entries[] = ['account_id' => $credit['ar_account_id'], 'type' => 'debit',
                     'amount' => $credit['amount'], 'description' => 'Credit sale '.$credit['invoice_number'].' — '.$credit['customer_name']];
             }
-            $cashChange = $closingCash - $openingCash - $externalCashIn + $externalCashOut;
+            // Payments received created inline just above already posted their own Dr Cash /
+            // Cr AR transaction; that cash is real and already in the drawer, but must not be
+            // debited again here or the same dollar is posted twice across two transactions.
+            $cashChange = $closingCash - $openingCash - $externalCashIn + $externalCashOut - $paymentsReceivedCashTotal;
             if ($cashChange != 0) {
                 $entries[] = [
                     'account_id' => $accounts['cash_on_hand'],
@@ -1332,6 +1353,7 @@ class DailyCloseService
                 ],
                 'channels' => $paymentReceiptPostings, 'tanks' => $tankSnapshot,
                 'credit_sales' => $creditDetails,
+                'payments_received' => $paymentsReceivedDetails,
                 'nozzles' => $nozzleReadingsData, 'correction_accounts' => $accounts,
                 'physical_observations' => $data['tank_readings'] ?? [],
             ];

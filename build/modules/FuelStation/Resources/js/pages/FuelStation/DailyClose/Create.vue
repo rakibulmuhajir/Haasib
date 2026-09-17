@@ -55,6 +55,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
+import PaymentsReceivedEntry from '../../../components/PaymentsReceivedEntry.vue';
 import { useLexicon } from '@/composables/useLexicon';
 import TankLevelGauge from '../../../components/TankLevelGauge.vue';
 
@@ -237,6 +238,15 @@ interface PendingFuelInvoice {
     reference: string;
 }
 
+interface OpenInvoice {
+    id: string;
+    invoice_number: string;
+    customer_id: string;
+    customer_name: string;
+    balance: number;
+    currency: string;
+}
+
 interface PurchaseSupplier {
     id: string;
     name: string;
@@ -282,6 +292,8 @@ const props = defineProps<{
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
     pendingFuelInvoices?: PendingFuelInvoice[];
+    openInvoices?: OpenInvoice[];
+    cashAccountIds?: string[];
     purchaseSuppliers?: PurchaseSupplier[];
     purchaseItems?: PurchaseItem[];
     canEnterPurchases?: boolean;
@@ -798,6 +810,15 @@ const form = useForm({
 
     // Tab 3: Money In - Dynamic payment receipts
     opening_cash: props.previousClose.closing_cash || 0,
+    payments_received: [] as {
+        customer_id: string;
+        customer_name: string;
+        invoice_id: string;
+        invoice_number?: string;
+        amount: number;
+        payment_account_id: string;
+        reference: string;
+    }[],
     partner_deposits: [] as {
         partner_id: string;
         partner_name: string;
@@ -1046,6 +1067,7 @@ const resetFormToInitial = () => {
 
     // Reset money in
     form.opening_cash = props.previousClose.closing_cash || 0;
+    form.payments_received = [];
     form.partner_deposits = [];
     form.amanat_deposits = [];
     form.other_deposits = [];
@@ -1662,9 +1684,18 @@ const totalNonCashReceipts = computed(() => {
 });
 
 // Money In = opening cash + every cash deposit + TOTAL sales (cash, card, transfer — all of it)
+// Only a payment received into a cash account raises expected drawer cash, matching
+// DailyClosePaymentsReceivedService's affects_cash_drawer flag on the backend; a bank
+// account never touches it.
+const totalPaymentsReceivedCash = computed(() => {
+    const cashIds = new Set(props.cashAccountIds ?? []);
+    return form.payments_received.reduce((sum, row) => (cashIds.has(row.payment_account_id) ? sum + Number(row.amount || 0) : sum), 0);
+});
+
 const totalMoneyIn = computed(() => {
     return (
         form.opening_cash +
+        totalPaymentsReceivedCash.value +
         totalPartnerDeposits.value +
         totalAmanatDeposits.value +
         totalOtherDeposits.value +
@@ -4393,6 +4424,16 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                             </div>
                         </template>
+
+                        <PaymentsReceivedEntry
+                            v-model="form.payments_received"
+                            :errors="form.errors as Record<string, string>"
+                            :disabled="submitting || form.processing"
+                            :open-invoices="props.openInvoices ?? []"
+                            :payment-accounts="(props as any).paymentAccounts ?? []"
+                            :currency="currencyCode"
+                        />
+                        <Separator />
 
                         <!-- Money In Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">

@@ -195,6 +195,29 @@ class DailyCloseController extends Controller
             ->values();
     }
 
+    /**
+     * Buyers with an outstanding invoice, for the "Payments Received" section of the close:
+     * a searchable list of invoices to settle, each showing its own outstanding balance.
+     */
+    private function getOpenInvoicesForDailyClose(string $companyId)
+    {
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereNotIn('status', ['draft', 'void', 'cancelled', 'paid'])
+            ->where('balance', '>', 0)
+            ->with('customer:id,name')
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(fn (\App\Modules\Accounting\Models\Invoice $invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'customer_id' => $invoice->customer_id,
+                'customer_name' => $invoice->customer?->name ?? 'Buyer',
+                'balance' => (float) $invoice->balance,
+                'currency' => $invoice->currency,
+            ])
+            ->values();
+    }
+
     /** Suppliers selectable for an inline purchase entered inside the Daily Close. */
     private function getPurchaseSuppliersForDailyClose(string $companyId)
     {
@@ -585,6 +608,11 @@ class DailyCloseController extends Controller
             ->where('subtype', 'bank')
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
+        $openInvoices = $this->getOpenInvoicesForDailyClose($companyId);
+        // Which company accounts are cash-subtype, so the Payments Received section can
+        // tell the frontend which rows raise expected drawer cash.
+        $cashAccountIds = Account::where('company_id', $companyId)->where('is_active', true)
+            ->whereNull('deleted_at')->where('subtype', 'cash')->pluck('id')->all();
 
         // Get expense accounts
         $expenseAccounts = Account::where('company_id', $companyId)
@@ -689,6 +717,8 @@ class DailyCloseController extends Controller
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
+            'openInvoices' => $openInvoices,
+            'cashAccountIds' => $cashAccountIds,
             'expenseAccounts' => $expenseAccounts,
             'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,

@@ -64,6 +64,8 @@ return [
         'account.delete',
         'journal.create',
         'journal.view',
+        'opening_balance.view',
+        'opening_balance.manage',
         'posting_template.create',
         'posting_template.view',
         'posting_template.update',
@@ -219,6 +221,7 @@ return [
         'daily_close.view',
         'daily_close.amend',
         'daily_close.lock',
+        'daily_close.correct_reading',
 
         // Umrah
         'umrah.agent.create',
@@ -298,6 +301,8 @@ return [
         'account.update',
         'journal.create',
         'journal.view',
+        'opening_balance.view',
+        'opening_balance.manage',
         'posting_template.view',
         'posting_template.update',
         'bill.create',

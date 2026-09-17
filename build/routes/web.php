@@ -19,6 +19,7 @@ use App\Modules\Accounting\Http\Controllers\CustomerController;
 use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use App\Modules\Accounting\Http\Controllers\InvoiceController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\PaymentController;
 use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
@@ -237,6 +238,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
         Route::post('/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
         Route::get('/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+
+        // Opening balances
+        Route::get('/{company}/accounting/opening-balances', [OpeningBalanceController::class, 'show'])->name('accounting.opening-balances.show');
+        Route::post('/{company}/accounting/opening-balances', [OpeningBalanceController::class, 'store'])->name('accounting.opening-balances.store');
+        Route::post('/{company}/accounting/opening-balances/lock', [OpeningBalanceController::class, 'lock'])->name('accounting.opening-balances.lock');
 
         // Tax Management routes
         Route::get('/{company}/tax/settings', [TaxSettingsController::class, 'index'])->name('tax.settings');

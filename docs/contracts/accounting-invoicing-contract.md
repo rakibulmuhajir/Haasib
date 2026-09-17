@@ -197,6 +197,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency; NULL if currency = base).
   - `base_currency` char(3) not null (company base, denormalized).
   - `base_amount` numeric(15,2) not null default 0.00 (amount in base currency).
+  - `transaction_charge` numeric(18,6) not null default 0.00 (bank/transaction fee in payment currency).
+  - `base_transaction_charge` numeric(15,2) not null default 0.00 (bank/transaction fee in base currency).
   - `payment_method` varchar(50) not null; constrained values: cash, check, card, bank_transfer, other.
   - `reference_number` varchar(100) null.
   - `notes` text null.
@@ -210,14 +212,15 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.payments'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','transaction_charge','base_transaction_charge','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','transaction_charge'=>'decimal:6','base_transaction_charge'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; hasMany PaymentAllocation.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id.
   - `payment_number`: required|string|max:50 (unique per company, soft-delete aware).
   - `payment_date`: required|date|before_or_equal:today.
   - `amount`: required|numeric|min:0.01|decimal:6.
+  - `transaction_charge`: nullable|numeric|min:0|decimal:6; must not exceed amount.
   - `currency`: required|string|size:3|uppercase (enabled for company); must equal invoice currency or company base when allocating.
   - `exchange_rate`: nullable|numeric|min:0.00000001|decimal:8 (required if currency != base_currency; NULL if currency = base).
   - `base_currency`: required|string|size:3|uppercase (company base).
@@ -226,6 +229,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `notes`: nullable|string.
 - Business rules:
   - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
+  - base_transaction_charge = ROUND(transaction_charge * COALESCE(exchange_rate,1), 2).
   - Payment currency must match invoice currency or company base currency when allocating (Phase 1 rule).
   - Payment amount cannot exceed sum of allocations.
   - Cannot delete payment with allocations; void instead if required.
@@ -578,5 +582,12 @@ never appear on it — they are template-role postings derived from the ticket
 rows at posting time, not invoice lines.
 
 ## Extending
+- Fuel Daily Close may create a sent base-currency invoice for the unpaid portion
+  of meter sales. Its `transaction_id` references the shared close journal; its
+  single descriptive line has quantity 1, no tax and no inventory item. The journal
+  posts gross sales once and debits AR for this allocation. `posting_snapshot.credit_sales`
+  records the invoice/customer/AR/amount link. Ordinary invoice creation must not be
+  used again for that same sale. Database guards freeze these headers/lines after
+  the close snapshot exists while allowing valid payment settlement fields.
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.
 - Keep enums and validation snippets in sync across requests, DTOs, Vue components, and tests.

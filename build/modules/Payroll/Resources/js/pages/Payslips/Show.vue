@@ -306,13 +306,19 @@ const handleVoid = () => {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Accounting</CardTitle>
+                    <CardTitle>Accounting</CardTitle>
                     </CardHeader>
                     <CardContent class="grid gap-3 md:grid-cols-3">
-                        <div class="rounded-lg border p-3 text-sm">
+                        <div v-if="payslip.status === 'draft'" class="rounded-lg border p-3 text-sm">
                             <p class="font-medium">Draft</p>
                             <p class="mt-1 text-muted-foreground">
                                 No accounting entry yet.
+                            </p>
+                        </div>
+                        <div v-else class="rounded-lg border p-3 text-sm">
+                            <p class="font-medium">{{ payslip.status === 'voided' ? 'Voided' : 'Posted' }}</p>
+                            <p class="mt-1 text-muted-foreground">
+                                Accounting entries are recorded for this payslip.
                             </p>
                         </div>
                         <div class="rounded-lg border p-3 text-sm">

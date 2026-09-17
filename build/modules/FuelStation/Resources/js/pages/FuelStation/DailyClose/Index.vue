@@ -54,11 +54,13 @@ interface DailyClose {
   is_locked?: boolean
   is_amendable?: boolean
   has_amendments?: boolean
+  has_post_close_activity?: boolean
 }
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string }
   closes: DailyClose[]
+  parkedCloses?: Array<{ business_date: string; updated_at: string }>
   permissions: {
     canAmend: boolean
     canLock: boolean
@@ -170,6 +172,10 @@ const unlockSingle = (closeId: string) => {
     :breadcrumbs="breadcrumbs"
   >
     <DailyCloseNav :company="company" history />
+    <div v-if="parkedCloses?.length" class="my-4 rounded-lg border p-4">
+      <h2 class="font-semibold">Parked Daily Closes</h2>
+      <Link v-for="draft in parkedCloses" :key="draft.business_date" :href="`/${company.slug}/fuel/daily-close?date=${draft.business_date}`" class="mr-4 inline-block py-2 underline">Resume {{ draft.business_date }}</Link>
+    </div>
     <template #actions>
       <div class="flex items-center gap-2">
         <Button v-if="permissions.canLock" variant="outline" @click="lockMonthOpen = true">
@@ -228,7 +234,7 @@ const unlockSingle = (closeId: string) => {
                   </Badge>
                 </div>
                 <div class="text-sm text-muted-foreground font-mono">
-                  {{ close.transaction_number }}
+                  {{ close.transaction_number }} <Badge v-if="close.has_post_close_activity" variant="destructive">Post-close activity</Badge>
                 </div>
               </div>
             </div>

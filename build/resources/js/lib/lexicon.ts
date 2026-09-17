@@ -35,6 +35,10 @@ export interface TermDictionary {
 // -----------------------------------------------------------------------------
 
 export const coreTerms: TermDictionary = {
+  meterCreditSales: 'Credit sales (udhaar)',
+  meterCreditHelp: 'Enter the unpaid part of today’s nozzle sales by customer. Posting creates an invoice for collection. These sales are already in the meter total; do not invoice them again.',
+  addCreditCustomer: 'Add credit customer',
+  creditReference: 'Register / slip reference',
   // Income/Revenue
   moneyIn: 'Money In',
   income: 'Income',

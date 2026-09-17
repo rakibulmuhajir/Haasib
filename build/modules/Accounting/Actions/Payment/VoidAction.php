@@ -29,6 +29,11 @@ class VoidAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         $payment = Payment::where('company_id', $company->id)
@@ -44,7 +49,7 @@ class VoidAction implements PaletteAction
             throw new \Exception("Payment has no allocations to void");
         }
 
-        return DB::transaction(function () use ($params, $payment, $allocations) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $payment, $allocations) {
             $totalVoided = 0;
 
             $transaction = null;

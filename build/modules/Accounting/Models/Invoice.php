@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\DB;
 class Invoice extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+    use \App\Modules\Accounting\Models\Concerns\ProtectsOpeningDocument;
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $invoice) {
+            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status'];
+            if (array_diff(array_keys($invoice->getDirty()), $settlement)
+                || ($invoice->isDirty('status') && in_array($invoice->status, ['draft', 'void', 'cancelled', 'reversed'], true))) {
+                app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+            }
+        });
+        static::deleting(fn (self $invoice) => app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice));
+    }
 
     protected $connection = 'pgsql';
     protected $table = 'acct.invoices';
@@ -108,7 +121,9 @@ class Invoice extends Model
         $last = DB::connection('pgsql')->table('acct.invoices')
             ->where('company_id', $companyId)
             ->whereNotNull('invoice_number')
+            ->lockForUpdate()
             ->orderByDesc('created_at')
+            ->orderByDesc('invoice_number')
             ->value('invoice_number');
 
         $next = $startNumber;

@@ -285,6 +285,7 @@ This keeps the core accounting module industry-agnostic.
   - `variance_reason`: nullable|in:evaporation,leak_suspected,meter_fault,dip_error,temperature,theft_suspected,unknown.
   - `status`: required|in:draft,confirmed,posted.
 - Business rules:
+  - Timing: the station dips each tank once every morning. The dip taken on the morning after day D is stored on day D's daily close with `reading_date = D`, `reading_type = 'closing'`. It is both the closing stock of D and the opening baseline of D+1 (`DailyCloseService::openingBaselineForTank` picks the latest posted reading dated before the close). Expected stock for D = baseline + stock movements dated within (baseline, D] excluding `fuel.daily_close` adjustments − sales on D. A close is refused for a tank with neither a previous dip nor any stock movement (`has_baseline = false`).
   - item_id derived from tank→linked_item_id at creation.
   - variance_liters = dip_measurement_liters - system_calculated_liters.
   - variance_type = 'loss' if negative, 'gain' if positive, 'none' if zero.
@@ -428,7 +429,7 @@ enum VarianceReason: string {
   - `fuel_item_id` uuid nullable FK → `inv.items.id` (SET NULL/CASCADE) — if fuel_purchase.
   - `fuel_quantity` numeric(10,2) nullable — liters if fuel_purchase.
   - `reference` varchar(100) nullable.
-  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE).
+  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE) (added by migration 2026_09_15_000001).
   - `recorded_by_user_id` uuid not null FK → `auth.users.id` (SET NULL/CASCADE).
   - `notes` text nullable.
   - `created_at`, `updated_at` timestamps.
@@ -790,3 +791,98 @@ modules/FuelStation/Resources/js/pages/
 - Add new variance_reason values here first.
 - Multi-supplier would add `fuel.suppliers` and FK on purchases.
 - Loyalty would add `fuel.loyalty_programs` and `fuel.loyalty_transactions`.
+
+
+## Daily Close reconciliation (2026-09-15)
+
+- `fuel.daily_close_drafts`: UUID id; company_id UUID FK auth.companies;
+  business_date date; payload jsonb; created_by_user_id and updated_by_user_id UUID
+  FKs auth.users; timestamps. Unique (company_id, business_date), company RLS.
+  Drafts have no journals, stock movements or finalized physical readings.
+- Posting continues to use acct.transactions, transaction_type fuel_daily_close.
+  transaction_date is the business date. created_at and posted_at are audit times.
+- metadata.posting_snapshot stores version, business_date, posted_at, posted_by,
+  totals and canonical journal/stock source vectors. It is immutable after posting.
+  Existing metadata remains the original declared physical cash, dip and meter data.
+- Reconciled values are read-time differences against source vectors. They never
+  update a posted close or carry revised physical cash into another posted close.
+- No new ledger or duplicated business-date column is added to Accounting.
+
+
+### fuel.daily_close_activity
+- Append-only audit evidence, not a ledger or a source for accounting totals.
+- id UUID PK; company_id UUID FK auth.companies; close_transaction_id UUID FK
+  acct.transactions; source_table varchar(100); source_id UUID; operation varchar(10);
+  occurred_at timestamptz; actor_id nullable UUID; before_data/after_data nullable jsonb.
+- Company RLS and index (company_id, close_transaction_id, occurred_at, id).
+- Database source triggers retain insert/update/delete facts after a close posts,
+  including edits subsequently reverted and late records subsequently deleted.
+- Snapshot-era close journal lines cannot be edited or deleted. Canonical adjustments
+  remain separate transactions with their own business dates and audit events.
+
+Posted snapshot physical tank/nozzle observations and close-owned stock movements are immutable at database level. Corrections use separately dated canonical adjustments. Salary advances created by Daily Close reference its journal entry. Reconciliation applies stock movement changes to both the old and new tank/item when an adjustment is reassigned.
+
+Post-close audit also covers invoice/bill lines, customer/supplier payments, Amanat, partner movements and salary advances. Effective dates come from document dates or linked journals, never entry timestamps. These source-document edits are audit evidence; reconciliation amounts remain derived from canonical posted journals and stock movements.
+
+### fuel.daily_close_reading_corrections (2026-09-16)
+- Controlled correction of a physical tank or nozzle reading belonging to an
+  already-posted (posting_snapshot) Daily Close. The original
+  fuel.tank_readings / fuel.nozzle_readings row is never touched -- physical
+  observations on a posted close remain immutable at database level (see
+  fuel.capture_post_close_activity above). A correction only adjusts the
+  CURRENT/RECONCILED figures DailyCloseReconciliationService::view() returns;
+  the POSTED SNAPSHOT section is byte-identical before and after.
+- id UUID PK; company_id UUID FK auth.companies; close_transaction_id UUID FK
+  acct.transactions; reading_type varchar(10) CHECK IN ('tank','nozzle');
+  reading_id UUID (the original tank_readings/nozzle_readings row, not FK-enforced
+  across schemas); original_value/corrected_value numeric(18,4); reason text NOT
+  NULL; created_by_user_id UUID FK auth.users; created_at timestamptz.
+- Company RLS (ENABLE + FORCE), index (company_id, close_transaction_id).
+- Append-only: reuses fuel.prevent_audit_mutation() to reject UPDATE/DELETE --
+  a correction row is itself audit evidence of the correction, never edited.
+- CorrectCloseReadingAction (fuel.daily_close.correct_reading) validates: the
+  close belongs to the current company and has a posting_snapshot (unposted or
+  legacy closes are rejected); the reading belongs to that company and business
+  date (nozzle readings are additionally matched by daily_close_transaction_id);
+  corrected_value >= 0; reason required. Permission
+  Permissions::DAILY_CLOSE_CORRECT ('daily_close.correct_reading').
+- Corrections are serialized per company/business date, with a monotonically increasing
+  revision per reading. original_value is the previous effective value, not always the
+  posting-time value. Unique(company_id, close_transaction_id, reading_id, revision).
+- Additional columns: revision integer; effects jsonb (frozen tank/item, quantity,
+  revenue, cost, and expected-stock deltas); transaction_id nullable UUID FK acct.transactions.
+- New snapshots store nozzle tank assignments, per-nozzle prices/rate boundaries,
+  unit costs, accounting accounts, and per-tank valuation basis. Missing historical
+  basis is never reconstructed from current settings: controlled correction rejects it.
+- Corrections post only deltas through canonical GL and stock movements atomically.
+  Meter revenue changes offset cash over/short, preserving counted cash. Meter COGS
+  changes also adjust declared tank variance; unchanged physical dip means no extra
+  stock quantity movement. Dip corrections create canonical stock adjustment deltas,
+  excluded from expected receipts because they correct the physical declaration itself.
+- Original readings, posted snapshots and downstream posted closes never change.
+- Operational rule: all fuel sales flow through nozzles and are included in point
+  register totals, copied to the office register and Haasib on the following day.
+  Credit allocations entered below are already included in those meter sales.
+
+### Daily-close credit allocations and register totals (2026-09-17)
+- `credit_sales[]` input: `customer_id` (active tenant customer, distinct), `amount`
+  (positive base-currency amount, at most two decimals), optional `reference` (100 characters).
+  These are unpaid portions of the entered nozzle sales, not additional sales.
+  Credit allocations cannot exceed nozzle revenue; cards plus credit cannot exceed total sales.
+- Parking saves these inputs only. Posting atomically creates one native `acct.invoices`
+  header/line per customer, links `transaction_id` to the close journal, and debits
+  that customer's configured AR account (or company/default AR). The close credits
+  full sales revenue and posts COGS/stock once; cash is reduced by card and credit totals.
+  No separate invoice journal or additional inventory movement is created.
+- Invoice creation is authorized as part of `DAILY_CLOSE_CREATE`. These invoices appear
+  on normal Invoice/Customer pages and are settled through normal Payments. Their
+  original principal, customer, date and lines are immutable once the close is frozen;
+  settlement updates remain permitted. Do not enter a second invoice for the same meter sale.
+- Close metadata: `credit_sales_total`, `credit_sale_details[]` with `customer_id`,
+  `customer_name`, `amount`, `reference`, `ar_account_id`, `invoice_id`, `invoice_number`.
+  `form_input.credit_sales` preserves input; `posting_snapshot.credit_sales` freezes details.
+- Snapshot version 2 reports current-day gross Money In and Money Out, with opening
+  cash separate. Card/bank receipts and credit allocations are included in Money Out
+  rather than netted from sales in Money In. Expected cash = opening + in - out.
+  Version 1 is normalized for display using its frozen channel amounts without rewriting
+  stored snapshots; both posted and current views use the same normalized convention.

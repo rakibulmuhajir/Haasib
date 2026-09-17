@@ -52,6 +52,11 @@ class CreateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         $billNumber = $params['bill_number'] ?? $this->nextNumber($company->id);
@@ -72,7 +77,7 @@ class CreateAction implements PaletteAction
         $exchangeRate = $params['currency'] === $params['base_currency'] ? null : ($params['exchange_rate'] ?? null);
         $status = $params['status'] ?? 'draft';
 
-        return DB::transaction(function () use ($company, $params, $billNumber, $billDate, $dueDate, $paymentTerms, $exchangeRate, $status) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($company, $params, $billNumber, $billDate, $dueDate, $paymentTerms, $exchangeRate, $status) {
             $normalizedLines = collect($params['line_items'])
                 ->map(fn ($item) => $this->withPurchaseDefaults($company->id, $item))
                 ->all();
@@ -153,7 +158,9 @@ class CreateAction implements PaletteAction
                     : "Bill {$bill->bill_number} created",
                 'data' => ['id' => $bill->id],
             ];
-        });
+        }); // retry on deadlock (40P01): nextNumber() above takes a lockForUpdate()
+        // row lock ahead of this insert into an audited table; see the lock-order
+        // comment in the audit_post_close_activity migration.
     }
 
     private function withPurchaseDefaults(string $companyId, array $line): array
@@ -238,7 +245,7 @@ class CreateAction implements PaletteAction
 
     private function nextNumber(string $companyId): string
     {
-        return DB::transaction(function () use ($companyId) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($companyId) {
             $last = Bill::where('company_id', $companyId)
                 ->whereNotNull('bill_number')
                 ->lockForUpdate()

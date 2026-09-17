@@ -50,7 +50,6 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('onboarding/rates', [FuelStationOnboardingController::class, 'setupRates'])->name('fuel.onboarding.rates');
     Route::post('onboarding/lubricants', [FuelStationOnboardingController::class, 'setupLubricants'])->name('fuel.onboarding.lubricants');
     Route::post('onboarding/initial-stock', [FuelStationOnboardingController::class, 'setupInitialStock'])->name('fuel.onboarding.initial-stock');
-    Route::post('onboarding/opening-cash', [FuelStationOnboardingController::class, 'setupOpeningCash'])->name('fuel.onboarding.opening-cash');
     Route::post('onboarding/complete', [FuelStationOnboardingController::class, 'complete'])->name('fuel.onboarding.complete');
 
     // Dashboard
@@ -88,6 +87,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
 
     // Daily Close (full daily register matching manual workflow)
     Route::get('daily-close', [DailyCloseController::class, 'create'])->name('fuel.daily-close.create');
+    Route::post('daily-close/{transaction}/expenses', [DailyCloseController::class, 'postCloseExpense'])->name('fuel.daily-close.expenses.store');
+    Route::post('daily-close/{transaction}/corrections', [DailyCloseController::class, 'storeCorrection'])->name('fuel.daily-close.corrections.store');
     Route::post('daily-close', [DailyCloseController::class, 'store'])->name('fuel.daily-close.store');
     Route::get('daily-close/history', [DailyCloseController::class, 'index'])->name('fuel.daily-close.index');
     Route::get('daily-close/{transaction}', [DailyCloseController::class, 'show'])->name('fuel.daily-close.show');

@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Models;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -45,6 +46,7 @@ class AmanatTransaction extends Model
         'fuel_quantity',
         'reference',
         'notes',
+        'journal_entry_id',
         'recorded_by_user_id',
     ];
 
@@ -54,6 +56,7 @@ class AmanatTransaction extends Model
         'amount' => 'decimal:2',
         'fuel_item_id' => 'string',
         'fuel_quantity' => 'decimal:2',
+        'journal_entry_id' => 'string',
         'recorded_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -77,6 +80,11 @@ class AmanatTransaction extends Model
     public function recordedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by_user_id');
+    }
+
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
 
     /**

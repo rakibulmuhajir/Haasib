@@ -39,7 +39,7 @@ class FuelStationOnboardingController extends Controller
     /**
      * Show onboarding wizard.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
         CompanyContext::setContext($company);
@@ -335,8 +335,21 @@ class FuelStationOnboardingController extends Controller
             // Table might not exist
         }
 
-        $settings = $company->settings ?? [];
-        $openingBalances = $settings['opening_balances'] ?? [];
+        $openingSummary = null;
+        try {
+            $view = app(\App\Services\CommandBus::class)->dispatch('opening_balance.view', [], $request->user());
+            $rows = $view['rows'];
+            $openingSummary = [
+                'as_of_date' => $view['as_of_date'],
+                'locked_at' => $view['locked_at'],
+                'row_count' => ($rows['cash']['amount'] > 0 ? 1 : 0) + count($rows['banks']) + count($rows['credit_customers']) + count($rows['employees']) + count($rows['amanat']) + count($rows['suppliers']) + count($rows['partners']),
+                'assets' => $view['totals']['assets'],
+                'liabilities' => $view['totals']['liabilities'],
+                'url' => route('accounting.opening-balances.show', ['company' => $company->slug]),
+            ];
+        } catch (\Throwable $e) {
+            \Log::warning('Onboarding: could not load opening balance summary', ['error' => $e->getMessage()]);
+        }
 
         // Get or create station settings with defaults
         $stationSettings = null;
@@ -385,7 +398,7 @@ class FuelStationOnboardingController extends Controller
             'lubricants' => $lubricants,
             'rateChanges' => $rateChanges,
             'openingReadings' => $openingReadings,
-            'openingBalances' => $openingBalances,
+            'openingBalances' => $openingSummary,
             'currencies' => $currencies,
             'arAccounts' => $arAccounts,
             'apAccounts' => $apAccounts,
@@ -1507,112 +1520,6 @@ class FuelStationOnboardingController extends Controller
         }
 
         return redirect()->back()->with('success', 'Recorded opening stock for: ' . implode(', ', $recordedTanks));
-    }
-
-    /**
-     * Setup opening cash balance.
-     */
-    public function setupOpeningCash(Request $request): RedirectResponse
-    {
-        $company = app(CurrentCompany::class)->get();
-
-        $validated = $request->validate([
-            'as_of_date' => 'required|date',
-            'cash_on_hand' => 'required|numeric|min:0',
-            'bank_balance' => 'nullable|numeric|min:0',
-            'bank_balances' => 'nullable|array',
-            'bank_balances.*.account_id' => 'required|uuid',
-            'bank_balances.*.balance' => 'required|numeric|min:0',
-        ]);
-
-        $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-        $recorded = [];
-
-        DB::transaction(function () use ($validated, $company, $request, $baseCurrency, &$recorded) {
-            // Record cash on hand opening balance
-            $cashOnHand = (float) $validated['cash_on_hand'];
-            $cashAccount = Account::where('company_id', $company->id)
-                ->where('code', '1050')
-                ->first();
-
-            if ($cashAccount) {
-                // Store opening balance in company settings (simpler than JE for onboarding)
-                $settings = $company->settings ?? [];
-                $settings['opening_balances'] = $settings['opening_balances'] ?? [];
-                $settings['opening_balances']['cash_on_hand'] = [
-                    'account_id' => $cashAccount->id,
-                    'amount' => $cashOnHand,
-                    'as_of_date' => $validated['as_of_date'],
-                    'currency' => $baseCurrency,
-                ];
-                $company->settings = $settings;
-                $company->save();
-
-                if ($cashOnHand > 0) {
-                    $recorded[] = "Cash on Hand: {$baseCurrency} " . number_format($cashOnHand, 2);
-                }
-            }
-
-            // Record simple bank balance (for main operating account)
-            $simpleBankBalance = (float) ($validated['bank_balance'] ?? 0);
-            $bankAccount = Account::where('company_id', $company->id)
-                ->where('code', '1000')
-                ->first();
-
-            if ($bankAccount) {
-                $settings = $company->settings ?? [];
-                $settings['opening_balances'] = $settings['opening_balances'] ?? [];
-                $settings['opening_balances']['banks'] = $settings['opening_balances']['banks'] ?? [];
-                $settings['opening_balances']['banks'][$bankAccount->id] = [
-                    'account_id' => $bankAccount->id,
-                    'account_name' => $bankAccount->name,
-                    'amount' => $simpleBankBalance,
-                    'as_of_date' => $validated['as_of_date'],
-                    'currency' => $baseCurrency,
-                ];
-                $company->settings = $settings;
-                $company->save();
-
-                if ($simpleBankBalance > 0) {
-                    $recorded[] = "{$bankAccount->name}: {$baseCurrency} " . number_format($simpleBankBalance, 2);
-                }
-            }
-
-            // Record detailed bank balances (if provided)
-            if (!empty($validated['bank_balances'])) {
-                foreach ($validated['bank_balances'] as $bankBalance) {
-                    $account = Account::where('company_id', $company->id)
-                        ->where('id', $bankBalance['account_id'])
-                        ->where('subtype', 'bank')
-                        ->first();
-
-                    if ($account) {
-                        $settings = $company->settings ?? [];
-                        $settings['opening_balances'] = $settings['opening_balances'] ?? [];
-                        $settings['opening_balances']['banks'] = $settings['opening_balances']['banks'] ?? [];
-                        $settings['opening_balances']['banks'][$account->id] = [
-                            'account_id' => $account->id,
-                            'account_name' => $account->name,
-                            'amount' => (float) $bankBalance['balance'],
-                            'as_of_date' => $validated['as_of_date'],
-                            'currency' => $baseCurrency,
-                        ];
-                        $company->settings = $settings;
-                        $company->save();
-
-                        if ($bankBalance['balance'] > 0) {
-                            $recorded[] = "{$account->name}: {$baseCurrency} " . number_format($bankBalance['balance'], 2);
-                        }
-                    }
-                }
-            }
-        });
-
-        if (empty($recorded)) {
-            return redirect()->back()->with('info', 'No opening balances to record.');
-        }
-
-        return redirect()->back()->with('success', 'Recorded opening balances: ' . implode(', ', $recorded));
     }
 
     /**

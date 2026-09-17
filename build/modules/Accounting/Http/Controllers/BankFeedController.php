@@ -70,6 +70,10 @@ class BankFeedController extends Controller
         $balanceExplainer = null;
 
         if ($activeBankAccount) {
+            $hasStatementTransactions = BankTransaction::where('company_id', $currentCompany->id)
+                ->where('bank_account_id', $activeBankAccount->id)
+                ->exists();
+
             // 1. Bank Feed Balance
             $feedBalance = $activeBankAccount->current_balance;
 
@@ -112,6 +116,7 @@ class BankFeedController extends Controller
                 'ledger_balance' => $ledgerBalance,
                 'difference' => $difference,
                 'is_balanced' => abs($difference) < 0.01,
+                'has_statement_transactions' => $hasStatementTransactions,
                 'explanations' => $explanations,
                 'currency' => $activeBankAccount->currency, // Pass currency
             ];

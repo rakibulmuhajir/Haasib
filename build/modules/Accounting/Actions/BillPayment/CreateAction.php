@@ -23,6 +23,7 @@ class CreateAction implements PaletteAction
             'payment_number' => 'nullable|string|max:50',
             'payment_date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
+            'transaction_charge' => 'nullable|numeric|min:0',
             'currency' => 'required|string|size:3|uppercase',
             'base_currency' => 'required|string|size:3|uppercase',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|decimal:8',
@@ -49,12 +50,21 @@ class CreateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         $exchangeRate = $params['currency'] === $params['base_currency'] ? null : ($params['exchange_rate'] ?? null);
         $splits = $this->normalizeSplits($params);
         $splitTotal = round(collect($splits)->sum('amount'), 6);
         $paymentAmount = round((float) $params['amount'], 6);
+        $transactionCharge = round((float) ($params['transaction_charge'] ?? 0), 6);
+        if ($transactionCharge > $paymentAmount) {
+            throw new \InvalidArgumentException('Transaction charge cannot exceed the payment amount.');
+        }
         if (abs($splitTotal - $paymentAmount) > 0.000001) {
             throw new \InvalidArgumentException('Payment splits must equal the total payment amount.');
         }
@@ -70,7 +80,7 @@ class CreateAction implements PaletteAction
             }
         }
 
-        return DB::transaction(function () use ($company, $params, $paymentNumbers, $exchangeRate, $splits) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($company, $params, $paymentNumbers, $exchangeRate, $splits, $transactionCharge) {
             $allocationPool = $this->validateAndBuildAllocationPool($company->id, $params);
             $createdPayments = [];
             $paymentGroupId = (string) Str::uuid();
@@ -86,6 +96,10 @@ class CreateAction implements PaletteAction
             foreach ($splits as $index => $split) {
                 $amount = round((float) $split['amount'], 6);
                 $baseAmount = round($amount * ($exchangeRate ?? 1), 2);
+                $splitCharge = $index === count($splits) - 1
+                    ? round($transactionCharge - collect($splits)->take($index)->sum(fn ($prior) => round((float) $prior['amount'] / $paymentAmount * $transactionCharge, 6)), 6)
+                    : round($amount / $paymentAmount * $transactionCharge, 6);
+                $baseSplitCharge = round($splitCharge * ($exchangeRate ?? 1), 2);
                 $paymentAllocations = $this->takeAllocationsForAmount($allocationPool, $amount);
 
                 $payment = BillPayment::create([
@@ -100,6 +114,8 @@ class CreateAction implements PaletteAction
                 'exchange_rate' => $exchangeRate,
                 'base_currency' => $params['base_currency'],
                 'base_amount' => $baseAmount,
+                'transaction_charge' => $splitCharge,
+                'base_transaction_charge' => $baseSplitCharge,
                     'payment_method' => $split['payment_method'],
                     'payment_account_id' => $split['payment_account_id'],
                     'reference_number' => $split['reference_number'] ?? $params['reference_number'] ?? null,
@@ -150,7 +166,9 @@ class CreateAction implements PaletteAction
                     : count($createdPayments) . ' split payments recorded for Daily Close',
                 'data' => ['id' => $createdPayments[0]->id, 'ids' => collect($createdPayments)->pluck('id')->all()],
             ];
-        });
+        }); // retry on deadlock (40P01): nextNumber()/paymentNumbers() above take a
+        // lockForUpdate() row lock ahead of this insert into an audited table; see the
+        // lock-order comment in the audit_post_close_activity migration.
     }
 
     private function normalizeSplits(array $params): array
@@ -271,7 +289,7 @@ class CreateAction implements PaletteAction
 
     private function nextNumber(string $companyId): string
     {
-        return DB::transaction(function () use ($companyId) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($companyId) {
             $last = BillPayment::where('company_id', $companyId)
                 ->whereNotNull('payment_number')
                 ->lockForUpdate()

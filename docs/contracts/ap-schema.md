@@ -207,6 +207,8 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency; NULL if currency = base).
   - `base_currency` char(3) not null (company base, denormalized); FK → `public.currencies.code`.
   - `base_amount` numeric(15,2) not null default 0.00 (amount in base currency).
+  - `transaction_charge` numeric(18,6) not null default 0.00 (bank/transaction fee in payment currency).
+  - `base_transaction_charge` numeric(15,2) not null default 0.00 (bank/transaction fee in base currency).
   - `payment_method` varchar(50) not null; constrained values: cash, check, card, fuel_card, bank_transfer, ach, wire, other.
   - `reference_number` varchar(100) null.
   - `notes` text null.
@@ -220,14 +222,15 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.bill_payments'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','vendor_id','payment_group_id','payment_group_number','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','vendor_id'=>'string','payment_group_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','vendor_id','payment_group_id','payment_group_number','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','transaction_charge','base_transaction_charge','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','vendor_id'=>'string','payment_group_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','transaction_charge'=>'decimal:6','base_transaction_charge'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Vendor; hasMany BillPaymentAllocation.
 - Validation:
   - `vendor_id`: required|uuid|exists:acct.vendors,id.
   - `payment_number`: required|string|max:50 (unique per company, soft-delete aware).
   - `payment_date`: required|date|before_or_equal:today.
   - `amount`: required|numeric|min:0.01|decimal:6.
+  - `transaction_charge`: nullable|numeric|min:0|decimal:6; must not exceed amount.
   - `currency`: required|string|size:3|uppercase (enabled for company); must equal bill currency or company base when allocating.
   - `exchange_rate`: nullable|numeric|min:0.00000001|decimal:8 (required if currency != base_currency; NULL if currency = base).
   - `base_currency`: required|string|size:3|uppercase (company base).
@@ -236,6 +239,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `notes`: nullable|string.
 - Business rules:
   - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
+  - base_transaction_charge = ROUND(transaction_charge * COALESCE(exchange_rate,1), 2).
   - Payment currency must match bill currency or company base currency when allocating (Phase 1 rule).
   - Payment amount cannot exceed sum of allocations.
   - A UI request may submit `payment_splits[]` to record one bill payment from multiple source accounts. Each split is saved as a separate `acct.bill_payments` row and posts its own DR AP / CR source account journal.

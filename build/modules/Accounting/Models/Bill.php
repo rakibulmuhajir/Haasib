@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Bill extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+    use \App\Modules\Accounting\Models\Concerns\ProtectsOpeningDocument;
 
     protected $connection = 'pgsql';
     protected $table = 'acct.bills';

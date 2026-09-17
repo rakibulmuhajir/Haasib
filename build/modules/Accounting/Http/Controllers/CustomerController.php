@@ -218,6 +218,7 @@ class CustomerController extends Controller
             ->selectRaw('COALESCE(SUM(balance), 0) AS open_balance')
             ->selectRaw('COALESCE(SUM(total_amount), 0) AS total_billed')
             ->selectRaw('COUNT(*) AS invoice_count')
+            ->selectRaw("COUNT(*) FILTER (WHERE balance > 0 AND status NOT IN ('paid', 'void', 'cancelled')) AS open_invoice_count")
             ->first();
 
         $creditSummary = CreditNote::where('company_id', $company->id)
@@ -321,6 +322,7 @@ class CustomerController extends Controller
             'summary' => [
                 'open_balance' => (float) ($invoiceSummary->open_balance ?? 0),
                 'invoice_count' => (int) ($invoiceSummary->invoice_count ?? 0),
+                'open_invoice_count' => (int) ($invoiceSummary->open_invoice_count ?? 0),
                 'total_billed' => (float) ($invoiceSummary->total_billed ?? 0),
                 'available_credit' => $availableCredit,
                 'credit_note_count' => (int) ($creditSummary->credit_count ?? 0),

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
+    'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
+    'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,
+    'fuel.amanat.movement' => \App\Modules\FuelStation\Actions\AmanatMovementAction::class,
     'company.create' => \App\Modules\Accounting\Actions\Company\CreateAction::class,
     'company.list' => \App\Modules\Accounting\Actions\Company\IndexAction::class,
     'company.switch' => \App\Modules\Accounting\Actions\Company\SwitchAction::class,
@@ -106,4 +110,9 @@ return [
 
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,
+
+    // General Ledger - Opening Balances
+    'opening_balance.view' => \App\Modules\Accounting\Actions\OpeningBalance\ViewAction::class,
+    'opening_balance.save' => \App\Modules\Accounting\Actions\OpeningBalance\SaveAction::class,
+    'opening_balance.lock' => \App\Modules\Accounting\Actions\OpeningBalance\LockAction::class,
 ];

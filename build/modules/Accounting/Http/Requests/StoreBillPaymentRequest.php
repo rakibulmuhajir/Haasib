@@ -56,6 +56,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'payment_number' => ['nullable', 'string', 'max:50', $paymentNumberRule],
             'payment_date' => ['required', 'date', 'before_or_equal:today'],
             'amount' => ['required', 'numeric', 'min:0.01'],
+            'transaction_charge' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'exchange_rate' => $exchangeRateRules,
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],

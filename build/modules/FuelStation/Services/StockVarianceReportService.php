@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockReceiptLine;
 use App\Modules\Inventory\Models\Warehouse;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class StockVarianceReportService
 {
@@ -54,13 +55,39 @@ class StockVarianceReportService
      */
     private function physicalRows(string $companyId, string $startDate, string $endDate, string $tankId, string $productId, string $varianceType): array
     {
+        $corrections = DB::table('fuel.daily_close_reading_corrections as corrections')
+            ->join('acct.transactions as close_transactions', 'close_transactions.id', '=', 'corrections.close_transaction_id')
+            ->where('corrections.company_id', $companyId)
+            ->where('corrections.reading_type', 'tank')
+            ->whereBetween('close_transactions.transaction_date', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay(),
+            ])
+            ->orderBy('corrections.revision')
+            ->get([
+                'corrections.reading_id',
+                'corrections.corrected_value',
+                'corrections.revision',
+                'corrections.effects',
+                'corrections.reason',
+                'corrections.transaction_id',
+            ])
+            ->groupBy('reading_id');
+
+        $correctedReadingIds = $corrections->keys()->all();
         $query = TankReading::where('company_id', $companyId)
             ->with(['tank:id,name,code,capacity,linked_item_id', 'item:id,name,sku,avg_cost,cost_price'])
             ->whereBetween('reading_date', [
                 Carbon::parse($startDate)->startOfDay(),
                 Carbon::parse($endDate)->endOfDay(),
             ])
-            ->where('variance_type', '!=', TankReading::VARIANCE_NONE)
+            ->where(function ($query) use ($correctedReadingIds) {
+                $query->where('variance_type', '!=', TankReading::VARIANCE_NONE);
+
+                if ($correctedReadingIds !== []) {
+                    $query->orWhereIn('id', $correctedReadingIds);
+                }
+            })
             ->orderByDesc('reading_date');
 
         if ($tankId !== 'all') {
@@ -71,13 +98,41 @@ class StockVarianceReportService
             $query->where('item_id', $productId);
         }
 
-        if ($varianceType !== 'all') {
-            $query->where('variance_type', $varianceType);
-        }
+        $rows = $query->get()->map(function (TankReading $reading) use ($corrections) {
+            $history = $corrections->get($reading->id, collect());
+            $latestCorrection = $history->sortByDesc('revision')->first();
+            $physicalEffect = (float) $history->sum(function ($correction) {
+                $effects = is_array($correction->effects)
+                    ? $correction->effects
+                    : json_decode($correction->effects, true);
 
-        return $query->get()->map(function (TankReading $reading) {
-            $unitCost = (float) ($reading->item?->avg_cost ?: $reading->item?->cost_price ?: 0);
-            $varianceLiters = (float) $reading->variance_liters;
+                return (float) ($effects['physical_liters_effect'] ?? 0);
+            });
+            $expectedEffect = (float) $history->sum(function ($correction) {
+                $effects = is_array($correction->effects)
+                    ? $correction->effects
+                    : json_decode($correction->effects, true);
+
+                return (float) ($effects['expected_liters_effect'] ?? 0);
+            });
+            $latestEffects = $latestCorrection
+                ? (is_array($latestCorrection->effects)
+                    ? $latestCorrection->effects
+                    : json_decode($latestCorrection->effects, true))
+                : [];
+            $unitCost = (float) ($latestEffects['unit_cost']
+                ?? ($reading->item?->avg_cost ?: $reading->item?->cost_price ?: 0));
+            $dipLiters = (float) $reading->dip_measurement_liters + $physicalEffect;
+            $expectedLiters = (float) $reading->system_calculated_liters + $expectedEffect;
+            $varianceLiters = (float) $reading->variance_liters + $physicalEffect - $expectedEffect;
+            $varianceType = $varianceLiters < 0
+                ? TankReading::VARIANCE_LOSS
+                : ($varianceLiters > 0 ? TankReading::VARIANCE_GAIN : TankReading::VARIANCE_NONE);
+
+            if (abs($varianceLiters) <= 0.5) {
+                return null;
+            }
+
             $value = round(abs($varianceLiters) * $unitCost, 2);
 
             return [
@@ -90,18 +145,24 @@ class StockVarianceReportService
                 'product_id' => $reading->item_id,
                 'product_name' => $reading->item?->name ?? 'Product',
                 'reading_type' => $reading->reading_type,
-                'status' => $reading->status,
-                'dip_liters' => (float) $reading->dip_measurement_liters,
-                'expected_liters' => (float) $reading->system_calculated_liters,
+                'status' => $latestCorrection?->transaction_id ? TankReading::STATUS_POSTED : $reading->status,
+                'dip_liters' => $dipLiters,
+                'expected_liters' => $expectedLiters,
                 'variance_liters' => $varianceLiters,
-                'variance_type' => $reading->variance_type,
-                'variance_reason' => $reading->variance_reason,
+                'variance_type' => $varianceType,
+                'variance_reason' => $latestCorrection?->reason ?? $reading->variance_reason,
                 'unit_cost' => $unitCost,
                 'value' => $value,
-                'journal_entry_id' => $reading->journal_entry_id,
-                'notes' => $reading->notes,
+                'journal_entry_id' => $latestCorrection?->transaction_id ?? $reading->journal_entry_id,
+                'notes' => $latestCorrection?->reason ?? $reading->notes,
             ];
-        })->values()->all();
+        })->filter();
+
+        if ($varianceType !== 'all') {
+            $rows = $rows->filter(fn (array $row) => $row['variance_type'] === $varianceType);
+        }
+
+        return $rows->values()->all();
     }
 
     /**

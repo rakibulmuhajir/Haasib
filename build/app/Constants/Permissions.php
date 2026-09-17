@@ -96,6 +96,10 @@ class Permissions
 
     public const JOURNAL_VIEW = 'journal.view';
 
+    public const OPENING_BALANCE_VIEW = 'opening_balance.view';
+
+    public const OPENING_BALANCE_MANAGE = 'opening_balance.manage';
+
     // Posting Templates
     public const POSTING_TEMPLATE_CREATE = 'posting_template.create';
 
@@ -250,6 +254,8 @@ class Permissions
     public const DAILY_CLOSE_LOCK = 'daily_close.lock';
 
     public const DAILY_CLOSE_UNLOCK = 'daily_close.unlock';
+
+    public const DAILY_CLOSE_CORRECT = 'daily_close.correct_reading';
 
     // Payroll - Employees
     public const EMPLOYEE_CREATE = 'employee.create';

@@ -18,6 +18,7 @@ class VoidAction implements PaletteAction
         return [
             'id' => 'required|string|max:255',
             'reason' => 'nullable|string|max:500',
+            'reversal_date' => 'nullable|date',
         ];
     }
 
@@ -28,9 +29,16 @@ class VoidAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         $invoice = $this->resolveInvoice($params['id'], $company->id);
+
+        app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
 
         // Validate current status
         if (in_array($invoice->status, ['cancelled', 'void'])) {
@@ -75,7 +83,7 @@ class VoidAction implements PaletteAction
         }
 
         if ($transaction) {
-            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null, $params['reversal_date'] ?? null);
         }
 
         // Update invoice status

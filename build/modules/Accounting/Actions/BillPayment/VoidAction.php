@@ -30,10 +30,15 @@ class VoidAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
         $payment = BillPayment::where('company_id', $company->id)->findOrFail($params['id']);
 
-        return DB::transaction(function () use ($payment, $params, $company) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($payment, $params, $company) {
             $transaction = null;
             if ($payment->transaction_id) {
                 $transaction = Transaction::where('company_id', $company->id)

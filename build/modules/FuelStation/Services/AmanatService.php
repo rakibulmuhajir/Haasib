@@ -43,8 +43,9 @@ class AmanatService
      */
     public function deposit(Customer $customer, array $data): AmanatTransaction
     {
-        return DB::transaction(function () use ($customer, $data) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($customer, $data) {
             $company = app(CurrentCompany::class)->get();
+            if ($customer->company_id !== $company->id) { throw new \InvalidArgumentException('Customer does not belong to this company.'); }
             $amount = $data['amount'];
 
             // Ensure customer has fuel profile with amanat flag
@@ -56,7 +57,7 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $cashAccount = $this->getCashAccount($company->id);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
-            $date = now()->toDateString();
+            $date = $data['business_date'] ?? now()->toDateString();
 
             // Create GL transaction
             $glTransaction = $this->postingService->postBalancedTransaction([
@@ -93,7 +94,7 @@ class AmanatService
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'recorded_by_user_id' => auth()->id(),
-                'transaction_id' => $glTransaction->id,
+                'journal_entry_id' => $glTransaction->journalEntries()->firstOrFail()->id,
             ]);
 
             // Update profile balance
@@ -112,8 +113,9 @@ class AmanatService
      */
     public function withdraw(Customer $customer, array $data): AmanatTransaction
     {
-        return DB::transaction(function () use ($customer, $data) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($customer, $data) {
             $company = app(CurrentCompany::class)->get();
+            if ($customer->company_id !== $company->id) { throw new \InvalidArgumentException('Customer does not belong to this company.'); }
             $amount = $data['amount'];
 
             // Get profile and validate balance
@@ -128,7 +130,7 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $cashAccount = $this->getCashAccount($company->id);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
-            $date = now()->toDateString();
+            $date = $data['business_date'] ?? now()->toDateString();
 
             // Create GL transaction (reversed from deposit)
             $glTransaction = $this->postingService->postBalancedTransaction([
@@ -165,7 +167,7 @@ class AmanatService
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'recorded_by_user_id' => auth()->id(),
-                'transaction_id' => $glTransaction->id,
+                'journal_entry_id' => $glTransaction->journalEntries()->firstOrFail()->id,
             ]);
 
             // Update profile balance (negative for withdrawal)
@@ -190,7 +192,7 @@ class AmanatService
         float $quantity,
         string $reference
     ): AmanatTransaction {
-        return DB::transaction(function () use ($customer, $amount, $itemId, $quantity, $reference) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($customer, $amount, $itemId, $quantity, $reference) {
             $company = app(CurrentCompany::class)->get();
 
             // Get profile and validate balance
@@ -243,7 +245,7 @@ class AmanatService
                 'fuel_quantity' => $quantity,
                 'reference' => $reference,
                 'recorded_by_user_id' => auth()->id(),
-                'transaction_id' => $glTransaction->id,
+                'journal_entry_id' => $glTransaction->journalEntries()->firstOrFail()->id,
             ]);
 
             // Update profile balance (negative for purchase)
@@ -260,7 +262,7 @@ class AmanatService
     {
         return Account::where('company_id', $companyId)
             ->where('type', 'asset')
-            ->where('name', 'like', '%Cash%')
+            ->whereKey(app(DailyCloseService::class)->cashAccountId($companyId))
             ->firstOrFail();
     }
 

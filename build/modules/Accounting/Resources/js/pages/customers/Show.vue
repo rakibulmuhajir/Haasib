@@ -88,6 +88,7 @@ interface AgingRef {
 interface SummaryRef {
   open_balance: number
   invoice_count: number
+  open_invoice_count: number
   total_billed: number
   available_credit: number
   credit_note_count: number
@@ -411,7 +412,7 @@ const cancelShippingEdit = () => {
             </CardHeader>
             <CardContent>
               <CardFigure><MoneyText :amount="summary.open_balance" :currency="customer.base_currency || company.base_currency" /></CardFigure>
-              <CardNote>{{ summary.invoice_count }} open invoice{{ summary.invoice_count === 1 ? '' : 's' }}</CardNote>
+              <CardNote>{{ summary.open_invoice_count }} open invoice{{ summary.open_invoice_count === 1 ? '' : 's' }}</CardNote>
             </CardContent>
           </Card>
 

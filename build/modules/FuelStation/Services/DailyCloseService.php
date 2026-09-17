@@ -32,7 +32,7 @@ class DailyCloseService
         private readonly PayrollPostingService $payrollPostingService,
     ) {}
 
-    private function getOpeningBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
+    public function openingBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
     {
         $previousReading = TankReading::where('company_id', $companyId)
             ->where('tank_id', $tankId)
@@ -46,6 +46,7 @@ class DailyCloseService
                 'liters' => (float) $previousReading->dip_measurement_liters,
                 'date' => $previousReading->reading_date?->toDateString(),
                 'created_at' => $previousReading->created_at,
+                'has_baseline' => true,
             ];
         }
 
@@ -62,6 +63,7 @@ class DailyCloseService
                 'liters' => 0.0,
                 'date' => null,
                 'created_at' => null,
+                'has_baseline' => false,
             ];
         }
 
@@ -75,6 +77,7 @@ class DailyCloseService
                 ->sum('quantity'),
             'date' => $movementDate,
             'created_at' => $stockMovement->created_at,
+            'has_baseline' => true,
         ];
     }
 
@@ -94,10 +97,31 @@ class DailyCloseService
             ->first();
 
         if (!$previousClose) {
+            // No prior daily close exists (typically the very first close for this
+            // station). Opening cash for today is not zero in that case — it is
+            // whatever cash the ledger already carries as of the day before, most
+            // commonly posted via Accounting opening balances. Falling back to 0
+            // here silently drops that cash from the first day's reconciliation.
+            $cashAccountId = $this->cashAccountId($companyId);
+            $balance = 0.0;
+
+            if ($cashAccountId) {
+                $row = DB::table('acct.journal_entries as je')
+                    ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                    ->where('t.company_id', $companyId)
+                    ->where('je.account_id', $cashAccountId)
+                    ->where('t.transaction_date', '<', $date)
+                    ->whereIn('t.status', ['posted', 'locked'])
+                    ->selectRaw('COALESCE(SUM(je.debit_amount), 0) - COALESCE(SUM(je.credit_amount), 0) as balance')
+                    ->first();
+                $balance = (float) ($row->balance ?? 0);
+            }
+
             return [
                 'date' => null,
-                'closing_cash' => 0,
+                'closing_cash' => round($balance, 2),
                 'exists' => false,
+                'source' => 'ledger',
             ];
         }
 
@@ -111,7 +135,21 @@ class DailyCloseService
             'date' => $previousClose->transaction_date->toDateString(),
             'closing_cash' => (float) ($metadata['closing_cash'] ?? 0),
             'exists' => true,
+            'source' => 'daily_close',
         ];
+    }
+
+    /**
+     * Resolve the station's cash-on-hand account the same way resolveAccounts() does:
+     * station settings first, then account code 1050, then any active cash-subtype account.
+     */
+    public function cashAccountId(string $companyId): ?string
+    {
+        $stationSettings = StationSettings::where('company_id', $companyId)->first();
+
+        return $stationSettings?->cash_account_id
+            ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('code', '1050')->value('id')
+            ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('subtype', 'cash')->orderBy('code')->value('id');
     }
 
     /**
@@ -124,14 +162,31 @@ class DailyCloseService
      */
     public function processDailyClose(string $companyId, array $data, User $user, bool $isCorrection = false): array
     {
-        return DB::transaction(function () use ($companyId, $data, $user, $isCorrection) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($companyId, $data, $user, $isCorrection) {
             $date = $data['date'];
+            // Reserve the date before reading sources. Row triggers use nonblocking shared
+            // locks and signal a whole-transaction retry instead of waiting while holding rows.
+            DB::selectOne('select pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$companyId, $date]);
+            \App\Models\Company::whereKey($companyId)->firstOrFail();
+            $declaredExpenses = $data['expenses'] ?? [];
+            // Reserve/check the close before creating any canonical entries.
             $transactionNumber = $this->generateTransactionNumber($companyId, $date, $isCorrection);
+            foreach ($declaredExpenses as $expense) {
+                if ((float) ($expense['amount'] ?? 0) > 0) {
+                    app(DailyCloseEntryService::class)->expense($companyId, $date, $expense);
+                }
+            }
+            $data['expenses'] = [];
+            $createdAmanat = []; $createdPartners = []; $createdAdvances = [];
+            $reconciliation = app(DailyCloseReconciliationService::class);
+            $canonicalSources = $reconciliation->sources($companyId, $date);
+            $externalCashIn = array_sum(array_column($canonicalSources, 'money_in'));
+            $externalCashOut = array_sum(array_column($canonicalSources, 'money_out'));
 
             // Resolve all required accounts
             $accounts = $this->resolveAccounts($companyId);
 
-            $currency = 'PKR'; // Default for Pakistan
+            $currency = \App\Models\Company::whereKey($companyId)->value('base_currency') ?: 'PKR';
 
             $entries = [];
             $metadata = [
@@ -223,6 +278,12 @@ class DailyCloseService
                 // Store nozzle reading data for later save
                 $nozzleReadingsData[] = [
                     'nozzle_id' => $reading['nozzle_id'],
+                    'tank_id' => Nozzle::where('company_id', $companyId)->where('id', $reading['nozzle_id'])->value('tank_id'),
+                    'unit_cost' => $avgCost,
+                    'income_account_id' => $item?->income_account_id ?: $accounts['fuel_sales'],
+                    'cogs_account_id' => $item?->expense_account_id ?: $accounts['fuel_cogs'],
+                    'inventory_account_id' => $item?->asset_account_id ?: $accounts['fuel_inventory'],
+                    'pricing' => $rateSplit,
                     'item_id' => $reading['item_id'],
                     'opening_electronic' => (float) $reading['opening_electronic'],
                     'closing_electronic' => (float) $reading['closing_electronic'],
@@ -280,6 +341,7 @@ class DailyCloseService
             // 3. Process Tank Readings (calculate variance and save)
             // ─────────────────────────────────────────────────────────────────
             $tankVariances = [];
+            $tankSnapshot = [];
             $stockReconciliations = [];
             $totalShrinkage = 0;
             $totalGain = 0;
@@ -299,13 +361,19 @@ class DailyCloseService
 
                     // Calculate system expected liters:
                     // Opening (previous closing dip, or stock baseline for first close) + Receipts - Sales = Expected
-                    $openingBaseline = $this->getOpeningBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+                    $openingBaseline = $this->openingBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+
+                    if (! $openingBaseline['has_baseline']) {
+                        $tankName = $tank?->name ?? 'this tank';
+                        throw new \RuntimeException("No opening stock for {$tankName}. Record opening stock in Fuel setup (or post the previous day's close) before closing {$date}.");
+                    }
+
                     $openingLiters = $openingBaseline['liters'];
 
                     // Get today's sales for this tank's item from nozzle readings and open/bulk product sales.
                     $todaysSales = 0;
                     foreach ($nozzleReadingsData as $nozzleData) {
-                        if ($nozzleData['item_id'] === $itemId) {
+                        if ($nozzleData['item_id'] === $itemId && $nozzleData['tank_id'] === $tankData['tank_id']) {
                             $todaysSales += $nozzleData['liters_dispensed'];
                         }
                     }
@@ -404,6 +472,12 @@ class DailyCloseService
                         ];
                     }
 
+                    $tankSnapshot[] = ['tank_id' => $tankData['tank_id'], 'tank_name' => $tank->name,
+                        'item_id' => $itemId, 'physical_liters' => $dipMeasurement,
+                        'expected_liters' => $systemCalculatedLiters, 'variance_liters' => $varianceLiters,
+                        'stick_reading' => $tankData['stick_reading'] ?? null,
+                        'unit_cost' => $avgCost,
+                        'inventory_account_id' => $item?->asset_account_id ?: $accounts['fuel_inventory']];
                     // Save tank reading with calculated values
                     TankReading::updateOrCreate(
                         [
@@ -443,7 +517,7 @@ class DailyCloseService
                     $partnerDepositsTotal += (float) $deposit['amount'];
 
                     // Record partner investment
-                    PartnerTransaction::create([
+                    $createdPartners[] = PartnerTransaction::create([
                         'company_id' => $companyId,
                         'partner_id' => $deposit['partner_id'],
                         'transaction_date' => $date,
@@ -483,7 +557,7 @@ class DailyCloseService
                         throw new \RuntimeException('Selected Amanat depositor was not found.');
                     }
 
-                    AmanatTransaction::create([
+                    $createdAmanat[] = AmanatTransaction::create([
                         'company_id' => $companyId,
                         'customer_id' => $customerId,
                         'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
@@ -677,7 +751,7 @@ class DailyCloseService
                         // Note: Drawing limit is informational only, not a blocker
                         // The limit is shown in UI for awareness but doesn't prevent withdrawal
 
-                        PartnerTransaction::create([
+                        $createdPartners[] = PartnerTransaction::create([
                             'company_id' => $companyId,
                             'partner_id' => $withdrawal['partner_id'],
                             'transaction_date' => $date,
@@ -707,7 +781,7 @@ class DailyCloseService
                     $employeeAdvancesTotal += $amount;
 
                     // Create salary advance record
-                    SalaryAdvance::create([
+                    $createdAdvances[] = SalaryAdvance::create([
                         'company_id' => $companyId,
                         'employee_id' => $advance['employee_id'],
                         'advance_date' => $date,
@@ -799,7 +873,7 @@ class DailyCloseService
                         throw new \RuntimeException("{$name} has only {$profile->amanat_balance} available in Amanat.");
                     }
 
-                    AmanatTransaction::create([
+                    $createdAmanat[] = AmanatTransaction::create([
                         'company_id' => $companyId,
                         'customer_id' => $customerId,
                         'transaction_type' => AmanatTransaction::TYPE_WITHDRAWAL,
@@ -844,7 +918,7 @@ class DailyCloseService
                     $expensesByAccount[$accountId] += $amount;
                 }
             }
-            $metadata['expenses'] = $expensesTotal;
+            $metadata['expenses'] = array_sum(array_map(fn ($source) => ($source['type'] ?? null) === 'expense' ? ($source['money_out'] ?? 0) : 0, $canonicalSources));
 
             // Supplier bill payments recorded elsewhere are still posted through Daily Close.
             $billPaymentIds = [];
@@ -920,13 +994,20 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
 
             // Cash from sales (total revenue goes to cash initially)
-            $cashFromSales = $totalRevenue - $totalNonCashReceipts;
+            $creditDetails = app(DailyCloseCreditSaleService::class)->prepare(
+                $companyId, $date, $data['credit_sales'] ?? [], $totalRevenue - $otherSalesTotal,
+                $totalRevenue - $totalNonCashReceipts, $user
+            );
+            $creditTotal = round(array_sum(array_column($creditDetails, 'amount')), 2);
+            $metadata['credit_sales_total'] = $creditTotal;
+            $metadata['credit_sale_details'] = $creditDetails;
+            $cashFromSales = $totalRevenue - $totalNonCashReceipts - $creditTotal;
             $totalCashIn = $openingCash + $partnerDepositsTotal + $amanatDepositsTotal + $otherDepositsTotal + $cashFromSales;
             $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal + $cashBillPaymentsTotal;
 
             // Debit: Cash on Hand (opening + deposits + cash sales - withdrawals)
             $closingCash = (float) $data['closing_cash'];
-            $expectedClosing = $totalCashIn - $totalCashOut;
+            $expectedClosing = $totalCashIn - $totalCashOut + $externalCashIn - $externalCashOut;
             $variance = round($closingCash - $expectedClosing, 2);
 
             $metadata['expected_closing'] = $expectedClosing;
@@ -942,13 +1023,14 @@ class DailyCloseService
                 'amanat_deposits' => $data['amanat_deposits'] ?? [],
                 'other_deposits' => $data['other_deposits'] ?? [],
                 'payment_receipts' => $data['payment_receipts'] ?? [],
+                'credit_sales' => $data['credit_sales'] ?? [],
                 'bank_deposits' => $data['bank_deposits'] ?? [],
                 'partner_withdrawals' => $data['partner_withdrawals'] ?? [],
                 'employee_advances' => $data['employee_advances'] ?? [],
                 'payroll_payouts' => $payrollPayoutDetails,
                 'bill_payments' => $billPaymentDetails,
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
-                'expenses' => $data['expenses'] ?? [],
+                'expenses' => $declaredExpenses,
                 'closing_cash' => $data['closing_cash'],
                 'notes' => $data['notes'] ?? null,
             ];
@@ -983,7 +1065,11 @@ class DailyCloseService
             }
 
             // Cash on hand (net change)
-            $cashChange = $closingCash - $openingCash;
+            foreach ($creditDetails as $credit) {
+                $entries[] = ['account_id' => $credit['ar_account_id'], 'type' => 'debit',
+                    'amount' => $credit['amount'], 'description' => 'Credit sale '.$credit['invoice_number'].' — '.$credit['customer_name']];
+            }
+            $cashChange = $closingCash - $openingCash - $externalCashIn + $externalCashOut;
             if ($cashChange != 0) {
                 $entries[] = [
                     'account_id' => $accounts['cash_on_hand'],
@@ -1192,6 +1278,40 @@ class DailyCloseService
                 ];
             }
 
+            $accountEffects = [];
+            foreach ($canonicalSources as $source) {
+                foreach ($source['account_effects'] ?? [] as $accountId => $amount) {
+                    $accountEffects[$accountId] = ($accountEffects[$accountId] ?? 0) + $amount;
+                }
+            }
+            foreach ($entries as $entry) {
+                $accountEffects[$entry['account_id']] = ($accountEffects[$entry['account_id']] ?? 0)
+                    + ($entry['type'] === 'debit' ? $entry['amount'] : -$entry['amount']);
+            }
+            $channelAccounts = Account::where('company_id', $companyId)
+                ->where(function ($query) use ($accounts) {
+                    $query->whereIn('subtype', ['cash', 'bank'])->orWhereIn('id', array_filter([
+                        $accounts['cash_on_hand'], $accounts['operating_bank'], $accounts['card_clearing'], $accounts['fuel_card_clearing'],
+                    ]));
+                })->pluck('name', 'id')->all();
+            $metadata['posting_snapshot'] = [
+                'channel_accounts' => $channelAccounts,
+                'account_effects' => $accountEffects, 'cash_account_id' => $accounts['cash_on_hand'],
+                'version' => 2, 'business_date' => $date, 'posted_at' => now()->toISOString(),
+                'posted_by' => $user->id, 'sources' => $canonicalSources,
+                'zero_sales_confirmed' => (array_sum(array_column($data['nozzle_readings'], 'liters_sold')) <= 0 && $otherSalesTotal <= 0) ? filter_var($data['zero_sales_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN) : false,
+                'zero_sales_reason' => (array_sum(array_column($data['nozzle_readings'], 'liters_sold')) <= 0 && $otherSalesTotal <= 0) ? ($data['zero_sales_reason'] ?? null) : null,
+                'totals' => [
+                    'total_revenue' => $totalRevenue + array_sum(array_column($canonicalSources, 'sales')), 'money_in' => $totalCashIn - $openingCash + $externalCashIn + $totalNonCashReceipts + $creditTotal,
+                    'money_out' => $totalCashOut + $externalCashOut + $totalNonCashReceipts + $creditTotal,
+                    'opening_cash' => $openingCash, 'closing_cash' => $closingCash,
+                    'expected_closing' => $expectedClosing, 'variance' => $variance,
+                ],
+                'channels' => $paymentReceiptPostings, 'tanks' => $tankSnapshot,
+                'credit_sales' => $creditDetails,
+                'nozzles' => $nozzleReadingsData, 'correction_accounts' => $accounts,
+                'physical_observations' => $data['tank_readings'] ?? [],
+            ];
             // Post the transaction
             $transaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $companyId,
@@ -1202,8 +1322,19 @@ class DailyCloseService
                 'base_currency' => $currency,
                 'description' => "Daily close - {$date}",
                 'reference_type' => 'fuel.daily_close',
-                'metadata' => $metadata,
+                'metadata' => array_diff_key($metadata, ['posting_snapshot' => true]),
             ], $entries);
+            // Existing subledger records reference this one posting, including its business date.
+            app(DailyCloseCreditSaleService::class)->attach($companyId, $transaction->id, $creditDetails);
+            $amanatEntryId = $transaction->journalEntries()->where('account_id', $accounts['amanat_deposits'])->value('id');
+            foreach ($createdAmanat as $record) { $record->update(['journal_entry_id' => $amanatEntryId]); }
+            foreach ($createdAdvances as $record) {
+                $record->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $accounts['employee_advances'])->value('id')]);
+            }
+            foreach ($createdPartners as $record) {
+                $accountId = $record->transaction_type === 'investment' ? $accounts['partner_deposits'] : $accounts['partner_drawings'];
+                $record->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $accountId)->value('id')]);
+            }
 
             foreach ($stockReconciliations as $reconciliation) {
                 StockMovement::create([
@@ -1281,6 +1412,12 @@ class DailyCloseService
                     ]);
             }
 
+            // Freeze only after all journal, stock and subledger records have been constructed.
+            $transaction->update(['metadata' => $metadata, 'posted_at' => $metadata['posting_snapshot']['posted_at'],
+                'posted_by_user_id' => $user->id, 'created_by_user_id' => $user->id]);
+
+            DB::table('fuel.daily_close_drafts')->where('company_id', $companyId)->where('business_date', $date)->delete();
+
             return [
                 'transaction_number' => $transactionNumber,
                 'transaction_id' => $transaction->id,
@@ -1299,9 +1436,27 @@ class DailyCloseService
             ->whereNull('deleted_at')
             ->where('transaction_date', '>=', now()->subDays($days)->toDateString())
             ->orderByDesc('transaction_date')
-            ->get(['id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked', 'reversed_by_id', 'reversal_of_id', 'corrects_transaction_id']);
+            ->get(['id', 'company_id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked', 'reversed_by_id', 'reversal_of_id', 'corrects_transaction_id']);
 
-        return $closes->map(function ($t) {
+        // One aggregated query instead of a full DailyCloseReconciliationService::view()
+        // (~6-7 queries) per close: fuel.daily_close_activity is the append-only audit
+        // trail every post-close write lands in, so its mere presence for a close id
+        // is a cheap, sufficient proxy for "has post-close activity" on a history list.
+        $activeCloseIds = DB::table('fuel.daily_close_activity')
+            ->where('company_id', $companyId)
+            ->whereIn('close_transaction_id', $closes->pluck('id'))
+            ->distinct()
+            ->pluck('close_transaction_id')
+            ->merge(
+                DB::table('fuel.daily_close_reading_corrections')
+                    ->where('company_id', $companyId)
+                    ->whereIn('close_transaction_id', $closes->pluck('id'))
+                    ->distinct()
+                    ->pluck('close_transaction_id')
+            )
+            ->flip();
+
+        return $closes->map(function ($t) use ($activeCloseIds) {
             $metadata = $t->metadata ?? [];
             if (!is_array($metadata)) {
                 $metadata = [];
@@ -1319,6 +1474,7 @@ class DailyCloseService
                 'is_locked' => $t->is_locked ?? false,
                 'is_amendable' => $t->isAmendable(),
                 'has_amendments' => $t->reversed_by_id !== null,
+                'has_post_close_activity' => $activeCloseIds->has($t->id),
             ];
         })->toArray();
     }
@@ -1363,7 +1519,7 @@ class DailyCloseService
             ->exists();
 
         if ($exists) {
-            throw new \RuntimeException("A daily close entry already exists for {$date}. Use the amendment flow to correct it.");
+            throw new \RuntimeException("A daily close entry already exists for {$date}. Record a separate dated adjustment to preserve the original close.");
         }
 
         return $base;
@@ -1543,7 +1699,12 @@ class DailyCloseService
         }
     }
 
-    private function getRateChangeSnapshotsForDate(string $companyId, string $date): array
+    /**
+     * Public so DailyCloseReconciliationService can recompute a corrected nozzle
+     * reading's revenue using the exact same rate-change-split logic (review
+     * finding #6): never reimplement pricing outside this service.
+     */
+    public function getRateChangeSnapshotsForDate(string $companyId, string $date): array
     {
         return RateChange::where('company_id', $companyId)
             ->whereDate('effective_date', $date)
@@ -1570,7 +1731,7 @@ class DailyCloseService
             ->all();
     }
 
-    private function calculateRateChangeSplit(array $reading, ?array $snapshot, float $fallbackRate): array
+    public function calculateRateChangeSplit(array $reading, ?array $snapshot, float $fallbackRate): array
     {
         $liters = (float) $reading['liters_sold'];
         $opening = (float) $reading['opening_electronic'];

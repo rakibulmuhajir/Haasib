@@ -38,6 +38,11 @@ class UpdateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         // Get the payment
@@ -59,7 +64,7 @@ class UpdateAction implements PaletteAction
 
         $newAmount = (float) $params['amount'];
 
-        return DB::transaction(function () use ($params, $company, $payment, $invoice, $newAmount) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $payment, $invoice, $newAmount) {
             $paymentDate = !empty($params['date'])
                 ? Carbon::parse($params['date'])
                 : $payment->payment_date;

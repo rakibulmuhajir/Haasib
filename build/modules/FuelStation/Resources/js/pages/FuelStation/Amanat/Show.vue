@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +24,7 @@ interface AmanatTransaction {
   reference?: string | null
   notes?: string | null
   created_at: string
+  transaction_date?: string | null
 }
 
 interface CustomerProfile {
@@ -49,6 +52,7 @@ interface PaginatedTransactions {
 const props = withDefaults(defineProps<{
   customer: Customer
   profile: CustomerProfile
+  canRecordMovement?: boolean
   transactions: AmanatTransaction[] | PaginatedTransactions
 }>(), {
   transactions: () => [],
@@ -64,10 +68,20 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.customer.name, href: `/${companySlug.value}/fuel/amanat/${props.customer.id}` },
 ])
 
+const movement = useForm({ business_date: '', amount: 0, reference: '' })
+const recordMovement = (kind: 'deposit' | 'withdraw') => movement.post(`/${companySlug.value}/fuel/amanat/${props.customer.id}/${kind}`, {
+  preserveScroll: true,
+  onSuccess: (page) => { if ((page.props as any).flash?.success) movement.reset('amount', 'reference') },
+})
+
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
 const formatDateTime = (date: string) => {
   return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
+}
+
+const formatDateOnly = (date: string) => {
+  return formatSharedDateTime(date, { mode: 'date', locale: 'en-PK' })
 }
 
 // Transaction table
@@ -92,7 +106,8 @@ const txTableData = computed(() => {
 
     return {
       id: tx.id,
-      date: formatDateTime(tx.created_at),
+      date: formatDateOnly(tx.transaction_date ?? tx.created_at),
+      recordedAt: formatDateTime(tx.created_at),
       type: tx.transaction_type,
       details: details || '-',
       amount: tx.amount,
@@ -133,6 +148,13 @@ const getTypeBadge = (type: string) => {
 
     <div class="grid gap-4 md:grid-cols-3">
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken md:col-span-2">
+        <CardContent v-if="canRecordMovement" class="space-y-2 pt-4">
+          <Label>Business date</Label><Input v-model="movement.business_date" type="date" />
+          <Label>Amount</Label><Input v-model.number="movement.amount" type="number" min="0.01" step="0.01" />
+          <Label>Reference</Label><Input v-model="movement.reference" />
+          <p v-for="(error, field) in movement.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+          <div class="flex gap-2"><Button :disabled="movement.processing" @click="recordMovement('deposit')">Record deposit</Button><Button variant="outline" :disabled="movement.processing" @click="recordMovement('withdraw')">Record withdrawal</Button></div>
+        </CardContent>
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
           <CardTitle class="text-3xl"><MoneyText :amount="profile.amanat_balance" :currency="currencyCode" /></CardTitle>
@@ -164,7 +186,7 @@ const getTypeBadge = (type: string) => {
     <Card class="border-border/80">
       <CardHeader class="pb-3">
         <CardTitle class="text-base">Transaction History</CardTitle>
-        <CardDescription>Deposits and withdrawals are recorded from Daily Close.</CardDescription>
+        <CardDescription>Business-date movements appear in Daily Close automatically.</CardDescription>
       </CardHeader>
 
       <CardContent class="p-0">
@@ -174,6 +196,10 @@ const getTypeBadge = (type: string) => {
               title="No transactions"
               description="Daily Close deposits, withdrawals, and fuel purchases will appear here."
             />
+          </template>
+
+          <template #cell-date="{ row }">
+            <span :title="`recorded ${row.recordedAt}`">{{ row.date }}</span>
           </template>
 
           <template #cell-type="{ row }">

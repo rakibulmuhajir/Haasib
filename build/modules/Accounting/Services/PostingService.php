@@ -25,7 +25,7 @@ class PostingService
         private readonly PostingTemplateValidator $templateValidator,
     ) {}
 
-    public function postInvoice(Invoice $invoice): Transaction
+    public function postInvoice(Invoice $invoice, ?string $transactionNumber = null): Transaction
     {
         $invoice->loadMissing(['customer', 'lineItems', 'company']);
 
@@ -44,7 +44,7 @@ class PostingService
 
         return $this->createTransaction([
             'company_id' => $company->id,
-            'transaction_number' => $invoice->invoice_number,
+            'transaction_number' => $transactionNumber ?? $invoice->invoice_number,
             'transaction_type' => 'invoice',
             'transaction_date' => $transactionDate,
             'posting_date' => $transactionDate,
@@ -92,6 +92,13 @@ class PostingService
 
         $allocated = $payment->paymentAllocations ? (float) $payment->paymentAllocations->sum('amount_allocated') : (float) $payment->amount;
         $amount = round((float) $payment->amount, 2);
+        $charge = round((float) ($payment->transaction_charge ?? 0), 2);
+        if ($charge < 0 || $charge > $amount) {
+            throw new \RuntimeException('Transaction charge must be between zero and the payment amount.');
+        }
+        if ($charge > 0 && ! $payment->company?->expense_account_id) {
+            throw new \RuntimeException('A default expense account is required to post transaction charges.');
+        }
         if (abs($amount - round($allocated, 2)) >= 0.01) {
             throw new \RuntimeException('Payment allocations must equal payment amount to post to GL.');
         }
@@ -114,9 +121,15 @@ class PostingService
             [
                 'account_id' => $depositAccountId,
                 'type' => 'debit',
-                'amount' => $amount,
-                'description' => 'Deposit',
+                'amount' => round($amount - $charge, 2),
+                'description' => 'Deposit (net of transaction charge)',
             ],
+            ...($charge > 0 ? [[
+                'account_id' => $payment->company?->expense_account_id,
+                'type' => 'debit',
+                'amount' => $charge,
+                'description' => 'Transaction charges',
+            ]] : []),
             [
                 'account_id' => $arAccountId,
                 'type' => 'credit',
@@ -126,7 +139,7 @@ class PostingService
         ]);
     }
 
-    public function postBill(Bill $bill): Transaction
+    public function postBill(Bill $bill, ?string $transactionNumber = null): Transaction
     {
         $bill->loadMissing(['vendor', 'lineItems', 'company']);
 
@@ -145,7 +158,7 @@ class PostingService
 
         return $this->createTransaction([
             'company_id' => $company->id,
-            'transaction_number' => $bill->bill_number,
+            'transaction_number' => $transactionNumber ?? $bill->bill_number,
             'transaction_type' => 'bill',
             'transaction_date' => $transactionDate,
             'posting_date' => $transactionDate,
@@ -193,6 +206,13 @@ class PostingService
 
         $allocated = $payment->allocations ? (float) $payment->allocations->sum('amount_allocated') : (float) $payment->amount;
         $amount = round((float) $payment->amount, 2);
+        $charge = round((float) ($payment->transaction_charge ?? 0), 2);
+        if ($charge < 0) {
+            throw new \RuntimeException('Transaction charge cannot be negative.');
+        }
+        if ($charge > 0 && ! $payment->company?->expense_account_id) {
+            throw new \RuntimeException('A default expense account is required to post transaction charges.');
+        }
         if (abs($amount - round($allocated, 2)) >= 0.01) {
             throw new \RuntimeException('Bill payment allocations must equal payment amount to post to GL.');
         }
@@ -221,9 +241,15 @@ class PostingService
             [
                 'account_id' => $paymentAccountId,
                 'type' => 'credit',
-                'amount' => $amount,
-                'description' => 'Cash/Bank',
+                'amount' => round($amount + $charge, 2),
+                'description' => 'Cash/Bank (including transaction charge)',
             ],
+            ...($charge > 0 ? [[
+                'account_id' => $payment->company?->expense_account_id,
+                'type' => 'debit',
+                'amount' => $charge,
+                'description' => 'Transaction charges',
+            ]] : []),
         ]);
     }
 
@@ -383,9 +409,13 @@ class PostingService
      */
     public function reverseTransaction(Transaction $original, ?string $reason = null, Carbon|string|null $date = null): Transaction
     {
+        app(OpeningBalanceGuard::class)->assertMutable($original->company_id, 'journal', $original->id);
+        if ($original->transaction_type === 'fuel_daily_close' && isset($original->metadata['posting_snapshot'])) {
+            throw new \RuntimeException('A posted Daily Close cannot be reversed. Record a separate dated correction.');
+        }
         $original->loadMissing(['journalEntries']);
 
-        return DB::transaction(function () use ($original, $reason, $date) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($original, $reason, $date) {
             if ($original->reversed_by_id) {
                 $existing = Transaction::where('company_id', $original->company_id)
                     ->where('id', $original->reversed_by_id)

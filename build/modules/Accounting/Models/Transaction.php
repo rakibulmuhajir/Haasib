@@ -165,7 +165,8 @@ class Transaction extends Model
      */
     public function isAmendable(): bool
     {
-        return !$this->is_locked
+        return !isset($this->metadata['posting_snapshot'])
+            && !$this->is_locked
             && !$this->reversed_by_id
             && !$this->voided_at
             && in_array($this->transaction_type, ['fuel_daily_close']);

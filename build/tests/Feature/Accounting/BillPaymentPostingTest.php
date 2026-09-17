@@ -181,3 +181,49 @@ test('recording a bill payment throws when neither the vendor nor the company ha
 
     expect($call)->toThrow(\RuntimeException::class, 'AP account is required to post the bill payment.');
 });
+
+test('a bill payment charge debits expense and increases the bank movement while leaving AP gross', function () {
+    $fixture = billPaymentTestFixture(null, null);
+    $company = $fixture['company'];
+    $user = $fixture['user'];
+    $bankAccount = $fixture['bankAccount'];
+    $apAccount = $fixture['apAccount'];
+    $vendor = $fixture['vendor'];
+    $bill = $fixture['bill'];
+
+    $chargeAccount = Account::create([
+        'company_id' => $company->id,
+        'code' => '6500',
+        'name' => 'Transaction Charges',
+        'type' => 'expense',
+        'subtype' => 'expense',
+        'normal_balance' => 'debit',
+        'currency' => null,
+    ]);
+    $company->update(['expense_account_id' => $chargeAccount->id]);
+
+    $result = app(CompanyContextService::class)->withContext($company->fresh(), function () use ($vendor, $bill, $bankAccount, $user) {
+        return app(CommandBus::class)->dispatch('bill_payment.create', [
+            'vendor_id' => $vendor->id,
+            'payment_date' => '2026-08-15',
+            'amount' => 500,
+            'transaction_charge' => 25,
+            'currency' => 'USD',
+            'base_currency' => 'USD',
+            'payment_method' => 'bank_transfer',
+            'payment_account_id' => $bankAccount->id,
+            'allocations' => [['bill_id' => $bill->id, 'amount_allocated' => 500]],
+        ], $user, true);
+    });
+
+    $payment = BillPayment::find($result['data']['id']);
+    $entries = Transaction::find($payment->transaction_id)->journalEntries;
+
+    expect((float) $entries->sum('debit_amount'))->toBe(525.0)
+        ->and((float) $entries->sum('credit_amount'))->toBe(525.0)
+        ->and((float) $entries->where('account_id', $apAccount->id)->sum('debit_amount'))->toBe(500.0)
+        ->and((float) $entries->where('account_id', $chargeAccount->id)->sum('debit_amount'))->toBe(25.0)
+        ->and((float) $entries->where('account_id', $bankAccount->id)->sum('credit_amount'))->toBe(525.0)
+        ->and((float) $payment->transaction_charge)->toBe(25.0)
+        ->and((float) $payment->base_transaction_charge)->toBe(25.0);
+});

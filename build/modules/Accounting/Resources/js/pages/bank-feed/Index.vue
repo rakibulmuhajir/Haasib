@@ -16,6 +16,7 @@ interface Props {
     ledger_balance: number
     difference: number
     is_balanced: boolean
+    has_statement_transactions: boolean
     explanations: Array<{ label: string, amount: number }>
     currency: string
   }
@@ -61,7 +62,15 @@ const { t } = useLexicon()
           </CardHeader>
           <CardContent>
             <div class="space-y-4">
-              <div v-if="props.balanceExplainer.is_balanced" class="bg-status-success/10 p-3 rounded-sm text-sm text-status-success flex items-center gap-2">
+              <div v-if="!props.balanceExplainer.has_statement_transactions" class="bg-status-attention/10 p-3 rounded-sm text-sm text-status-attention flex items-center gap-2">
+                <span class="text-lg">!</span>
+                <div>
+                  <div class="font-semibold">Bank statement not connected</div>
+                  Import or connect a statement before comparing bank and book balances.
+                </div>
+              </div>
+
+              <div v-else-if="props.balanceExplainer.is_balanced" class="bg-status-success/10 p-3 rounded-sm text-sm text-status-success flex items-center gap-2">
                 <span class="text-lg">✓</span>
                 <div>
                   <div class="font-semibold">Balances Match</div>
@@ -70,15 +79,16 @@ const { t } = useLexicon()
               </div>
 
               <div class="flex justify-between items-center pb-2 border-b">
-                <span class="text-sm text-muted-foreground">{{ t('bankFeedBalanceFeed') }}</span>
-                <span class="font-bold"><MoneyText :amount="props.balanceExplainer.feed_balance" :currency="props.balanceExplainer.currency" /></span>
+                <span class="text-sm text-muted-foreground">{{ props.balanceExplainer.has_statement_transactions ? t('bankFeedBalanceFeed') : 'Statement balance' }}</span>
+                <span v-if="props.balanceExplainer.has_statement_transactions" class="font-bold"><MoneyText :amount="props.balanceExplainer.feed_balance" :currency="props.balanceExplainer.currency" /></span>
+                <span v-else class="font-medium text-muted-foreground">Not connected</span>
               </div>
               <div class="flex justify-between items-center pb-2 border-b">
                 <span class="text-sm text-muted-foreground">{{ t('bankFeedBalanceBooks') }}</span>
                 <span class="font-bold"><MoneyText :amount="props.balanceExplainer.ledger_balance" :currency="props.balanceExplainer.currency" /></span>
               </div>
 
-              <div v-if="!props.balanceExplainer.is_balanced">
+              <div v-if="props.balanceExplainer.has_statement_transactions && !props.balanceExplainer.is_balanced">
                 <div class="flex justify-between items-center pb-2 border-b text-status-critical">
                   <span class="text-sm font-medium">Difference</span>
                   <span class="font-bold"><MoneyText :amount="props.balanceExplainer.difference" :currency="props.balanceExplainer.currency" /></span>

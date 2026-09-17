@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import { computed } from 'vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -37,6 +40,8 @@ import {
 } from 'lucide-vue-next'
 import AmendmentChain from './AmendmentChain.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import { useLexicon } from '@/composables/useLexicon'
+const { t } = useLexicon()
 
 interface TransactionData {
   id: string
@@ -70,6 +75,8 @@ interface TransactionData {
     other_deposits?: number
     cash_bill_payments?: number
     amanat_disbursements?: number
+    credit_sales_total?: number
+    credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number }>
     payment_receipt_postings?: Array<{ channel_code: string; channel_label: string; channel_type: string; account_id: string | null; amount: number }>
   }
 }
@@ -88,6 +95,14 @@ interface ChainItem {
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   transaction: TransactionData
+  expenseAccounts?: Array<{ id: string; name: string }>
+  canAddActivity?: boolean
+  canCorrectReadings?: boolean
+  correctableReadings?: {
+    tank: Array<{ id: string; label: string; current_value: number }>
+    nozzle: Array<{ id: string; label: string; current_value: number }>
+  }
+  reconciliation?: { legacy: boolean; has_post_close_activity?: boolean; audit_events?: any[]; snapshot?: any; current?: any; activity: any[]; corrections?: any[] }
   amendmentChain: ChainItem[]
   permissions: {
     canAmend: boolean
@@ -95,6 +110,32 @@ const props = defineProps<{
     canUnlock: boolean
   }
 }>()
+
+const expense = useForm({ account_id: '', description: '', amount: 0 })
+const addExpense = () => expense.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/expenses`, {
+  preserveScroll: true,
+  onSuccess: (page) => { if ((page.props as any).flash?.success) expense.reset() },
+  onError: (errors) => toast.error(String(Object.values(errors)[0])),
+})
+
+const correction = useForm({ reading_type: 'tank', reading_id: '', corrected_value: 0, reason: '', expected_revision: 0 })
+const correctableOptions = computed(() => {
+  const options = correction.reading_type === 'nozzle' ? (props.correctableReadings?.nozzle ?? []) : (props.correctableReadings?.tank ?? [])
+  return options.map(option => {
+    const latest = (props.reconciliation?.corrections ?? []).filter(row => row.reading_id === option.id)
+      .sort((a, b) => Number(b.revision) - Number(a.revision))[0]
+    return { ...option, label: latest ? `${option.label} (current: ${latest.corrected_value}L)` : option.label }
+  })
+})
+const addCorrection = () => {
+  correction.expected_revision = Math.max(0, ...(props.reconciliation?.corrections ?? [])
+    .filter(row => row.reading_id === correction.reading_id).map(row => Number(row.revision)))
+  correction.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/corrections`, {
+  preserveScroll: true,
+  onSuccess: (page) => { if ((page.props as any).flash?.success) { toast.success('Correction recorded'); correction.reset('reading_id', 'corrected_value', 'reason') } },
+  onError: (errors) => toast.error(String(Object.values(errors)[0])),
+})
+}
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -137,13 +178,18 @@ const channelOutRows = computed(() => {
 const totalChannelOut = computed(() => channelOutRows.value.reduce((s, p) => s + Number(p.amount), 0))
 
 const totalMoneyIn = computed(() => {
+  if (props.reconciliation?.snapshot) return Number(props.reconciliation.snapshot.totals.money_in || 0)
   const m = metadata.value
-  return Number(m.opening_cash || 0) + Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
+  // Opening cash is shown separately below. This total must contain only
+  // current-day inflows, otherwise the detail view double-counts the opening
+  // drawer balance while the reconciliation table correctly reports money_in.
+  return Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
 })
 
 const totalMoneyOut = computed(() => {
+  if (props.reconciliation?.snapshot) return Number(props.reconciliation.snapshot.totals.money_out || 0)
   const m = metadata.value
-  return totalChannelOut.value + Number(m.bank_deposits || 0) + Number(m.partner_withdrawals || 0) + Number(m.employee_advances || 0)
+  return totalChannelOut.value + Number(m.credit_sales_total || 0) + Number(m.bank_deposits || 0) + Number(m.partner_withdrawals || 0) + Number(m.employee_advances || 0)
     + Number(m.payroll_payouts || 0) + Number(m.cash_bill_payments || 0) + Number(m.amanat_disbursements || 0) + Number(m.expenses || 0)
 })
 
@@ -180,6 +226,102 @@ const unlockTransaction = () => {
     :breadcrumbs="breadcrumbs"
   >
     <DailyCloseNav :company="company" history />
+    <Card v-if="reconciliation" class="mb-6">
+      <CardHeader>
+        <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
+        <CardDescription v-if="reconciliation.legacy">This legacy close has no captured source snapshot. Its original declaration is shown below; historical adjustment details cannot be reconstructed reliably.</CardDescription>
+        <CardDescription v-else>Posted {{ formatDateTime(reconciliation.snapshot?.posted_at) }} by {{ reconciliation.snapshot?.posted_by_name || reconciliation.snapshot?.posted_by }} · Business date {{ transaction.transaction_date }}</CardDescription>
+        <div v-if="reconciliation.snapshot?.zero_sales_confirmed" class="mt-2 rounded-md border border-status-info/30 bg-status-info/10 px-3 py-2 text-sm">
+          <span class="font-medium">Zero-sales day confirmed.</span>
+          <span v-if="reconciliation.snapshot?.zero_sales_reason" class="text-muted-foreground"> {{ reconciliation.snapshot.zero_sales_reason }}</span>
+        </div>
+      </CardHeader>
+      <CardContent v-if="!reconciliation.legacy" class="space-y-6">
+        <table class="w-full text-sm">
+          <thead><tr class="border-b text-left"><th class="py-2">Cash</th><th>POSTED SNAPSHOT</th><th>CURRENT / RECONCILED</th></tr></thead>
+          <tbody>
+            <tr v-for="[key, label] in [['total_revenue','Sales'],['money_in','Money In'],['money_out','Money Out'],['expected_closing','Expected closing cash'],['closing_cash','Physical closing cash'],['variance','Cash variance']]" :key="key" class="border-b">
+              <td class="py-2">{{ label }}</td>
+              <td><MoneyText :amount="reconciliation.snapshot?.totals[key] || 0" :currency="currency" /></td>
+              <td><MoneyText :amount="reconciliation.current?.[key] || 0" :currency="currency" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <table class="w-full text-sm">
+          <thead><tr class="border-b text-left"><th>Channel movement</th><th>Posted snapshot</th><th>Current / reconciled</th></tr></thead>
+          <tbody><tr v-for="(label, accountId) in reconciliation.snapshot?.channel_accounts" :key="accountId" class="border-b"><td class="py-2">{{ label }}</td><td><MoneyText :amount="reconciliation.snapshot?.account_effects?.[accountId] || 0" :currency="currency" /></td><td><MoneyText :amount="reconciliation.current?.account_effects?.[accountId] || 0" :currency="currency" /></td></tr></tbody>
+        </table>
+        <table v-if="reconciliation.snapshot?.tanks?.length" class="w-full text-sm">
+          <thead><tr><th class="text-left">Tank</th><th>Declared physical litres</th><th>Original variance</th><th>Reconciled variance</th></tr></thead>
+          <tbody><tr v-for="(tank, index) in reconciliation.snapshot.tanks" :key="tank.tank_id"><td>{{ tank.tank_name }}</td><td>{{ tank.physical_liters }}</td><td>{{ tank.variance_liters }}</td><td>{{ reconciliation.current?.tanks?.[index]?.variance_liters }}</td></tr></tbody>
+        </table>
+        <div>
+          <h3 class="mb-2 font-semibold">POST-CLOSE ACTIVITY</h3>
+          <form v-if="canAddActivity" @submit.prevent="addExpense" class="mb-4 space-y-3 rounded border p-4">
+            <p class="font-medium">Record a forgotten cash expense for {{ transaction.transaction_date }}</p>
+            <Label>Expense account</Label>
+            <Select v-model="expense.account_id"><SelectTrigger><SelectValue placeholder="Choose expense account" /></SelectTrigger><SelectContent><SelectItem v-for="account in expenseAccounts" :key="account.id" :value="account.id">{{ account.name }}</SelectItem></SelectContent></Select>
+            <Label>Description</Label><Input v-model="expense.description" required />
+            <Label>Amount</Label><Input v-model.number="expense.amount" type="number" min="0.01" step="0.01" required />
+            <p v-for="(error, field) in expense.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+            <Button type="submit" :disabled="expense.processing">{{ expense.processing ? 'Recording…' : 'Record expense' }}</Button>
+          </form>
+          <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
+          <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
+            <p class="font-medium">{{ row.activity }} · {{ row.type }} · <Link v-if="!row.type.startsWith('stock:')" :href="`/${company.slug}/journals/${row.id}`" class="underline">{{ row.reference }}</Link><span v-else>{{ row.reference }}</span></p>
+            <p>Business date {{ row.business_date }} · Entered {{ formatDateTime(row.entered_at) }} by {{ row.entered_by_name }}</p>
+            <p v-if="row.before">Updated {{ formatDateTime(row.updated_at) }} · {{ row.updated_by_name || 'Actor unavailable' }}</p>
+            <p>{{ row.source_type }} · {{ row.source_id || row.id }}</p>
+            <p>Amount <MoneyText :amount="row.amount" :currency="currency" /> · Cash reconciliation effect <MoneyText :amount="row.reconciliation_effect" :currency="currency" /></p>
+            <p v-if="row.quantity_effect">Stock effect: {{ row.quantity_effect }} litres · Tank {{ row.warehouse_id }}</p>
+          </div>
+        </div>
+        <div>
+          <h3 class="mb-2 font-semibold">READING CORRECTIONS</h3>
+          <form v-if="canCorrectReadings" @submit.prevent="addCorrection" class="mb-4 space-y-3 rounded border p-4">
+            <p class="font-medium">Correct a tank or nozzle reading for {{ transaction.transaction_date }}</p>
+            <p class="text-sm text-muted-foreground">The original reading is never changed. This records the correction and its journal/stock adjustments. Counted cash and the posted snapshot stay unchanged.</p>
+            <Label>Reading type</Label>
+            <Select v-model="correction.reading_type" @update:model-value="correction.reading_id = ''">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tank">Tank reading</SelectItem>
+                <SelectItem value="nozzle">Nozzle reading</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Reading</Label>
+            <Select v-model="correction.reading_id">
+              <SelectTrigger><SelectValue placeholder="Choose reading" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in correctableOptions" :key="option.id" :value="option.id">{{ option.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Corrected value (litres)</Label><Input v-model.number="correction.corrected_value" type="number" min="0" step="0.001" required />
+            <Label>Reason</Label><Input v-model="correction.reason" required />
+            <p v-for="(error, field) in correction.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+            <Button type="submit" :disabled="correction.processing">{{ correction.processing ? 'Recording…' : 'Record correction' }}</Button>
+          </form>
+          <p v-if="!reconciliation.corrections?.length" class="text-sm text-muted-foreground">No corrections recorded.</p>
+          <div v-for="row in reconciliation.corrections" :key="row.id" class="border-b py-3 text-sm">
+            <p class="font-medium">{{ row.reading_type === 'tank' ? 'Tank reading' : 'Nozzle reading' }} correction</p>
+            <p>{{ row.original_value }}L → {{ row.corrected_value }}L · {{ formatDateTime(row.created_at) }} by {{ row.created_by_name }}</p>
+            <p>Reason: {{ row.reason }}</p>
+            <p v-if="row.revenue_effect !== undefined">Revenue effect <MoneyText :amount="row.revenue_effect" :currency="currency" /></p>
+          </div>
+        </div>
+        <details v-if="reconciliation.audit_events?.length" class="rounded border p-3">
+          <summary class="cursor-pointer font-medium">Audit history ({{ reconciliation.audit_events.length }} events)</summary>
+          <div v-for="event in reconciliation.audit_events" :key="event.id" class="border-b py-2 text-sm">
+            <p>{{ event.operation }} · {{ event.source_table }} · {{ event.source_id }}</p>
+            <p>{{ formatDateTime(event.occurred_at) }} · {{ event.actor_name || 'Actor unavailable' }}</p>
+              <p>Business date {{ event.after_data?.transaction_date || event.after_data?.movement_date || event.after_data?.invoice_date || event.after_data?.bill_date || event.before_data?.transaction_date || transaction.transaction_date }}</p>
+              <p>Reference {{ event.after_data?.transaction_number || event.before_data?.transaction_number || event.source_id }}</p>
+              <p v-if="event.before_data">Before amount: {{ event.before_data.total_amount ?? event.before_data.total_debit ?? event.before_data.amount ?? event.before_data.total_cost ?? event.before_data.debit_amount ?? '—' }}</p>
+              <p v-if="event.after_data">After amount: {{ event.after_data.total_amount ?? event.after_data.total_debit ?? event.after_data.amount ?? event.after_data.total_cost ?? event.after_data.debit_amount ?? '—' }}</p>
+          </div>
+        </details>
+      </CardContent>
+    </Card>
     <template #actions>
       <div class="flex items-center gap-2">
         <Button variant="outline" as-child>
@@ -404,6 +546,10 @@ const unlockTransaction = () => {
 
           <!-- Cash Out -->
           <div class="space-y-2">
+            <div v-for="credit in metadata.credit_sale_details || []" :key="credit.invoice_id" class="flex justify-between items-center py-2">
+              <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">{{ t('meterCreditSales') }} · {{ credit.customer_name }} · {{ credit.invoice_number }}</Link>
+              <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
+            </div>
             <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">
               <span>{{ row.channel_label }} → bank / card account</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="row.amount" :currency="currency" :fraction-digits="0" /></span>

@@ -439,3 +439,13 @@ Company settings needed for auto-posting:
   3. any transaction whose `reversal_of_id` points at a transaction matching (1) or (2) — the void reversal of an opening invoice/bill — via a sub-select, so this holds even if `reverseTransaction()` were to stop copying `reference_id` onto the reversal.
   Nothing else is excluded: a genuinely unrelated transaction that is later reversed for any other reason still counts as real history and still bounds `as_of_date`.
 - Re-saving refuses (before mutating anything) if any current opening invoice/bill has been paid (`paid_amount > 0` or `total_amount - balance > 0.005`), any opening amanat deposit has since been drawn below its opening amount, or any opening salary advance has been partly recovered.
+
+
+## Locked opening provenance protection
+
+Opening-generated invoices, bills, their line items and journal records are protected
+by persisted company settings opening_balances provenance IDs. PostgreSQL guards
+cover direct SQL mutations as well as application actions and serialize against the
+company row used by opening save/lock. Ordinary settlement may update paid_amount,
+balance, paid_at and settlement status; it cannot change principal or void history.
+No ordinary unlock bypass is introduced.

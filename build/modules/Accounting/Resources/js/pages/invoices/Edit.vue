@@ -52,12 +52,18 @@ interface AccountOption {
   name: string
 }
 
+interface CurrencyOption {
+  currency_code: string
+  exchange_rate: string | number
+}
+
 interface Invoice {
   id: string
   invoice_number: string
   customer: { id: string; name: string }
   status: string
   currency: string
+  exchange_rate?: string | number | null
   invoice_date: string
   due_date: string
   internal_notes?: string
@@ -69,6 +75,7 @@ interface Invoice {
 const props = defineProps<{
   company: CompanyRef
   invoice: Invoice
+  currencies: CurrencyOption[]
   revenueAccounts?: AccountOption[]
 }>()
 
@@ -104,6 +111,7 @@ const form = useForm({
   customer_id: props.invoice.customer.id,
   line_items: initialLines,
   currency: props.invoice.currency,
+  exchange_rate: props.invoice.exchange_rate ?? 1,
   invoice_date: toDateInput(props.invoice.invoice_date),
   due_date: toDateInput(props.invoice.due_date),
   internal_notes: props.invoice.internal_notes || '',
@@ -126,6 +134,14 @@ const taxAmount = computed(() =>
 )
 
 const totalAmount = computed(() => subtotal.value + taxAmount.value)
+
+const selectedCurrency = computed(() => props.currencies.find((currency) => currency.currency_code === form.currency))
+const baseAmount = computed(() => totalAmount.value * Number(selectedCurrency.value?.exchange_rate || form.exchange_rate || 1))
+
+const currencyChanged = (currency: string) => {
+  form.currency = currency
+  form.exchange_rate = Number(props.currencies.find((option) => option.currency_code === currency)?.exchange_rate || 1)
+}
 
 const addLine = () => form.line_items.push(emptyLine())
 
@@ -229,6 +245,19 @@ const submit = () => {
           <CardTitle>Dates and terms</CardTitle>
         </CardHeader>
         <CardContent class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label>Invoice currency</Label>
+            <Select :model-value="form.currency" :disabled="!isEditable" @update:model-value="currencyChanged">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="currency in currencies" :key="currency.currency_code" :value="currency.currency_code">{{ currency.currency_code }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="mt-1 text-xs text-muted-foreground">
+              1 {{ form.currency }} = {{ selectedCurrency?.exchange_rate || form.exchange_rate || 1 }} {{ company.base_currency }} · {{ baseAmount.toFixed(2) }} {{ company.base_currency }} base value
+            </p>
+            <InputError :message="form.errors.currency" />
+          </div>
           <div>
             <Label for="invoice_date">Invoice date</Label>
             <Input id="invoice_date" v-model="form.invoice_date" type="date" :disabled="!isEditable" required />

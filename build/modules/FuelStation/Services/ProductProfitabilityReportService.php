@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\Item;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ProductProfitabilityReportService
 {
@@ -271,12 +272,35 @@ class ProductProfitabilityReportService
      */
     private function addStockVariance(string $companyId, string $startDate, string $endDate, string $product, array $items, array &$products): void
     {
+        $corrections = DB::table('fuel.daily_close_reading_corrections as corrections')
+            ->join('acct.transactions as close_transactions', 'close_transactions.id', '=', 'corrections.close_transaction_id')
+            ->where('corrections.company_id', $companyId)
+            ->where('corrections.reading_type', 'tank')
+            ->whereBetween('close_transactions.transaction_date', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay(),
+            ])
+            ->orderBy('corrections.revision')
+            ->get([
+                'corrections.reading_id',
+                'corrections.effects',
+                'corrections.revision',
+            ])
+            ->groupBy('reading_id');
+
+        $correctedReadingIds = $corrections->keys()->all();
         $readings = TankReading::where('company_id', $companyId)
             ->whereBetween('reading_date', [
                 Carbon::parse($startDate)->startOfDay(),
                 Carbon::parse($endDate)->endOfDay(),
             ])
-            ->where('variance_type', '!=', TankReading::VARIANCE_NONE)
+            ->where(function ($query) use ($correctedReadingIds) {
+                $query->where('variance_type', '!=', TankReading::VARIANCE_NONE);
+
+                if ($correctedReadingIds !== []) {
+                    $query->orWhereIn('id', $correctedReadingIds);
+                }
+            })
             ->with('item:id,name,fuel_category,avg_cost,cost_price,unit_of_measure')
             ->get();
 
@@ -290,8 +314,30 @@ class ProductProfitabilityReportService
                 $products[$key] = $this->emptyProductRow($key, $this->productName($key, $items, $reading->item?->name), 'L');
             }
 
-            $variance = (float) $reading->variance_liters;
-            $unitCost = (float) ($items[$key]['avg_cost'] ?? $reading->item?->avg_cost ?? $reading->item?->cost_price ?? 0);
+            $history = $corrections->get($reading->id, collect());
+            $physicalEffect = (float) $history->sum(function ($correction) {
+                $effects = is_array($correction->effects)
+                    ? $correction->effects
+                    : json_decode($correction->effects, true);
+
+                return (float) ($effects['physical_liters_effect'] ?? 0);
+            });
+            $expectedEffect = (float) $history->sum(function ($correction) {
+                $effects = is_array($correction->effects)
+                    ? $correction->effects
+                    : json_decode($correction->effects, true);
+
+                return (float) ($effects['expected_liters_effect'] ?? 0);
+            });
+            $latestCorrection = $history->sortByDesc('revision')->first();
+            $latestEffects = $latestCorrection
+                ? (is_array($latestCorrection->effects)
+                    ? $latestCorrection->effects
+                    : json_decode($latestCorrection->effects, true))
+                : [];
+            $variance = (float) $reading->variance_liters + $physicalEffect - $expectedEffect;
+            $unitCost = (float) ($latestEffects['unit_cost']
+                ?? ($items[$key]['avg_cost'] ?? $reading->item?->avg_cost ?? $reading->item?->cost_price ?? 0));
             $value = round(abs($variance) * $unitCost, 2);
 
             if ($variance < 0) {

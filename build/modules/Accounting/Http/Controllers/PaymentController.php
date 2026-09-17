@@ -141,6 +141,7 @@ class PaymentController extends Controller
         $params = [
             'invoice' => $validated['invoice_id'],
             'amount' => $validated['amount'],
+            'transaction_charge' => $validated['transaction_charge'] ?? 0,
             'method' => $method,
             'currency' => $validated['currency'] ?? null,
             'date' => $validated['payment_date'] ?? null,
@@ -175,7 +176,7 @@ class PaymentController extends Controller
 
         $paymentId = $request->route('payment');
         $paymentRecord = Payment::where('company_id', $company->id)
-            ->with(['customer', 'paymentAllocations.invoice:id,invoice_number'])
+            ->with(['customer', 'paymentAllocations.invoice:id,invoice_number,currency'])
             ->findOrFail($paymentId);
 
         return Inertia::render('accounting/payments/Show', [

@@ -32,6 +32,7 @@ class UpdateInvoiceRequest extends BaseFormRequest
                     ->where('is_active', true)),
             ],
             'currency' => ['sometimes', 'required', 'string', 'size:3', 'uppercase'],
+            'exchange_rate' => ['nullable', 'numeric', 'gt:0', 'decimal:0,8'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'description' => ['nullable', 'string', 'max:500'],
             'payment_terms' => ['nullable', 'integer', 'min:0', 'max:365'],

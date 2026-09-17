@@ -55,12 +55,20 @@ class UpdateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         // Get the invoice
         $invoice = Invoice::where('id', $params['id'])
             ->where('company_id', $company->id)
             ->firstOrFail();
+
+        app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
+        app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
 
         // An invoice stops being amendable once its figures have been reported
         // somewhere else — money received against it, or the document itself
@@ -78,10 +86,14 @@ class UpdateAction implements PaletteAction
             ]);
         }
 
+        if ($invoice->transaction_id && ($params['draft'] ?? false)) {
+            throw ValidationException::withMessages(['draft' => 'A posted invoice cannot return to draft. Void it through the controlled reversal action.']);
+        }
+
         // Resolve customer (UUID, email, or fuzzy name match)
         $customer = $this->resolveCustomer($params['customer'], $company->id);
 
-        return DB::transaction(function () use ($params, $company, $customer, $invoice) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer, $invoice) {
             // Calculate dates
             $paymentTerms = $params['payment_terms'] ?? $customer->payment_terms ?? 30;
             $invoiceDate = !empty($params['date'])
@@ -132,6 +144,11 @@ class UpdateAction implements PaletteAction
 
             $total = $subtotal + $taxAmount - $discountAmount;
             $baseAmount = round($total * ($exchangeRate ?? 1), 2);
+
+            // Decide, before mutating anything, whether the journal actually needs
+            // reversing and reposting. A notes/reference/memo/due-date-only edit
+            // must not renumber or touch the posted journal.
+            $journalRelevantChanged = $this->journalRelevantChanged($invoice, $customer, $invoiceDate, $currency, $exchangeRate, $total, $lineItems);
 
             // Update invoice
             $invoice->update([
@@ -184,6 +201,14 @@ class UpdateAction implements PaletteAction
                 ]);
             }
 
+            if ($invoice->transaction_id && $journalRelevantChanged) {
+                $oldJournal = \App\Modules\Accounting\Models\Transaction::where('company_id', $invoice->company_id)->findOrFail($invoice->transaction_id);
+                $posting = app(\App\Modules\Accounting\Services\PostingService::class);
+                $posting->reverseTransaction($oldJournal, 'Document amended', $oldJournal->transaction_date);
+                $newJournal = $posting->postInvoice($invoice->fresh(), \App\Modules\Accounting\Models\Transaction::generateJournalNumber($invoice->company_id));
+                $invoice->update(['transaction_id' => $newJournal->id]);
+            }
+
             $statusLabel = $status === 'draft' ? 'Draft' : 'Sent';
 
             return [
@@ -199,6 +224,73 @@ class UpdateAction implements PaletteAction
                 'redirect' => "/{$company->slug}/invoices/{$invoice->id}",
             ];
         });
+    }
+
+    /**
+     * Whether anything the posted journal actually depends on changed:
+     * totals, per-line amounts/accounts/tax, the transaction date, the
+     * customer, or currency/exchange rate. Notes/reference/memo/due-date-only
+     * edits must return false so the journal is left untouched.
+     *
+     * @param  array<int, array<string, mixed>>  $lineItems
+     */
+    private function journalRelevantChanged(
+        Invoice $invoice,
+        Customer $customer,
+        Carbon $invoiceDate,
+        string $currency,
+        ?float $exchangeRate,
+        float $total,
+        array $lineItems
+    ): bool {
+        if (!$invoice->transaction_id) {
+            return false;
+        }
+
+        if ($invoice->customer_id !== $customer->id) {
+            return true;
+        }
+        if (optional($invoice->invoice_date)->format('Y-m-d') !== $invoiceDate->format('Y-m-d')) {
+            return true;
+        }
+        if (strtoupper((string) $invoice->currency) !== strtoupper($currency)) {
+            return true;
+        }
+        $oldRate = $invoice->exchange_rate !== null ? round((float) $invoice->exchange_rate, 8) : null;
+        $newRate = $exchangeRate !== null ? round((float) $exchangeRate, 8) : null;
+        if ($oldRate !== $newRate) {
+            return true;
+        }
+        if (round((float) $invoice->total_amount, 2) !== round($total, 2)) {
+            return true;
+        }
+
+        $oldLines = InvoiceLineItem::where('invoice_id', $invoice->id)
+            ->orderBy('line_number')
+            ->get(['line_number', 'quantity', 'unit_price', 'tax_rate', 'discount_rate', 'income_account_id'])
+            ->map(fn ($li) => [
+                'line_number' => (int) $li->line_number,
+                'quantity' => round((float) $li->quantity, 6),
+                'unit_price' => round((float) $li->unit_price, 6),
+                'tax_rate' => round((float) $li->tax_rate, 4),
+                'discount_rate' => round((float) $li->discount_rate, 4),
+                'income_account_id' => $li->income_account_id,
+            ])->values()->all();
+
+        $newLines = collect($lineItems)
+            ->map(fn ($item, $idx) => [
+                'line_number' => (int) ($item['line_number'] ?? ($idx + 1)),
+                'quantity' => round((float) $item['quantity'], 6),
+                'unit_price' => round((float) $item['unit_price'], 6),
+                'tax_rate' => round((float) ($item['tax_rate'] ?? 0), 4),
+                'discount_rate' => round((float) ($item['discount_rate'] ?? 0), 4),
+                'income_account_id' => $item['income_account_id'] ?? null,
+            ])
+            ->sortBy('line_number')
+            ->values()
+            ->all();
+
+        return $oldLines !== $newLines;
     }
 
     private function resolveCustomer(string $identifier, string $companyId): Customer

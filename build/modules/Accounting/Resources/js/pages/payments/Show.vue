@@ -14,120 +14,145 @@
  * unapplied credit is a real position a customer can be in, and a receipt that
  * silently omits it does not add up to the amount printed at the bottom.
  */
-import { computed } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
-import PageShell from '@/components/PageShell.vue'
-import LedgerDocument from '@/components/LedgerDocument.vue'
-import type { DocumentIssuer, DocumentLine } from '@/components/LedgerDocument.vue'
-import DefinitionList from '@/components/DefinitionList.vue'
-import RelatedActions from '@/components/RelatedActions.vue'
-import MoneyText from '@/components/MoneyText.vue'
-import MetaChip from '@/components/MetaChip.vue'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import DefinitionList from '@/components/DefinitionList.vue';
+import type {
+    DocumentIssuer,
+    DocumentLine,
+} from '@/components/LedgerDocument.vue';
+import LedgerDocument from '@/components/LedgerDocument.vue';
+import MetaChip from '@/components/MetaChip.vue';
+import MoneyText from '@/components/MoneyText.vue';
+import PageShell from '@/components/PageShell.vue';
+import RelatedActions from '@/components/RelatedActions.vue';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import type { BreadcrumbItem } from '@/types'
-import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next'
-import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
+import { formatMoneyText } from '@/lib/money';
+import type { BreadcrumbItem } from '@/types';
+import { Head, router } from '@inertiajs/vue3';
+import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 interface Invoice {
-  id: string
-  invoice_number: string
+    id: string;
+    invoice_number: string;
+    currency: string;
 }
 
 interface PaymentAllocation {
-  id: string
-  invoice_id: string
-  invoice?: Invoice
-  amount_allocated: number
+    id: string;
+    invoice_id: string;
+    invoice?: Invoice;
+    amount_allocated: number;
+    base_amount_allocated: number;
 }
 
 interface Customer {
-  id: string
-  name: string
-  email?: string
+    id: string;
+    name: string;
+    email?: string;
 }
 
 interface Payment {
-  id: string
-  payment_number: string
-  customer: Customer
-  amount: number
-  currency: string
-  payment_method: string
-  reference_number?: string
-  payment_date: string
-  notes?: string
-  payment_allocations: PaymentAllocation[]
-  created_at: string
+    id: string;
+    payment_number: string;
+    customer: Customer;
+    amount: number;
+    transaction_charge?: number;
+    base_transaction_charge?: number;
+    currency: string;
+    payment_method: string;
+    reference_number?: string;
+    payment_date: string;
+    notes?: string;
+    payment_allocations: PaymentAllocation[];
+    created_at: string;
 }
 
 interface CompanyRef {
-  id: string
-  name: string
-  slug: string
-  /** Assembled server-side by CompanyLetterhead — see the invoice page. */
-  letterhead: DocumentIssuer
+    id: string;
+    name: string;
+    slug: string;
+    /** Assembled server-side by CompanyLetterhead — see the invoice page. */
+    letterhead: DocumentIssuer;
 }
 
 const props = defineProps<{
-  company: CompanyRef
-  payment: Payment
-}>()
+    company: CompanyRef;
+    payment: Payment;
+}>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
-  { title: 'Dashboard', href: '/dashboard' },
-  { title: props.company.name, href: `/${props.company.slug}` },
-  { title: 'Payments', href: `/${props.company.slug}/payments` },
-  { title: props.payment.payment_number },
-])
+    { title: 'Dashboard', href: '/dashboard' },
+    { title: props.company.name, href: `/${props.company.slug}` },
+    { title: 'Payments', href: `/${props.company.slug}/payments` },
+    { title: props.payment.payment_number },
+]);
 
 /**
  * Written as 'cheque' by the form, stored as 'check' by the column's check
  * constraint. Both spellings arrive here.
  */
 const paymentMethodLabels: Record<string, string> = {
-  cash: 'Cash',
-  bank_transfer: 'Bank transfer',
-  card: 'Card',
-  cheque: 'Cheque',
-  check: 'Cheque',
-}
+    cash: 'Cash',
+    bank_transfer: 'Bank transfer',
+    card: 'Card',
+    cheque: 'Cheque',
+    check: 'Cheque',
+};
 
 const methodLabel = computed(
-  () => paymentMethodLabels[props.payment.payment_method] ?? 'Other',
-)
+    () => paymentMethodLabels[props.payment.payment_method] ?? 'Other',
+);
 
-const formatDate = (dateString: string) => formatSharedDateTime(dateString, { mode: 'date' })
+const formatDate = (dateString: string) =>
+    formatSharedDateTime(dateString, { mode: 'date' });
 
-const issuer = computed(() => props.company.letterhead)
+const formatMoney = (amount: number, currency: string) =>
+    formatMoneyText(amount, currency || 'USD');
+
+const issuer = computed(() => props.company.letterhead);
 
 const receivedFrom = computed(() => ({
-  name: props.payment.customer.name,
-  email: props.payment.customer.email,
-}))
+    name: props.payment.customer.name,
+    email: props.payment.customer.email,
+}));
 
 const documentDates = computed(() =>
-  [
-    { label: 'Received', value: formatDate(props.payment.payment_date) },
-    { label: 'Method', value: methodLabel.value },
-    { label: 'Reference', value: props.payment.reference_number ?? null },
-  ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
-)
+    [
+        { label: 'Received', value: formatDate(props.payment.payment_date) },
+        { label: 'Method', value: methodLabel.value },
+        { label: 'Reference', value: props.payment.reference_number ?? null },
+    ].filter((date): date is { label: string; value: string } =>
+        Boolean(date.value),
+    ),
+);
+
+// Allocation amounts are stored in invoice currency, while a receipt is
+// printed in payment currency. Use the base allocation when a base-currency
+// payment settles a foreign-currency invoice so the receipt still reconciles.
+const allocationDisplayAmount = (allocation: PaymentAllocation) =>
+    allocation.invoice?.currency &&
+    allocation.invoice.currency !== props.payment.currency
+        ? Number(allocation.base_amount_allocated)
+        : Number(allocation.amount_allocated);
 
 const allocatedTotal = computed(() =>
-  props.payment.payment_allocations.reduce(
-    (sum, allocation) => sum + Number(allocation.amount_allocated),
-    0,
-  ),
-)
+    props.payment.payment_allocations.reduce(
+        (sum, allocation) => sum + allocationDisplayAmount(allocation),
+        0,
+    ),
+);
 
-const unapplied = computed(() => Number(props.payment.amount) - allocatedTotal.value)
+const unapplied = computed(
+    () => Number(props.payment.amount) - allocatedTotal.value,
+);
 
 /**
  * One line per invoice the money went against, then the remainder if the
@@ -135,139 +160,191 @@ const unapplied = computed(() => Number(props.payment.amount) - allocatedTotal.v
  * total or the receipt is wrong, so the remainder is never left off.
  */
 const documentLines = computed<DocumentLine[]>(() => {
-  const lines: DocumentLine[] = props.payment.payment_allocations.map((allocation) => ({
-    description: allocation.invoice?.invoice_number
-      ? `Applied to ${allocation.invoice.invoice_number}`
-      : 'Applied to invoice',
-    amount: allocation.amount_allocated,
-  }))
+    const lines: DocumentLine[] = props.payment.payment_allocations.map(
+        (allocation) => ({
+            description: allocation.invoice?.invoice_number
+                ? `Applied to ${allocation.invoice.invoice_number}`
+                : 'Applied to invoice',
+            amount: allocationDisplayAmount(allocation),
+        }),
+    );
 
-  if (unapplied.value > 0.005) {
-    lines.push({
-      description: lines.length ? 'Unapplied credit' : 'Payment on account',
-      detail: lines.length ? 'Held against future invoices' : undefined,
-      amount: unapplied.value,
-    })
-  }
+    if (unapplied.value > 0.005) {
+        lines.push({
+            description: lines.length
+                ? 'Unapplied credit'
+                : 'Payment on account',
+            detail: lines.length ? 'Held against future invoices' : undefined,
+            amount: unapplied.value,
+        });
+    }
 
-  return lines
-})
+    return lines;
+});
 
 const summaryItems = computed(() => [
-  { term: 'Method', value: methodLabel.value },
-  { term: 'Reference', value: props.payment.reference_number ?? null },
-  { term: 'Recorded', value: formatDate(props.payment.created_at) },
-])
+    { term: 'Method', value: methodLabel.value },
+    {
+        term: 'Transaction charges',
+        value: formatMoney(
+            Number(props.payment.transaction_charge ?? 0),
+            props.payment.currency,
+        ),
+    },
+    {
+        term: 'Net bank/cash movement',
+        value: formatMoney(
+            Math.max(
+                0,
+                Number(props.payment.amount) -
+                    Number(props.payment.transaction_charge ?? 0),
+            ),
+            props.payment.currency,
+        ),
+    },
+    { term: 'Reference', value: props.payment.reference_number ?? null },
+    { term: 'Recorded', value: formatDate(props.payment.created_at) },
+]);
 </script>
 
 <template>
-  <Head :title="`Payment ${payment.payment_number}`" />
+    <Head :title="`Payment ${payment.payment_number}`" />
 
-  <PageShell
-    :title="`Payment ${payment.payment_number}`"
-    :breadcrumbs="breadcrumbs"
-  >
-    <template #actions>
-      <Button variant="outline" @click="router.get(`/${company.slug}/payments`)">
-        <ArrowLeft class="mr-2 h-4 w-4" />
-        Back
-      </Button>
+    <PageShell
+        :title="`Payment ${payment.payment_number}`"
+        :breadcrumbs="breadcrumbs"
+    >
+        <template #actions>
+            <Button
+                variant="outline"
+                @click="router.get(`/${company.slug}/payments`)"
+            >
+                <ArrowLeft class="mr-2 h-4 w-4" />
+                Back
+            </Button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline">
-            <MoreHorizontal class="mr-2 h-4 w-4" />
-            More
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem @click="router.get(`/${company.slug}/payments/${payment.id}/edit`)">
-            <Edit class="mr-2 h-4 w-4" />
-            Edit
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </template>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                        <MoreHorizontal class="mr-2 h-4 w-4" />
+                        More
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                        @click="
+                            router.get(
+                                `/${company.slug}/payments/${payment.id}/edit`,
+                            )
+                        "
+                    >
+                        <Edit class="mr-2 h-4 w-4" />
+                        Edit
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </template>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 space-y-6">
-        <LedgerDocument
-          doc-type="Receipt"
-          :doc-number="payment.payment_number"
-          :issuer="issuer"
-          :bill-to="receivedFrom"
-          bill-to-label="Received from"
-          :dates="documentDates"
-          :lines="documentLines"
-          grand-total-label="Amount received"
-          :grand-total-amount="payment.amount"
-          :currency="payment.currency"
-          locale="en-PK"
-          :show-quantity="false"
-        />
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div class="space-y-6 lg:col-span-2">
+                <LedgerDocument
+                    doc-type="Receipt"
+                    :doc-number="payment.payment_number"
+                    :issuer="issuer"
+                    :bill-to="receivedFrom"
+                    bill-to-label="Received from"
+                    :dates="documentDates"
+                    :lines="documentLines"
+                    grand-total-label="Amount received"
+                    :grand-total-amount="payment.amount"
+                    :currency="payment.currency"
+                    locale="en-PK"
+                    :show-quantity="false"
+                />
 
-        <Card v-if="payment.notes" variant="detail">
-          <CardHeader>
-            <CardTitle>Internal notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p class="text-sm" dir="auto">{{ payment.notes }}</p>
-          </CardContent>
-        </Card>
-      </div>
+                <Card v-if="payment.notes" variant="detail">
+                    <CardHeader>
+                        <CardTitle>Internal notes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p class="text-sm" dir="auto">{{ payment.notes }}</p>
+                    </CardContent>
+                </Card>
+            </div>
 
-      <div class="space-y-6">
-        <Card variant="detail">
-          <CardHeader>
-            <CardTitle>How it was paid</CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-3">
-            <DefinitionList :items="summaryItems" />
-          </CardContent>
-        </Card>
+            <div class="space-y-6">
+                <Card variant="detail">
+                    <CardHeader>
+                        <CardTitle>How it was paid</CardTitle>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <DefinitionList :items="summaryItems" />
+                    </CardContent>
+                </Card>
 
-        <!-- What the money did. A receipt whose allocations are hidden in a
+                <!-- What the money did. A receipt whose allocations are hidden in a
              sidebar total is a receipt nobody can reconcile against. -->
-        <Card variant="detail">
-          <CardHeader>
-            <CardTitle>Where it went</CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-3">
-            <div
-              v-for="allocation in payment.payment_allocations"
-              :key="allocation.id"
-              class="flex items-center justify-between gap-3 text-sm"
-            >
-              <button
-                type="button"
-                class="text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-                @click="router.get(`/${company.slug}/invoices/${allocation.invoice_id}`)"
-              >
-                {{ allocation.invoice?.invoice_number || 'Invoice' }}
-              </button>
-              <MoneyText
-                :amount="allocation.amount_allocated"
-                :currency="payment.currency"
-                locale="en-PK"
-              />
+                <Card variant="detail">
+                    <CardHeader>
+                        <CardTitle>Where it went</CardTitle>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div
+                            v-for="allocation in payment.payment_allocations"
+                            :key="allocation.id"
+                            class="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <button
+                                type="button"
+                                class="text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+                                @click="
+                                    router.get(
+                                        `/${company.slug}/invoices/${allocation.invoice_id}`,
+                                    )
+                                "
+                            >
+                                {{
+                                    allocation.invoice?.invoice_number ||
+                                    'Invoice'
+                                }}
+                            </button>
+                            <MoneyText
+                                :amount="allocationDisplayAmount(allocation)"
+                                :currency="payment.currency"
+                                locale="en-PK"
+                            />
+                        </div>
+
+                        <div
+                            v-if="unapplied > 0.005"
+                            class="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <MetaChip>On account</MetaChip>
+                            <MoneyText
+                                :amount="unapplied"
+                                :currency="payment.currency"
+                                locale="en-PK"
+                            />
+                        </div>
+
+                        <p
+                            v-if="
+                                !payment.payment_allocations.length &&
+                                unapplied <= 0.005
+                            "
+                            class="text-sm text-muted-foreground"
+                        >
+                            Not applied to any invoice yet.
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
+        </div>
 
-            <div v-if="unapplied > 0.005" class="flex items-center justify-between gap-3 text-sm">
-              <MetaChip>On account</MetaChip>
-              <MoneyText :amount="unapplied" :currency="payment.currency" locale="en-PK" />
-            </div>
-
-            <p
-              v-if="!payment.payment_allocations.length && unapplied <= 0.005"
-              class="text-sm text-muted-foreground"
-            >
-              Not applied to any invoice yet.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-
-    <RelatedActions screen="payment.show" :slug="company.slug" :subject="payment" />
-  </PageShell>
+        <RelatedActions
+            screen="payment.show"
+            :slug="company.slug"
+            :subject="payment"
+        />
+    </PageShell>
 </template>

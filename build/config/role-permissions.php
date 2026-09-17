@@ -221,6 +221,7 @@ return [
         'daily_close.view',
         'daily_close.amend',
         'daily_close.lock',
+        'daily_close.correct_reading',
 
         // Umrah
         'umrah.agent.create',

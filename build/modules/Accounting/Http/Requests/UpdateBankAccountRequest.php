@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\BankAccount;
+use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
 class UpdateBankAccountRequest extends BaseFormRequest
@@ -17,7 +18,7 @@ class UpdateBankAccountRequest extends BaseFormRequest
 
     public function rules(): array
     {
-        $company = $this->getCompany();
+        $companyId = app(CompanyContextService::class)->getCompanyId();
         $bankAccountId = $this->route('bankAccount');
 
         // Check if account has transactions (currency immutability)
@@ -31,7 +32,7 @@ class UpdateBankAccountRequest extends BaseFormRequest
                 'string',
                 'max:100',
                 Rule::unique('acct.company_bank_accounts', 'account_number')
-                    ->where('company_id', $company->id)
+                    ->where('company_id', $companyId)
                     ->whereNull('deleted_at')
                     ->ignore($bankAccountId),
             ],

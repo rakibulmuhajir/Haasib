@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Models;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -79,6 +80,11 @@ class AmanatTransaction extends Model
     public function recordedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by_user_id');
+    }
+
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
 
     /**

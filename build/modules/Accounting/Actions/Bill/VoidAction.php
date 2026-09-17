@@ -28,8 +28,15 @@ class VoidAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
         $bill = Bill::where('company_id', $company->id)->findOrFail($params['id']);
+
+        app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'bill', $bill->id);
 
         if (in_array($bill->status, ['void', 'cancelled'], true)) {
             throw new \InvalidArgumentException('Bill already void/cancelled');

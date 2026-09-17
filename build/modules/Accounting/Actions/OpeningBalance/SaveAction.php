@@ -7,6 +7,7 @@ use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Partner;
 use App\Models\PartnerTransaction;
+use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
@@ -72,14 +73,32 @@ class SaveAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = CompanyContext::requireCompany();
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
+        $contextCompany = CompanyContext::requireCompany();
         $asOf = $params['as_of_date'];
-        $priorOpening = $company->settings['opening_balances'] ?? [];
 
-        $this->guardNotLocked($company);
-        $this->guardDate($company->id, $asOf, $priorOpening);
+        return \App\Services\AccountingWriteTransaction::run(function () use ($contextCompany, $params, $asOf) {
+            // Lock order (do not invert): (1) advisory 'opening:'||company_id lock --
+            // EXCLUSIVE here, SHARED for ordinary writers via acct.protect_locked_opening
+            // -- taken as the very first statement, before any reads or row locks;
+            // (2) document row locks (company row below, invoices/bills created further
+            // down). See the lock-order comment in the protect_locked_openings migration.
+            DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['opening:'.$contextCompany->id]);
+            // Lock the company row first so a concurrent save cannot read the same
+            // stale settings and both reverse-then-repost against the same prior
+            // generation, duplicating balances. Every read of "prior opening state"
+            // below comes from this freshly-locked row, not from the (possibly
+            // stale) instance the caller/context handed in.
+            $company = Company::whereKey($contextCompany->id)->lockForUpdate()->firstOrFail();
+            $priorOpening = $company->settings['opening_balances'] ?? [];
 
-        return DB::transaction(function () use ($company, $params, $asOf, $priorOpening) {
+            $this->guardNotLocked($company);
+            $this->guardDate($company->id, $asOf, $priorOpening);
+
             $this->reversePrevious($company, $priorOpening);
 
             $accounts = $this->accounts->resolve($company->id);
@@ -132,11 +151,20 @@ class SaveAction implements PaletteAction
             $company->settings = $settings;
             $company->save();
 
+            // Keep the context-bound Company instance (the one the caller/redirect
+            // holds a reference to) in sync with what was just persisted, so code
+            // elsewhere in this same request that reads CompanyContext::requireCompany()
+            // sees the fresh settings without needing its own DB round trip.
+            $contextCompany->settings = $settings;
+
             return [
                 'message' => 'Opening balances saved as of '.$asOf,
                 'data' => ['journal_id' => $journalId, 'invoice_ids' => $invoiceIds, 'bill_ids' => $billIds],
             ];
-        });
+        }); // retry on deadlock (40P01): this transaction takes document row locks
+        // (company row above, invoices/bills created below) after the exclusive advisory
+        // lock; retry is a backstop against the narrow window described in the lock-order
+        // comment in the protect_locked_openings migration.
     }
 
     private function guardNotLocked($company): void

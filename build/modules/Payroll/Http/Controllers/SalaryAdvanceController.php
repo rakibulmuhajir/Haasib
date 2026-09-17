@@ -79,9 +79,7 @@ class SalaryAdvanceController extends Controller
             || $company->industry_code === 'fuel_station'
             || $company->industry === 'fuel_station';
 
-        $paymentAccounts = $usesDailyClose
-            ? collect()
-            : Account::where('company_id', $company->id)
+        $paymentAccounts = Account::where('company_id', $company->id)
                 ->whereIn('subtype', ['bank', 'cash'])
                 ->where('is_active', true)
                 ->whereNull('deleted_at')
@@ -110,12 +108,6 @@ class SalaryAdvanceController extends Controller
     public function store(StoreSalaryAdvanceRequest $request, CommandBus $commandBus): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-
-        if ($company->isModuleEnabled('fuel_station') || $company->industry_code === 'fuel_station' || $company->industry === 'fuel_station') {
-            return redirect()
-                ->route('fuel.daily-close.create', ['company' => $company->slug])
-                ->with('error', 'Salary advances are recorded from Daily Close so station cash has one source of truth.');
-        }
 
         try {
             $result = $commandBus->dispatch('payroll.salary-advance.create', [

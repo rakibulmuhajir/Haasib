@@ -134,9 +134,9 @@ class PayrollPostingService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            $this->postingService->postBalancedTransaction([
+            $transaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $companyId,
-                'transaction_number' => 'ADV-'.strtoupper(substr($advance->id, 0, 8)),
+                'transaction_number' => 'ADV-'.$advance->id,
                 'transaction_type' => 'salary_advance',
                 'date' => $advance->advance_date,
                 'currency' => $baseCurrency,
@@ -164,6 +164,8 @@ class PayrollPostingService
                     'description' => 'Cash or bank paid to employee',
                 ],
             ]);
+
+            $advance->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $advanceAccountId)->value('id')]);
 
             return $advance;
         });

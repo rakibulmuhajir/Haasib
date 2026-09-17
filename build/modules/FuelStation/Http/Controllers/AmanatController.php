@@ -107,36 +107,49 @@ class AmanatController extends Controller
         // Get or create profile
         $profile = CustomerProfile::getOrCreateForCustomer($company->id, $customerModel->id);
 
-        // Get transaction history
         $transactions = AmanatTransaction::where('company_id', $company->id)
             ->where('customer_id', $customerModel->id)
-            ->with(['fuelItem', 'recordedBy'])
-            ->orderByDesc('created_at')
+            ->select('fuel.amanat_transactions.*')
+            ->selectRaw("COALESCE((SELECT t.transaction_date FROM acct.journal_entries je
+                JOIN acct.transactions t ON t.id = je.transaction_id
+                WHERE je.id = fuel.amanat_transactions.journal_entry_id
+                  AND t.company_id = fuel.amanat_transactions.company_id),
+                fuel.amanat_transactions.created_at::date) AS transaction_date")
+            ->with(['fuelItem', 'recordedBy', 'journalEntry.transaction'])
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('fuel.amanat_transactions.created_at')
+            ->orderByDesc('fuel.amanat_transactions.id')
             ->paginate(50);
 
         return Inertia::render('FuelStation/Amanat/Show', [
             'customer' => $customerModel,
             'profile' => $profile,
             'transactions' => $transactions,
+            'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
         ]);
     }
 
-    public function deposit(Request $request): RedirectResponse
+    public function deposit(\App\Modules\FuelStation\Http\Requests\StoreAmanatMovementRequest $request): RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
-
-        return redirect()
-            ->route('fuel.daily-close.create', ['company' => $company->slug])
-            ->with('error', 'Amanat deposits are recorded from Daily Close so station cash has one source of truth.');
+        return $this->recordMovement($request, 'deposit');
     }
 
-    public function withdraw(Request $request): RedirectResponse
+    public function withdraw(\App\Modules\FuelStation\Http\Requests\StoreAmanatMovementRequest $request): RedirectResponse
+    {
+        return $this->recordMovement($request, 'withdraw');
+    }
+
+    private function recordMovement(\App\Modules\FuelStation\Http\Requests\StoreAmanatMovementRequest $request, string $method): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-
-        return redirect()
-            ->route('fuel.daily-close.create', ['company' => $company->slug])
-            ->with('error', 'Amanat withdrawals are recorded from Daily Close so station cash has one source of truth.');
+        $customer = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
+        abort_unless($customer, 404);
+        try {
+            app(\App\Services\CommandBus::class)->dispatch('fuel.amanat.movement', $request->validated() + ['customer_id' => $customer->id, 'kind' => $method], $request->user());
+            return back()->with('success', 'Amanat movement recorded for the selected business date.');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     private function findCompanyCustomer(string $companyId, string $customerId): ?Customer

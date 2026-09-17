@@ -29,9 +29,16 @@ class VoidAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         $invoice = $this->resolveInvoice($params['id'], $company->id);
+
+        app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
 
         // Validate current status
         if (in_array($invoice->status, ['cancelled', 'void'])) {

@@ -233,13 +233,13 @@ const recoveryPercentage = computed(() => {
         title="Salary Advances"
         :description="
             usesDailyClose
-                ? 'View advances recorded from Daily Close. Recovery happens automatically through payroll deductions.'
+                ? 'Record advances here or through Daily Close. The business date determines reconciliation; payroll handles recovery.'
                 : 'Record employee advances and recover them automatically through future payrolls.'
         "
         :icon="Wallet"
         :breadcrumbs="breadcrumbs"
     >
-        <Card v-if="!usesDailyClose" class="border-border/80">
+        <Card class="border-border/80">
             <CardHeader>
                 <CardTitle class="text-base">Record Advance</CardTitle>
                 <CardDescription
@@ -491,7 +491,7 @@ const recoveryPercentage = computed(() => {
                         <CardTitle class="text-base">Advance History</CardTitle>
                         <CardDescription>{{
                             usesDailyClose
-                                ? 'Daily Close is the source of truth for station cash advances.'
+                                ? 'These canonical advances are included in their business date’s Daily Close.'
                                 : 'All advances and payroll recoveries for this company.'
                         }}</CardDescription>
                     </div>
@@ -558,7 +558,7 @@ const recoveryPercentage = computed(() => {
                             title="No salary advances yet"
                             :description="
                                 usesDailyClose
-                                    ? 'Record employee cash advances in Daily Close so station cash stays reconciled.'
+                                    ? 'Record the first employee advance above or through Daily Close.'
                                     : 'Record the first employee advance above.'
                             "
                         />

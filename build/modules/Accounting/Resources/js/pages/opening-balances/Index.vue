@@ -53,6 +53,22 @@ const editable = computed(() => props.canManage && !locked.value)
 const baseCurrency = useBaseCurrency()
 const currency = computed(() => baseCurrency.value ?? 'PKR')
 
+/**
+ * EntitySearch is given only an id via v-model; left alone it fetches
+ * `/{company}/customers/{id}` (an Inertia page response, not JSON) to resolve a display
+ * name, so a saved row shows blank until the user searches again. This map lets every
+ * picker resolve its saved id to a name up front, from data already in `opening`.
+ */
+const entityNames = computed<Record<string, string>>(() => {
+  const names: Record<string, string> = {}
+  for (const c of props.opening.options.customers) names[c.id] = c.name
+  for (const v of props.opening.options.vendors) names[v.id] = v.name
+  for (const row of props.opening.rows.credit_customers) if (row.customer_id) names[row.customer_id] = row.customer_name
+  for (const row of props.opening.rows.amanat) if (row.customer_id) names[row.customer_id] = row.customer_name
+  for (const row of props.opening.rows.suppliers) if (row.vendor_id) names[row.vendor_id] = row.vendor_name
+  return names
+})
+
 function fieldsFromOpening(o: Opening) {
   return {
     as_of_date: o.as_of_date ?? '',
@@ -230,6 +246,7 @@ function lock() {
               <div>
                 <CardTitle>Credit customers</CardTitle>
                 <CardDescription>What each customer owes the business (udhaar). Becomes an opening invoice.</CardDescription>
+                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.credit_customers)" :currency="currency" :fraction-digits="0" />
@@ -247,6 +264,8 @@ function lock() {
                     v-model="row.customer_id"
                     entity-type="customer"
                     :disabled="!editable"
+                    :allow-quick-add="false"
+                    :initial-entity="row.customer_id ? { id: row.customer_id, name: entityNames[row.customer_id] ?? '' } : null"
                     :aria-labelledby="`credit_customers-${i}-customer_id-label`"
                   />
                   <InputError :message="err(`credit_customers.${i}.customer_id`)" />
@@ -329,6 +348,8 @@ function lock() {
                     v-model="row.customer_id"
                     entity-type="customer"
                     :disabled="!editable"
+                    :allow-quick-add="false"
+                    :initial-entity="row.customer_id ? { id: row.customer_id, name: entityNames[row.customer_id] ?? '' } : null"
                     :aria-labelledby="`amanat-${i}-customer_id-label`"
                   />
                   <InputError :message="err(`amanat.${i}.customer_id`)" />
@@ -354,6 +375,7 @@ function lock() {
               <div>
                 <CardTitle>Suppliers</CardTitle>
                 <CardDescription>Unpaid supplier balances. Becomes an opening bill.</CardDescription>
+                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.suppliers)" :currency="currency" :fraction-digits="0" />
@@ -371,6 +393,8 @@ function lock() {
                     v-model="row.vendor_id"
                     entity-type="vendor"
                     :disabled="!editable"
+                    :allow-quick-add="false"
+                    :initial-entity="row.vendor_id ? { id: row.vendor_id, name: entityNames[row.vendor_id] ?? '' } : null"
                     :aria-labelledby="`suppliers-${i}-vendor_id-label`"
                   />
                   <InputError :message="err(`suppliers.${i}.vendor_id`)" />

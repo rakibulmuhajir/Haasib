@@ -18,6 +18,7 @@ use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\SalaryAdvance;
+use App\Modules\Payroll\Models\SalaryAdvanceRecovery;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
@@ -238,6 +239,50 @@ test('amanat, employee advance and partner capital openings create sub-records l
     $equity = Account::where('company_id', $f['company']->id)->where('code', '3080')->first();
     // assets 5000 − liabilities 1,030,000 = −1,025,000 → 3080 carries a debit of 1,025,000
     expect(ledgerBalance($equity))->toBe(1025000.0);
+});
+
+test('a locked opening-balance employee advance can still be fully recovered through payroll but not cancelled or amended', function () {
+    $f = openingBalanceFixture();
+    $employee = Employee::create([
+        'company_id' => $f['company']->id,
+        'employee_number' => 'EMP-001',
+        'first_name' => 'Ali',
+        'last_name' => 'Khan',
+        'hire_date' => '2025-01-01',
+        'currency' => 'PKR',
+    ]);
+
+    dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'employees' => [['employee_id' => $employee->id, 'amount' => 5000]],
+    ]);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
+
+    $advance = SalaryAdvance::where('employee_id', $employee->id)->firstOrFail();
+    expect($advance->status)->toBe('pending');
+
+    // Final recovery (via the payroll trigger path) must not be blocked by the
+    // locked-opening-balance guard: it only mutates amount_recovered/amount_outstanding/status.
+    SalaryAdvanceRecovery::create([
+        'company_id' => $f['company']->id,
+        'salary_advance_id' => $advance->id,
+        'recovery_date' => '2026-09-05',
+        'amount' => 5000,
+        'recovery_type' => 'manual_repayment',
+    ]);
+
+    $advance->refresh();
+    expect($advance->status)->toBe('fully_recovered')
+        ->and((float) $advance->amount_recovered)->toBe(5000.0)
+        ->and((float) $advance->amount_outstanding)->toBe(0.0);
+
+    // Cancelling a locked opening-balance advance must still be rejected.
+    expect(fn () => DB::table('pay.salary_advances')->where('id', $advance->id)->update(['status' => 'cancelled']))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+
+    // Changing the advance amount on a locked opening-balance advance must still be rejected.
+    expect(fn () => DB::table('pay.salary_advances')->where('id', $advance->id)->update(['amount' => 9999]))
+        ->toThrow(\Illuminate\Database\QueryException::class);
 });
 
 test('an employee or partner belonging to another company is refused and nothing is written', function () {
@@ -596,6 +641,49 @@ test('a real invoice posting with no opening records saved yet still bounds the 
     expect($result['data']['journal_id'])->not->toBeNull();
 });
 
+test('a save bound to a stale company instance still sees the other save that already ran', function () {
+    // Reproduces the concurrent-save race without threads: two Company instances of the
+    // same row are loaded up front (as two overlapping requests would), instance A saves
+    // first (cash 100), then instance B — whose in-memory settings are still the
+    // pre-save empty state — saves cash 200. Before the fix, SaveAction read
+    // $company->settings straight off the (stale) instance the context was bound to,
+    // so the second save's guards and reversePrevious() never saw the first journal:
+    // both journals would end up live and cash would double-post. With the row locked
+    // and settings re-read inside the transaction, the second save must reverse the
+    // first generation and end up as the single live journal.
+    $f = openingBalanceFixture();
+
+    $instanceA = Company::find($f['company']->id);
+    $instanceB = Company::find($f['company']->id);
+
+    test()->actingAs($f['user']);
+
+    app(CompanyContextService::class)->withContext($instanceA, function () use ($f) {
+        app(CommandBus::class)->dispatch('opening_balance.save', [
+            'as_of_date' => '2026-08-31',
+            'cash' => ['amount' => 100],
+        ], $f['user'], true);
+    });
+
+    // $instanceB still has the settings it was loaded with, before instance A's save —
+    // simulating a second request that read the company row before the first request wrote it.
+    app(CompanyContextService::class)->withContext($instanceB, function () use ($f) {
+        app(CommandBus::class)->dispatch('opening_balance.save', [
+            'as_of_date' => '2026-08-31',
+            'cash' => ['amount' => 200],
+        ], $f['user'], true);
+    });
+
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(200.0);
+
+    $liveJournals = Transaction::where('company_id', $f['company']->id)
+        ->where('transaction_type', 'opening_balance')
+        ->whereNull('reversed_by_id')
+        ->whereNull('reversal_of_id')
+        ->count();
+    expect($liveJournals)->toBe(1);
+});
+
 test('locking prevents further saves', function () {
     $f = openingBalanceFixture();
     dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 10]]);
@@ -616,6 +704,55 @@ test('viewing opening balances on a fresh company creates no equity account, sav
     dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 10]]);
 
     expect(Account::where('company_id', $f['company']->id)->where('code', '3080')->exists())->toBeTrue();
+});
+
+test('locking opening balances freezes the underlying opening invoice and bill against voiding', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'Truck Company');
+    $vendor = Vendor::create([
+        'company_id' => $f['company']->id,
+        'vendor_number' => 'VEND-LOCK-1',
+        'name' => 'PSO Depot',
+        'base_currency' => 'PKR',
+        'is_active' => true,
+        'ap_account_id' => $f['accounts']['ap']->id,
+        'created_by_user_id' => $f['user']->id,
+    ]);
+
+    $result = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],
+        'suppliers' => [['vendor_id' => $vendor->id, 'amount' => 250000]],
+    ]);
+    $invoiceId = $result['data']['invoice_ids'][0];
+    $billId = $result['data']['bill_ids'][0];
+
+    // Before locking, voiding still works normally.
+    test()->actingAs($f['user']);
+    app(CompanyContextService::class)->withContext($f['company'], function () use ($invoiceId, $f) {
+        app(CommandBus::class)->dispatch('invoice.void', ['id' => $invoiceId, 'reason' => 'test'], $f['user'], true);
+    });
+    expect(Invoice::find($invoiceId)->status)->toBe('void');
+
+    // Re-save (the void above leaves this generation retired) then lock the new one.
+    $result = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],
+        'suppliers' => [['vendor_id' => $vendor->id, 'amount' => 250000]],
+    ]);
+    $invoiceId = $result['data']['invoice_ids'][0];
+    $billId = $result['data']['bill_ids'][0];
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
+    $lockedCompany = $f['company']->fresh();
+
+    expect(fn () => app(CompanyContextService::class)->withContext($lockedCompany, fn () => app(CommandBus::class)->dispatch('invoice.void', ['id' => $invoiceId, 'reason' => 'test'], $f['user'], true)))
+        ->toThrow(\RuntimeException::class);
+    expect(fn () => app(CompanyContextService::class)->withContext($lockedCompany, fn () => app(CommandBus::class)->dispatch('bill.void', ['id' => $billId, 'reason' => 'test'], $f['user'], true)))
+        ->toThrow(\RuntimeException::class);
+
+    expect(Invoice::find($invoiceId)->status)->not->toBe('void');
+    expect(Bill::find($billId)->status)->not->toBe('void');
 });
 
 test('the opening balances page requires the view permission and store requires manage', function () {
@@ -679,4 +816,75 @@ test('the fuel onboarding opening-cash route is gone', function () {
     $this->actingAs($f['user'])
         ->post("/{$f['company']->slug}/fuel/onboarding/opening-cash", ['as_of_date' => '2026-08-31', 'cash_on_hand' => 1])
         ->assertNotFound();
+});
+
+
+test('locked opening documents reject ordinary updates and direct journal reversal using stale context', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'Locked customer');
+    $vendor = Vendor::create([
+        'company_id' => $f['company']->id, 'vendor_number' => 'LOCKED-AP', 'name' => 'Locked supplier',
+        'base_currency' => 'PKR', 'is_active' => true, 'ap_account_id' => $f['accounts']['ap']->id,
+    ]);
+    $saved = dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31', 'cash' => ['amount' => 100],
+        'credit_customers' => [['customer_id' => $customer->id, 'amount' => 100]],
+        'suppliers' => [['vendor_id' => $vendor->id, 'amount' => 100]],
+    ]);
+    $stale = $f['company']->fresh();
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
+    $invoice = Invoice::findOrFail($saved['data']['invoice_ids'][0]);
+    $bill = Bill::findOrFail($saved['data']['bill_ids'][0]);
+    $before = JournalEntry::where('company_id', $f['company']->id)->get()->toArray();
+    app(CompanyContextService::class)->withContext($stale, function () use ($f, $invoice, $bill, $customer, $saved) {
+        expect(fn () => app(CommandBus::class)->dispatch('invoice.update', [
+            'id' => $invoice->id, 'customer' => $customer->id, 'currency' => 'PKR',
+            'line_items' => [['description' => 'Changed opening', 'quantity' => 1, 'unit_price' => 200]],
+        ], $f['user'], true))->toThrow(\RuntimeException::class);
+        expect(fn () => app(CommandBus::class)->dispatch('bill.update', [
+            'id' => $bill->id, 'line_items' => [['description' => 'Changed opening', 'quantity' => 1, 'unit_price' => 200]],
+        ], $f['user'], true))->toThrow(\RuntimeException::class);
+        foreach ([$invoice->transaction_id, $bill->transaction_id, $saved['data']['journal_id']] as $id) {
+            expect(fn () => app(PostingService::class)->reverseTransaction(Transaction::findOrFail($id)))
+                ->toThrow(\RuntimeException::class);
+        }
+    });
+    expect((float) $invoice->fresh()->total_amount)->toBe(100.0);
+    expect((float) $bill->fresh()->total_amount)->toBe(100.0);
+    expect(JournalEntry::where('company_id', $f['company']->id)->get()->toArray())->toBe($before);
+});
+
+
+test('locked opening principal and lines are protected against direct model and SQL mutation', function () {
+    $f = openingBalanceFixture();
+    $customer = openingCustomer($f, 'SQL protected');
+    $saved = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'credit_customers' => [['customer_id' => $customer->id, 'amount' => 100]]]);
+    $invoice = Invoice::findOrFail($saved['data']['invoice_ids'][0]);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
+    expect(fn () => $invoice->update(['total_amount' => 200]))->toThrow(\RuntimeException::class);
+    expect(fn () => $invoice->delete())->toThrow(\RuntimeException::class);
+    expect(fn () => DB::transaction(fn () => \App\Modules\Accounting\Models\InvoiceLineItem::create(['company_id' => $f['company']->id, 'invoice_id' => $invoice->id, 'line_number' => 1, 'description' => 'Injected line', 'quantity' => 1, 'unit_price' => 200, 'line_total' => 200, 'tax_amount' => 0, 'total' => 200])))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$f['company']->id]);
+    expect(fn () => DB::transaction(fn () => DB::table('acct.invoices')->where('id', $invoice->id)->update(['total_amount' => 200])))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+    expect((float) $invoice->fresh()->total_amount)->toBe(100.0);
+});
+
+
+test('locked opening receivable can be settled by a canonical payment without rewriting its principal journal', function () {
+    $f = openingBalanceFixture(); test()->actingAs($f['user']);
+    $customer = openingCustomer($f, 'Pay opening');
+    $saved = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'credit_customers' => [['customer_id' => $customer->id, 'amount' => 100]]]);
+    $invoice = Invoice::findOrFail($saved['data']['invoice_ids'][0]);
+    $entries = $invoice->transaction->journalEntries->toArray();
+    app(CompanyContextService::class)->withContext($f['company'], function () use ($f, $invoice) {
+        app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true);
+        app(CommandBus::class)->dispatch('payment.create', ['invoice' => $invoice->id, 'amount' => 100, 'method' => 'cash',
+            'date' => '2026-09-15', 'deposit_account_id' => $f['accounts']['cash']->id, 'ar_account_id' => $f['accounts']['ar']->id], $f['user'], true);
+    });
+    expect((float) $invoice->fresh()->total_amount)->toBe(100.0);
+    expect((float) $invoice->fresh()->balance)->toBe(0.0);
+    expect($invoice->fresh()->transaction->journalEntries->toArray())->toBe($entries);
+    expect(ledgerBalance($f['accounts']['ar']))->toBe(0.0);
 });

@@ -112,6 +112,7 @@ class InvoiceController extends Controller
         $params = [
             'customer' => $validated['customer_id'],
             'currency' => $validated['currency'] ?? $company->base_currency ?? 'USD',
+            'exchange_rate' => $validated['exchange_rate'] ?? null,
             'due' => $validated['due_date'] ?? null,
             'date' => $validated['invoice_date'] ?? null,
             'draft' => $status === 'draft',
@@ -205,6 +206,7 @@ class InvoiceController extends Controller
             'id' => $invoiceRecord->id,
             'customer' => $validated['customer_id'] ?? $invoiceRecord->customer_id,
             'currency' => $validated['currency'] ?? $invoiceRecord->currency ?? $company->base_currency ?? 'USD',
+            'exchange_rate' => $validated['exchange_rate'] ?? $invoiceRecord->exchange_rate ?? null,
             'due' => $validated['due_date'] ?? null,
             // The form offers an invoice date and both notes; before this they
             // were validated, accepted, and then dropped on the floor here.

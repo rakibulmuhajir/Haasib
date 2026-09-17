@@ -296,7 +296,7 @@ class GlPostingService
             }
         }
 
-        return DB::transaction(function () use ($data, $entries, $debitTotal, $creditTotal) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($data, $entries, $debitTotal, $creditTotal) {
             $transaction = Transaction::create([
                 'company_id' => $data['company_id'],
                 'transaction_number' => $data['transaction_number'],

@@ -571,25 +571,16 @@ class UmrahCoreService
             $group->travel_date?->toDateString(),
         );
 
-        $remaining = $group->transportItems()->lockForUpdate()->get();
+        // An explicit transport_items payload is a complete replacement of
+        // the specialized vehicle set. Keep the old rows append-only so their
+        // historical pricing and accounting remain readable, then recreate
+        // the submitted set with fresh identities. An absent payload is still
+        // treated by the controller as "unchanged" for unrelated edits.
+        $group->transportItems()->lockForUpdate()->get()->each->delete();
         foreach ($resolved as $item) {
             unset($item['pax_capacity']);
-            // Preserve an unchanged reservation's identity when a group form
-            // merely updates notes or prices. Replacements start unconfirmed.
-            $match = $remaining->first(function (GroupTransportItem $previous) use ($item): bool {
-                $candidate = clone $previous;
-                $candidate->fill($item);
-
-                return ! $candidate->isDirty(['transport_vendor_id', 'transport_service_id', 'transport_sector_id', 'transport_package_id', 'driver_id', 'description', 'scheduled_at', 'terminal', 'quantity', 'passenger_count']);
-            });
-            if ($match) {
-                $match->update($item);
-                $remaining = $remaining->reject(fn ($old) => $old->id === $match->id);
-            } else {
-                GroupTransportItem::create([...$item, 'company_id' => $group->company_id, 'visa_group_id' => $group->id]);
-            }
+            GroupTransportItem::create([...$item, 'company_id' => $group->company_id, 'visa_group_id' => $group->id]);
         }
-        $remaining->each->delete();
         $group->unsetRelation('transportItems');
 
         $primary = $resolved[0] ?? null;

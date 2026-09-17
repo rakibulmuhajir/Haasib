@@ -50,12 +50,17 @@ class CreateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
 
         // Resolve customer (UUID, email, or fuzzy name match)
         $customer = $this->resolveCustomer($params['customer'], $company->id);
 
-        return DB::transaction(function () use ($params, $company, $customer) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer) {
             // Calculate dates
             $invoiceDate = !empty($params['date'])
                 ? Carbon::parse($params['date'])
@@ -190,7 +195,9 @@ class CreateAction implements PaletteAction
                 ],
                 'redirect' => "/{$company->slug}/invoices/{$invoice->id}",
             ];
-        });
+        }); // retry on deadlock (40P01): Invoice::generateInvoiceNumber() above takes
+        // a lockForUpdate() row lock ahead of this insert into an audited table; see the
+        // lock-order comment in the audit_post_close_activity migration.
     }
 
     private function resolveCustomer(string $identifier, string $companyId): Customer

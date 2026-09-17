@@ -255,6 +255,8 @@ class Permissions
 
     public const DAILY_CLOSE_UNLOCK = 'daily_close.unlock';
 
+    public const DAILY_CLOSE_CORRECT = 'daily_close.correct_reading';
+
     // Payroll - Employees
     public const EMPLOYEE_CREATE = 'employee.create';
 

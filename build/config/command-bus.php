@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
+    'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
+    'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,
+    'fuel.amanat.movement' => \App\Modules\FuelStation\Actions\AmanatMovementAction::class,
     'company.create' => \App\Modules\Accounting\Actions\Company\CreateAction::class,
     'company.list' => \App\Modules\Accounting\Actions\Company\IndexAction::class,
     'company.switch' => \App\Modules\Accounting\Actions\Company\SwitchAction::class,

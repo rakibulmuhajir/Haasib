@@ -106,7 +106,10 @@ const tableData = computed(() =>
         <Button v-if="sourceHref" variant="outline" @click="router.get(sourceHref)">
           Open Source
         </Button>
-        <Button variant="outline" @click="() => window.history.back()">
+        <Button
+          variant="outline"
+          @click="router.get(`/${props.company.slug}/journals`)"
+        >
           <ArrowLeft class="mr-2 h-4 w-4" />
           Back
         </Button>

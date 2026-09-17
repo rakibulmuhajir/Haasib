@@ -383,6 +383,7 @@ class DailyCloseController extends Controller
      */
     public function create(Request $request): Response
     {
+        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE), 403);
         /** @var Company $company */
         $company = app(CurrentCompany::class)->get();
         $companyId = $company->id;
@@ -610,6 +611,8 @@ class DailyCloseController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency ?? 'PKR',
             ],
+            'parkedDraft' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($companyId, $date),
+            'canonicalActivity' => array_values(app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->sources($companyId, $date)),
             'date' => $date,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
@@ -648,102 +651,18 @@ class DailyCloseController extends Controller
     /**
      * Store the daily close entry.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(\App\Modules\FuelStation\Http\Requests\StoreDailyCloseRequest $request): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
 
-        $validated = $request->validate([
-            'date' => 'required|date',
-
-            // Tab 1: Sales (nozzle readings - each nozzle has electronic + optional manual readings)
-            'nozzle_readings' => 'required|array|min:1',
-            'nozzle_readings.*.nozzle_id' => 'required|uuid',
-            'nozzle_readings.*.item_id' => 'required|uuid',
-            'nozzle_readings.*.opening_electronic' => 'required|numeric|min:0',
-            'nozzle_readings.*.closing_electronic' => 'required|numeric|min:0',
-            'nozzle_readings.*.opening_manual' => 'nullable|numeric|min:0',
-            'nozzle_readings.*.closing_manual' => 'nullable|numeric|min:0',
-            'nozzle_readings.*.liters_sold' => 'required|numeric|min:0',
-            'nozzle_readings.*.sale_rate' => 'required|numeric|min:0',
-
-            // Other sales (lubricants, etc.)
-            'other_sales' => 'nullable|array',
-            'other_sales.*.item_id' => 'required|uuid',
-            'other_sales.*.item_name' => 'required|string|max:255',
-            'other_sales.*.quantity' => 'required|numeric|min:0.001',
-            'other_sales.*.unit_price' => 'required|numeric|min:0',
-            'other_sales.*.amount' => 'required|numeric|min:0',
-
-            // Tab 2: Tank readings
-            'tank_readings' => 'nullable|array',
-            'tank_readings.*.tank_id' => 'required|uuid',
-            'tank_readings.*.stick_reading' => 'required|numeric|min:0',
-            'tank_readings.*.liters' => 'required|numeric|min:0',
-
-            // Tab 3: Money In
-            'opening_cash' => 'required|numeric|min:0',
-            'partner_deposits' => 'nullable|array',
-            'partner_deposits.*.partner_id' => 'required|uuid',
-            'partner_deposits.*.amount' => 'required|numeric|min:0',
-
-            'amanat_deposits' => 'nullable|array',
-            'amanat_deposits.*.customer_id' => 'required|uuid',
-            'amanat_deposits.*.customer_name' => 'nullable|string|max:255',
-            'amanat_deposits.*.amount' => 'required|numeric|min:0',
-            'amanat_deposits.*.reference' => 'nullable|string|max:255',
-
-            'other_deposits' => 'nullable|array',
-            'other_deposits.*.deposit_type' => 'required|in:loss_compensation,fuel_disbursement,misc_income',
-            'other_deposits.*.account_id' => 'nullable|uuid',
-            'other_deposits.*.description' => 'nullable|string|max:255',
-            'other_deposits.*.amount' => 'required|numeric|min:0',
-
-            // Dynamic payment receipts (replaces hardcoded bank_transfers, card_swipes, parco_cards)
-            'payment_receipts' => 'nullable|array',
-            'payment_receipts.*.entries' => 'nullable|array',
-            'payment_receipts.*.entries.*.reference' => 'nullable|string|max:255',
-            'payment_receipts.*.entries.*.last_four' => 'nullable|string|max:4',
-            'payment_receipts.*.entries.*.amount' => 'required|numeric|min:0',
-
-            // Tab 4: Money Out
-            'bank_deposits' => 'nullable|array',
-            'bank_deposits.*.bank_account_id' => 'required|uuid',
-            'bank_deposits.*.amount' => 'required|numeric|min:0',
-            'bank_deposits.*.reference' => 'nullable|string|max:100',
-            'bank_deposits.*.purpose' => 'nullable|string|max:255',
-
-            'partner_withdrawals' => 'nullable|array',
-            'partner_withdrawals.*.partner_id' => 'required|uuid',
-            'partner_withdrawals.*.amount' => 'required|numeric|min:0',
-
-            'employee_advances' => 'nullable|array',
-            'employee_advances.*.employee_id' => 'required|uuid',
-            'employee_advances.*.amount' => 'required|numeric|min:0',
-            'employee_advances.*.reason' => 'nullable|string|max:255',
-
-            'payroll_payouts' => 'nullable|array',
-            'payroll_payouts.*.payslip_id' => 'required|uuid',
-            'payroll_payouts.*.employee_id' => 'required|uuid',
-            'payroll_payouts.*.amount' => 'required|numeric|min:0',
-
-            'amanat_disbursements' => 'nullable|array',
-            'amanat_disbursements.*.customer_id' => 'required|uuid',
-            'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
-            'amanat_disbursements.*.amount' => 'required|numeric|min:0',
-
-            'expenses' => 'nullable|array',
-            'expenses.*.account_id' => 'required|uuid',
-            'expenses.*.description' => 'required|string|max:255',
-            'expenses.*.amount' => 'required|numeric|min:0',
-
-            // Tab 5: Summary
-            'closing_cash' => 'required|numeric|min:0',
-            'cash_variance' => 'nullable|numeric',
-            'notes' => 'nullable|string|max:1000',
-        ]);
+        $validated = $request->validated();
 
         try {
-            $result = $this->dailyCloseService->processDailyClose($company->id, $validated, $request->user());
+            $result = app(\App\Services\CommandBus::class)->dispatch('fuel.daily_close.save', $validated, $request->user());
+            if ($result['parked'] ?? false) {
+                return back()->with('success', 'Daily Close parked. Resume it by selecting this business date.');
+            }
+
 
             return redirect()
                 ->route('fuel.daily-close.index', ['company' => $company->slug])
@@ -756,8 +675,33 @@ class DailyCloseController extends Controller
     /**
      * Show the daily close history/reports.
      */
+    public function postCloseExpense(\App\Modules\FuelStation\Http\Requests\StorePostCloseExpenseRequest $request, string $company, string $transaction): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        $close = Transaction::where('company_id', $companyModel->id)->where('transaction_type', 'fuel_daily_close')->findOrFail($transaction);
+        try {
+            app(\App\Services\CommandBus::class)->dispatch('fuel.daily_close.expense', $request->validated() + ['close_id' => $close->id], $request->user());
+            return back()->with('success', 'Expense recorded. The posted snapshot is unchanged.');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function storeCorrection(\App\Modules\FuelStation\Http\Requests\StoreCloseReadingCorrectionRequest $request, string $company, string $transaction): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        $close = Transaction::where('company_id', $companyModel->id)->where('transaction_type', 'fuel_daily_close')->findOrFail($transaction);
+        try {
+            app(\App\Services\CommandBus::class)->dispatch('fuel.daily_close.correct_reading', $request->validated() + ['close_id' => $close->id], $request->user());
+            return back()->with('success', 'Correction recorded. The posted snapshot is unchanged.');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function index(Request $request): Response
     {
+        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW), 403);
         $company = app(CurrentCompany::class)->get();
 
         $closes = $this->dailyCloseService->getRecentCloses($company->id, 30);
@@ -775,6 +719,7 @@ class DailyCloseController extends Controller
                 'slug' => $company->slug,
             ],
             'closes' => $closes,
+            'parkedCloses' => DB::table('fuel.daily_close_drafts')->where('company_id', $company->id)->orderByDesc('business_date')->get(['business_date', 'updated_at']),
             'permissions' => [
                 'canAmend' => $canAmend,
                 'canLock' => $canLock,
@@ -837,6 +782,20 @@ class DailyCloseController extends Controller
                 'amended_at' => $txn->amended_at?->toDateTimeString(),
                 'metadata' => $metadata,
             ],
+            'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->where('type', 'expense')->get(['id', 'name']),
+            'canAddActivity' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE),
+            'canCorrectReadings' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CORRECT) && !empty($metadata['posting_snapshot']),
+            'correctableReadings' => !empty($metadata['posting_snapshot']) ? [
+                'tank' => TankReading::where('company_id', $companyModel->id)
+                    ->whereDate('reading_date', $txn->transaction_date->toDateString())
+                    ->get(['id', 'tank_id', 'dip_measurement_liters'])
+                    ->map(fn ($r) => ['id' => $r->id, 'label' => 'Tank '.$r->tank_id.' — '.$r->dip_measurement_liters.'L', 'current_value' => (float) $r->dip_measurement_liters]),
+                'nozzle' => NozzleReading::where('company_id', $companyModel->id)
+                    ->where('daily_close_transaction_id', $txn->id)
+                    ->get(['id', 'nozzle_id', 'liters_dispensed'])
+                    ->map(fn ($r) => ['id' => $r->id, 'label' => 'Nozzle '.$r->nozzle_id.' — '.$r->liters_dispensed.'L', 'current_value' => (float) $r->liters_dispensed]),
+            ] : ['tank' => [], 'nozzle' => []],
+            'reconciliation' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->view($txn),
             'amendmentChain' => $chain,
             'permissions' => [
                 'canAmend' => $canAmend && $txn->isAmendable(),
@@ -849,7 +808,7 @@ class DailyCloseController extends Controller
     /**
      * Show the amendment form (pre-filled with original data).
      */
-    public function amend(Request $request, string $company, string $transaction): Response
+    public function amend(Request $request, string $company, string $transaction): Response|RedirectResponse
     {
         $companyModel = app(CurrentCompany::class)->get();
 
@@ -1244,6 +1203,8 @@ class DailyCloseController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency ?? 'PKR',
             ],
+            'parkedDraft' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($companyId, $date),
+            'canonicalActivity' => array_values(app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->sources($companyId, $date)),
             'date' => $date,
             'fuelItems' => $fuelItems,
             'rates' => $rates,

@@ -41,8 +41,11 @@ class CommandController extends Controller
         $user = $request->user();
         $commandBus = app(CommandBus::class);
 
-        // Validate action format
-        if (! $action || ! preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
+        // Validate action format. Actions are dot-separated lowercase segments
+        // (letters, digits, underscores, hyphens) with at least one dot, e.g.
+        // "customer.create" or the multi-segment "fuel.daily_close.save" —
+        // segments may contain underscores (see config/command-bus.php).
+        if (! $action || ! preg_match('/^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$/', $action)) {
             return $this->error('BAD_REQUEST', 'Invalid or missing X-Action header', 400);
         }
 

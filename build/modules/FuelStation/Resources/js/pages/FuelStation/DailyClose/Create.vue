@@ -839,8 +839,9 @@ const form = useForm({
         amount: invoice.amount,
         reference: invoice.reference,
         invoice_id: invoice.invoice_id,
+        invoice_number: invoice.invoice_number,
         pending_fuel_invoice: true,
-    })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; pending_fuel_invoice?: boolean }[],
+    })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean }[],
     bank_deposits: [] as {
         bank_account_id: string;
         amount: number;
@@ -1064,6 +1065,7 @@ const resetFormToInitial = () => {
         amount: invoice.amount,
         reference: invoice.reference,
         invoice_id: invoice.invoice_id,
+        invoice_number: invoice.invoice_number,
         pending_fuel_invoice: true,
     }));
     form.bank_deposits = [];
@@ -4502,7 +4504,7 @@ const completedWorkflowSteps = computed(() => {
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" />
+                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" />
                         <Separator />
                         <div class="space-y-4">
                             <div>

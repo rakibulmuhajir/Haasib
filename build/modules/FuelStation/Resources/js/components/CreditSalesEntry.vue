@@ -5,10 +5,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLexicon } from '@/composables/useLexicon'
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { Plus, Trash2, Lock } from 'lucide-vue-next'
 
-const rows = defineModel<Array<{ customer_id: string; customer_name: string; amount: number; reference: string }>>({ required: true })
-defineProps<{ errors: Record<string, string>; disabled: boolean }>()
+const rows = defineModel<Array<{
+    customer_id: string
+    customer_name: string
+    amount: number
+    reference: string
+    invoice_id?: string
+    invoice_number?: string
+    pending_fuel_invoice?: boolean
+}>>({ required: true })
+const props = defineProps<{ errors: Record<string, string>; disabled: boolean; companySlug?: string }>()
 const { t } = useLexicon()
 </script>
 
@@ -19,26 +27,38 @@ const { t } = useLexicon()
       <p class="text-xs text-muted-foreground">{{ t('meterCreditHelp') }}</p>
     </div>
     <InputError :message="errors.credit_sales" />
-    <div v-for="(row, index) in rows" :key="index" class="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end">
+    <div v-for="(row, index) in rows" :key="index"
+      class="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end"
+      :class="row.pending_fuel_invoice ? 'rounded-md bg-muted/50 p-3' : ''">
       <div class="space-y-1">
         <Label :id="`credit-customer-${index}`">Customer</Label>
-        <EntitySearch v-model="row.customer_id" entity-type="customer" :allow-quick-add="false" :disabled="disabled"
+        <EntitySearch v-if="!row.pending_fuel_invoice" v-model="row.customer_id" entity-type="customer" :allow-quick-add="false" :disabled="disabled"
           :aria-labelledby="`credit-customer-${index}`"
           :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
           @entity-selected="row.customer_name = $event.name" />
+        <div v-else class="flex h-9 items-center text-sm text-muted-foreground">{{ row.customer_name }}</div>
         <InputError :message="errors[`credit_sales.${index}.customer_id`]" />
       </div>
       <div class="space-y-1">
         <Label :for="`credit-amount-${index}`">Amount</Label>
-        <Input :id="`credit-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <Input v-if="!row.pending_fuel_invoice" :id="`credit-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <div v-else :id="`credit-amount-${index}`" class="flex h-9 items-center text-sm text-muted-foreground">{{ row.amount }}</div>
         <InputError :message="errors[`credit_sales.${index}.amount`]" />
       </div>
       <div class="space-y-1">
         <Label :for="`credit-reference-${index}`">{{ t('creditReference') }}</Label>
-        <Input :id="`credit-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
+        <Input v-if="!row.pending_fuel_invoice" :id="`credit-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
+        <a v-else-if="row.invoice_id && companySlug" :href="`/${companySlug}/invoices/${row.invoice_id}`"
+          class="flex h-9 items-center gap-1 text-sm text-primary underline-offset-2 hover:underline">
+          <Lock class="h-3 w-3" />From invoice {{ row.invoice_number ?? row.reference }}
+        </a>
+        <div v-else class="flex h-9 items-center gap-1 text-sm text-muted-foreground">
+          <Lock class="h-3 w-3" />From invoice {{ row.invoice_number ?? row.reference }}
+        </div>
         <InputError :message="errors[`credit_sales.${index}.reference`]" />
       </div>
-      <Button type="button" variant="ghost" size="icon" aria-label="Remove credit sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
+      <Button v-if="!row.pending_fuel_invoice" type="button" variant="ghost" size="icon" aria-label="Remove credit sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
+      <div v-else class="h-9 w-9" aria-hidden="true" />
     </div>
     <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', amount: 0, reference: '' })">
       <Plus class="mr-2 h-4 w-4" />{{ t('addCreditCustomer') }}

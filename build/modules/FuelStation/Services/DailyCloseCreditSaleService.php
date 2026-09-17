@@ -38,6 +38,21 @@ class DailyCloseCreditSaleService
         $pending = $this->pendingFuelInvoiceDetails($company, $date);
         $pendingByNumber = collect($pending)->keyBy('invoice_number');
 
+        // Every litre already went through a nozzle the close reads: a fuel-sale invoice
+        // dated this business date is not optional. The client must echo back each pending
+        // invoice unchanged (see Create.vue's read-only rows); if one is missing or its
+        // amount was tampered with, reject rather than silently reattaching it, so the
+        // operator sees exactly why and is pointed at the invoice, not the close.
+        foreach ($pending as $invoiceDetail) {
+            $match = collect($rows)->first(fn ($row) => ($row['reference'] ?? null) === $invoiceDetail['invoice_number']);
+            $matches = $match && round((float) ($match['amount'] ?? 0), 2) === round((float) $invoiceDetail['amount'], 2);
+            if (!$matches) {
+                throw ValidationException::withMessages([
+                    'credit_sales' => "Invoice {$invoiceDetail['invoice_number']} exists for this date and must be included; void or correct the invoice instead.",
+                ]);
+            }
+        }
+
         // The Create page pre-checks each pending fuel-sale invoice as a credit_sales row so
         // its total is visible in the form (see Create.vue); the FormRequest strips the
         // invoice_id marker, so an unmodified echo is recognised by an exact reference+amount

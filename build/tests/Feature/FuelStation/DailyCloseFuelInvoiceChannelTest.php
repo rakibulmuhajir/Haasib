@@ -41,12 +41,17 @@ function createStandaloneFuelInvoice(array $f, string $saleDate = '2026-09-15', 
 test('a pending fuel-sale invoice is pre-loaded and attached on post, reducing expected cash without adding sales', function () {
     $f = creditCloseFixture();
     fuelInvoiceRate($f);
-    $f['payload']['credit_sales'] = [];
     $invoice = createStandaloneFuelInvoice($f);
     expect($invoice->transaction_id)->toBeNull();
 
     $pending = app(DailyCloseService::class)->cashAccountId($f['company']->id);
     expect($pending)->not->toBeNull();
+
+    // The Create page pre-loads pending invoices as read-only credit_sales rows; the
+    // client is expected to echo them back unchanged.
+    $f['payload']['credit_sales'] = [
+        ['customer_id' => $invoice->customer_id, 'amount' => (float) $invoice->total_amount, 'reference' => $invoice->invoice_number],
+    ];
 
     $before = $f['payload'];
     $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $before, $f['user']);
@@ -115,6 +120,43 @@ test('a fuel-sale invoice for a different date or company is left untouched by t
     app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
 
     expect($otherDateInvoice->fresh()->transaction_id)->toBeNull();
+});
+
+test('posting with a pending fuel invoice omitted from credit_sales is rejected', function () {
+    $f = creditCloseFixture();
+    fuelInvoiceRate($f);
+    $invoice = createStandaloneFuelInvoice($f);
+    $f['payload']['credit_sales'] = [];
+
+    expect(fn () => app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+    expect($invoice->fresh()->transaction_id)->toBeNull();
+});
+
+test('posting with a pending fuel invoice amount tampered with is rejected, never using the client amount', function () {
+    $f = creditCloseFixture();
+    fuelInvoiceRate($f);
+    $invoice = createStandaloneFuelInvoice($f);
+    $f['payload']['credit_sales'] = [
+        ['customer_id' => $invoice->customer_id, 'amount' => 1.0, 'reference' => $invoice->invoice_number],
+    ];
+
+    expect(fn () => app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+    expect($invoice->fresh()->transaction_id)->toBeNull();
+});
+
+test('a manual credit row not tied to any pending invoice is still freely removable', function () {
+    $f = creditCloseFixture();
+    fuelInvoiceRate($f);
+    // No pending invoice exists for this date; a manual row may be added or omitted freely.
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000;
+
+    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+    expect($posted['transaction_id'])->not->toBeNull();
 });
 
 test('parking with a pending fuel invoice keeps it pending: no link, no journal', function () {

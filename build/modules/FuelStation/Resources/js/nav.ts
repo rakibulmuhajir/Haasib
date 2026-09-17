@@ -32,11 +32,13 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('bills', 'Bill Payments', '/bill-payments', Banknote),
         ...item('vendors', t('vendors'), '/vendors', Truck),
         ...item('settlements', 'Vendor Card Settlement', '/fuel/vendor-cards/pending', CreditCard),
+        ...item('expenses', 'Record Expense', '/expenses', ReceiptText),
       ] },
       { label: 'Customers', items: [
         ...item('customers', 'All Customers', '/customers', Users),
         ...item('customers', 'Credit Customers', '/fuel/credit-customers', CreditCard),
         ...item('customers', 'Amanat Depositors', '/fuel/amanat', HandCoins),
+        ...item('payments', 'Payments Received', '/payments', HandCoins),
       ] },
       { label: 'Team & Partners', items: [
         ...item('employees', 'Employees', '/employees', UserCog, context.isPayrollEnabled),
@@ -58,6 +60,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('warehouses', 'Tanks & Warehouses', '/warehouses', Warehouse, context.isInventoryEnabled),
         ...item('pumps', 'Pumps & Nozzles', '/fuel/pumps', Gauge),
         ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),
+        ...item('banking', 'Bank Transactions', '/banking/transactions', Landmark),
         ...item('settings', 'Setup Wizard', '/fuel/onboarding', Settings),
         { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: BookOpen },
         ...item('journals', 'Advanced Accounting · Journal Entries', '/journals', BookOpen),

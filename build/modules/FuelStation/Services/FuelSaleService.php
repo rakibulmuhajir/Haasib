@@ -31,7 +31,11 @@ class FuelSaleService
      */
     public function createSale(array $data): Invoice
     {
-        return DB::transaction(function () use ($data) {
+        // Retry the whole command (never a partial posting) on a concurrent-write
+        // serialization failure/deadlock, same as Bill\CreateAction and
+        // BillPayment\CreateAction: the Daily Close audit trigger raises 40001 when
+        // this date's close is mid-finalization.
+        return \App\Services\AccountingWriteTransaction::run(function () use ($data) {
             $company = app(CurrentCompany::class)->get();
             $saleType = $data['sale_type'];
 

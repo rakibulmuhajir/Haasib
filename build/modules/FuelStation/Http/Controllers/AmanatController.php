@@ -4,6 +4,7 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
@@ -115,7 +116,7 @@ class AmanatController extends Controller
                 WHERE je.id = fuel.amanat_transactions.journal_entry_id
                   AND t.company_id = fuel.amanat_transactions.company_id),
                 fuel.amanat_transactions.created_at::date) AS transaction_date")
-            ->with(['fuelItem', 'recordedBy', 'journalEntry.transaction'])
+            ->with(['fuelItem', 'recordedBy', 'journalEntry.transaction', 'paymentAccount'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('fuel.amanat_transactions.created_at')
             ->orderByDesc('fuel.amanat_transactions.id')
@@ -126,6 +127,11 @@ class AmanatController extends Controller
             'profile' => $profile,
             'transactions' => $transactions,
             'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
+            'paymentAccounts' => Account::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->whereIn('subtype', ['cash', 'bank'])
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'subtype']),
         ]);
     }
 

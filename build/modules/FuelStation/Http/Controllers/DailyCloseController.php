@@ -609,10 +609,14 @@ class DailyCloseController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
         $openInvoices = $this->getOpenInvoicesForDailyClose($companyId);
-        // Which company accounts are cash-subtype, so the Payments Received section can
-        // tell the frontend which rows raise expected drawer cash.
+        // Which of paymentAccounts (below) are cash, so the Payments Received section can
+        // tell the frontend which rows raise expected drawer cash without redeclaring the
+        // payment-accounts query itself.
         $cashAccountIds = Account::where('company_id', $companyId)->where('is_active', true)
             ->whereNull('deleted_at')->where('subtype', 'cash')->pluck('id')->all();
+        $paymentAccounts = Account::where('company_id', $companyId)
+            ->where('is_active', true)->whereNull('deleted_at')->whereIn('subtype', ['cash', 'bank'])
+            ->orderBy('code')->get(['id', 'code', 'name']);
 
         // Get expense accounts
         $expenseAccounts = Account::where('company_id', $companyId)
@@ -719,6 +723,7 @@ class DailyCloseController extends Controller
             'bankAccounts' => $bankAccounts,
             'openInvoices' => $openInvoices,
             'cashAccountIds' => $cashAccountIds,
+            'paymentAccounts' => $paymentAccounts,
             'expenseAccounts' => $expenseAccounts,
             'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,

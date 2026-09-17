@@ -78,6 +78,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_deposits.*.customer_id' => 'required|uuid',
             'amanat_deposits.*.customer_name' => 'nullable|string|max:255',
             'amanat_deposits.*.amount' => 'required|numeric|min:0',
+            'amanat_deposits.*.payment_account_id' => 'nullable|string',
             'amanat_deposits.*.reference' => 'nullable|string|max:255',
 
             'other_deposits' => 'nullable|array',
@@ -123,6 +124,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_disbursements.*.customer_id' => 'required|uuid',
             'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
             'amanat_disbursements.*.amount' => 'required|numeric|min:0',
+            'amanat_disbursements.*.payment_account_id' => 'nullable|string',
 
             'expenses' => 'nullable|array',
             'expenses.*.account_id' => 'required|uuid',
@@ -142,6 +144,14 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
             'purchases.*.notes' => 'nullable|string|max:500',
             'purchases.*.paid_now' => 'nullable|boolean',
+
+            'bank_withdrawals' => 'nullable|array',
+            'bank_withdrawals.*.bank_account_id' => ['required', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
+                ->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)
+                ->where('is_active', true)->where('subtype', 'bank')->whereNull('deleted_at')],
+            'bank_withdrawals.*.amount' => 'required|numeric|min:0.01',
+            'bank_withdrawals.*.reference' => 'nullable|string|max:255',
+            'bank_withdrawals.*.purpose' => 'nullable|string|max:255',
 
             // Payments received: a buyer settling an invoice, entered inline instead of at
             // /payments. Same shape for park and post; on post each row must be complete
@@ -172,6 +182,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_deposits.*.customer_id' => 'acct.customers', 'amanat_disbursements.*.customer_id' => 'acct.customers',
         ] as $field => $table) {
             $rules[$field] = ['required', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
+        }
+        foreach (['amanat_deposits.*.payment_account_id', 'amanat_disbursements.*.payment_account_id'] as $field) {
+            $rules[$field] = ['nullable', 'string'];
         }
         // Purchase rows are optional per-row (park stays lenient), but any supplier/item/tank
         // that is given must belong to this company.

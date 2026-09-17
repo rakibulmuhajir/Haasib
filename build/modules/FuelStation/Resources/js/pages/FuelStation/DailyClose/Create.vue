@@ -300,6 +300,7 @@ const props = defineProps<{
     amanatHolders: AmanatHolder[];
     investors: Investor[];
     bankAccounts: BankAccount[];
+    paymentAccounts: BankAccount[];
     expenseAccounts: ExpenseAccount[];
     otherDepositAccounts: OtherDepositAccount[];
     lubricantItems: LubricantItem[];
@@ -359,6 +360,7 @@ const props = defineProps<{
             customer_id?: string;
             customer_name?: string;
             amount: number;
+            payment_account_id?: string;
             reference?: string;
         }>;
         other_deposits?: Array<{
@@ -377,6 +379,7 @@ const props = defineProps<{
                 }>;
             }
         >;
+        bank_withdrawals?: Array<{ bank_account_id: string; amount: number; reference?: string; purpose?: string }>;
         bank_deposits?: Array<{
             bank_account_id: string;
             amount: number;
@@ -395,6 +398,7 @@ const props = defineProps<{
             customer_id?: string;
             customer_name?: string;
             amount: number;
+            payment_account_id?: string;
         }>;
         expenses?: Array<{
             account_id: string;
@@ -463,6 +467,7 @@ const suppressDateChange = ref(false);
 
 // Check if form has meaningful data worth saving
 const hasFormData = (formData: Record<string, unknown>): boolean => {
+    if ((formData.bank_withdrawals as unknown[] | undefined)?.length) return true;
     // Check nozzle readings - any closing reading entered
     const nozzleReadings = formData.nozzle_readings as
         | Array<{ closing_electronic: number }>
@@ -830,6 +835,7 @@ const form = useForm({
         available_balance: number;
         amount: number;
         reference: string;
+        payment_account_id?: string;
     }[],
     other_deposits: [] as {
         deposit_type: string;
@@ -863,6 +869,7 @@ const form = useForm({
         invoice_number: invoice.invoice_number,
         pending_fuel_invoice: true,
     })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean }[],
+    bank_withdrawals: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
     bank_deposits: [] as {
         bank_account_id: string;
         amount: number;
@@ -889,6 +896,7 @@ const form = useForm({
         customer_name: string;
         available_balance: number;
         amount: number;
+        payment_account_id?: string;
     }[],
     expenses: [] as {
         account_id: string;
@@ -1065,6 +1073,7 @@ const resetFormToInitial = () => {
         };
     });
 
+    form.bank_withdrawals = [];
     // Reset money in
     form.opening_cash = props.previousClose.closing_cash || 0;
     form.payments_received = [];
@@ -1278,6 +1287,7 @@ const hydrateFormForAmendment = () => {
         });
     }
 
+    form.bank_withdrawals = (orig.bank_withdrawals || []).map((row) => ({ ...row, reference: row.reference ?? '', purpose: row.purpose ?? '' }));
     // Hydrate bank deposits
     if (orig.bank_deposits && orig.bank_deposits.length > 0) {
         form.bank_deposits = orig.bank_deposits.map((bd) => ({
@@ -1684,6 +1694,7 @@ const totalNonCashReceipts = computed(() => {
 });
 
 // Money In = opening cash + every cash deposit + TOTAL sales (cash, card, transfer — all of it)
+const totalBankWithdrawals = computed(() => form.bank_withdrawals.reduce((sum, row) => sum + Number(row.amount || 0), 0));
 // Only a payment received into a cash account raises expected drawer cash, matching
 // DailyClosePaymentsReceivedService's affects_cash_drawer flag on the backend; a bank
 // account never touches it.
@@ -1696,6 +1707,7 @@ const totalMoneyIn = computed(() => {
     return (
         form.opening_cash +
         totalPaymentsReceivedCash.value +
+        totalBankWithdrawals.value +
         totalPartnerDeposits.value +
         totalAmanatDeposits.value +
         totalOtherDeposits.value +
@@ -1958,6 +1970,7 @@ const addAmanatDeposit = () => {
         available_balance: 0,
         amount: 0,
         reference: '',
+        payment_account_id: '',
     });
 };
 
@@ -2000,6 +2013,13 @@ const getOtherDepositTypeLabel = (type: string) => {
         'Other deposit'
     );
 };
+
+const bankWithdrawalError = (index: number, field: string) =>
+    (form.errors as Record<string, string>)[`bank_withdrawals.${index}.${field}`];
+const addBankWithdrawal = () => {
+    form.bank_withdrawals.push({ bank_account_id: '', amount: 0, reference: '', purpose: '' });
+};
+const removeBankWithdrawal = (index: number) => form.bank_withdrawals.splice(index, 1);
 
 const addBankDeposit = () => {
     form.bank_deposits.push({
@@ -2045,6 +2065,7 @@ const addAmanat = () => {
         customer_name: '',
         available_balance: 0,
         amount: 0,
+        payment_account_id: '',
     });
 };
 
@@ -4183,6 +4204,18 @@ const completedWorkflowSteps = computed(() => {
                                         />
                                     </div>
                                     <div class="col-span-3">
+                                        <Label class="text-xs">Receive into</Label>
+                                        <Select v-model="deposit.payment_account_id">
+                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+                                            <SelectContent>
+                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
+                                                    {{ account.code }} - {{ account.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="amanatDepositError(index, 'payment_account_id')" />
+                                    </div>
+                                    <div class="col-span-3">
                                         <Label class="text-xs">Reference</Label>
                                         <Input
                                             v-model="deposit.reference"
@@ -4424,6 +4457,101 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                             </div>
                         </template>
+
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Cash Withdrawn from Bank</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        Cash collected from your bank and added to the station drawer.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="addBankWithdrawal"
+                                >
+                                    <Plus class="mr-1 h-4 w-4" /> Add
+                                </Button>
+                            </div>
+
+                            <div
+                                v-for="(deposit, index) in form.bank_withdrawals"
+                                :key="index"
+                                class="grid grid-cols-5 items-end gap-4"
+                            >
+                                <div>
+                                    <Label class="text-xs">Bank Account</Label>
+                                    <Select v-model="deposit.bank_account_id">
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem
+                                                v-for="b in bankAccounts"
+                                                :key="b.id"
+                                                :value="b.id"
+                                                >{{ b.name }}</SelectItem
+                                            >
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(
+                                                index,
+                                                'bank_account_id',
+                                            )
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Amount</Label>
+                                    <Input
+                                        v-model.number="deposit.amount"
+                                        type="number"
+                                        @focus="selectZeroValue"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'amount')
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Reference</Label>
+                                    <Input
+                                        v-model="deposit.reference"
+                                        placeholder="Slip #"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'reference')
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Purpose</Label>
+                                    <Input
+                                        v-model="deposit.purpose"
+                                        placeholder="e.g., cash for station expenses"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'purpose')
+                                        "
+                                    />
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="removeBankWithdrawal(index)"
+                                >
+                                    <Trash2 class="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-if="totalBankWithdrawals" class="flex justify-between text-sm"><span>Cash Withdrawn from Bank</span><MoneyText :amount="totalBankWithdrawals" :currency="currencyCode" /></div>
 
                         <PaymentsReceivedEntry
                             v-model="form.payments_received"
@@ -4952,6 +5080,18 @@ const completedWorkflowSteps = computed(() => {
                                                 )
                                             "
                                         />
+                                    </div>
+                                    <div class="w-48">
+                                        <Label class="text-xs">Pay from</Label>
+                                        <Select v-model="amanat.payment_account_id">
+                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+                                            <SelectContent>
+                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
+                                                    {{ account.code }} - {{ account.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="amanatDisbursementError(index, 'payment_account_id')" />
                                     </div>
                                     <div class="w-32">
                                         <Label class="text-xs">Amount</Label>

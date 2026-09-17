@@ -453,6 +453,27 @@ test('normal Amanat form has explicit business date and is included once in dail
     expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'amanat_deposit')->count())->toBe(1);
 });
 
+test('Amanat received into a bank does not change drawer cash and posts to that bank', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $amanat = Account::create(['company_id' => $f['company']->id, 'code' => '2200', 'name' => 'Customer Amanat Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'currency' => 'PKR', 'is_active' => true]);
+    $bank = Account::create(['company_id' => $f['company']->id, 'code' => '1010', 'name' => 'Meezan Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $customer = \App\Modules\Accounting\Models\Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'AM-BANK', 'name' => 'Bank Amanat customer', 'base_currency' => 'PKR']);
+
+    test()->post("/{$f['company']->slug}/fuel/amanat/{$customer->id}/deposit", [
+        'business_date' => '2026-09-15', 'amount' => 100, 'payment_account_id' => $bank->id,
+    ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    $amanatTransaction = \App\Modules\FuelStation\Models\AmanatTransaction::where('customer_id', $customer->id)->firstOrFail();
+    expect($amanatTransaction->payment_account_id)->toBe($bank->id);
+    expect($amanatTransaction->journalEntry->account_id)->toBe($bank->id);
+
+    // The money went directly to Meezan, so the physical drawer is unchanged.
+    $f['payload']['closing_cash'] = $f['payload']['opening_cash'];
+    test()->post("/{$f['company']->slug}/fuel/daily-close", $f['payload'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
+    expect((float) $close->metadata['variance'])->toBe(0.0);
+});
+
 
 test('ordinary posted invoice and bill amendments preserve old journals and reconcile only the delta', function (string $kind) {
     $f = closeWorkflowFixture();
@@ -561,4 +582,34 @@ test('normal salary advance form posts once and appears as late activity for its
     expect($view['activity'])->toHaveCount(1);
     $advance = \App\Modules\Payroll\Models\SalaryAdvance::where('company_id', $f['company']->id)->sole();
     expect($advance->journal_entry_id)->not->toBeNull();
+});
+
+test('bank cash withdrawals survive parking and post bank credits with drawer cash only', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $bank = Account::create(['company_id' => $f['company']->id, 'code' => '1010', 'name' => 'Meezan', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $f['payload']['closing_cash'] = 470000;
+    $f['payload']['bank_withdrawals'] = [
+        ['bank_account_id' => $bank->id, 'amount' => 30000, 'reference' => 'ATM-1'],
+        ['bank_account_id' => $bank->id, 'amount' => 20000, 'reference' => 'ATM-2'],
+    ];
+    $url = "/{$f['company']->slug}/fuel/daily-close";
+    test()->post($url, $f['payload'] + ['intent' => 'park'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+    expect(app(DailyCloseReconciliationService::class)->draft($f['company']->id, '2026-09-15')['bank_withdrawals'])->toEqual($f['payload']['bank_withdrawals']);
+    test()->post($url, $f['payload'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
+    expect((float) $close->metadata['expected_closing'])->toBe(470000.0);
+    expect((float) $close->metadata['variance'])->toBe(0.0);
+    expect((float) $close->metadata['posting_snapshot']['totals']['money_in'])->toBe(50000.0);
+    expect((float) $close->metadata['posting_snapshot']['totals']['total_revenue'])->toBe(0.0);
+    expect((float) $close->journalEntries()->where('account_id', $bank->id)->sum('credit_amount'))->toBe(50000.0);
+    expect((float) $close->journalEntries()->where('account_id', $f['accounts']['1050']->id)->sum('debit_amount'))->toBe(50000.0);
+    expect((float) app(DailyCloseReconciliationService::class)->view($close)['current']['variance'])->toBe(0.0);
+});
+
+test('bank cash withdrawals reject cash accounts and nonpositive amounts', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $f['payload']['bank_withdrawals'] = [['bank_account_id' => $f['accounts']['1050']->id, 'amount' => -1]];
+    test()->post("/{$f['company']->slug}/fuel/daily-close", $f['payload'])->assertSessionHasErrors(['bank_withdrawals.0.bank_account_id', 'bank_withdrawals.0.amount']);
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
 });

@@ -5,6 +5,10 @@ Single source of truth for fuel station specific operations: pumps, rate changes
 **Module Location:** `modules/FuelStation/`
 **Namespace:** `App\Modules\FuelStation`
 
+### Daily close bank withdrawals
+
+`bank_withdrawals` is an optional list of `{bank_account_id, amount, reference?, purpose?}` in the daily-close form and saved `metadata.form_input`. Each row transfers cash from an active, company-owned bank account in the company base currency into the configured station cash drawer. It increases Money In and expected drawer cash; it does not create revenue. Posting credits the selected bank and includes the matching debit in the close's cash entry. Metadata stores `bank_withdrawals` (total) and `bank_withdrawals_by_account` (amounts by account). Park/resume preserves the rows without posting them.
+
 ---
 
 ## Architectural Decisions (REJECTED → ACCEPTED)
@@ -425,7 +429,8 @@ enum VarianceReason: string {
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
   - `customer_id` uuid not null FK → `acct.customers.id` (RESTRICT/CASCADE).
   - `transaction_type` varchar(20) not null — 'deposit', 'withdrawal', 'fuel_purchase'.
-  - `amount` numeric(15,2) not null.
+    - `amount` numeric(15,2) not null.
+    - `payment_account_id` uuid nullable FK → `acct.accounts.id` (cash or bank account used for a deposit/withdrawal; null on legacy rows and fuel purchases).
   - `fuel_item_id` uuid nullable FK → `inv.items.id` (SET NULL/CASCADE) — if fuel_purchase.
   - `fuel_quantity` numeric(10,2) nullable — liters if fuel_purchase.
   - `reference` varchar(100) nullable.
@@ -439,8 +444,8 @@ enum VarianceReason: string {
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'fuel.amanat_transactions'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','transaction_type','amount','fuel_item_id','fuel_quantity','reference','journal_entry_id','recorded_by_user_id','notes'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','amount'=>'decimal:2','fuel_item_id'=>'string','fuel_quantity'=>'decimal:2','journal_entry_id'=>'string','recorded_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+    - `$fillable = ['company_id','customer_id','transaction_type','amount','payment_account_id','fuel_item_id','fuel_quantity','reference','journal_entry_id','recorded_by_user_id','notes'];`
+    - `$casts = ['company_id'=>'string','customer_id'=>'string','amount'=>'decimal:2','payment_account_id'=>'string','fuel_item_id'=>'string','fuel_quantity'=>'decimal:2','journal_entry_id'=>'string','recorded_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; belongsTo FuelItem (Item); belongsTo JournalEntry.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id (must have is_amanat_holder=true).
@@ -449,8 +454,8 @@ enum VarianceReason: string {
   - `fuel_item_id`: required_if:transaction_type,fuel_purchase.
   - `fuel_quantity`: required_if:transaction_type,fuel_purchase|numeric|gt:0.
 - Business rules:
-  - Deposit: adds to customer.amanat_balance.
-  - Withdrawal: subtracts from customer.amanat_balance.
+    - Deposit: adds to customer.amanat_balance and debits the selected cash/bank account (cash is the legacy default).
+    - Withdrawal: subtracts from customer.amanat_balance and credits the selected cash/bank account (cash is the legacy default).
   - Fuel purchase: subtracts from balance, creates sale.
   - Balance cannot go negative.
   - **Tech debt:** May be refactored to generic `acct.deposits` later.

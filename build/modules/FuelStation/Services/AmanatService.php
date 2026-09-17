@@ -55,7 +55,7 @@ class AmanatService
             }
 
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-            $cashAccount = $this->getCashAccount($company->id);
+            $paymentAccount = $this->getPaymentAccount($company->id, $data['payment_account_id'] ?? null);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
             $date = $data['business_date'] ?? now()->toDateString();
 
@@ -72,7 +72,7 @@ class AmanatService
                 'reference_id' => null, // Will update after creating transaction
             ], [
                 [
-                    'account_id' => $cashAccount->id,
+                    'account_id' => $paymentAccount->id,
                     'type' => 'debit',
                     'amount' => $amount,
                     'description' => "Amanat deposit - {$customer->name}",
@@ -91,6 +91,7 @@ class AmanatService
                 'customer_id' => $customer->id,
                 'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
                 'amount' => $amount,
+                'payment_account_id' => $paymentAccount->id,
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'recorded_by_user_id' => auth()->id(),
@@ -128,7 +129,7 @@ class AmanatService
             }
 
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-            $cashAccount = $this->getCashAccount($company->id);
+            $paymentAccount = $this->getPaymentAccount($company->id, $data['payment_account_id'] ?? null);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
             $date = $data['business_date'] ?? now()->toDateString();
 
@@ -151,7 +152,7 @@ class AmanatService
                     'description' => "Amanat withdrawal - {$customer->name}",
                 ],
                 [
-                    'account_id' => $cashAccount->id,
+                    'account_id' => $paymentAccount->id,
                     'type' => 'credit',
                     'amount' => $amount,
                     'description' => "Amanat withdrawal - {$customer->name}",
@@ -164,6 +165,7 @@ class AmanatService
                 'customer_id' => $customer->id,
                 'transaction_type' => AmanatTransaction::TYPE_WITHDRAWAL,
                 'amount' => $amount,
+                'payment_account_id' => $paymentAccount->id,
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'recorded_by_user_id' => auth()->id(),
@@ -264,6 +266,19 @@ class AmanatService
             ->where('type', 'asset')
             ->whereKey(app(DailyCloseService::class)->cashAccountId($companyId))
             ->firstOrFail();
+    }
+
+    private function getPaymentAccount(string $companyId, ?string $accountId): Account
+    {
+        $query = Account::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereIn('subtype', ['cash', 'bank']);
+
+        if ($accountId) {
+            return $query->whereKey($accountId)->firstOrFail();
+        }
+
+        return $this->getCashAccount($companyId);
     }
 
     /**

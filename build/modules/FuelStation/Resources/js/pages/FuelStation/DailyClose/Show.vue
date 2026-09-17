@@ -59,6 +59,7 @@ interface TransactionData {
     expected_closing?: number
     fuel_sales?: Record<string, { liters: number; revenue: number; cogs: number }>
     other_sales?: number
+    bank_withdrawals?: number
     bank_deposits?: number
     partner_withdrawals?: number
     employee_advances?: number
@@ -162,7 +163,7 @@ const totalMoneyIn = computed(() => {
   // Opening cash is shown separately below. This total must contain only
   // current-day inflows, otherwise the detail view double-counts the opening
   // drawer balance while the reconciliation table correctly reports money_in.
-  return Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
+  return Number(m.bank_withdrawals || 0) + Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
 })
 
 const totalMoneyOut = computed(() => {
@@ -483,6 +484,10 @@ const unlockTransaction = () => {
             <div class="flex justify-between items-center py-2">
               <span>Total Sales</span>
               <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.total_revenue" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div v-if="metadata.bank_withdrawals" class="flex justify-between items-center py-2">
+              <span>Cash Withdrawn from Bank</span>
+              <MoneyText :amount="metadata.bank_withdrawals" :currency="currency" />
             </div>
             <div class="flex justify-between items-center py-2 font-semibold">
               <span>Total Money In</span>

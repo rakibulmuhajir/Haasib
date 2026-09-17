@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -25,6 +26,7 @@ interface AmanatTransaction {
   notes?: string | null
   created_at: string
   transaction_date?: string | null
+  payment_account?: { code: string; name: string; subtype: string } | null
 }
 
 interface CustomerProfile {
@@ -45,6 +47,13 @@ interface Customer {
   phone?: string | null
 }
 
+interface PaymentAccount {
+  id: string
+  code: string
+  name: string
+  subtype: string
+}
+
 interface PaginatedTransactions {
   data: AmanatTransaction[]
 }
@@ -54,8 +63,10 @@ const props = withDefaults(defineProps<{
   profile: CustomerProfile
   canRecordMovement?: boolean
   transactions: AmanatTransaction[] | PaginatedTransactions
+  paymentAccounts?: PaymentAccount[]
 }>(), {
   transactions: () => [],
+  paymentAccounts: () => [],
 })
 
 const page = usePage()
@@ -68,7 +79,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.customer.name, href: `/${companySlug.value}/fuel/amanat/${props.customer.id}` },
 ])
 
-const movement = useForm({ business_date: '', amount: 0, reference: '' })
+const movement = useForm({ business_date: '', amount: 0, payment_account_id: '', reference: '' })
 const recordMovement = (kind: 'deposit' | 'withdraw') => movement.post(`/${companySlug.value}/fuel/amanat/${props.customer.id}/${kind}`, {
   preserveScroll: true,
   onSuccess: (page) => { if ((page.props as any).flash?.success) movement.reset('amount', 'reference') },
@@ -100,6 +111,9 @@ const transactionRows = computed(() => {
 const txTableData = computed(() => {
   return transactionRows.value.map((tx) => {
     let details = tx.reference ?? ''
+    if (tx.payment_account) {
+      details = `${tx.payment_account.code} - ${tx.payment_account.name}${details ? ` · ${details}` : ''}`
+    }
     if (tx.transaction_type === 'fuel_purchase' && tx.fuel_item_name) {
       details = `${tx.fuel_quantity?.toFixed(2) ?? '?'} L ${tx.fuel_item_name}`
     }
@@ -151,6 +165,15 @@ const getTypeBadge = (type: string) => {
         <CardContent v-if="canRecordMovement" class="space-y-2 pt-4">
           <Label>Business date</Label><Input v-model="movement.business_date" type="date" />
           <Label>Amount</Label><Input v-model.number="movement.amount" type="number" min="0.01" step="0.01" />
+          <Label>Receive / pay from</Label>
+          <Select v-model="movement.payment_account_id">
+            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="account in paymentAccounts" :key="account.id" :value="account.id">
+                {{ account.code }} - {{ account.name }} ({{ account.subtype === 'bank' ? 'Bank' : 'Cash' }})
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <Label>Reference</Label><Input v-model="movement.reference" />
           <p v-for="(error, field) in movement.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
           <div class="flex gap-2"><Button :disabled="movement.processing" @click="recordMovement('deposit')">Record deposit</Button><Button variant="outline" :disabled="movement.processing" @click="recordMovement('withdraw')">Record withdrawal</Button></div>

@@ -212,6 +212,10 @@ class DailyCloseService
             $currency = \App\Models\Company::whereKey($companyId)->value('base_currency') ?: 'PKR';
 
             $entries = [];
+            $amanatDepositByAccount = [];
+            $amanatWithdrawalByAccount = [];
+            $amanatDepositsCashTotal = 0.0;
+            $amanatWithdrawalsCashTotal = 0.0;
             $metadata = [
                 'date' => $date,
                 'opening_cash' => $data['opening_cash'],
@@ -405,7 +409,6 @@ class DailyCloseService
                             $todaysSales += (float) ($sale['quantity'] ?? 0);
                         }
                     }
-
                     $todaysReceipts = 0.0;
                     if ($openingBaseline['date']) {
                         $todaysReceipts = (float) StockMovement::where('company_id', $companyId)
@@ -554,7 +557,7 @@ class DailyCloseService
             }
             $metadata['partner_deposits'] = $partnerDepositsTotal;
 
-            // Amanat deposits/top-ups received in station cash.
+            // Amanat deposits/top-ups received in cash or a selected bank account.
             $amanatDepositsTotal = 0;
             $amanatDepositDetails = [];
             if (!empty($data['amanat_deposits'])) {
@@ -580,11 +583,18 @@ class DailyCloseService
                         throw new \RuntimeException('Selected Amanat depositor was not found.');
                     }
 
+                    $paymentAccount = $this->resolveAmanatPaymentAccount($companyId, $deposit['payment_account_id'] ?? null, $accounts['cash_on_hand']);
+                    $amanatDepositByAccount[$paymentAccount->id] = ($amanatDepositByAccount[$paymentAccount->id] ?? 0) + $amount;
+                    if ($paymentAccount->id === $accounts['cash_on_hand']) {
+                        $amanatDepositsCashTotal += $amount;
+                    }
+
                     $createdAmanat[] = AmanatTransaction::create([
                         'company_id' => $companyId,
                         'customer_id' => $customerId,
                         'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
                         'amount' => $amount,
+                        'payment_account_id' => $paymentAccount->id,
                         'reference' => $deposit['reference'] ?? 'Daily close ' . $date,
                         'notes' => $deposit['notes'] ?? 'Daily close Amanat deposit',
                         'recorded_by_user_id' => $user->id,
@@ -597,6 +607,8 @@ class DailyCloseService
                         'customer_id' => $customerId,
                         'customer_name' => $profile->customer?->name ?? ($deposit['customer_name'] ?? null),
                         'amount' => $amount,
+                        'payment_account_id' => $paymentAccount->id,
+                        'payment_account_name' => $paymentAccount->name,
                         'reference' => $deposit['reference'] ?? null,
                     ];
                 }
@@ -740,6 +752,26 @@ class DailyCloseService
             // 5. Calculate Money Out totals
             // ─────────────────────────────────────────────────────────────────
 
+            // Bank-to-drawer transfers are Money In, never sales revenue.
+            $bankWithdrawalsTotal = 0.0;
+            $bankWithdrawalsByAccount = [];
+            foreach ($data['bank_withdrawals'] ?? [] as $index => $withdrawal) {
+                $amount = round((float) ($withdrawal['amount'] ?? 0), 2);
+                $bank = Account::where('company_id', $companyId)->where('is_active', true)
+                    ->where('type', 'asset')->where('subtype', 'bank')
+                    ->where('currency', $currency)
+                    ->find($withdrawal['bank_account_id'] ?? null);
+                if (!$bank || $amount <= 0) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "bank_withdrawals.{$index}.bank_account_id" => 'Choose an active bank account in the company currency and enter a positive amount.',
+                    ]);
+                }
+                $bankWithdrawalsTotal += $amount;
+                $bankWithdrawalsByAccount[$bank->id] = ($bankWithdrawalsByAccount[$bank->id] ?? 0) + $amount;
+            }
+            $metadata['bank_withdrawals'] = $bankWithdrawalsTotal;
+            $metadata['bank_withdrawals_by_account'] = $bankWithdrawalsByAccount;
+
             // Bank deposits
             $bankDepositsTotal = 0;
             $bankDepositsByAccount = [];
@@ -865,7 +897,7 @@ class DailyCloseService
             $metadata['payroll_payouts'] = $payrollPayoutsTotal;
             $metadata['payroll_payout_details'] = $payrollPayoutDetails;
 
-            // Amanat disbursements
+            // Amanat disbursements paid from cash or a selected bank account.
             $amanatTotal = 0;
             $amanatDetails = [];
             if (!empty($data['amanat_disbursements'])) {
@@ -891,6 +923,12 @@ class DailyCloseService
                         throw new \RuntimeException('Selected Amanat depositor was not found.');
                     }
 
+                    $paymentAccount = $this->resolveAmanatPaymentAccount($companyId, $amanat['payment_account_id'] ?? null, $accounts['cash_on_hand']);
+                    $amanatWithdrawalByAccount[$paymentAccount->id] = ($amanatWithdrawalByAccount[$paymentAccount->id] ?? 0) + $amount;
+                    if ($paymentAccount->id === $accounts['cash_on_hand']) {
+                        $amanatWithdrawalsCashTotal += $amount;
+                    }
+
                     if ($amount > (float) $profile->amanat_balance) {
                         $name = $profile->customer?->name ?? 'Selected Amanat depositor';
                         throw new \RuntimeException("{$name} has only {$profile->amanat_balance} available in Amanat.");
@@ -901,6 +939,7 @@ class DailyCloseService
                         'customer_id' => $customerId,
                         'transaction_type' => AmanatTransaction::TYPE_WITHDRAWAL,
                         'amount' => $amount,
+                        'payment_account_id' => $paymentAccount->id,
                         'reference' => 'Daily close ' . $date,
                         'notes' => $amanat['notes'] ?? 'Daily close cash disbursement',
                         'recorded_by_user_id' => $user->id,
@@ -913,6 +952,8 @@ class DailyCloseService
                         'customer_id' => $customerId,
                         'customer_name' => $profile->customer?->name ?? ($amanat['customer_name'] ?? null),
                         'amount' => $amount,
+                        'payment_account_id' => $paymentAccount->id,
+                        'payment_account_name' => $paymentAccount->name,
                     ];
                 }
             }
@@ -1040,9 +1081,9 @@ class DailyCloseService
             )), 2);
             $metadata['payments_received_total'] = round(array_sum(array_column($paymentsReceivedDetails, 'amount')), 2);
             $metadata['payments_received_details'] = $paymentsReceivedDetails;
-            $totalCashIn = $openingCash + $partnerDepositsTotal + $amanatDepositsTotal + $otherDepositsTotal + $cashFromSales;
-            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal + $cashBillPaymentsTotal;
 
+            $totalCashIn = $openingCash + $bankWithdrawalsTotal + $partnerDepositsTotal + $amanatDepositsCashTotal + $otherDepositsTotal + $cashFromSales;
+            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatWithdrawalsCashTotal + $expensesTotal + $cashBillPaymentsTotal;
             $totalCashIn += $paymentsReceivedCashTotal;
 
             // Debit: Cash on Hand (opening + deposits + cash sales - withdrawals)
@@ -1066,6 +1107,7 @@ class DailyCloseService
                 'credit_sales' => $data['credit_sales'] ?? [],
                 'payments_received' => $data['payments_received'] ?? [],
                 'bank_deposits' => $data['bank_deposits'] ?? [],
+                'bank_withdrawals' => $data['bank_withdrawals'] ?? [],
                 'partner_withdrawals' => $data['partner_withdrawals'] ?? [],
                 'employee_advances' => $data['employee_advances'] ?? [],
                 'payroll_payouts' => $payrollPayoutDetails,
@@ -1123,6 +1165,13 @@ class DailyCloseService
                 ];
             }
 
+            foreach ($bankWithdrawalsByAccount as $bankAccountId => $amount) {
+                $entries[] = [
+                    'account_id' => $bankAccountId, 'type' => 'credit',
+                    'amount' => round($amount, 2), 'description' => 'Cash withdrawn from bank',
+                ];
+            }
+
             // Bank deposits (cash goes out, selected bank goes up)
             foreach ($bankDepositsByAccount as $bankAccountId => $amount) {
                 $entries[] = [
@@ -1130,6 +1179,19 @@ class DailyCloseService
                     'type' => 'debit',
                     'amount' => round($amount, 2),
                     'description' => 'Cash deposited to bank',
+                ];
+            }
+
+            // Amanat deposits paid into a bank increase that bank without changing drawer cash.
+            foreach ($amanatDepositByAccount as $accountId => $amount) {
+                if ($accountId === $accounts['cash_on_hand']) {
+                    continue;
+                }
+                $entries[] = [
+                    'account_id' => $accountId,
+                    'type' => 'debit',
+                    'amount' => round($amount, 2),
+                    'description' => 'Amanat deposits received',
                 ];
             }
 
@@ -1235,6 +1297,19 @@ class DailyCloseService
                     'account_id' => $accounts['amanat_deposits'],
                     'type' => 'debit',
                     'amount' => round($amanatTotal, 2),
+                    'description' => 'Amanat disbursements',
+                ];
+            }
+
+            // Amanat withdrawals paid from a bank reduce that bank without changing drawer cash.
+            foreach ($amanatWithdrawalByAccount as $accountId => $amount) {
+                if ($accountId === $accounts['cash_on_hand']) {
+                    continue;
+                }
+                $entries[] = [
+                    'account_id' => $accountId,
+                    'type' => 'credit',
+                    'amount' => round($amount, 2),
                     'description' => 'Amanat disbursements',
                 ];
             }
@@ -1568,6 +1643,19 @@ class DailyCloseService
         }
 
         return $base;
+    }
+
+    private function resolveAmanatPaymentAccount(string $companyId, ?string $accountId, string $cashAccountId): Account
+    {
+        $query = Account::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereIn('subtype', ['cash', 'bank']);
+
+        if ($accountId) {
+            return $query->whereKey($accountId)->firstOrFail();
+        }
+
+        return Account::whereKey($cashAccountId)->where('company_id', $companyId)->firstOrFail();
     }
 
     private function resolvePaymentChannelAccount(array $channel, array $accounts): string

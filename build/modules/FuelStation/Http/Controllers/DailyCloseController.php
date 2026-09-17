@@ -196,6 +196,31 @@ class DailyCloseController extends Controller
             ->values();
     }
 
+    /** Suppliers selectable for an inline purchase entered inside the Daily Close. */
+    private function getPurchaseSuppliersForDailyClose(string $companyId)
+    {
+        return \App\Modules\Accounting\Models\Vendor::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /** Purchasable items (fuel + non-fuel) selectable for an inline purchase. */
+    private function getPurchaseItemsForDailyClose(string $companyId)
+    {
+        return Item::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->orderBy('name')
+            ->get(['id', 'name', 'fuel_category', 'unit_of_measure'])
+            ->map(fn (Item $item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'is_fuel' => !is_null($item->fuel_category),
+                'unit' => $item->unit_of_measure ?? 'unit',
+            ]);
+    }
+
     private function getPartnersForDailyClose(string $companyId)
     {
         return Partner::where('company_id', $companyId)
@@ -550,6 +575,9 @@ class DailyCloseController extends Controller
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
         $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
+        $purchaseSuppliers = $this->getPurchaseSuppliersForDailyClose($companyId);
+        $purchaseItems = $this->getPurchaseItemsForDailyClose($companyId);
+        $canEnterPurchases = auth()->user()?->hasCompanyPermission(Permissions::BILL_CREATE) ?? false;
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -656,6 +684,9 @@ class DailyCloseController extends Controller
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
             'pendingFuelInvoices' => $pendingFuelInvoices,
+            'purchaseSuppliers' => $purchaseSuppliers,
+            'purchaseItems' => $purchaseItems,
+            'canEnterPurchases' => $canEnterPurchases,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
@@ -1146,6 +1177,9 @@ class DailyCloseController extends Controller
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
         $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
+        $purchaseSuppliers = $this->getPurchaseSuppliersForDailyClose($companyId);
+        $purchaseItems = $this->getPurchaseItemsForDailyClose($companyId);
+        $canEnterPurchases = auth()->user()?->hasCompanyPermission(Permissions::BILL_CREATE) ?? false;
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -1250,6 +1284,9 @@ class DailyCloseController extends Controller
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
             'pendingFuelInvoices' => $pendingFuelInvoices,
+            'purchaseSuppliers' => $purchaseSuppliers,
+            'purchaseItems' => $purchaseItems,
+            'canEnterPurchases' => $canEnterPurchases,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,

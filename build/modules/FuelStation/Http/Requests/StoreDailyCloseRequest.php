@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\FuelStation\Http\Requests\Rules\RequiresBillCreatePermission;
+use App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePurchaseRows;
 use App\Modules\FuelStation\Http\Requests\Rules\RequiresSalesOrZeroConfirmation;
 
 class StoreDailyCloseRequest extends BaseFormRequest
@@ -127,6 +129,20 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'expenses.*.description' => 'required|string|max:255',
             'expenses.*.amount' => 'required|numeric|min:0',
 
+            // Supplier bills / fuel purchases entered inline, instead of via the Bills
+            // module. Same shape for park (stored as-is) and post (each row must be
+            // complete and becomes a canonical bill through Bill\CreateAction).
+            'purchases' => ['nullable', 'array', new RequiresBillCreatePermission(), new RequiresCompletePurchaseRows()],
+            'purchases.*.supplier_id' => 'nullable|uuid',
+            'purchases.*.item_id' => 'nullable|uuid',
+            'purchases.*.description' => 'nullable|string|max:255',
+            'purchases.*.quantity' => 'nullable|numeric|min:0.01',
+            'purchases.*.unit_cost' => 'nullable|numeric|min:0',
+            'purchases.*.tank_id' => 'nullable|uuid',
+            'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
+            'purchases.*.notes' => 'nullable|string|max:500',
+            'purchases.*.paid_now' => 'nullable|boolean',
+
             // Tab 5: Summary
             'closing_cash' => 'required|numeric|min:0',
             'cash_variance' => 'nullable|numeric',
@@ -143,6 +159,13 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_deposits.*.customer_id' => 'acct.customers', 'amanat_disbursements.*.customer_id' => 'acct.customers',
         ] as $field => $table) {
             $rules[$field] = ['required', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
+        }
+        // Purchase rows are optional per-row (park stays lenient), but any supplier/item/tank
+        // that is given must belong to this company.
+        foreach ([
+            'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
+        ] as $field => $table) {
+            $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
         }
         return $rules;
     }

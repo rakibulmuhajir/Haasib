@@ -886,3 +886,46 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   rather than netted from sales in Money In. Expected cash = opening + in - out.
   Version 1 is normalized for display using its frozen channel amounts without rewriting
   stored snapshots; both posted and current views use the same normalized convention.
+
+### Standalone fuel-sale invoices as a close channel (2026-09-17)
+- Business rule: every litre sold goes through a nozzle the close reads. A standalone
+  credit fuel-sale invoice (`FuelSaleService::createSale`, `sale_type=credit`) is never
+  additional revenue — it is a split of the meter-derived sales into a receivable, same
+  as a credit allocation typed directly into the close.
+- Before a close for its date posts: `DailyCloseCreditSaleService::pendingFuelInvoiceDetails()`
+  finds unlinked (`transaction_id IS NULL`) credit fuel-sale invoices for the company+date
+  and folds them into `credit_sale_details`/`posting_snapshot.credit_sales` alongside
+  manually-typed rows, each detail carrying `source` = `fuel_sale_invoice` (manual rows
+  carry `source` = `manual`). They reduce expected cash exactly like a manual credit row
+  and are linked to the close's transaction on post via the same `attach()` used for
+  manual rows. The `DailyCloseController` Create page pre-loads them as `pendingFuelInvoices`,
+  pre-checked into the credit-sales section; a manual row whose `reference` matches a
+  pending invoice's number is either the page's own echo (same amount — dropped) or a
+  genuine duplicate attempt (different amount — rejected).
+- After a close for its date has already posted (has `metadata.posting_snapshot`):
+  `FuelSaleService::createSale` immediately posts a `fuel_sale_reclass` journal
+  (Dr buyer's AR / Cr the close's frozen `cash_account_id`, `reference_type=acct.invoices`,
+  `reference_id=<invoice id>`, dated the sale date) and links the invoice's `transaction_id`
+  to it. `DailyCloseReconciliationService::sources()`/`view()` pick this transaction up like
+  any other canonical late activity: cash effect = -amount, sales effect = 0 (no revenue
+  account is touched).
+- No new columns were added: this reuses `acct.invoices.transaction_id` (null = pending,
+  set = attached to a close or reclassified) plus the existing `posting_snapshot` metadata.
+
+### Inline supplier bills / fuel purchases in the Daily Close (2026-09-17)
+- `purchases[]` input (park: stored as-is in the draft; post: each row must be complete):
+  `supplier_id`, `item_id`, `quantity`, `unit_cost`, `tank_id` (required when the item has
+  a `fuel_category`), `supplier_invoice_number`, `notes`, `paid_now`. Entering a purchase
+  requires `bill.create` (`RequiresBillCreatePermission`); the Create page hides the
+  section and the FormRequest rejects any row without it.
+- At post, before `DailyCloseReconciliationService::sources()` reads the date (inside the
+  same advisory-locked transaction), `DailyCloseEntryService::purchase()` dispatches the
+  same `bill.create` (status `received`, so `Bill\CreateAction`'s own immediate-delivery
+  receipt posts the stock movement into the chosen tank) and, when `paid_now` is set,
+  `bill_payment.create` commands the Bills module itself uses — no bill/payment logic is
+  duplicated. The resulting bill/payment transactions are then picked up automatically by
+  `sources()` like any other canonical activity for the date; `DailyCloseService` tags the
+  matching `posting_snapshot.sources['journal:<id>']` entries with `source` = `close_purchase`
+  for display. A bill paid inside the same close already carries a `transaction_id`, so it
+  is excluded from `pendingBillPayments` by the same `whereNull('transaction_id')` filter
+  that list already uses.

@@ -237,6 +237,18 @@ interface PendingFuelInvoice {
     reference: string;
 }
 
+interface PurchaseSupplier {
+    id: string;
+    name: string;
+}
+
+interface PurchaseItem {
+    id: string;
+    name: string;
+    is_fuel: boolean;
+    unit: string;
+}
+
 interface Features {
     has_partners: boolean;
     has_amanat: boolean;
@@ -270,6 +282,9 @@ const props = defineProps<{
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
     pendingFuelInvoices?: PendingFuelInvoice[];
+    purchaseSuppliers?: PurchaseSupplier[];
+    purchaseItems?: PurchaseItem[];
+    canEnterPurchases?: boolean;
     amanatHolders: AmanatHolder[];
     investors: Investor[];
     bankAccounts: BankAccount[];
@@ -860,6 +875,19 @@ const form = useForm({
         amount: number;
     }[],
 
+    // Supplier bills / fuel purchases entered inline instead of via the Bills module.
+    purchases: [] as {
+        supplier_id: string;
+        item_id: string;
+        description: string;
+        quantity: number | null;
+        unit_cost: number | null;
+        tank_id: string;
+        supplier_invoice_number: string;
+        notes: string;
+        paid_now: boolean;
+    }[],
+
     // Tab 5: Summary
     closing_cash: 0,
     cash_variance: 0,
@@ -932,6 +960,33 @@ const amanatDisbursementError = (index: number, field: string) =>
 
 const expenseError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`expenses.${index}.${field}`];
+
+const purchaseError = (index: number, field: string) =>
+    (form.errors as Record<string, string>)[`purchases.${index}.${field}`];
+
+const purchaseLineTotal = (row: { quantity: number | null; unit_cost: number | null }) =>
+    Number(row.quantity || 0) * Number(row.unit_cost || 0);
+
+const addPurchaseRow = () => {
+    form.purchases.push({
+        supplier_id: '',
+        item_id: '',
+        description: '',
+        quantity: null,
+        unit_cost: null,
+        tank_id: '',
+        supplier_invoice_number: '',
+        notes: '',
+        paid_now: false,
+    });
+};
+
+const removePurchaseRow = (index: number) => {
+    form.purchases.splice(index, 1);
+};
+
+const isFuelPurchaseItem = (itemId: string) =>
+    (props.purchaseItems ?? []).find((item) => item.id === itemId)?.is_fuel ?? false;
 
 // Reset form to initial empty state (preserving structure from props)
 const resetFormToInitial = () => {
@@ -1022,6 +1077,7 @@ const resetFormToInitial = () => {
     }));
     form.amanat_disbursements = [];
     form.expenses = [];
+    form.purchases = [];
 
     // Reset summary
     form.closing_cash = 0;
@@ -5453,6 +5509,122 @@ const completedWorkflowSteps = computed(() => {
                         </div>
 
                         <Separator />
+
+                        <!-- Supplier bills / fuel purchases entered inline (requires bill.create) -->
+                        <div v-if="canEnterPurchases" class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Purchases</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        A supplier bill (and, for fuel, a stock receipt into a tank) posted the moment this close is posted.
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" @click="addPurchaseRow">
+                                    <Plus class="mr-1 h-4 w-4" /> Add
+                                </Button>
+                            </div>
+
+                            <div
+                                v-for="(purchase, index) in form.purchases"
+                                :key="index"
+                                class="space-y-2 rounded-lg border p-3"
+                            >
+                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <div>
+                                        <Label class="text-xs">Supplier</Label>
+                                        <Select v-model="purchase.supplier_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="s in purchaseSuppliers ?? []"
+                                                    :key="s.id"
+                                                    :value="s.id"
+                                                    >{{ s.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'supplier_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Item</Label>
+                                        <Select v-model="purchase.item_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="it in purchaseItems ?? []"
+                                                    :key="it.id"
+                                                    :value="it.id"
+                                                    >{{ it.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'item_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Quantity</Label>
+                                        <Input v-model.number="purchase.quantity" type="number" @focus="selectZeroValue" />
+                                        <InputError :message="purchaseError(index, 'quantity')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Unit cost</Label>
+                                        <Input v-model.number="purchase.unit_cost" type="number" @focus="selectZeroValue" />
+                                        <InputError :message="purchaseError(index, 'unit_cost')" />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <div v-if="isFuelPurchaseItem(purchase.item_id)">
+                                        <Label class="text-xs">Tank</Label>
+                                        <Select v-model="purchase.tank_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="t in tanks"
+                                                    :key="t.id"
+                                                    :value="t.id"
+                                                    >{{ t.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'tank_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Supplier invoice #</Label>
+                                        <Input v-model="purchase.supplier_invoice_number" placeholder="Optional" />
+                                    </div>
+                                    <div class="flex items-end gap-2">
+                                        <input
+                                            :id="'purchase-paid-now-' + index"
+                                            v-model="purchase.paid_now"
+                                            type="checkbox"
+                                            class="h-4 w-4"
+                                        />
+                                        <Label :for="'purchase-paid-now-' + index" class="text-xs"
+                                            >Paid now from cash</Label
+                                        >
+                                    </div>
+                                    <div class="flex items-end justify-between gap-2">
+                                        <div class="text-sm font-medium">
+                                            <MoneyText
+                                                :amount="purchaseLineTotal(purchase)"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                            />
+                                        </div>
+                                        <Button variant="ghost" size="icon" @click="removePurchaseRow(index)">
+                                            <Trash2 class="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator v-if="canEnterPurchases" />
 
                         <!-- Money Out Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">

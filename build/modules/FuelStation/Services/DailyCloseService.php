@@ -177,9 +177,32 @@ class DailyCloseService
                 }
             }
             $data['expenses'] = [];
+
+            // Supplier bills / fuel purchases entered inline become ordinary canonical bills
+            // (and, when paid now, an ordinary bill payment) before sources() reads the date,
+            // so they are picked up exactly like any other canonical activity below.
+            $declaredPurchases = $data['purchases'] ?? [];
+            $purchaseTransactionIds = [];
+            foreach ($declaredPurchases as $purchase) {
+                if (empty($purchase['supplier_id']) || empty($purchase['item_id']) || (float) ($purchase['quantity'] ?? 0) <= 0) {
+                    continue;
+                }
+                $purchaseResult = app(DailyCloseEntryService::class)->purchase($companyId, $date, $purchase, $user);
+                $purchaseTransactionIds[] = $purchaseResult['bill_transaction_id'];
+                if ($purchaseResult['payment_transaction_id']) {
+                    $purchaseTransactionIds[] = $purchaseResult['payment_transaction_id'];
+                }
+            }
+            $data['purchases'] = [];
+
             $createdAmanat = []; $createdPartners = []; $createdAdvances = [];
             $reconciliation = app(DailyCloseReconciliationService::class);
             $canonicalSources = $reconciliation->sources($companyId, $date);
+            foreach (array_filter($purchaseTransactionIds) as $purchaseTransactionId) {
+                if (isset($canonicalSources['journal:'.$purchaseTransactionId])) {
+                    $canonicalSources['journal:'.$purchaseTransactionId]['source'] = 'close_purchase';
+                }
+            }
             $externalCashIn = array_sum(array_column($canonicalSources, 'money_in'));
             $externalCashOut = array_sum(array_column($canonicalSources, 'money_out'));
 

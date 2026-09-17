@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import EntitySearch from '@/components/forms/EntitySearch.vue'
+import QuickAddModal from '@/components/forms/QuickAddModal.vue'
 import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +20,25 @@ const rows = defineModel<Array<{
 }>>({ required: true })
 const props = defineProps<{ errors: Record<string, string>; disabled: boolean; companySlug?: string }>()
 const { t } = useLexicon()
+
+// Inline "new credit buyer" without leaving the close: EntitySearch's own quick-add
+// button opens the same QuickAddModal used by /invoices and /bills, then selects the
+// created buyer into whichever row asked for it.
+const quickAddIndex = ref<number | null>(null)
+const quickAddQuery = ref('')
+const showQuickAdd = ref(false)
+const openQuickAdd = (index: number, query: string) => {
+    quickAddIndex.value = index
+    quickAddQuery.value = query
+    showQuickAdd.value = true
+}
+const onCustomerCreated = (customer: { id: string; name: string }) => {
+    if (quickAddIndex.value !== null && rows.value[quickAddIndex.value]) {
+        rows.value[quickAddIndex.value].customer_id = customer.id
+        rows.value[quickAddIndex.value].customer_name = customer.name
+    }
+    showQuickAdd.value = false
+}
 </script>
 
 <template>
@@ -32,10 +53,11 @@ const { t } = useLexicon()
       :class="row.pending_fuel_invoice ? 'rounded-md bg-muted/50 p-3' : ''">
       <div class="space-y-1">
         <Label :id="`credit-customer-${index}`">Customer</Label>
-        <EntitySearch v-if="!row.pending_fuel_invoice" v-model="row.customer_id" entity-type="customer" :allow-quick-add="false" :disabled="disabled"
+        <EntitySearch v-if="!row.pending_fuel_invoice" v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
           :aria-labelledby="`credit-customer-${index}`"
           :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
-          @entity-selected="row.customer_name = $event.name" />
+          @entity-selected="row.customer_name = $event.name"
+          @quick-add-click="(query) => openQuickAdd(index, query)" />
         <div v-else class="flex h-9 items-center text-sm text-muted-foreground">{{ row.customer_name }}</div>
         <InputError :message="errors[`credit_sales.${index}.customer_id`]" />
       </div>
@@ -63,5 +85,6 @@ const { t } = useLexicon()
     <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', amount: 0, reference: '' })">
       <Plus class="mr-2 h-4 w-4" />{{ t('addCreditCustomer') }}
     </Button>
+    <QuickAddModal v-model:open="showQuickAdd" entity-type="customer" :initial-name="quickAddQuery" @created="onCustomerCreated" />
   </section>
 </template>

@@ -88,6 +88,9 @@ class DailyCloseCreditSaleService
             if (!$customer) {
                 throw ValidationException::withMessages(["credit_sales.{$index}.customer_id" => 'Choose an active customer of this company.']);
             }
+            if ($customer->is_credit_blocked) {
+                throw ValidationException::withMessages(["credit_sales.{$index}.customer_id" => "{$customer->name} is blocked from further credit sales."]);
+            }
             $arId = $customer->ar_account_id ?: $company->default_ar_account_id;
             $ar = Account::where('company_id', $companyId)->where('is_active', true)->where('subtype', 'accounts_receivable')
                 ->when($arId, fn ($q) => $q->whereKey($arId), fn ($q) => $q->orderBy('code'))->first();

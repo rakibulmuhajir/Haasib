@@ -45,6 +45,15 @@ class FuelSaleService
                 throw new \InvalidArgumentException('No current rate found for this fuel item.');
             }
 
+            // A blocked buyer is refused a new credit sale outright (an over-limit buyer
+            // only warns, on the frontend, and is not enforced here).
+            if ($saleType === SaleMetadata::TYPE_CREDIT && !empty($data['customer_id'])) {
+                $customer = Customer::where('company_id', $company->id)->find($data['customer_id']);
+                if ($customer?->is_credit_blocked) {
+                    throw new \InvalidArgumentException("{$customer->name} is blocked from further credit sales.");
+                }
+            }
+
             // Calculate amounts
             $quantity = $data['quantity'];
             $unitPrice = $this->determineUnitPrice($saleType, $currentRate, $data);

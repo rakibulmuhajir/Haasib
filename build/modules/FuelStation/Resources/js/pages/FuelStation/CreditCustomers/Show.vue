@@ -36,19 +36,21 @@ interface Customer {
   is_credit_blocked: boolean
 }
 
-interface Transaction {
-  id: string
-  date: string
-  type: 'sale' | 'collection'
+interface StatementRow {
+  date: string | null
+  type: 'opening_balance' | 'invoice' | 'payment' | 'credit_note'
+  reference: string | null
   description: string
-  amount: number
-  liters?: number
-  reference?: string
+  debit: number
+  credit: number
+  source_id: string | null
+  link: string | null
+  balance: number
 }
 
 const props = defineProps<{
   customer: Customer
-  transactions: Transaction[]
+  statement: StatementRow[]
   currency: string
 }>()
 
@@ -91,17 +93,21 @@ const columns = [
   { key: 'date', label: 'Date', kind: 'date' as const },
   { key: 'type', label: 'Type', kind: 'status' as const },
   { key: 'description', label: 'Description', kind: 'text' as const },
-  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'debit', label: 'Debit', kind: 'amount' as const },
+  { key: 'credit', label: 'Credit', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
-  return props.transactions.map((t) => ({
-    id: t.id,
-    date: formatDate(t.date),
-    type: t.type,
-    description: t.description,
-    amount: t.amount,
-    _raw: t,
+  return props.statement.map((row, index) => ({
+    id: row.source_id ?? `opening-${index}`,
+    date: row.date ? formatDate(row.date) : '—',
+    type: row.type,
+    description: row.description,
+    debit: row.debit,
+    credit: row.credit,
+    balance: row.balance,
+    _raw: row,
   }))
 })
 
@@ -221,33 +227,40 @@ const goBack = () => {
 
       <Card class="lg:col-span-2">
         <CardHeader>
-          <CardTitle class="text-base">Transaction History</CardTitle>
-          <CardDescription>Recent credit sales and collections.</CardDescription>
+          <CardTitle class="text-base">Statement</CardTitle>
+          <CardDescription>Every invoice, payment and credit note against this buyer's receivable account, from every entry point, oldest first.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
           <LedgerRegister :data="tableData" :columns="columns">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
-                No transactions yet
+                No activity yet
               </div>
             </template>
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.type === 'sale' ? 'bg-status-attention/10 text-status-attention' : 'bg-status-success/10 text-status-success'"
+                :class="{
+                  invoice: 'bg-status-attention/10 text-status-attention',
+                  payment: 'bg-status-success/10 text-status-success',
+                  credit_note: 'bg-status-info/10 text-status-info',
+                  opening_balance: 'bg-muted text-muted-foreground',
+                }[row._raw.type as string]"
               >
-                {{ row._raw.type === 'sale' ? 'Sale' : 'Collection' }}
+                {{ { invoice: 'Invoice', payment: 'Payment', credit_note: 'Credit note', opening_balance: 'Opening' }[row._raw.type as string] }}
               </Badge>
             </template>
 
-            <template #cell-amount="{ row }">
-              <span :class="row._raw.type === 'sale' ? 'text-status-attention' : 'text-status-success'" class="font-medium">
-                <MoneyText
-                  :amount="row._raw.amount"
-                  :currency="props.currency"
-                  :direction="row._raw.type === 'sale' ? 'inflow' : 'outflow'"
-                />
-              </span>
+            <template #cell-debit="{ row }">
+              <span v-if="row._raw.debit > 0" class="font-medium text-status-attention"><MoneyText :amount="row._raw.debit" :currency="props.currency" /></span>
+            </template>
+
+            <template #cell-credit="{ row }">
+              <span v-if="row._raw.credit > 0" class="font-medium text-status-success"><MoneyText :amount="row._raw.credit" :currency="props.currency" /></span>
+            </template>
+
+            <template #cell-balance="{ row }">
+              <span class="font-semibold"><MoneyText :amount="row._raw.balance" :currency="props.currency" /></span>
             </template>
           </LedgerRegister>
         </CardContent>

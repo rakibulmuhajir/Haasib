@@ -139,3 +139,20 @@ test('version one snapshots normalize frozen card totals without rewriting histo
     expect((float) $view['snapshot']['totals']['money_in'])->toBe(30000.0)->and((float) $view['current']['money_out'])->toBe(9000.0);
     expect($close->fresh()->metadata)->toEqual($before);
 });
+
+test('a buyer created inline (quick-add) and used the same close creates exactly one customer and links the sale', function () {
+    $f = creditCloseFixture();
+    $created = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('customer.create', [
+        'name' => 'Walk-in Tanker Buyer', 'company_id' => $f['company']->id, 'base_currency' => $f['company']->base_currency, 'is_active' => true,
+    ], $f['user'], true));
+    $newCustomerId = $created['data']['id'];
+
+    $f['payload']['credit_sales'] = [
+        ['customer_id' => $newCustomerId, 'amount' => 6000, 'reference' => 'Inline buyer sale'],
+    ];
+    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+
+    expect(Customer::where('company_id', $f['company']->id)->where('name', 'Walk-in Tanker Buyer')->count())->toBe(1);
+    $invoice = Invoice::where('company_id', $f['company']->id)->where('customer_id', $newCustomerId)->sole();
+    expect($invoice->transaction_id)->toBe($posted['transaction_id']);
+});

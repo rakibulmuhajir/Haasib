@@ -15,6 +15,10 @@ return [
     // Payroll
     'payroll.salary-advance.create' => \App\Modules\Payroll\Actions\CreateSalaryAdvanceAction::class,
 
+    // Manual bank transactions and standalone expenses (ordinary journals, second entry point).
+    'bank_transaction.create' => \App\Modules\Accounting\Actions\BankTransaction\CreateAction::class,
+    'expense.create' => \App\Modules\Accounting\Actions\Expense\CreateAction::class,
+
     'user.invite' => \App\Modules\Accounting\Actions\User\InviteAction::class,
     'user.list' => \App\Modules\Accounting\Actions\User\IndexAction::class,
     'user.assign-role' => \App\Modules\Accounting\Actions\User\AssignRoleAction::class,

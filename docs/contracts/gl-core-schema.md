@@ -163,7 +163,7 @@ Single source of truth for fiscal years, accounting periods, transactions, and j
 - Relationships: belongsTo Company; belongsTo FiscalYear; belongsTo AccountingPeriod; hasMany JournalEntry; belongsTo ReversalOf (self); hasOne ReversedBy (self); belongsTo CorrectsTransaction (self); hasOne CorrectedBy (self); belongsTo LockedBy (User); belongsTo AmendedBy (User).
 - Validation:
   - `transaction_number`: required|string|max:50; unique per company (soft-delete aware).
-  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing,fuel_daily_close,fuel_daily_close_reversal.
+  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing,expense,fuel_daily_close,fuel_daily_close_reversal. (`expense` already covered a Daily Close's own inline/post-close expense entries — `Expense\CreateAction`'s standalone `/expenses` page reuses the same value so both entry points are one channel to the ledger, not two.)
   - `transaction_date`: required|date.
   - `posting_date`: required|date.
   - `fiscal_year_id`: required|uuid|exists:acct.fiscal_years,id.

@@ -332,6 +332,16 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'update'])->whereUuid('rule')->name('banking.rules.update');
         Route::delete('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'destroy'])->whereUuid('rule')->name('banking.rules.destroy');
 
+        // Manual bank transactions: deposit, withdrawal, transfer, bank charge (Accountant Mode)
+        Route::get('/{company}/banking/transactions', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'index'])->name('banking.transactions.index');
+        Route::get('/{company}/banking/transactions/create', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'create'])->name('banking.transactions.create');
+        Route::post('/{company}/banking/transactions', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'store'])->name('banking.transactions.store');
+
+        // Standalone expenses
+        Route::get('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/{company}/expenses/create', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'create'])->name('expenses.create');
+        Route::post('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'store'])->name('expenses.store');
+
         // ─────────────────────────────────────────────────────────────────
         // Inventory Module
         // ─────────────────────────────────────────────────────────────────

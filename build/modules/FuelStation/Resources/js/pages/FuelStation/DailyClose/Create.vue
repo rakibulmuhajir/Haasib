@@ -227,6 +227,16 @@ interface PendingBillPayment {
     affects_cash_drawer: boolean;
 }
 
+interface PendingFuelInvoice {
+    invoice_id: string;
+    invoice_number: string;
+    customer_id: string;
+    customer_name: string;
+    litres: number;
+    amount: number;
+    reference: string;
+}
+
 interface Features {
     has_partners: boolean;
     has_amanat: boolean;
@@ -259,6 +269,7 @@ const props = defineProps<{
     employees: Employee[];
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
+    pendingFuelInvoices?: PendingFuelInvoice[];
     amanatHolders: AmanatHolder[];
     investors: Investor[];
     bankAccounts: BankAccount[];
@@ -804,8 +815,17 @@ const form = useForm({
         }
     >,
 
-    // Tab 4: Money Out
-    credit_sales: [] as { customer_id: string; customer_name: string; amount: number; reference: string }[],
+    // Tab 4: Money Out. Pending fuel-sale invoices (credit sales already made through a nozzle)
+    // are pre-checked here exactly like pendingBillPayments below: they are a channel of the
+    // close, never additional sales, and reduce expected cash by their amount.
+    credit_sales: (props.pendingFuelInvoices ?? []).map((invoice) => ({
+        customer_id: invoice.customer_id,
+        customer_name: invoice.customer_name,
+        amount: invoice.amount,
+        reference: invoice.reference,
+        invoice_id: invoice.invoice_id,
+        pending_fuel_invoice: true,
+    })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; pending_fuel_invoice?: boolean }[],
     bank_deposits: [] as {
         bank_account_id: string;
         amount: number;
@@ -983,7 +1003,14 @@ const resetFormToInitial = () => {
     });
 
     // Reset money out
-    form.credit_sales = [];
+    form.credit_sales = (props.pendingFuelInvoices ?? []).map((invoice) => ({
+        customer_id: invoice.customer_id,
+        customer_name: invoice.customer_name,
+        amount: invoice.amount,
+        reference: invoice.reference,
+        invoice_id: invoice.invoice_id,
+        pending_fuel_invoice: true,
+    }));
     form.bank_deposits = [];
     form.partner_withdrawals = [];
     form.employee_advances = [];

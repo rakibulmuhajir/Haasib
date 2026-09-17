@@ -107,6 +107,12 @@ class Invoice extends Model
         return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 
+    /** 1:1 fuel-station metadata, when this invoice came from a fuel sale. */
+    public function saleMetadata()
+    {
+        return $this->hasOne(\App\Modules\FuelStation\Models\SaleMetadata::class, 'invoice_id');
+    }
+
     /**
      * Generate an invoice number scoped per company (simple incremental suffix).
      * Uses company's invoice_prefix and invoice_start_number settings.

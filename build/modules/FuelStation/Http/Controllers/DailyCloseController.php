@@ -166,6 +166,36 @@ class DailyCloseController extends Controller
             });
     }
 
+    /**
+     * Standalone credit fuel-sale invoices for this date not yet linked to a close. Every
+     * litre already went through a nozzle the close reads, so these are pre-checked as a
+     * channel of the close (see DailyCloseCreditSaleService::pendingFuelInvoiceDetails), never
+     * additional sales.
+     */
+    private function getPendingFuelInvoicesForDailyClose(string $companyId, string $date)
+    {
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereDate('invoice_date', $date)
+            ->whereNull('transaction_id')
+            ->whereHas('saleMetadata', fn ($q) => $q->where('sale_type', \App\Modules\FuelStation\Models\SaleMetadata::TYPE_CREDIT))
+            ->with(['customer:id,name', 'lineItems'])
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(function (\App\Modules\Accounting\Models\Invoice $invoice) {
+                $line = $invoice->lineItems->first();
+                return [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'customer_id' => $invoice->customer_id,
+                    'customer_name' => $invoice->customer?->name ?? 'Buyer',
+                    'litres' => (float) ($line->quantity ?? 0),
+                    'amount' => (float) $invoice->total_amount,
+                    'reference' => $invoice->invoice_number,
+                ];
+            })
+            ->values();
+    }
+
     private function getPartnersForDailyClose(string $companyId)
     {
         return Partner::where('company_id', $companyId)
@@ -519,6 +549,7 @@ class DailyCloseController extends Controller
         $employees = $this->getEmployeesForAdvances($companyId);
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
+        $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -624,6 +655,7 @@ class DailyCloseController extends Controller
             'employees' => $employees,
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
+            'pendingFuelInvoices' => $pendingFuelInvoices,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
@@ -1113,6 +1145,7 @@ class DailyCloseController extends Controller
         $employees = $this->getEmployeesForAdvances($companyId);
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
+        $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -1216,6 +1249,7 @@ class DailyCloseController extends Controller
             'employees' => $employees,
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
+            'pendingFuelInvoices' => $pendingFuelInvoices,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,

@@ -2,8 +2,13 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Models\Company;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
@@ -61,7 +66,8 @@ class FuelSaleService
                 'total_amount' => $lineTotal - $discount,
                 'paid_amount' => $this->determineAmountPaid($saleType, $lineTotal - $discount),
                 'balance' => ($lineTotal - $discount) - $this->determineAmountPaid($saleType, $lineTotal - $discount),
-                'currency' => 'PKR',
+                'currency' => $company->base_currency ?: 'PKR',
+                'base_currency' => $company->base_currency ?: 'PKR',
                 'status' => $this->determineInvoiceStatus($saleType),
             ]);
 
@@ -94,8 +100,71 @@ class FuelSaleService
             // Decrement inventory for the fuel item
             $this->decrementInventory($company->id, $data['item_id'], $quantity, $data['pump_id'] ?? null, $invoice);
 
+            // Every litre already went through a nozzle the Daily Close reads: a credit
+            // sale is never additional revenue. If the close for this date has not posted
+            // yet, it will pick this invoice up as a pending channel (see
+            // DailyCloseCreditSaleService::pendingFuelInvoiceDetails). If it already has,
+            // reclassify immediately: Dr AR / Cr the close's cash account.
+            if ($saleType === SaleMetadata::TYPE_CREDIT) {
+                $this->reclassifyIfCloseAlreadyPosted($company->id, $invoice, $data['sale_date'] ?? now()->toDateString());
+            }
+
             return $invoice->load(['lineItems', 'customer']);
         });
+    }
+
+    /**
+     * A standalone credit fuel-sale invoice entered after the day's close already posted
+     * cannot wait for the next close to reduce expected cash. Post the reclassification
+     * journal now so it shows up as late channel activity on the posted close.
+     */
+    private function reclassifyIfCloseAlreadyPosted(string $companyId, Invoice $invoice, string $saleDate): void
+    {
+        $close = Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereDate('transaction_date', $saleDate)
+            ->whereNotNull('metadata->posting_snapshot')
+            ->first();
+        if (!$close) {
+            return;
+        }
+
+        $cashAccountId = $close->metadata['posting_snapshot']['cash_account_id'] ?? null;
+        if (!$cashAccountId || !$invoice->customer_id) {
+            return;
+        }
+
+        $company = Company::findOrFail($companyId);
+        $customer = Customer::where('company_id', $companyId)->find($invoice->customer_id);
+        $arId = $customer?->ar_account_id ?: $company->default_ar_account_id;
+        $ar = Account::where('company_id', $companyId)->where('is_active', true)->where('subtype', 'accounts_receivable')
+            ->when($arId, fn ($q) => $q->whereKey($arId), fn ($q) => $q->orderBy('code'))->first();
+        if (!$ar) {
+            throw new \RuntimeException('Set up a base-currency receivables account for this buyer before recording this sale.');
+        }
+
+        $amount = round((float) $invoice->total_amount, 2);
+        if ($amount <= 0) {
+            return;
+        }
+
+        $transaction = app(GlPostingService::class)->postBalancedTransaction([
+            'company_id' => $companyId,
+            'transaction_type' => 'fuel_sale_reclass',
+            'date' => $saleDate,
+            'currency' => $company->base_currency ?: 'PKR',
+            'description' => "Fuel sale reclassification - Invoice {$invoice->invoice_number}",
+            'reference_type' => 'acct.invoices',
+            'reference_id' => $invoice->id,
+        ], [
+            ['account_id' => $ar->id, 'type' => 'debit', 'amount' => $amount, 'description' => "Credit portion of meter sales — {$invoice->invoice_number}"],
+            ['account_id' => $cashAccountId, 'type' => 'credit', 'amount' => $amount, 'description' => "Credit portion of meter sales — {$invoice->invoice_number}"],
+        ]);
+
+        $invoice->transaction_id = $transaction->id;
+        $invoice->status = 'sent';
+        $invoice->sent_at = now();
+        $invoice->save();
     }
 
     /**

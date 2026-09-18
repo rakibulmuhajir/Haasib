@@ -4,7 +4,12 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\FuelStation\Models\Investor;
+use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\SaleMetadata;
+use App\Modules\Inventory\Models\Item;
+use Illuminate\Validation\Rule;
 
 class StoreFuelSaleRequest extends BaseFormRequest
 {
@@ -18,12 +23,12 @@ class StoreFuelSaleRequest extends BaseFormRequest
     {
         return [
             'sale_type' => ['required', 'in:' . implode(',', SaleMetadata::getSaleTypes())],
-            'item_id' => ['required', 'uuid', 'exists:inv.items,id'],
+            'item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
             'quantity' => ['required', 'numeric', 'min:0.01'],
             'sale_date' => ['nullable', 'date'],
-            'pump_id' => ['nullable', 'uuid', 'exists:fuel.pumps,id'],
-            'customer_id' => ['nullable', 'uuid', 'exists:acct.customers,id'],
-            'investor_id' => ['nullable', 'uuid', 'exists:fuel.investors,id'],
+            'pump_id' => ['nullable', 'uuid', Rule::exists(Pump::class, 'id')],
+            'customer_id' => ['nullable', 'uuid', Rule::exists(Customer::class, 'id')],
+            'investor_id' => ['nullable', 'uuid', Rule::exists(Investor::class, 'id')],
             'description' => ['nullable', 'string', 'max:255'],
             'discount_per_liter' => ['nullable', 'numeric', 'min:0'],
             'payment_terms_days' => ['nullable', 'integer', 'min:1', 'max:365'],

@@ -12,6 +12,7 @@ use App\Modules\Accounting\Services\BankFeedResolutionService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class BankFeedController extends Controller
@@ -229,7 +230,7 @@ class BankFeedController extends Controller
         $request->validate([
             'bank_transaction_id' => 'required|uuid',
             'allocations' => 'required|array|min:1',
-            'allocations.*.account_id' => 'required|uuid|exists:acct.accounts,id',
+            'allocations.*.account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
             'allocations.*.amount' => 'required|numeric|min:0.01',
             'allocations.*.description' => 'nullable|string|max:255',
         ]);
@@ -248,7 +249,7 @@ class BankFeedController extends Controller
 
         $request->validate([
             'bank_transaction_id' => 'required|uuid',
-            'target_bank_account_id' => 'required|uuid|exists:acct.company_bank_accounts,id',
+            'target_bank_account_id' => ['required', 'uuid', Rule::exists(BankAccount::class, 'id')],
         ]);
 
         $bankTransaction = BankTransaction::where('company_id', $currentCompany->id)

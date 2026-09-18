@@ -4,6 +4,9 @@ namespace App\Modules\Inventory\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Inventory\Models\ItemCategory;
+use Illuminate\Validation\Rule;
 
 class UpdateItemRequest extends BaseFormRequest
 {
@@ -23,7 +26,7 @@ class UpdateItemRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'category_id' => 'nullable|uuid|exists:inv.item_categories,id',
+            'category_id' => ['nullable', 'uuid', Rule::exists(ItemCategory::class, 'id')],
             'sku' => 'sometimes|required|string|max:100',
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -37,9 +40,9 @@ class UpdateItemRequest extends BaseFormRequest
             'selling_price' => 'numeric|min:0',
             'currency' => 'sometimes|required|string|size:3',
             'tax_rate_id' => 'nullable|uuid|exists:tax.tax_rates,id',
-            'income_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'expense_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'asset_account_id' => 'nullable|uuid|exists:acct.accounts,id',
+            'income_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'expense_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'asset_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'reorder_point' => 'numeric|min:0',
             'reorder_quantity' => 'numeric|min:0',
             'weight' => 'nullable|numeric|min:0',

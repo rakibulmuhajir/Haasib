@@ -4,7 +4,9 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Transaction;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
@@ -65,18 +67,18 @@ class StoreVendorCreditRequest extends BaseFormRequest
             'reason' => ['required', 'string', 'max:255'],
             'status' => [Rule::in(['draft', 'received', 'applied', 'void'])],
             'notes' => ['nullable', 'string'],
-            'transaction_id' => ['nullable', 'uuid', 'exists:acct.transactions,id'],
+            'transaction_id' => ['nullable', 'uuid', Rule::exists(Transaction::class, 'id')],
             'ap_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],
             'line_items.*.expense_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('type', ['expense', 'cogs', 'asset'])
                     ->where('is_active', true)),
             ],

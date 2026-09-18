@@ -5,6 +5,8 @@ namespace App\Modules\FuelStation\Actions\ShiftClose;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Modules\FuelStation\Services\ShiftCloseService;
+use App\Modules\Inventory\Models\Item;
+use Illuminate\Validation\Rule;
 
 class PostAction implements PaletteAction
 {
@@ -14,7 +16,7 @@ class PostAction implements PaletteAction
             'date' => ['required', 'date'],
             'shift' => ['required', 'in:day,night'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.item_id' => ['required', 'uuid', 'exists:inv.items,id'],
+            'lines.*.item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
             'lines.*.liters_sold' => ['required', 'numeric', 'min:0'],
             'lines.*.sale_rate' => ['required', 'numeric', 'min:0'],
 

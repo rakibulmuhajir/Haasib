@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -114,23 +115,23 @@ class StationSettingsController extends Controller
             'payment_channels.*.label' => 'required|string',
             'payment_channels.*.type' => 'required|string|in:cash,bank_transfer,card_pos,fuel_card,mobile_wallet',
             'payment_channels.*.enabled' => 'boolean',
-            'payment_channels.*.bank_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'payment_channels.*.clearing_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'cash_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_sales_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_cogs_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_inventory_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'cash_over_short_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'partner_drawings_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'employee_advances_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'operating_bank_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_card_clearing_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'card_pos_clearing_account_id' => 'nullable|uuid|exists:acct.accounts,id',
+            'payment_channels.*.bank_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'payment_channels.*.clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'cash_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_sales_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_cogs_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_inventory_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'cash_over_short_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'partner_drawings_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'employee_advances_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'operating_bank_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_card_clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'card_pos_clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'fuel_products' => 'nullable|array',
-            'fuel_products.*.id' => 'required|uuid|exists:inv.items,id',
-            'fuel_products.*.income_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_products.*.expense_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'fuel_products.*.asset_account_id' => 'nullable|uuid|exists:acct.accounts,id',
+            'fuel_products.*.id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
+            'fuel_products.*.income_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_products.*.expense_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'fuel_products.*.asset_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
         ]);
 
         $settings = StationSettings::forCompany($company->id);

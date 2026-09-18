@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use Illuminate\Validation\Rule;
 
 class SettlePaymentChannelRequest extends BaseFormRequest
 {
@@ -16,8 +18,8 @@ class SettlePaymentChannelRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'clearing_account_id' => ['required', 'uuid', 'exists:acct.accounts,id'],
-            'bank_account_id' => ['required', 'uuid', 'exists:acct.accounts,id'],
+            'clearing_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'bank_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
             'amount_received' => ['required', 'numeric', 'min:0.01'],
             'fees' => ['nullable', 'numeric', 'min:0'],
             'settlement_date' => ['nullable', 'date'],

@@ -67,6 +67,12 @@ class AccountController extends Controller
         $createdCount = count($result['created']);
         $conflictCount = count($result['skipped_conflicts']);
 
+        // The templates applied without throwing, so whatever left the company marked
+        // incomplete (see CompanyBootstrapService) is resolved -- clear the gate.
+        if ($company->bootstrap_incomplete_at !== null) {
+            $company->forceFill(['bootstrap_incomplete_at' => null])->saveQuietly();
+        }
+
         if ($createdCount === 0) {
             return back()->with('success', $conflictCount > 0
                 ? "Nothing to restore, but {$conflictCount} existing account(s) conflict with the standard chart -- review them manually."

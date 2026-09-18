@@ -4,7 +4,11 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\FuelStation\Models\AttendantHandover;
+use App\Modules\FuelStation\Models\Pump;
+use Illuminate\Validation\Rule;
 
 class StoreHandoverRequest extends BaseFormRequest
 {
@@ -17,9 +21,9 @@ class StoreHandoverRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'attendant_id' => ['required', 'uuid', 'exists:auth.users,id'],
+            'attendant_id' => ['required', 'uuid', Rule::exists(User::class, 'id')],
             'handover_date' => ['required', 'date'],
-            'pump_id' => ['nullable', 'uuid', 'exists:fuel.pumps,id'],
+            'pump_id' => ['nullable', 'uuid', Rule::exists(Pump::class, 'id')],
             'shift' => ['required', 'in:' . implode(',', AttendantHandover::getShifts())],
             'cash_amount' => ['nullable', 'numeric', 'min:0'],
             'easypaisa_amount' => ['nullable', 'numeric', 'min:0'],
@@ -27,7 +31,7 @@ class StoreHandoverRequest extends BaseFormRequest
             'bank_transfer_amount' => ['nullable', 'numeric', 'min:0'],
             'card_swipe_amount' => ['nullable', 'numeric', 'min:0'],
             'parco_card_amount' => ['nullable', 'numeric', 'min:0'],
-            'destination_bank_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'destination_bank_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

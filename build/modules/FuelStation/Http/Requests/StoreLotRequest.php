@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Inventory\Models\Item;
+use Illuminate\Validation\Rule;
 
 class StoreLotRequest extends BaseFormRequest
 {
@@ -18,7 +20,7 @@ class StoreLotRequest extends BaseFormRequest
         return [
             'investment_amount' => ['required', 'numeric', 'min:1000'],
             'deposit_date' => ['nullable', 'date'],
-            'item_id' => ['nullable', 'uuid', 'exists:inv.items,id'],
+            'item_id' => ['nullable', 'uuid', Rule::exists(Item::class, 'id')],
         ];
     }
 

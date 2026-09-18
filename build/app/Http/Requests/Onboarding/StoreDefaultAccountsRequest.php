@@ -4,6 +4,8 @@ namespace App\Http\Requests\Onboarding;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use Illuminate\Validation\Rule;
 
 class StoreDefaultAccountsRequest extends BaseFormRequest
 {
@@ -26,16 +28,16 @@ class StoreDefaultAccountsRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'ar_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'ap_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'income_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'expense_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'bank_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'retained_earnings_account_id' => 'required|uuid|exists:acct.accounts,id',
-            'sales_tax_payable_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'purchase_tax_receivable_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'transit_loss_account_id' => 'nullable|uuid|exists:acct.accounts,id',
-            'transit_gain_account_id' => 'nullable|uuid|exists:acct.accounts,id',
+            'ar_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'ap_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'income_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'expense_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'bank_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'retained_earnings_account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'sales_tax_payable_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'purchase_tax_receivable_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'transit_loss_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'transit_gain_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
         ];
     }
 }

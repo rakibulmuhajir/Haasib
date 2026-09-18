@@ -4,6 +4,8 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bank;
 use App\Modules\Accounting\Models\BankAccount;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -37,8 +39,8 @@ class UpdateBankAccountRequest extends BaseFormRequest
                     ->ignore($bankAccountId),
             ],
             'account_type' => ['required', 'in:checking,savings,credit_card,cash,other'],
-            'bank_id' => ['nullable', 'uuid', 'exists:acct.banks,id'],
-            'gl_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'bank_id' => ['nullable', 'uuid', Rule::exists(Bank::class, 'id')],
+            'gl_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'iban' => ['nullable', 'string', 'max:34', 'regex:/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/'],
             'swift_code' => ['nullable', 'string', 'max:11'],
             'routing_number' => ['nullable', 'string', 'max:50'],

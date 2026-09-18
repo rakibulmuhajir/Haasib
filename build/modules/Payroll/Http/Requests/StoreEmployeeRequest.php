@@ -5,8 +5,10 @@ namespace App\Modules\Payroll\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Models\CompanyCurrency;
+use App\Modules\Payroll\Models\Employee;
 use App\Services\CurrentCompany;
 use Closure;
+use Illuminate\Validation\Rule;
 
 class StoreEmployeeRequest extends BaseFormRequest
 {
@@ -51,7 +53,7 @@ class StoreEmployeeRequest extends BaseFormRequest
             'employment_status' => 'required|in:active,on_leave,suspended,terminated',
             'department' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',
-            'manager_id' => 'nullable|uuid|exists:pay.employees,id',
+            'manager_id' => ['nullable', 'uuid', Rule::exists(Employee::class, 'id')],
             'pay_frequency' => 'required|in:weekly,biweekly,semimonthly,monthly',
             'base_salary' => 'required|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',

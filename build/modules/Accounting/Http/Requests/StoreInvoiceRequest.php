@@ -4,6 +4,8 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
 use Illuminate\Validation\Rule;
 
 class StoreInvoiceRequest extends BaseFormRequest
@@ -17,7 +19,7 @@ class StoreInvoiceRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => ['required', 'uuid', 'exists:acct.customers,id'],
+            'customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'numeric', 'min:0.01'],
@@ -27,7 +29,7 @@ class StoreInvoiceRequest extends BaseFormRequest
             'line_items.*.income_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('type', 'revenue')
                     ->where('is_active', true)),
             ],

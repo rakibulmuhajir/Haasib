@@ -4,6 +4,10 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
@@ -40,7 +44,7 @@ class StoreBillRequest extends BaseFormRequest
         ];
 
         return [
-            'vendor_id' => ['required', 'uuid', 'exists:acct.vendors,id'],
+            'vendor_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')],
             'bill_number' => ['nullable', 'string', 'max:50', $billNumberRule],
             'vendor_invoice_number' => ['nullable', 'string', 'max:100'],
             'bill_date' => ['required', 'date'],
@@ -54,8 +58,8 @@ class StoreBillRequest extends BaseFormRequest
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
             'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.item_id' => ['nullable', 'uuid', 'exists:inv.items,id'],
-            'line_items.*.warehouse_id' => ['nullable', 'uuid', 'exists:inv.warehouses,id'],
+            'line_items.*.item_id' => ['nullable', 'uuid', Rule::exists(Item::class, 'id')],
+            'line_items.*.warehouse_id' => ['nullable', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'line_items.*.description' => ['required', 'string', 'max:500'],
             'line_items.*.quantity' => ['required', 'numeric', 'min:0.01'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
@@ -64,14 +68,14 @@ class StoreBillRequest extends BaseFormRequest
             'line_items.*.expense_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('type', ['expense', 'cogs', 'asset'])
                     ->where('is_active', true)),
             ],
             'ap_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],

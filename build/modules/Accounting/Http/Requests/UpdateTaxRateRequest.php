@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
 
@@ -35,8 +36,8 @@ class UpdateTaxRateRequest extends BaseFormRequest
             'tax_type' => ['sometimes', Rule::in(['sales', 'purchase', 'withholding', 'both'])],
             'is_compound' => ['sometimes', 'boolean'],
             'compound_priority' => ['sometimes', 'integer', 'min:0'],
-            'gl_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
-            'recoverable_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'gl_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'recoverable_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'effective_from' => ['sometimes', 'date'],
             'effective_to' => ['nullable', 'date', 'after:effective_from'],
             'is_default' => ['sometimes', 'boolean'],

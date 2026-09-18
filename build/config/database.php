@@ -253,6 +253,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tenant Context Guard
+    |--------------------------------------------------------------------------
+    |
+    | Under enforced row level security a read with no app.current_company_id
+    | returns nothing and reports success -- a blank screen, not a stack trace.
+    | This guard watches the query stream and complains when a company-scoped
+    | table is touched with no company context set.
+    |
+    | Development and test only; it is forced off in production. The test suite
+    | turns it on in phpunit.xml so a missing context fails at a desk. Modes:
+    | "off", "log", "throw".
+    |
+    | See docs/reviews/2026-09-18-rls-enforcement-readiness.md.
+    |
+    */
+
+    'tenant_context_guard' => [
+        'mode' => env('DB_TENANT_CONTEXT_GUARD', 'off'),
+        'connections' => array_filter(explode(',', (string) env(
+            'DB_TENANT_CONTEXT_GUARD_CONNECTIONS',
+            (string) env('DB_CONNECTION', 'pgsql')
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redis Databases
     |--------------------------------------------------------------------------
     |

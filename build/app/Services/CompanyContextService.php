@@ -205,16 +205,53 @@ class CompanyContextService
     {
         $previousCompany = $this->company;
 
+        // Not every caller arrived through this service: console commands,
+        // seeders and tests set app.current_company_id with set_config directly.
+        // Clearing the session variable on the way out would strip the context
+        // out from under them, and the writes that follow would then be
+        // rejected by row level security -- or, worse, silently match nothing.
+        $previousCompanyId = $this->currentSetting('app.current_company_id');
+        $previousCurrency = $this->currentSetting('app.company_base_currency');
+
         try {
             $this->setContext($company);
             return $callback();
         } finally {
-            // Restore previous context
             if ($previousCompany) {
                 $this->setContext($previousCompany);
             } else {
-                $this->clearContext();
+                $this->company = null;
+                $this->permissionRegistrar->setPermissionsTeamId(null);
+                DB::select("SELECT set_config('app.current_company_id', ?, false)", [$previousCompanyId]);
+                DB::select("SELECT set_config('app.company_base_currency', ?, false)", [$previousCurrency]);
             }
+        }
+    }
+
+    private function currentSetting(string $name): string
+    {
+        return (string) (DB::selectOne('SELECT current_setting(?, true) AS value', [$name])->value ?? '');
+    }
+
+    /**
+     * Run work that legitimately spans every company -- console commands,
+     * seeders, deployment repairs -- using the policies' own super-admin
+     * escape hatch rather than turning row level security off.
+     *
+     * Session scope on purpose: SET LOCAL outside a transaction silently does
+     * nothing, so a failure here leaves a session setting behind rather than a
+     * table with its isolation switched off.
+     */
+    public function crossCompany(callable $callback): mixed
+    {
+        $previous = $this->currentSetting('app.is_super_admin');
+
+        DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+
+        try {
+            return $callback();
+        } finally {
+            DB::select("SELECT set_config('app.is_super_admin', ?, false)", [$previous]);
         }
     }
 

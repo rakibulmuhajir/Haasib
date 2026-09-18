@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Transaction;
+use App\Services\CompanyContextService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -30,7 +31,7 @@ class LockMonthlyDailyCloses extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(CompanyContextService $context): int
     {
         $now = Carbon::now();
 
@@ -69,7 +70,9 @@ class LockMonthlyDailyCloses extends Command
         // Only process companies with fuel_station industry
         $companiesQuery->where('industry', 'fuel_station');
 
-        $companies = $companiesQuery->get();
+        // auth.companies is tenant-scoped under row level security; enumerating
+        // every company is exactly the cross-company work the escape hatch is for.
+        $companies = $context->crossCompany(fn () => $companiesQuery->get());
 
         if ($companies->isEmpty()) {
             $this->warn('No fuel station companies found to process.');
@@ -77,26 +80,33 @@ class LockMonthlyDailyCloses extends Command
         }
 
         $totalLocked = 0;
-        $this->withProgressBar($companies, function ($company) use ($startDate, $endDate, $isDryRun, &$totalLocked) {
-            $query = Transaction::where('company_id', $company->id)
-                ->where('transaction_type', 'fuel_daily_close')
-                ->whereBetween('transaction_date', [$startDate, $endDate])
-                ->where('is_locked', false)
-                ->whereNull('reversed_by_id')
-                ->whereNull('deleted_at');
+        $this->withProgressBar($companies, function ($company) use ($context, $startDate, $endDate, $isDryRun, &$totalLocked) {
+            // Without company context the UPDATE below matches nothing and
+            // reports success, which reads exactly like "there was nothing to lock".
+            $context->withContext($company, function () use ($company, $startDate, $endDate, $isDryRun, &$totalLocked) {
+                $query = Transaction::where('company_id', $company->id)
+                    ->where('transaction_type', 'fuel_daily_close')
+                    ->whereBetween('transaction_date', [$startDate, $endDate])
+                    ->where('is_locked', false)
+                    ->whereNull('reversed_by_id')
+                    ->whereNull('deleted_at');
 
-            $count = $query->count();
+                $count = $query->count();
 
-            if ($count > 0) {
-                if (!$isDryRun) {
+                if ($count === 0) {
+                    return;
+                }
+
+                if (! $isDryRun) {
                     $query->update([
                         'is_locked' => true,
                         'locked_at' => now(),
                         'lock_reason' => 'month_end',
                     ]);
                 }
+
                 $totalLocked += $count;
-            }
+            });
         });
 
         $this->newLine(2);

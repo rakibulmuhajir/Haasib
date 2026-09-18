@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Company;
+use App\Services\CompanyContextService;
 use App\Services\RolePermissionSynchronizer;
 use Illuminate\Console\Command;
 
@@ -16,7 +17,7 @@ class SyncRolePermissions extends Command
         'rbac:sync-role-permissions',
     ];
 
-    public function handle(): int
+    public function handle(CompanyContextService $context): int
     {
         $matrix = config('role-permissions', []);
 
@@ -29,11 +30,13 @@ class SyncRolePermissions extends Command
         /** @var RolePermissionSynchronizer $syncer */
         $syncer = app(RolePermissionSynchronizer::class);
 
-        $count = $syncer->syncAll(
+        // syncAll enumerates auth.companies, which row level security scopes to
+        // the current tenant; a matrix sync has no single tenant.
+        $count = $context->crossCompany(fn () => $syncer->syncAll(
             matrix: $matrix,
             companyId: $companyId,
-            logger: fn(string $line) => $this->line("  {$line}")
-        );
+            logger: fn (string $line) => $this->line("  {$line}")
+        ));
 
         $this->info("Role permissions synced for {$count} company(ies).");
 

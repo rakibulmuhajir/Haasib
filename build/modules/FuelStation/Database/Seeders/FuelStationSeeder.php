@@ -13,6 +13,8 @@ use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Services\ProductCatalogService;
+use App\Facades\CompanyContext;
+use App\Services\CompanyContextService;
 use Illuminate\Database\Seeder;
 
 class FuelStationSeeder extends Seeder
@@ -22,14 +24,18 @@ class FuelStationSeeder extends Seeder
      */
     public function run(?string $companyId = null): void
     {
-        $company = $companyId
+        // A seeder is not a request: auth.companies is tenant-scoped under row
+        // level security, and every write below needs the context set.
+        $company = app(CompanyContextService::class)->crossCompany(fn () => $companyId
             ? Company::find($companyId)
-            : Company::where('industry', 'fuel_station')->first();
+            : Company::where('industry', 'fuel_station')->first());
 
         if (!$company) {
             $this->command?->warn('No fuel station company found. Skipping FuelStationSeeder.');
             return;
         }
+
+        CompanyContext::setContext($company);
 
         $this->command?->info("Seeding fuel station data for: {$company->name}");
 

@@ -28,11 +28,18 @@ class SyncCompanyUserRoles extends Command
             $query->where('company_id', $companyId);
         }
 
-        $rows = $query->get();
+        // Both auth.company_user and auth.companies are tenant-scoped under row
+        // level security. A backfill across every membership has no one tenant.
+        [$rows, $companies] = $context->crossCompany(function () use ($query) {
+            $rows = $query->get();
+
+            return [$rows, Company::whereIn('id', $rows->pluck('company_id')->unique())->get()->keyBy('id')];
+        });
+
         $synced = 0;
 
         foreach ($rows as $row) {
-            $company = Company::find($row->company_id);
+            $company = $companies->get($row->company_id);
             $user = User::find($row->user_id);
 
             if (! $company || ! $user) {

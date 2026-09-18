@@ -65,9 +65,13 @@ class RepairChartOfAccounts extends Command
         $isDryRun = (bool) $this->option('dry-run');
 
         if ($all) {
-            $companies = Company::whereNotNull('industry_code')->orderBy('name')->get();
+            // auth.companies is tenant-scoped under row level security, and a
+            // repair pass by definition has no single tenant to be scoped to.
+            $companies = $context->crossCompany(
+                fn () => Company::whereNotNull('industry_code')->orderBy('name')->get()
+            );
         } else {
-            $company = $this->resolveCompany($companyOption);
+            $company = $context->crossCompany(fn () => $this->resolveCompany($companyOption));
 
             if (! $company) {
                 $this->error("No company found matching \"{$companyOption}\".");

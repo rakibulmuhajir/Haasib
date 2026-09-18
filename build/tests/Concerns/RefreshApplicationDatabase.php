@@ -22,6 +22,25 @@ trait RefreshApplicationDatabase
         $this->refreshLaravelDatabase();
     }
 
+    /**
+     * DDL runs as the owning role, which is not the least-privilege role the
+     * application connects as when the suite is run with row level security
+     * actually enforced.
+     */
+    protected function migrateDatabases(): void
+    {
+        $this->artisan('migrate:fresh', $this->migrateFreshUsing() + [
+            '--database' => $this->migratorConnection(),
+        ]);
+    }
+
+    private function migratorConnection(): string
+    {
+        return config('database.connections.pgsql_migrator') !== null
+            ? 'pgsql_migrator'
+            : (string) config('database.default');
+    }
+
     private function assertIsolatedTestingDatabase(): void
     {
         $database = (string) DB::connection()->getDatabaseName();
@@ -33,8 +52,10 @@ trait RefreshApplicationDatabase
 
     private function clearApplicationSchemas(): void
     {
+        $connection = DB::connection($this->migratorConnection());
+
         foreach (['umrah', 'fuel', 'pay', 'inv', 'crm', 'hsp', 'audit', 'acct', 'auth'] as $schema) {
-            DB::statement("DROP SCHEMA IF EXISTS {$schema} CASCADE");
+            $connection->statement("DROP SCHEMA IF EXISTS {$schema} CASCADE");
         }
     }
 }

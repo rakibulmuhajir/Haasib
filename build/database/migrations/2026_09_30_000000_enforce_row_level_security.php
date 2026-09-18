@@ -33,6 +33,7 @@ return new class extends Migration
         }
 
         $this->rescopeCompaniesPolicies();
+        $this->rescopeMembershipPolicies();
         $this->guardPolicyExpressions();
         $this->forceRowLevelSecurity();
     }
@@ -78,6 +79,42 @@ return new class extends Migration
 
         if (DB::selectOne("SELECT 1 AS present FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname='auth' AND c.relname='companies' AND p.polname='companies_delete_policy'") === null) {
             DB::statement("CREATE POLICY companies_delete_policy ON auth.companies FOR DELETE USING {$visible}");
+        }
+    }
+
+    /**
+     * auth.company_user gated every command on already being an owner or
+     * manager of the company, which made the first membership row of a new
+     * company impossible to write and made the member list invisible to
+     * everyone but the member themselves. Row level security here is tenant
+     * isolation; who may manage members inside a tenant is RBAC's job, and is
+     * enforced in the application. Scope it the same way every other table is.
+     *
+     * This policy must not reference auth.companies: the companies policy
+     * already reads company_user, and the round trip is infinite recursion.
+     */
+    private function rescopeMembershipPolicies(): void
+    {
+        if (DB::selectOne("SELECT to_regclass('auth.company_user') AS t")->t === null) {
+            return;
+        }
+
+        $scope = <<<'SQL'
+            (
+                COALESCE(NULLIF(current_setting('app.is_super_admin', true), '')::boolean, false)
+                OR company_id = NULLIF(current_setting('app.current_company_id', true), '')::uuid
+                OR user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+            )
+            SQL;
+
+        foreach (['select' => 'SELECT', 'insert' => 'INSERT', 'update' => 'UPDATE', 'delete' => 'DELETE'] as $suffix => $command) {
+            DB::statement("DROP POLICY IF EXISTS company_user_{$suffix}_policy ON auth.company_user");
+
+            $clauses = $command === 'INSERT'
+                ? "WITH CHECK {$scope}"
+                : ($command === 'UPDATE' ? "USING {$scope} WITH CHECK {$scope}" : "USING {$scope}");
+
+            DB::statement("CREATE POLICY company_user_{$suffix}_policy ON auth.company_user FOR {$command} {$clauses}");
         }
     }
 

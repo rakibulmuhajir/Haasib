@@ -157,27 +157,21 @@ class FuelStationOnboardingController extends Controller
             // Table might not exist
         }
 
-        // Get employees for the company - use DB query to avoid model issues
+        // Get employees for the company - use DB query to avoid model issues.
+        // The default connection only: the schema-named connections are separate
+        // sessions, and app.current_company_id is a session setting, so a query
+        // on one of them runs with no tenant context at all under row level
+        // security.
         $employees = collect();
         try {
-            DB::connection('pay')->select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
-            $employees = DB::connection('pay')
-                ->table('employees')
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+            $employees = DB::table('pay.employees')
                 ->where('company_id', $company->id)
                 ->whereNull('deleted_at')
                 ->select(['id', 'first_name', 'last_name', 'phone', 'position', 'base_salary'])
                 ->get();
         } catch (\Throwable $e) {
-            try {
-                DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
-                $employees = DB::table('pay.employees')
-                    ->where('company_id', $company->id)
-                    ->whereNull('deleted_at')
-                    ->select(['id', 'first_name', 'last_name', 'phone', 'position', 'base_salary'])
-                    ->get();
-            } catch (\Throwable $fallbackException) {
-                // Table might not exist
-            }
+            // Table might not exist
         }
 
         // Get dip sticks - use DB query

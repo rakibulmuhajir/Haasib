@@ -162,6 +162,8 @@ test('as the application role a company is visible to its own members only', fun
     $a = rlsCompany('A');
     rlsCompany('B');
 
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+
     DB::table('auth.company_user')->insert([
         'company_id' => $a->id,
         'user_id' => $user->id,

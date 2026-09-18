@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Facades\CompanyContext;
+use App\Services\CompanyContextService;
 use Illuminate\Database\Seeder;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
@@ -18,12 +20,16 @@ class BankFeedSimulationSeeder extends Seeder
 {
     public function run(): void
     {
-        // Get the first company (or the one from context if running via artisan context)
-        $company = Company::first();
+        // A seeder is not a request, so nothing has set the tenant context for
+        // it: auth.companies is invisible until we ask across companies, and
+        // every write below needs the context set afterwards.
+        $company = app(CompanyContextService::class)->crossCompany(fn () => Company::first());
         if (!$company) {
             $this->command->error("No company found.");
             return;
         }
+
+        CompanyContext::setContext($company);
 
         $this->command->info("Seeding Bank Feed for company: {$company->name}");
 

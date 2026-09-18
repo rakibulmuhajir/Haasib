@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
+use App\Modules\Accounting\Exceptions\IndustryCoaPackNotSeededException;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\FiscalYearService;
@@ -40,6 +41,18 @@ class CompanyBootstrapService
                 'industry_code' => $industryCode,
                 'timezone' => $company->timezone ?? 'UTC',
             ]);
+        } catch (IndustryCoaPackNotSeededException $e) {
+            // Do not swallow this one: an unseeded COA pack means the company would
+            // otherwise report success with no Accounts Receivable/Payable. Let it
+            // propagate so the caller (CompanyController@store) surfaces a visible
+            // "some defaults could not be prepared" error instead of silent success.
+            Log::error('Company bootstrap: industry COA pack is not seeded', [
+                'company_id' => $company->id,
+                'industry_code' => $industryCode,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('Company bootstrap failed to apply industry defaults', [
                 'company_id' => $company->id,

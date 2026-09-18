@@ -34,8 +34,11 @@ function inlinePurchaseFixture(): array
         'is_active' => true,
         'ap_account_id' => $ap->id,
     ]);
+    // delivery_mode deliberately left at its real default ('requires_receiving', see
+    // App\Modules\FuelStation\Actions\Product\SetupAction) — an inline close purchase
+    // must receive goods regardless of the item's delivery_mode.
     \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')
-        ->update(['asset_account_id' => $f['accounts']['1200']->id, 'fuel_category' => 'petrol', 'delivery_mode' => 'immediate']);
+        ->update(['asset_account_id' => $f['accounts']['1200']->id, 'fuel_category' => 'petrol', 'delivery_mode' => 'requires_receiving']);
     $f['payload']['purchases'] = [];
     $f['payload']['credit_sales'] = [];
 
@@ -109,6 +112,93 @@ test('posting a fuel purchase creates one canonical bill, receives stock into th
 
     // Unpaid: the bill is a payable, not a cash outflow. Expected cash is untouched by it.
     expect((float) $snapshot['totals']['money_out'])->toBe(9000.0);
+
+    // The receipt must set quantity_received on the bill line, or supplier reconciliation
+    // and "pending receipts" reporting would still see this bill as unreceived.
+    $line = $bill->lineItems()->sole();
+    expect((float) $line->quantity_received)->toBe(500.0)
+        ->and((float) $line->quantity_received)->toBe((float) $line->quantity)
+        ->and($bill->goods_received_at)->not->toBeNull();
+});
+
+test('an inline purchase actually receives stock into the tank, so the close only reconciles the real variance, not the whole delivery', function () {
+    $f = inlinePurchaseFixture();
+    $item = \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $f['company']->id)->where('code', 'T1')->sole();
+
+    // Yesterday's closing dip establishes the opening baseline: 1000 L already in the tank.
+    \App\Modules\FuelStation\Models\TankReading::create([
+        'company_id' => $f['company']->id,
+        'tank_id' => $tank->id,
+        'item_id' => $item->id,
+        'reading_date' => '2026-09-14',
+        'reading_type' => 'closing',
+        'dip_measurement_liters' => 1000,
+        'system_calculated_liters' => 1000,
+        'variance_liters' => 0,
+    ]);
+    \App\Modules\Inventory\Models\StockLevel::create([
+        'company_id' => $f['company']->id,
+        'warehouse_id' => $tank->id,
+        'item_id' => $item->id,
+        'quantity' => 1000,
+    ]);
+
+    // No pump sales today; only the purchase and the closing dip matter for this assertion.
+    $f['payload']['nozzle_readings'][0]['opening_electronic'] = 0;
+    $f['payload']['nozzle_readings'][0]['closing_electronic'] = 0;
+    $f['payload']['nozzle_readings'][0]['liters_sold'] = 0;
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['payment_receipts'] = [];
+    $f['payload']['closing_cash'] = 10000;
+    $f['payload']['purchases'] = [[
+        'supplier_id' => $f['vendor']->id,
+        'item_id' => $item->id,
+        'quantity' => 2000,
+        'unit_cost' => 240,
+        'tank_id' => $tank->id,
+        'supplier_invoice_number' => 'SUP-2000',
+    ]];
+    // Physical dip today: 1000 opening + 2000 received - 300 unexplained loss = 2700.
+    $f['payload']['tank_readings'] = [[
+        'tank_id' => $tank->id,
+        'liters' => 2700,
+    ]];
+
+    $posted = inlinePurchasePost($f);
+
+    // The delivery must be received exactly once: one +2000 movement into this tank,
+    // referenced to the bill (not to the daily close).
+    $receiptMovements = DB::table('inv.stock_movements')
+        ->where('company_id', $f['company']->id)
+        ->where('warehouse_id', $tank->id)
+        ->where('item_id', $item->id)
+        ->where('reference_type', 'acct.bills')
+        ->get();
+    expect($receiptMovements)->toHaveCount(1)
+        ->and((float) $receiptMovements->first()->quantity)->toBe(2000.0);
+
+    $bill = Bill::where('company_id', $f['company']->id)->sole();
+    expect((float) $bill->lineItems()->sole()->quantity_received)->toBe(2000.0);
+
+    // The close's own reconciling movement is now the small real variance (dip 2700 vs
+    // ledger 1000 opening + 2000 received = 3000 -> -300), not the netted +1700 the bug
+    // produced when the 2000 L delivery was silently absorbed as "adjustment_in".
+    $reconciling = DB::table('inv.stock_movements')
+        ->where('company_id', $f['company']->id)
+        ->where('warehouse_id', $tank->id)
+        ->where('reference_type', 'fuel.daily_close')
+        ->get();
+    expect($reconciling)->toHaveCount(1)
+        ->and($reconciling->first()->movement_type)->toBe('adjustment_out')
+        ->and((float) $reconciling->first()->quantity)->toBe(-300.0);
+
+    $snapshot = $posted['metadata']['posting_snapshot'];
+    $tankSnapshot = collect($snapshot['tank_variances'] ?? [])->first();
+    // Expected litres reflect the receipt counted exactly once: 1000 + 2000 - 0 = 3000.
+    $tankReading = \App\Modules\FuelStation\Models\TankReading::where('company_id', $f['company']->id)
+        ->where('tank_id', $tank->id)->where('reading_date', '2026-09-15')->sole();
+    expect((float) $tankReading->system_calculated_liters)->toBe(3000.0);
 });
 
 test('paying the purchase now from cash reduces expected cash by its amount', function () {

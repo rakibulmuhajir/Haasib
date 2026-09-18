@@ -74,6 +74,38 @@ class DailyCloseEntryService
         ], $user);
 
         $bill = Bill::where('company_id', $companyId)->findOrFail($billResult['data']['id']);
+
+        // An inline close purchase is the operator declaring "this delivery physically
+        // arrived today into this tank" — receive it unconditionally, regardless of the
+        // item's delivery_mode. bill.create only auto-receives 'immediate' items, and
+        // fuel items are 'requires_receiving' (App\Modules\FuelStation\Actions\Product\
+        // SetupAction), so without this the goods would never be received: no stock
+        // moves, quantity_received stays 0, and the tank loop's reconciling movement
+        // silently absorbs the missing litres as a fake variance.
+        $bill->loadMissing('lineItems');
+        // Receive only what is still outstanding: an 'immediate' item was already received
+        // by bill.create's own auto-receive, and receiving its full quantity again here
+        // would double the stock. Mirrors Bill\CreateAction::autoReceiveImmediateItems().
+        $receiveLines = $bill->lineItems
+            ->filter(fn ($line) => $line->warehouse_id && $line->item_id)
+            ->map(fn ($line) => [
+                'line_id' => $line->id,
+                'quantity' => round((float) $line->quantity - (float) $line->quantity_received, 6),
+                'warehouse_id' => $line->warehouse_id,
+            ])
+            ->filter(fn ($line) => $line['quantity'] > 0)
+            ->values()
+            ->all();
+
+        if (!empty($receiveLines)) {
+            app(CommandBus::class)->dispatch('bill.receive_goods', [
+                'id' => $bill->id,
+                'receipt_date' => $date,
+                'lines' => $receiveLines,
+            ], $user);
+            $bill->refresh();
+        }
+
         $paymentTransactionId = null;
 
         if (filter_var($purchase['paid_now'] ?? false, FILTER_VALIDATE_BOOLEAN)) {

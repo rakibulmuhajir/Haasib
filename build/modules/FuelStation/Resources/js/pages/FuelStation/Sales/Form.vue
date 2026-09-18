@@ -191,8 +191,30 @@ const resetForm = () => {
   formErrors.value = {}
 }
 
+/**
+ * Only a sale settled at the counter needs the payment breakdown to cover the total.
+ * A credit sale is owed by the buyer, a vendor-card (parco) sale is collected from the
+ * card issuer later, and amanat and investor sales draw on a balance the server applies
+ * (FuelSaleService::handleSaleTypeLogic) rather than on cash taken now. Requiring the
+ * breakdown to equal the total for those left Complete Sale permanently disabled.
+ */
+const settlesAtCounter = computed(() => !['credit', 'amanat', 'investor', 'parco_card'].includes(saleType.value))
+
+const canSubmit = computed(() =>
+  !!selectedPump.value
+  && !!selectedFuelItem.value
+  && !!quantity.value
+  && quantity.value > 0
+  && (!settlesAtCounter.value || totalPaid.value === total.value)
+  && (saleType.value !== 'credit' || !!selectedCustomer.value),
+)
+
 const validateForm = () => {
   const errors: Record<string, string[]> = {}
+
+  if (saleType.value === 'credit' && !selectedCustomer.value) {
+    errors.customer_id = ['Choose the buyer this sale is owed by']
+  }
 
   if (!selectedPump.value) errors.pump_id = ['Please select a pump']
   if (!selectedFuelItem.value) errors.item_id = ['Please select a fuel item']
@@ -534,7 +556,7 @@ const setPaymentTotal = () => {
               <Button
                 class="w-full bg-status-info hover:bg-status-info"
                 size="lg"
-                :disabled="!selectedPump || !selectedFuelItem || !quantity || totalPaid !== total"
+                :disabled="!canSubmit"
                 @click="submitSale"
               >
                 <Calculator class="mr-2 h-5 w-5" />

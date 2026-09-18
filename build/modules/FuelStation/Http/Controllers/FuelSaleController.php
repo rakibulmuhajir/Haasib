@@ -61,8 +61,26 @@ class FuelSaleController extends Controller
             ->values();
 
         return Inertia::render('FuelStation/Sales/Form', [
+            // The form labels each pump with the fuel its tank holds, reading
+            // tank.linked_item — without that relation every pump reads "No fuel".
             'pumps' => Pump::where('company_id', $company->id)->where('is_active', true)
-                ->with('tank:id,name')->orderBy('name')->get(['id', 'name', 'tank_id']),
+                ->with('tank.linkedItem:id,name,fuel_category')
+                ->orderBy('name')
+                ->get(['id', 'name', 'tank_id'])
+                ->map(fn (Pump $pump) => [
+                    'id' => $pump->id,
+                    'name' => $pump->name,
+                    'tank_id' => $pump->tank_id,
+                    'tank' => $pump->tank ? [
+                        'id' => $pump->tank->id,
+                        'name' => $pump->tank->name,
+                        'linked_item' => $pump->tank->linkedItem ? [
+                            'id' => $pump->tank->linkedItem->id,
+                            'name' => $pump->tank->linkedItem->name,
+                            'fuel_category' => $pump->tank->linkedItem->fuel_category,
+                        ] : null,
+                    ] : null,
+                ]),
             'fuelItems' => $fuelItems->map(fn (Item $item) => [
                 'id' => $item->id,
                 'name' => $item->name,

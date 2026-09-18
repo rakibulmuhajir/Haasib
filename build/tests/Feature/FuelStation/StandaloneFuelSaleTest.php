@@ -61,6 +61,20 @@ test('the standalone fuel sale form is reachable and lists this company fuel and
             ->has('pumps'));
 });
 
+test('each pump is labelled with the fuel its tank holds, not "No fuel"', function () {
+    $f = standaloneFuelSaleFixture();
+
+    $props = test()->actingAs($f['user'])
+        ->get("/{$f['company']->slug}/fuel/sales/form")
+        ->assertOk()
+        ->viewData('page')['props'];
+
+    // The form renders `pump.tank?.linked_item?.name || 'No fuel'`, so the tank's linked
+    // item has to survive serialisation or every pump reads as holding nothing.
+    expect($props['pumps'])->toHaveCount(1)
+        ->and($props['pumps'][0]['tank']['linked_item']['name'])->toBe('Petrol');
+});
+
 test('a standalone credit sale writes credit sale metadata and raises the buyer receivable', function () {
     $f = standaloneFuelSaleFixture();
     $item = Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();

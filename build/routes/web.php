@@ -182,6 +182,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Accounts (Chart of Accounts)
         Route::get('/{company}/accounts', [AccountController::class, 'index'])->name('accounts.index');
+        Route::post('/{company}/accounts/restore-missing', [AccountController::class, 'restoreMissing'])->name('accounts.restore-missing');
         Route::get('/{company}/accounts/create', [AccountController::class, 'create'])->name('accounts.create');
         Route::post('/{company}/accounts', [AccountController::class, 'store'])->name('accounts.store');
         Route::get('/{company}/accounts/{account}', [AccountController::class, 'show'])->whereUuid('account')->name('accounts.show');

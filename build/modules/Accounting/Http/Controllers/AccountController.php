@@ -2,11 +2,14 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\IndustryCoaPackNotSeededException;
 use App\Modules\Accounting\Http\Requests\StoreAccountRequest;
 use App\Modules\Accounting\Http\Requests\UpdateAccountRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountTemplate;
+use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +36,49 @@ class AccountController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'accounts' => $accounts,
+            'canRestoreMissingAccounts' => (bool) $request->user()?->hasCompanyPermission(Permissions::ACCOUNT_CREATE),
         ]);
+    }
+
+    /**
+     * Create any of this company's industry-standard accounts that are missing
+     * (e.g. because onboarding ran against an unseeded COA pack). Never touches
+     * an existing account -- see CompanyOnboardingService::applyIndustryCoaTemplates().
+     */
+    public function restoreMissing(Request $request): RedirectResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+
+        if (! $request->user()?->hasCompanyPermission(Permissions::ACCOUNT_CREATE)) {
+            abort(403);
+        }
+
+        if (! $company->industry_code) {
+            return back()->with('error', 'This company has no industry set, so there are no standard accounts to restore.');
+        }
+
+        try {
+            $result = app(CompanyOnboardingService::class)
+                ->applyIndustryCoaTemplates($company, $company->industry_code, allowUpdateExisting: false);
+        } catch (IndustryCoaPackNotSeededException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $createdCount = count($result['created']);
+        $conflictCount = count($result['skipped_conflicts']);
+
+        if ($createdCount === 0) {
+            return back()->with('success', $conflictCount > 0
+                ? "Nothing to restore, but {$conflictCount} existing account(s) conflict with the standard chart -- review them manually."
+                : 'Nothing missing -- this company already has every standard account for its industry.');
+        }
+
+        $message = "Restored {$createdCount} missing standard account".($createdCount === 1 ? '' : 's').'.';
+        if ($conflictCount > 0) {
+            $message .= " {$conflictCount} existing account(s) conflict with the standard chart and were left unchanged.";
+        }
+
+        return back()->with('success', $message);
     }
 
     public function create(): Response

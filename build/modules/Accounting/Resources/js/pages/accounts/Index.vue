@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { HelpCircle, PlusCircle, Pencil } from 'lucide-vue-next'
+import { HelpCircle, PlusCircle, Pencil, RefreshCw } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -36,6 +36,10 @@ const props = defineProps({
   accounts: {
     type: Array as () => AccountRow[],
     required: true
+  },
+  canRestoreMissingAccounts: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -183,6 +187,19 @@ const handleCreate = () => {
   router.get(`/${props.company.slug}/accounts/create`)
 }
 
+const restoringMissing = ref(false)
+
+const handleRestoreMissing = () => {
+  if (restoringMissing.value) return
+  restoringMissing.value = true
+  router.post(`/${props.company.slug}/accounts/restore-missing`, {}, {
+    preserveScroll: true,
+    onFinish: () => {
+      restoringMissing.value = false
+    }
+  })
+}
+
 </script>
 
 <template>
@@ -204,9 +221,21 @@ const handleCreate = () => {
     </template>
 
     <template #actions>
-      <Button variant="default" class="bg-status-info hover:bg-status-info font-semibold rounded-full px-6 shadow-sm" @click="handleCreate">
-        Add a New Account
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button
+          v-if="canRestoreMissingAccounts"
+          variant="outline"
+          class="rounded-full px-6"
+          :disabled="restoringMissing"
+          @click="handleRestoreMissing"
+        >
+          <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': restoringMissing }" />
+          Restore missing standard accounts
+        </Button>
+        <Button variant="default" class="bg-status-info hover:bg-status-info font-semibold rounded-full px-6 shadow-sm" @click="handleCreate">
+          Add a New Account
+        </Button>
+      </div>
     </template>
 
     <!-- PageShell's default slot for the main content area -->

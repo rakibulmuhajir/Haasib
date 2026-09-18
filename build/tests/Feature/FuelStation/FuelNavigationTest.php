@@ -47,3 +47,23 @@ test('a user without payment, expense or banking permissions does not see those 
         ->not->toContain('expenses')
         ->not->toContain('banking');
 });
+
+test('a fuel-station owner sees the bank feed, bank reconciliation and credit notes nav keys', function () {
+    ['user' => $user, 'company' => $company] = fuelNavCompanyWithRole('owner');
+
+    $allowed = app(CompanyContextService::class)->withContext($company, fn () => app(FuelNavigationAccess::class)->forUser($company, $user)['allowed']);
+
+    expect($allowed)->toContain('bankFeed')
+        ->toContain('bankReconciliation')
+        ->toContain('creditNotes');
+});
+
+test('a user without the mapped permissions does not see bank feed, bank reconciliation or credit notes', function () {
+    ['user' => $user, 'company' => $company] = fuelNavCompanyWithRole('operations');
+
+    $allowed = app(CompanyContextService::class)->withContext($company, fn () => app(FuelNavigationAccess::class)->forUser($company, $user)['allowed']);
+
+    expect($allowed)->not->toContain('bankFeed')
+        ->not->toContain('bankReconciliation')
+        ->not->toContain('creditNotes');
+});

@@ -7,6 +7,19 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One slice of a tour-group `GroupPayment` applied to a `VisaGroup` (`visa_group_id`
+ * set), or a `Refund`'s debit drawn against a group's advances (`refund_id` set,
+ * `visa_group_id` null — see {@see refund()}). This table has nothing to do with
+ * invoices or bills: there is no `invoice_id`/`bill_id` column here.
+ *
+ * This class shares its name with two unrelated models in the Accounting module — same
+ * word, different mechanisms, do not conflate them:
+ *  - {@see \App\Modules\Accounting\Models\PaymentAllocation} (`acct.payment_allocations`)
+ *    allocates a buyer `Payment` to an `Invoice` (with a null-invoice on-account variant).
+ *  - {@see \App\Modules\Accounting\Models\BillPaymentAllocation} (`acct.bill_payment_allocations`)
+ *    allocates a supplier `BillPayment` to a `Bill`.
+ */
 class PaymentAllocation extends Model
 {
     use HasUuids;

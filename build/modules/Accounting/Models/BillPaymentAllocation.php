@@ -7,6 +7,20 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * One slice of a supplier (AP) `BillPayment` applied to a `Bill` (reducing that bill's
+ * balance). Unlike its AR mirror below, `bill_id` here is not nullable — there is no
+ * on-account/unapplied-remainder concept on the payables side as of this writing.
+ *
+ * This class shares its name with two unrelated models — same word, different
+ * mechanisms, do not conflate them:
+ *  - {@see \App\Modules\Accounting\Models\PaymentAllocation} (`acct.payment_allocations`)
+ *    is the buyer/AR mirror of this table: a `Payment` allocated to an `Invoice`, with a
+ *    nullable `invoice_id` meaning an on-account credit.
+ *  - {@see \App\Modules\Umrah\Models\PaymentAllocation} (`umrah.payment_allocations`)
+ *    allocates a tour-group `GroupPayment` to a `VisaGroup` and has nothing to do with
+ *    invoices or bills.
+ */
 class BillPaymentAllocation extends Model
 {
     use HasFactory, HasUuids;

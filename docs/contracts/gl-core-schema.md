@@ -449,3 +449,19 @@ cover direct SQL mutations as well as application actions and serialize against 
 company row used by opening save/lock. Ordinary settlement may update paid_amount,
 balance, paid_at and settlement status; it cannot change principal or void history.
 No ordinary unlock bypass is introduced.
+
+## PaymentAllocation name collision
+
+Three unrelated tables/models share the name "PaymentAllocation" (or a close
+variant). They are genuinely different mechanisms — not a duplication to be
+merged — distinguished only by schema/namespace:
+
+| Model | Table | Allocates | Nullable target column |
+|---|---|---|---|
+| `App\Modules\Accounting\Models\PaymentAllocation` | `acct.payment_allocations` | A buyer `Payment` to an `Invoice` | `invoice_id` nullable since `2026_09_18_000001_make_payment_allocations_invoice_nullable.php` — a null-invoice row is an on-account credit (advance, or the unapplied remainder of a payment) |
+| `App\Modules\Accounting\Models\BillPaymentAllocation` | `acct.bill_payment_allocations` | A supplier `BillPayment` to a `Bill` (the AP mirror of the row above) | `bill_id` — not nullable; no on-account concept on this side as of this writing |
+| `App\Modules\Umrah\Models\PaymentAllocation` | `umrah.payment_allocations` | A tour-group `GroupPayment` to a `VisaGroup` (also used, via a null `visa_group_id`, to record a `Refund`'s debit against agent advances) | unrelated to invoices entirely — no `invoice_id`/`bill_id` column exists on this table |
+
+Each model's class docblock names its siblings so a future reader who finds
+one by grepping "PaymentAllocation" is not misled into treating them as the
+same concept.

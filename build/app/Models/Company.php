@@ -29,6 +29,7 @@ class Company extends Model
         'tax_inclusive' => 'boolean',
         'onboarding_completed' => 'boolean',
         'onboarding_completed_at' => 'datetime',
+        'bootstrap_incomplete_at' => 'datetime',
         'ar_account_id' => 'string',
         'ap_account_id' => 'string',
         'income_account_id' => 'string',

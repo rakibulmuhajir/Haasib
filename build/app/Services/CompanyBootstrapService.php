@@ -22,16 +22,33 @@ class CompanyBootstrapService
             return;
         }
 
-        $this->ensureIndustryDefaults($company, $industryCode);
-        $this->ensureBankAccount($company, $userId);
+        try {
+            $this->ensureIndustryDefaults($company, $industryCode);
+            $this->ensureBankAccount($company, $userId);
 
-        $company = $company->fresh();
+            $company = $company->fresh();
 
-        app(CompanyBankAccountSyncService::class)->ensureForCompany($company->id, $userId);
-        app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
-        app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company->fresh());
-        app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
-        app(FiscalYearService::class)->ensureCurrentFiscalYearExists($company->id);
+            app(CompanyBankAccountSyncService::class)->ensureForCompany($company->id, $userId);
+            app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
+            app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company->fresh());
+            app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
+            app(FiscalYearService::class)->ensureCurrentFiscalYearExists($company->id);
+        } catch (IndustryCoaPackNotSeededException $e) {
+            // The company row was already committed by CompanyController@store in its own
+            // transaction before this method ever runs, so there is nothing left to roll
+            // back here. Mark it explicitly incomplete instead of letting it sit there
+            // looking like an ordinary, ready company with no chart of accounts at all --
+            // IdentifyCompany blocks ordinary use of a company in this state until the
+            // Restore Missing Accounts repair path (AccountController::restoreMissing)
+            // clears the flag.
+            $company->forceFill(['bootstrap_incomplete_at' => now()])->saveQuietly();
+
+            throw $e;
+        }
+
+        if ($company->bootstrap_incomplete_at !== null) {
+            $company->forceFill(['bootstrap_incomplete_at' => null])->saveQuietly();
+        }
     }
 
     private function ensureIndustryDefaults(Company $company, string $industryCode): void

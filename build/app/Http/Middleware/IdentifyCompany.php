@@ -35,6 +35,24 @@ class IdentifyCompany
                 CompanyContext::setContextBySlug($slug);
                 if ($company = CompanyContext::getCompany()) {
                     app(CurrentCompany::class)->set($company);
+
+                    // A company whose bootstrap failed partway (see CompanyBootstrapService)
+                    // has no chart of accounts -- do not let it be used as though it were
+                    // ready. Allow only the repair action itself, the accounts page it
+                    // lives on, and the escape hatches every gate needs (logout, settings).
+                    if ($company->bootstrap_incomplete_at !== null
+                        && ! $request->routeIs(
+                            'accounts.restore-missing',
+                            'accounts.index',
+                            'logout',
+                            'company.settings',
+                        )
+                        && ! $request->is('*/accounts')
+                        && ! $request->is('*/accounts/restore-missing')
+                    ) {
+                        return redirect("/{$slug}/accounts")
+                            ->with('error', 'Company setup is incomplete: restore the missing standard accounts before continuing.');
+                    }
                 }
                 // Remember this as the last accessed company
                 if ($user) {

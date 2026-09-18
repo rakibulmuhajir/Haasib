@@ -6,7 +6,9 @@ set -Eeuo pipefail
 # Usage: ./deploy.sh
 # Optional: DEPLOY_REMOTE=origin DEPLOY_BRANCH=main ./deploy.sh
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Honour DEPLOY_ROOT_DIR when the script has re-execed from a copy in /tmp: BASH_SOURCE
+# then points at the copy, not at the checkout this deploy is for.
+ROOT_DIR="${DEPLOY_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 APP_DIR="${ROOT_DIR}/build"
 REMOTE="${DEPLOY_REMOTE:-origin}"
 BRANCH="${DEPLOY_BRANCH:-main}"
@@ -88,7 +90,7 @@ if [[ "${DEPLOY_REEXEC:-0}" -ne 1 ]]; then
     SELF_COPY="$(mktemp)"
     cp "${BASH_SOURCE[0]}" "${SELF_COPY}"
     trap - EXIT
-    DEPLOY_REEXEC=1 bash "${SELF_COPY}" "$@"
+    DEPLOY_REEXEC=1 DEPLOY_ROOT_DIR="${ROOT_DIR}" bash "${SELF_COPY}" "$@"
     status=$?
     rm -f "${SELF_COPY}"
     exit "${status}"

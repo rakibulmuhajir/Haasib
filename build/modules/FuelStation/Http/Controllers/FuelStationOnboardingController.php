@@ -608,7 +608,6 @@ class FuelStationOnboardingController extends Controller
             $accountMappings = $this->fuelProductAccountMapper->resolveAccounts(
                 $company->id,
                 $normalizedCategory,
-                $baseCurrency,
                 $request->user()->id
             );
             $payload = [
@@ -1284,7 +1283,7 @@ class FuelStationOnboardingController extends Controller
         DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
             $lubricantsAccount = app(\App\Modules\FuelStation\Services\FuelProductAccountMapper::class)
-                ->resolveAccounts($company->id, 'lubricant_packaged', $baseCurrency, $request->user()->id)['asset'];
+                ->resolveAccounts($company->id, 'lubricant_packaged', $request->user()->id)['asset'];
 
             foreach ($validated['lubricants'] as $lubricantData) {
                 $item = null;

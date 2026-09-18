@@ -42,8 +42,7 @@ class FuelProductAccountMapper
             return $item;
         }
 
-        $baseCurrency = strtoupper((string) ($item->company?->base_currency ?: 'PKR'));
-        $accounts = $this->resolveAccounts($item->company_id, $category, $baseCurrency, $userId);
+        $accounts = $this->resolveAccounts($item->company_id, $category, $userId);
 
         $updates = [
             'income_account_id' => $item->income_account_id ?: $accounts['income']->id,
@@ -60,7 +59,15 @@ class FuelProductAccountMapper
         return $item->fresh();
     }
 
-    public function resolveAccounts(string $companyId, string $category, string $baseCurrency = 'PKR', ?string $userId = null): array
+    /**
+     * All three fuel accounts are measured in the company's base currency, so all three
+     * carry a NULL currency. On acct.accounts a non-null currency means "this balance is
+     * denominated in a foreign currency and needs revaluation", which only monetary
+     * subtypes may claim -- accounts_currency_allowed_chk rejects it on revenue, cogs and
+     * inventory. Stamping the base currency here is both meaningless and a check violation,
+     * so this takes no currency argument at all.
+     */
+    public function resolveAccounts(string $companyId, string $category, ?string $userId = null): array
     {
         $category = $this->normalizeCategory($category);
         $map = self::ACCOUNT_MAP[$category] ?? self::ACCOUNT_MAP['petrol'];
@@ -68,7 +75,7 @@ class FuelProductAccountMapper
         return [
             'income' => $this->resolveOrCreateAccount($companyId, $map['income'], null, $userId),
             'expense' => $this->resolveOrCreateAccount($companyId, $map['expense'], null, $userId),
-            'asset' => $this->resolveOrCreateAccount($companyId, $map['asset'], $baseCurrency, $userId),
+            'asset' => $this->resolveOrCreateAccount($companyId, $map['asset'], null, $userId),
         ];
     }
 

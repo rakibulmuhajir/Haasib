@@ -187,7 +187,7 @@ class SetupAction implements PaletteAction
                 }
 
                 $accountMappings = $accountMappingKey !== null
-                    ? app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $accountMappingKey, $baseCurrency, $userId)
+                    ? app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $accountMappingKey, $userId)
                     : null;
                 $payload = [
                     'company_id' => $company->id,

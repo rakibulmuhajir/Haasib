@@ -818,8 +818,7 @@ const form = useForm({
     payments_received: [] as {
         customer_id: string;
         customer_name: string;
-        invoice_id: string;
-        invoice_number?: string;
+        invoice_ids: string[];
         amount: number;
         payment_account_id: string;
         reference: string;

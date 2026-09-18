@@ -48,6 +48,7 @@ return [
         'payment.view',
         'payment.update',
         'payment.void',
+        'payment.apply_credit',
 
         // Credit notes
         'credit_note.create',
@@ -287,6 +288,7 @@ return [
         'payment.view',
         'payment.update',
         'payment.void',
+        'payment.apply_credit',
 
         // Credit notes
         'credit_note.create',

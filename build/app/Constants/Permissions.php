@@ -26,6 +26,8 @@ class Permissions
 
     public const PAYMENT_VOID = 'payment.void';
 
+    public const PAYMENT_APPLY_CREDIT = 'payment.apply_credit';
+
     public const CREDIT_NOTE_CREATE = 'credit_note.create';
 
     public const CREDIT_NOTE_VIEW = 'credit_note.view';

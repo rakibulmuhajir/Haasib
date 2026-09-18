@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * One slice of a payment: either applied to an invoice (invoice_id set, reducing that
+ * invoice's balance) or sitting on the buyer's account unapplied (invoice_id null - an
+ * advance, or the remainder once a payment's amount exceeds what was allocated to
+ * invoices). A payment's allocations always sum to its own amount, so the null-invoice
+ * row is what keeps that sum whole rather than leaving a gap; see
+ * database/migrations/2026_09_18_000001_make_payment_allocations_invoice_nullable.php.
+ */
 class PaymentAllocation extends Model
 {
     use HasFactory, HasUuids;

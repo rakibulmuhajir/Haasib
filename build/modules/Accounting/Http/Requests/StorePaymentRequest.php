@@ -29,6 +29,11 @@ class StorePaymentRequest extends BaseFormRequest
         return [
             'customer_id' => ['required', 'uuid', 'exists:acct.customers,id'],
             'invoice_id' => ['nullable', 'uuid', 'exists:acct.invoices,id'],
+            'invoice_ids' => ['nullable', 'array'],
+            'invoice_ids.*' => ['uuid', 'exists:acct.invoices,id'],
+            'allocations' => ['nullable', 'array'],
+            'allocations.*.invoice_id' => ['required_with:allocations', 'uuid', 'exists:acct.invoices,id'],
+            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],

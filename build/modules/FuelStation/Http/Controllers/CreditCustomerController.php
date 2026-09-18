@@ -3,8 +3,10 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Http\Requests\ApplyPaymentCreditRequest;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\CustomerStatementService;
+use App\Services\CommandBus;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,6 +95,15 @@ class CreditCustomerController extends Controller
             $address = implode(', ', $parts);
         }
 
+        $openInvoices = app(\App\Modules\Accounting\Services\PaymentAllocationService::class)
+            ->openInvoicesOldestFirst($companyModel->id, $customerData->id)
+            ->map(fn ($invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'balance' => (float) $invoice->balance,
+                'currency' => $invoice->currency,
+            ])->values();
+
         return Inertia::render('FuelStation/CreditCustomers/Show', [
             'customer' => [
                 'id' => $customerData->id,
@@ -103,11 +114,29 @@ class CreditCustomerController extends Controller
                 'address' => $address,
                 'credit_limit' => (float) ($customerData->credit_limit ?? 0),
                 'current_balance' => $openBalance,
+                'available_credit' => $statement['available_credit'],
                 'is_credit_blocked' => (bool) $customerData->is_credit_blocked,
             ],
             'statement' => $statement['rows'],
+            'openInvoices' => $openInvoices,
             'currency' => $companyModel->base_currency ?? 'PKR',
         ]);
+    }
+
+    /**
+     * Apply an existing on-account credit (an advance, or the unapplied remainder of a
+     * bigger payment - see Payment\CreateAction) to one of this buyer's invoices. No new
+     * cash moves and no new journal is posted; see Payment\ApplyCreditAction.
+     */
+    public function applyCredit(ApplyPaymentCreditRequest $request, string $company, string $customer): RedirectResponse
+    {
+        $result = app(CommandBus::class)->dispatch('payment.apply_credit', [
+            'customer_id' => $customer,
+            'invoice_id' => $request->validated('invoice_id'),
+            'amount' => $request->validated('amount'),
+        ], $request->user());
+
+        return redirect()->back()->with('success', $result['message']);
     }
 
     /**

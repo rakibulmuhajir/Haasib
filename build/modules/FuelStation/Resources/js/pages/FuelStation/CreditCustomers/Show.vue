@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock } from 'lucide-vue-next'
+import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock, PiggyBank } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
@@ -33,7 +34,15 @@ interface Customer {
   address: string | null
   credit_limit: number
   current_balance: number
+  available_credit: number
   is_credit_blocked: boolean
+}
+
+interface OpenInvoice {
+  id: string
+  invoice_number: string
+  balance: number
+  currency: string
 }
 
 interface StatementRow {
@@ -51,6 +60,7 @@ interface StatementRow {
 const props = defineProps<{
   customer: Customer
   statement: StatementRow[]
+  openInvoices: OpenInvoice[]
   currency: string
 }>()
 
@@ -86,6 +96,32 @@ const submitLimit = () => {
 const toggleBlock = () => {
   router.post(`/${companySlug.value}/fuel/credit-customers/${props.customer.id}/toggle-block`, {}, {
     preserveScroll: true,
+  })
+}
+
+// Apply an on-account credit (an advance, or the leftover of a bigger payment) to one of
+// this buyer's open invoices - a subsidiary reclass, no new cash movement.
+const applyCreditDialogOpen = ref(false)
+const applyCreditForm = useForm({
+  invoice_id: '',
+  amount: 0,
+})
+const selectedInvoice = computed(() => props.openInvoices.find((inv) => inv.id === applyCreditForm.invoice_id))
+const openApplyCredit = () => {
+  applyCreditForm.reset()
+  const first = props.openInvoices[0]
+  if (first) {
+    applyCreditForm.invoice_id = first.id
+    applyCreditForm.amount = Math.min(first.balance, props.customer.available_credit)
+  }
+  applyCreditDialogOpen.value = true
+}
+const submitApplyCredit = () => {
+  applyCreditForm.post(`/${companySlug.value}/fuel/credit-customers/${props.customer.id}/apply-credit`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      applyCreditDialogOpen.value = false
+    },
   })
 }
 
@@ -134,6 +170,10 @@ const goBack = () => {
         <Edit class="mr-2 h-4 w-4" />
         Set Limit
       </Button>
+      <Button v-if="customer.available_credit > 0 && openInvoices.length" variant="outline" @click="openApplyCredit">
+        <PiggyBank class="mr-2 h-4 w-4" />
+        Apply Credit
+      </Button>
       <Button
         :variant="customer.is_credit_blocked ? 'default' : 'destructive'"
         @click="toggleBlock"
@@ -144,7 +184,7 @@ const goBack = () => {
     </template>
 
     <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-3">
+    <div class="grid gap-4 md:grid-cols-4">
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
@@ -156,6 +196,21 @@ const goBack = () => {
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Wallet class="h-4 w-4" />
             <span>Outstanding receivable</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="customer.available_credit > 0" class="border-border/80">
+        <CardHeader class="pb-2">
+          <CardDescription>On Account</CardDescription>
+          <CardTitle class="text-2xl text-status-info">
+            <MoneyText :amount="customer.available_credit" :currency="props.currency" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="pt-0">
+          <div class="flex items-center gap-2 text-sm text-text-secondary">
+            <PiggyBank class="h-4 w-4" />
+            <span>Unapplied credit, ready to apply to an invoice</span>
           </div>
         </CardContent>
       </Card>
@@ -301,6 +356,62 @@ const goBack = () => {
             <Button type="submit" :disabled="limitForm.processing">
               <span v-if="limitForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               Save Limit
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Apply On-Account Credit Dialog -->
+    <Dialog v-model:open="applyCreditDialogOpen">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Apply On-Account Credit</DialogTitle>
+          <DialogDescription>
+            Match <MoneyText :amount="customer.available_credit" :currency="props.currency" /> of {{ customer.name }}'s unapplied
+            credit to an invoice. No new payment is recorded - this only reassigns money already received.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form novalidate @submit.prevent="submitApplyCredit" class="space-y-4">
+          <div class="space-y-2">
+            <Label for="apply-credit-invoice">Invoice</Label>
+            <Select v-model="applyCreditForm.invoice_id">
+              <SelectTrigger id="apply-credit-invoice"><SelectValue placeholder="Select invoice" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="invoice in openInvoices" :key="invoice.id" :value="invoice.id">
+                  {{ invoice.invoice_number }} — <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <InputError :message="applyCreditForm.errors.invoice_id" />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="apply-credit-amount">Amount</Label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{{ currency }}</span>
+              <Input
+                id="apply-credit-amount"
+                v-model.number="applyCreditForm.amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                :max="Math.min(customer.available_credit, selectedInvoice?.balance ?? customer.available_credit)"
+                class="pl-14"
+                :class="{ 'border-destructive': applyCreditForm.errors.amount }"
+              />
+            </div>
+            <InputError :message="applyCreditForm.errors.amount" />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" @click="applyCreditDialogOpen = false" :disabled="applyCreditForm.processing">
+              Cancel
+            </Button>
+            <Button type="submit" :disabled="applyCreditForm.processing || !applyCreditForm.invoice_id">
+              <span v-if="applyCreditForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              Apply Credit
             </Button>
           </DialogFooter>
         </form>

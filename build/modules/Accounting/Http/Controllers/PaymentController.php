@@ -126,20 +126,21 @@ class PaymentController extends Controller
         // Transform validated data to match Action expected format
         $validated = $request->validated();
 
-        if (empty($validated['invoice_id'])) {
-            return redirect()
-                ->back()
-                ->withErrors(['invoice_id' => 'Please select an invoice to apply this payment to.'])
-                ->withInput();
-        }
-
         // Map payment method from FormRequest format to Action format
         $methodMap = ['cheque' => 'check'];
         $method = $validated['payment_method'];
         $method = $methodMap[$method] ?? $method;
 
+        // No invoice_id, invoice_ids or allocations at all means "on account" (an advance,
+        // or a lump sum the buyer wants applied automatically) - Payment\CreateAction's
+        // customer_id-only path handles that. invoice_id (a single pick) and invoice_ids (a
+        // hand-picked set, auto-split oldest-first) and allocations (exact amounts per
+        // invoice) are mutually exclusive ways to say more than that.
         $params = [
-            'invoice' => $validated['invoice_id'],
+            'customer_id' => $validated['customer_id'],
+            'invoice' => $validated['invoice_id'] ?? null,
+            'invoice_ids' => $validated['invoice_ids'] ?? null,
+            'allocations' => $validated['allocations'] ?? null,
             'amount' => $validated['amount'],
             'transaction_charge' => $validated['transaction_charge'] ?? 0,
             'method' => $method,

@@ -50,6 +50,7 @@ return [
 
     // Payment
     'payment.create' => \App\Modules\Accounting\Actions\Payment\CreateAction::class,
+    'payment.apply_credit' => \App\Modules\Accounting\Actions\Payment\ApplyCreditAction::class,
     'payment.list' => \App\Modules\Accounting\Actions\Payment\IndexAction::class,
     'payment.void' => \App\Modules\Accounting\Actions\Payment\VoidAction::class,
     'payment.update' => \App\Modules\Accounting\Actions\Payment\UpdateAction::class,

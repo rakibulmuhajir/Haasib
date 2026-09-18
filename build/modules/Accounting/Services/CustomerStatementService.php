@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Payment;
+use App\Modules\Accounting\Models\PaymentAllocation;
 
 /**
  * A buyer's running balance, built from the canonical AR-facing models
@@ -98,9 +99,21 @@ class CustomerStatementService
             $statement[] = $row;
         }
 
+        // Money this buyer already paid but that has not been matched to any invoice yet
+        // (an advance, or the remainder of a payment bigger than what was owed - see
+        // Payment\CreateAction and the payment_allocations.invoice_id-nullable migration).
+        // It is already reflected in closing_balance above (Payment.amount reduces the
+        // balance in full regardless of allocation); this is only "how much of that
+        // reduction is still free to match against a future invoice".
+        $availableCredit = round((float) PaymentAllocation::where('company_id', $customer->company_id)
+            ->whereNull('invoice_id')
+            ->whereHas('payment', fn ($q) => $q->where('customer_id', $customer->id))
+            ->sum('amount_allocated'), 2);
+
         return [
             'rows' => $statement,
             'closing_balance' => $running,
+            'available_credit' => $availableCredit,
         ];
     }
 }

@@ -8,13 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Plus, Trash2 } from 'lucide-vue-next'
 
 interface PaymentRow {
     customer_id: string
     customer_name: string
-    invoice_id: string
-    invoice_number?: string
+    // Empty means "on account" (an advance, or applied automatically to every open
+    // invoice for this buyer, oldest first - see Payment\CreateAction). One id behaves
+    // exactly like the historical single-invoice row; several auto-split oldest-first.
+    invoice_ids: string[]
     amount: number
     payment_account_id: string
     reference: string
@@ -44,23 +47,27 @@ const invoiceById = (id: string) => props.openInvoices.find((inv) => inv.id === 
 const onCustomerSelected = (row: PaymentRow, entity: { id: string; name: string }) => {
     row.customer_id = entity.id
     row.customer_name = entity.name
-    row.invoice_id = ''
-    row.invoice_number = ''
+    row.invoice_ids = []
     // Auto-select the only open invoice for this buyer, same convenience as the
-    // standalone Payment create page.
+    // standalone Payment create page. Leaving it unselected (no open invoices, or the
+    // buyer picks none) is a valid on-account payment.
     const options = invoicesFor(entity.id)
     if (options.length === 1) {
-        row.invoice_id = options[0].id
-        row.invoice_number = options[0].invoice_number
+        row.invoice_ids = [options[0].id]
         row.amount = options[0].balance
     }
 }
 
-const onInvoiceSelected = (row: PaymentRow, invoiceId: string) => {
-    row.invoice_id = invoiceId
-    const invoice = invoiceById(invoiceId)
-    row.invoice_number = invoice?.invoice_number
-    if (invoice && !row.amount) row.amount = invoice.balance
+const toggleInvoice = (row: PaymentRow, invoiceId: string, checked: boolean) => {
+    if (checked) {
+        if (!row.invoice_ids.includes(invoiceId)) row.invoice_ids.push(invoiceId)
+    } else {
+        row.invoice_ids = row.invoice_ids.filter((id) => id !== invoiceId)
+    }
+    if (!row.amount) {
+        const total = row.invoice_ids.reduce((sum, id) => sum + Number(invoiceById(id)?.balance ?? 0), 0)
+        if (total) row.amount = total
+    }
 }
 
 const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(row.amount || 0), 0))
@@ -89,7 +96,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
         <h4 class="font-medium">Payments Received</h4>
         <p class="text-xs text-muted-foreground">A buyer settling a credit invoice, entered here instead of at Payments.</p>
       </div>
-      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', invoice_id: '', amount: 0, payment_account_id: '', reference: '' })">
+      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' })">
         <Plus class="mr-1 h-4 w-4" /> Add
       </Button>
     </div>
@@ -106,15 +113,17 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
         <InputError :message="errors[`payments_received.${index}.customer_id`]" />
       </div>
       <div class="col-span-3 space-y-1">
-        <Label :for="`payment-invoice-${index}`">Invoice</Label>
-        <Select :model-value="row.invoice_id" :disabled="disabled || !row.customer_id" @update:model-value="(v) => onInvoiceSelected(row, String(v))">
-          <SelectTrigger :id="`payment-invoice-${index}`"><SelectValue :placeholder="row.customer_id ? 'Select invoice' : 'Choose a buyer first'" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="invoice in invoicesFor(row.customer_id)" :key="invoice.id" :value="invoice.id">
-              {{ invoice.invoice_number }} — <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <Label :id="`payment-invoice-${index}`">Invoice(s)</Label>
+        <div v-if="row.customer_id && invoicesFor(row.customer_id).length" class="max-h-28 space-y-1 overflow-y-auto rounded border p-2">
+          <label v-for="invoice in invoicesFor(row.customer_id)" :key="invoice.id" class="flex items-center gap-2 text-sm">
+            <Checkbox :model-value="row.invoice_ids.includes(invoice.id)" :disabled="disabled"
+              @update:model-value="(v) => toggleInvoice(row, invoice.id, !!v)" />
+            {{ invoice.invoice_number }} — <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
+          </label>
+        </div>
+        <p v-else class="text-xs text-muted-foreground">
+          {{ row.customer_id ? 'No open invoices — this will be an on-account payment.' : 'Choose a buyer first, or leave blank for on account.' }}
+        </p>
         <InputError :message="errors[`payments_received.${index}.invoice_id`]" />
       </div>
       <div class="col-span-2 space-y-1">

@@ -90,7 +90,7 @@ test('posting a bank-account payment received does not change expected drawer ca
     expect($snapshot['payments_received'][0]['affects_cash_drawer'])->toBeFalse();
 });
 
-test('a payment amount exceeding the invoice balance is rejected', function () {
+test('a payment amount exceeding the named invoice balance settles it and puts the rest on account', function () {
     $f = creditCloseFixture();
     $invoice = openInvoiceFixture($f, 1000.0);
     $f['payload']['credit_sales'] = [];
@@ -98,11 +98,21 @@ test('a payment amount exceeding the invoice balance is rejected', function () {
         'customer_id' => $f['customer']->id, 'invoice_id' => $invoice->id, 'amount' => 5000,
         'payment_account_id' => $f['accounts']['1050']->id,
     ]];
+    // Base close cash math (no credit_sales): opening 10000 + cash sales 21000 = 31000,
+    // plus this payment's full 5000 cash-in = 36000 expected, regardless of how much of
+    // it landed on the invoice.
+    $f['payload']['closing_cash'] = 36000;
 
-    expect(fn () => app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']))
-        ->toThrow(\Illuminate\Validation\ValidationException::class);
-    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(0);
-    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+
+    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(1);
+    expect((float) $invoice->fresh()->balance)->toBe(0.0)
+        ->and($invoice->fresh()->status)->toBe('paid');
+    $snapshot = $posted['metadata']['posting_snapshot'];
+    expect((float) $snapshot['totals']['variance'])->toBe(0.0);
+    $detail = $snapshot['payments_received'][0];
+    expect((float) $detail['amount'])->toBe(5000.0)
+        ->and((float) $detail['on_account'])->toBe(4000.0);
 });
 
 test('an other-company invoice or account is rejected', function () {
@@ -151,4 +161,46 @@ test('a standalone payment for the same date appears once in the close and is no
     $paymentSource = collect($sources)->firstWhere('source_id', $paymentId);
     expect($paymentSource)->not->toBeNull()
         ->and((float) $paymentSource['cash_effect'])->toBe(2000.0);
+});
+
+test('a payments-received row naming only a buyer (no invoice) is an on-account advance and still raises expected cash', function () {
+    $f = creditCloseFixture();
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['payments_received'] = [[
+        'customer_id' => $f['customer']->id, 'amount' => 2500,
+        'payment_account_id' => $f['accounts']['1050']->id, 'reference' => 'Advance',
+    ]];
+    $f['payload']['closing_cash'] = 33500;
+
+    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+
+    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(1);
+    $snapshot = $posted['metadata']['posting_snapshot'];
+    expect((float) $snapshot['totals']['variance'])->toBe(0.0);
+    $detail = $snapshot['payments_received'][0];
+    expect((float) $detail['amount'])->toBe(2500.0)
+        ->and((float) $detail['on_account'])->toBe(2500.0)
+        ->and($detail['invoice_id'])->toBeNull();
+});
+
+test('a payments-received row settles several hand-picked invoices oldest-first', function () {
+    $f = creditCloseFixture();
+    $older = openInvoiceFixture($f, 1000.0);
+    $older->update(['invoice_date' => '2026-09-01']);
+    $newer = openInvoiceFixture($f, 4000.0);
+    $newer->update(['invoice_date' => '2026-09-10']);
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['payments_received'] = [[
+        'customer_id' => $f['customer']->id, 'invoice_ids' => [$newer->id, $older->id], 'amount' => 3000,
+        'payment_account_id' => $f['accounts']['1050']->id,
+    ]];
+    $f['payload']['closing_cash'] = 34000;
+
+    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+
+    // Oldest ($older, invoice_date 09-01) settles fully first (1000), remaining 2000 goes
+    // to $newer even though it was listed first in invoice_ids.
+    expect((float) $older->fresh()->balance)->toBe(0.0)
+        ->and((float) $newer->fresh()->balance)->toBe(2000.0);
+    expect((float) $posted['metadata']['posting_snapshot']['totals']['variance'])->toBe(0.0);
 });

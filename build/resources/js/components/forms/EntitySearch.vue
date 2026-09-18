@@ -30,6 +30,11 @@ export interface Entity {
   customer_number?: string
   vendor_number?: string
   vendor_type?: string | null
+  // Credit-sale context, present when searching customers (CustomerController::search/
+  // recent), so a picker can warn about a buyer's limit without a second round trip.
+  credit_limit?: number
+  current_balance?: number
+  is_credit_blocked?: boolean
 }
 
 export interface EntitySearchProps {

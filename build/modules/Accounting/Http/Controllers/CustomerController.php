@@ -435,9 +435,36 @@ class CustomerController extends Controller
             })
             ->orderBy('name')
             ->limit($limit)
-            ->get(['id', 'name', 'email', 'phone', 'customer_number']);
+            ->get(['id', 'name', 'email', 'phone', 'customer_number', 'credit_limit', 'is_credit_blocked']);
 
-        return response()->json(['results' => $customers]);
+        return response()->json(['results' => $this->withCurrentBalances($customers, $company->id)]);
+    }
+
+    /**
+     * Attach each customer's current AR balance (sum of open invoice balances) so a
+     * credit-sale picker (EntitySearch) can warn inline before a sale would push the
+     * buyer over their limit, without a second round trip per selection. Mirrors
+     * CreditCustomerController::index's own computation.
+     */
+    private function withCurrentBalances($customers, string $companyId)
+    {
+        $ids = $customers->pluck('id');
+        if ($ids->isEmpty()) {
+            return $customers->values();
+        }
+
+        $balances = Invoice::where('company_id', $companyId)
+            ->whereIn('customer_id', $ids)
+            ->whereNotIn('status', ['void', 'draft'])
+            ->where('balance', '>', 0)
+            ->selectRaw('customer_id, SUM(balance) as balance')
+            ->groupBy('customer_id')
+            ->pluck('balance', 'customer_id');
+
+        return $customers->map(function (Customer $customer) use ($balances) {
+            $customer->setAttribute('current_balance', (float) ($balances[$customer->id] ?? 0));
+            return $customer;
+        })->values();
     }
 
     /**
@@ -459,7 +486,8 @@ class CustomerController extends Controller
         $customers = Customer::where('company_id', $company->id)
             ->whereIn('id', $recentCustomerIds)
             ->where('is_active', true)
-            ->get(['id', 'name', 'email', 'phone', 'customer_number']);
+            ->get(['id', 'name', 'email', 'phone', 'customer_number', 'credit_limit', 'is_credit_blocked']);
+        $customers = $this->withCurrentBalances($customers, $company->id);
 
         // Sort by the order they appear in recent invoices
         $sorted = $recentCustomerIds->map(fn ($id) => $customers->firstWhere('id', $id))

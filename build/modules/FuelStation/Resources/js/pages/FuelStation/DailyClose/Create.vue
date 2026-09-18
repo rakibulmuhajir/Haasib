@@ -4672,7 +4672,7 @@ const completedWorkflowSteps = computed(() => {
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" />
+                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" />
                         <Separator />
                         <div class="space-y-4">
                             <div>

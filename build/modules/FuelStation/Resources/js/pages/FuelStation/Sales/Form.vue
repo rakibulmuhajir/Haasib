@@ -75,6 +75,9 @@ const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.
 const selectedPump = ref<Pump | null>(null)
 const selectedFuelItem = ref<FuelItem | null>(null)
 const quantity = ref<number | null>(null)
+// The business date this fuel left the pump. A credit sale is imported into the Daily
+// Close for its own date, so backdating yesterday's sale has to be possible.
+const saleDate = ref<string>(new Date().toISOString().slice(0, 10))
 const saleType = ref<'retail' | 'bulk' | 'amanat' | 'investor' | 'credit' | 'parco_card'>('retail')
 const selectedCustomer = ref<Customer | null>(null)
 const selectedInvestor = ref(null)
@@ -215,6 +218,7 @@ const submitSale = () => {
     pump_id: selectedPump.value!.id,
     item_id: selectedFuelItem.value!.id,
     quantity: quantity.value!,
+    sale_date: saleDate.value,
     sale_type: saleType.value,
     customer_id: selectedCustomer.value?.id || null,
     investor_id: selectedInvestor.value?.id || null,
@@ -306,6 +310,15 @@ const setPaymentTotal = () => {
                 </Select>
                 <InputError :message="formErrors.item_id?.[0]" />
               </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="sale-date">Sale date *</Label>
+              <Input id="sale-date" v-model="saleDate" type="date" />
+              <p class="text-xs text-muted-foreground">
+                A credit sale is picked up by the Daily Close for this date.
+              </p>
+              <InputError :message="formErrors.sale_date?.[0]" />
             </div>
 
             <div class="grid gap-4 sm:grid-cols-3">

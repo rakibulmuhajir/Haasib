@@ -118,6 +118,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('handovers/{handover}/receive', [AttendantHandoverController::class, 'receive'])->name('fuel.handovers.receive');
 
     // Fuel Sales
+    Route::get('sales/form', [FuelSaleController::class, 'create'])->name('fuel.sales.create');
     Route::post('sales', [FuelSaleController::class, 'store'])->name('fuel.sales.store');
 
     // Vendor Card Settlement

@@ -183,7 +183,12 @@ mkdir -p "${STAGING_DIR}"
 git archive "${REMOTE}/${ASSETS_BRANCH}" | tar -x -C "${STAGING_DIR}"
 rm -f "${STAGING_DIR}/SOURCE_SHA"
 
-[[ -f "${STAGING_DIR}/manifest.json" ]] || fail "The build produced no manifest; the previous assets have been kept"
+# The asset fetch runs from the repository root; everything after it is artisan work and
+# expects to be in the Laravel application. The step this replaced left the shell in
+# APP_DIR, and without this the cache step failed with "Could not open input file: artisan".
+cd "${APP_DIR}"
+
+[[ -f "${STAGING_DIR}/manifest.json" ]] || fail "The published assets contain no manifest; the previous assets have been kept"
 
 log "Swapping the new frontend assets into place"
 rm -rf "${BUILD_DIR}"

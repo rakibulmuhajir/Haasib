@@ -75,9 +75,24 @@ on_exit() {
 
 trap on_exit EXIT
 
-for command in git php composer npm flock; do
+# Nothing is compiled here any more, so npm is no longer required on this box.
+for command in git php composer flock tar; do
     command -v "${command}" >/dev/null 2>&1 || fail "Required command not found: ${command}"
 done
+
+# The deploy updates the code with a fast-forward merge, which rewrites this very file while
+# bash is still reading it: on 18 September 2026 a rollback fix sat on disk and never ran
+# because the shell was executing the previous version. Re-exec from a copy taken before any
+# merge, so the script that starts the deploy is the script that finishes it.
+if [[ "${DEPLOY_REEXEC:-0}" -ne 1 ]]; then
+    SELF_COPY="$(mktemp)"
+    cp "${BASH_SOURCE[0]}" "${SELF_COPY}"
+    trap - EXIT
+    DEPLOY_REEXEC=1 bash "${SELF_COPY}" "$@"
+    status=$?
+    rm -f "${SELF_COPY}"
+    exit "${status}"
+fi
 
 [[ -f "${APP_DIR}/artisan" ]] || fail "Laravel application not found at ${APP_DIR}"
 
@@ -142,16 +157,29 @@ composer install \
     --prefer-dist \
     --optimize-autoloader
 
-log "Installing locked frontend dependencies"
-npm ci --no-audit --no-fund
+log "Fetching the frontend assets built for this commit"
+cd "${ROOT_DIR}"
+DEPLOY_SHA="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+ASSETS_BRANCH="${DEPLOY_ASSETS_BRANCH:-assets/main}"
 
-log "Building frontend assets"
+# Assets are built by .github/workflows/build-assets.yml on a clean runner and published to
+# the assets branch, because this box cannot compile the bundle: npm run build here died
+# with "JavaScript heap out of memory" and stranded a release halfway. Nothing is compiled
+# during a deploy any more.
+git fetch --quiet --force "${REMOTE}" "${ASSETS_BRANCH}:refs/remotes/${REMOTE}/${ASSETS_BRANCH}"     || fail "Could not fetch ${ASSETS_BRANCH}; has the asset workflow run for this commit?"
+
+PUBLISHED_SHA="$(git show "${REMOTE}/${ASSETS_BRANCH}:SOURCE_SHA" 2>/dev/null | tr -d '[:space:]' || true)"
+
+# Serving a bundle built from different source than the PHP being deployed is the failure
+# this whole arrangement exists to prevent, so it is a hard stop rather than a warning.
+if [[ "${PUBLISHED_SHA}" != "${DEPLOY_SHA}" ]]; then
+    fail "The published assets are for ${PUBLISHED_SHA:-<none>} but this deploy is ${DEPLOY_SHA}. Wait for the asset workflow to finish, then run again."
+fi
+
 rm -rf "${STAGING_DIR}"
-# Node's default heap on this box is ~978MB and the bundle outgrew it: the build died with
-# "Reached heap limit Allocation failed" and the deploy aborted before migrations. The box
-# has ~1.4GB available plus 2GB of swap, so give V8 room to finish rather than trading the
-# whole release for a few hundred megabytes.
-NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}" npm run build -- --outDir public/build-staging --emptyOutDir
+mkdir -p "${STAGING_DIR}"
+git archive "${REMOTE}/${ASSETS_BRANCH}" | tar -x -C "${STAGING_DIR}"
+rm -f "${STAGING_DIR}/SOURCE_SHA"
 
 [[ -f "${STAGING_DIR}/manifest.json" ]] || fail "The build produced no manifest; the previous assets have been kept"
 

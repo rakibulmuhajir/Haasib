@@ -1,0 +1,74 @@
+name: Publish frontend assets
+
+# The production box has 1.9GB of RAM and two cores, and the bundle outgrew it: `npm run
+# build` there died with "JavaScript heap out of memory" and stranded a release halfway.
+# Compiling on the machine that serves customers was always the wrong place for it.
+#
+# This builds once, on a clean runner, from a known commit, and publishes the result to the
+# assets/main branch. deploy.sh fetches that instead of compiling, so a broken build fails
+# here rather than against production, and the artefact is reproducible from its SHA.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only one publish at a time: two runs racing would leave assets/main describing whichever
+# finished last rather than whichever commit is newest.
+concurrency:
+  group: publish-frontend-assets
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: build/package-lock.json
+
+      - name: Install dependencies
+        working-directory: build
+        run: npm ci --no-audit --no-fund
+
+      - name: Build assets
+        working-directory: build
+        run: npm run build
+
+      - name: Fail if the build produced no manifest
+        working-directory: build
+        run: test -f public/build/manifest.json
+
+      - name: Publish to assets/main
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          # A clean orphan branch each time: the history of built bundles is noise, and
+          # keeping it would grow the repository for no one's benefit.
+          workdir="$(mktemp -d)"
+          cp -r build/public/build/. "${workdir}/"
+
+          # The deploy checks this file before swapping assets in. Without it a stale
+          # bundle could be served against newer PHP, which is the failure this whole
+          # workflow exists to prevent.
+          printf '%s\n' "${SOURCE_SHA}" > "${workdir}/SOURCE_SHA"
+
+          cd "${workdir}"
+          git init --quiet --initial-branch=assets/main
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit --quiet -m "Frontend assets for ${SOURCE_SHA}"
+          git push --force --quiet \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            assets/main

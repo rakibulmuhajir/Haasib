@@ -24,6 +24,12 @@ BUILD_DIR="${APP_DIR}/public/build"
 STAGING_DIR="${APP_DIR}/public/build-staging"
 PREVIOUS_DIR="${APP_DIR}/public/build-previous"
 ASSETS_NEED_RESTORING=0
+# The commit this release started from. If the deploy dies after the fast-forward but
+# before it finishes, the worktree is rolled back to it: a half-deployed release runs new
+# PHP against the old assets and the old schema, which is worse than not deploying at all.
+# That happened on 18 September 2026 when the asset build ran out of heap.
+PRE_DEPLOY_COMMIT=""
+CODE_NEEDS_ROLLBACK=0
 
 log() {
     printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1"
@@ -53,7 +59,16 @@ restore_previous_assets() {
     fi
 }
 
+roll_back_code() {
+    if [[ "${CODE_NEEDS_ROLLBACK}" -eq 1 && -n "${PRE_DEPLOY_COMMIT}" ]]; then
+        log "Deployment did not complete; returning the code to ${PRE_DEPLOY_COMMIT}"
+        git -C "${ROOT_DIR}" reset --hard --quiet "${PRE_DEPLOY_COMMIT}" || true
+        (cd "${APP_DIR}" && php artisan config:clear >/dev/null 2>&1) || true
+    fi
+}
+
 on_exit() {
+    roll_back_code
     restore_previous_assets
     bring_application_up
 }
@@ -115,6 +130,8 @@ APP_WAS_PUT_DOWN=1
 
 log "Updating code with a fast-forward-only merge"
 cd "${ROOT_DIR}"
+PRE_DEPLOY_COMMIT="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+CODE_NEEDS_ROLLBACK=1
 git merge --ff-only "${REMOTE}/${BRANCH}"
 
 log "Installing production PHP dependencies"
@@ -130,7 +147,11 @@ npm ci --no-audit --no-fund
 
 log "Building frontend assets"
 rm -rf "${STAGING_DIR}"
-npm run build -- --outDir public/build-staging --emptyOutDir
+# Node's default heap on this box is ~978MB and the bundle outgrew it: the build died with
+# "Reached heap limit Allocation failed" and the deploy aborted before migrations. The box
+# has ~1.4GB available plus 2GB of swap, so give V8 room to finish rather than trading the
+# whole release for a few hundred megabytes.
+NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}" npm run build -- --outDir public/build-staging --emptyOutDir
 
 [[ -f "${STAGING_DIR}/manifest.json" ]] || fail "The build produced no manifest; the previous assets have been kept"
 
@@ -169,4 +190,5 @@ ASSETS_NEED_RESTORING=0
 rm -rf "${PREVIOUS_DIR}"
 trap - EXIT
 
+CODE_NEEDS_ROLLBACK=0
 log "Deployment complete: $(git -C "${ROOT_DIR}" rev-parse --short HEAD)"

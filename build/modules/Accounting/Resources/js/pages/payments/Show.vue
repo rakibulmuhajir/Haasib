@@ -143,15 +143,26 @@ const allocationDisplayAmount = (allocation: PaymentAllocation) =>
         ? Number(allocation.base_amount_allocated)
         : Number(allocation.amount_allocated);
 
+// An allocation with no invoice IS the on-account credit: money the buyer paid that
+// is held against future invoices. It is stored as a payment_allocations row with a
+// null invoice_id so the ledger invariant (allocations sum to the payment) still
+// holds, so it must be split out here rather than counted as applied -- otherwise it
+// reads as "applied to invoice" and the unapplied figure computes to zero.
+const appliedAllocations = computed(() =>
+    props.payment.payment_allocations.filter((allocation) => allocation.invoice),
+);
+
 const allocatedTotal = computed(() =>
-    props.payment.payment_allocations.reduce(
+    appliedAllocations.value.reduce(
         (sum, allocation) => sum + allocationDisplayAmount(allocation),
         0,
     ),
 );
 
-const unapplied = computed(
-    () => Number(props.payment.amount) - allocatedTotal.value,
+// The stored null-invoice rows, plus any residual on an older payment written before
+// the remainder was recorded as a row at all.
+const unapplied = computed(() =>
+    Math.max(0, Number(props.payment.amount) - allocatedTotal.value),
 );
 
 /**
@@ -160,14 +171,10 @@ const unapplied = computed(
  * total or the receipt is wrong, so the remainder is never left off.
  */
 const documentLines = computed<DocumentLine[]>(() => {
-    const lines: DocumentLine[] = props.payment.payment_allocations.map(
-        (allocation) => ({
-            description: allocation.invoice?.invoice_number
-                ? `Applied to ${allocation.invoice.invoice_number}`
-                : 'Applied to invoice',
-            amount: allocationDisplayAmount(allocation),
-        }),
-    );
+    const lines: DocumentLine[] = appliedAllocations.value.map((allocation) => ({
+        description: `Applied to ${allocation.invoice?.invoice_number}`,
+        amount: allocationDisplayAmount(allocation),
+    }));
 
     if (unapplied.value > 0.005) {
         lines.push({
@@ -290,7 +297,7 @@ const summaryItems = computed(() => [
                     </CardHeader>
                     <CardContent class="space-y-3">
                         <div
-                            v-for="allocation in payment.payment_allocations"
+                            v-for="allocation in appliedAllocations"
                             :key="allocation.id"
                             class="flex items-center justify-between gap-3 text-sm"
                         >
@@ -329,7 +336,7 @@ const summaryItems = computed(() => [
 
                         <p
                             v-if="
-                                !payment.payment_allocations.length &&
+                                !appliedAllocations.length &&
                                 unapplied <= 0.005
                             "
                             class="text-sm text-muted-foreground"

@@ -28,6 +28,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Vite build runs @laravel/vite-plugin-wayfinder, which shells out to
+      # `php artisan wayfinder:generate`, so PHP and vendor/ have to exist before the
+      # bundle can be built at all. The first run of this workflow failed for exactly
+      # this reason; ci.yml works because it installs PHP first.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache/files
+          key: ${{ runner.os }}-composer-${{ hashFiles('build/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install PHP dependencies
+        working-directory: build
+        run: composer install --no-interaction --prefer-dist --no-progress
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

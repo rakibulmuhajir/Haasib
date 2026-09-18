@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock } from 'lucide-vue-next'
+import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock, PiggyBank } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
@@ -33,22 +34,33 @@ interface Customer {
   address: string | null
   credit_limit: number
   current_balance: number
+  available_credit: number
   is_credit_blocked: boolean
 }
 
-interface Transaction {
+interface OpenInvoice {
   id: string
-  date: string
-  type: 'sale' | 'collection'
+  invoice_number: string
+  balance: number
+  currency: string
+}
+
+interface StatementRow {
+  date: string | null
+  type: 'opening_balance' | 'invoice' | 'payment' | 'credit_note'
+  reference: string | null
   description: string
-  amount: number
-  liters?: number
-  reference?: string
+  debit: number
+  credit: number
+  source_id: string | null
+  link: string | null
+  balance: number
 }
 
 const props = defineProps<{
   customer: Customer
-  transactions: Transaction[]
+  statement: StatementRow[]
+  openInvoices: OpenInvoice[]
   currency: string
 }>()
 
@@ -87,21 +99,51 @@ const toggleBlock = () => {
   })
 }
 
+// Apply an on-account credit (an advance, or the leftover of a bigger payment) to one of
+// this buyer's open invoices - a subsidiary reclass, no new cash movement.
+const applyCreditDialogOpen = ref(false)
+const applyCreditForm = useForm({
+  invoice_id: '',
+  amount: 0,
+})
+const selectedInvoice = computed(() => props.openInvoices.find((inv) => inv.id === applyCreditForm.invoice_id))
+const openApplyCredit = () => {
+  applyCreditForm.reset()
+  const first = props.openInvoices[0]
+  if (first) {
+    applyCreditForm.invoice_id = first.id
+    applyCreditForm.amount = Math.min(first.balance, props.customer.available_credit)
+  }
+  applyCreditDialogOpen.value = true
+}
+const submitApplyCredit = () => {
+  applyCreditForm.post(`/${companySlug.value}/fuel/credit-customers/${props.customer.id}/apply-credit`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      applyCreditDialogOpen.value = false
+    },
+  })
+}
+
 const columns = [
   { key: 'date', label: 'Date', kind: 'date' as const },
   { key: 'type', label: 'Type', kind: 'status' as const },
   { key: 'description', label: 'Description', kind: 'text' as const },
-  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'debit', label: 'Debit', kind: 'amount' as const },
+  { key: 'credit', label: 'Credit', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
-  return props.transactions.map((t) => ({
-    id: t.id,
-    date: formatDate(t.date),
-    type: t.type,
-    description: t.description,
-    amount: t.amount,
-    _raw: t,
+  return props.statement.map((row, index) => ({
+    id: row.source_id ?? `opening-${index}`,
+    date: row.date ? formatDate(row.date) : '—',
+    type: row.type,
+    description: row.description,
+    debit: row.debit,
+    credit: row.credit,
+    balance: row.balance,
+    _raw: row,
   }))
 })
 
@@ -128,6 +170,10 @@ const goBack = () => {
         <Edit class="mr-2 h-4 w-4" />
         Set Limit
       </Button>
+      <Button v-if="customer.available_credit > 0 && openInvoices.length" variant="outline" @click="openApplyCredit">
+        <PiggyBank class="mr-2 h-4 w-4" />
+        Apply Credit
+      </Button>
       <Button
         :variant="customer.is_credit_blocked ? 'default' : 'destructive'"
         @click="toggleBlock"
@@ -138,7 +184,7 @@ const goBack = () => {
     </template>
 
     <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-3">
+    <div class="grid gap-4 md:grid-cols-4">
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
@@ -150,6 +196,21 @@ const goBack = () => {
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Wallet class="h-4 w-4" />
             <span>Outstanding receivable</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="customer.available_credit > 0" class="border-border/80">
+        <CardHeader class="pb-2">
+          <CardDescription>On Account</CardDescription>
+          <CardTitle class="text-2xl text-status-info">
+            <MoneyText :amount="customer.available_credit" :currency="props.currency" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="pt-0">
+          <div class="flex items-center gap-2 text-sm text-text-secondary">
+            <PiggyBank class="h-4 w-4" />
+            <span>Unapplied credit, ready to apply to an invoice</span>
           </div>
         </CardContent>
       </Card>
@@ -221,33 +282,40 @@ const goBack = () => {
 
       <Card class="lg:col-span-2">
         <CardHeader>
-          <CardTitle class="text-base">Transaction History</CardTitle>
-          <CardDescription>Recent credit sales and collections.</CardDescription>
+          <CardTitle class="text-base">Statement</CardTitle>
+          <CardDescription>Every invoice, payment and credit note against this buyer's receivable account, from every entry point, oldest first.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
           <LedgerRegister :data="tableData" :columns="columns">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
-                No transactions yet
+                No activity yet
               </div>
             </template>
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.type === 'sale' ? 'bg-status-attention/10 text-status-attention' : 'bg-status-success/10 text-status-success'"
+                :class="{
+                  invoice: 'bg-status-attention/10 text-status-attention',
+                  payment: 'bg-status-success/10 text-status-success',
+                  credit_note: 'bg-status-info/10 text-status-info',
+                  opening_balance: 'bg-muted text-muted-foreground',
+                }[row._raw.type as string]"
               >
-                {{ row._raw.type === 'sale' ? 'Sale' : 'Collection' }}
+                {{ { invoice: 'Invoice', payment: 'Payment', credit_note: 'Credit note', opening_balance: 'Opening' }[row._raw.type as string] }}
               </Badge>
             </template>
 
-            <template #cell-amount="{ row }">
-              <span :class="row._raw.type === 'sale' ? 'text-status-attention' : 'text-status-success'" class="font-medium">
-                <MoneyText
-                  :amount="row._raw.amount"
-                  :currency="props.currency"
-                  :direction="row._raw.type === 'sale' ? 'inflow' : 'outflow'"
-                />
-              </span>
+            <template #cell-debit="{ row }">
+              <span v-if="row._raw.debit > 0" class="font-medium text-status-attention"><MoneyText :amount="row._raw.debit" :currency="props.currency" /></span>
+            </template>
+
+            <template #cell-credit="{ row }">
+              <span v-if="row._raw.credit > 0" class="font-medium text-status-success"><MoneyText :amount="row._raw.credit" :currency="props.currency" /></span>
+            </template>
+
+            <template #cell-balance="{ row }">
+              <span class="font-semibold"><MoneyText :amount="row._raw.balance" :currency="props.currency" /></span>
             </template>
           </LedgerRegister>
         </CardContent>
@@ -288,6 +356,62 @@ const goBack = () => {
             <Button type="submit" :disabled="limitForm.processing">
               <span v-if="limitForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               Save Limit
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Apply On-Account Credit Dialog -->
+    <Dialog v-model:open="applyCreditDialogOpen">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Apply On-Account Credit</DialogTitle>
+          <DialogDescription>
+            Match <MoneyText :amount="customer.available_credit" :currency="props.currency" /> of {{ customer.name }}'s unapplied
+            credit to an invoice. No new payment is recorded - this only reassigns money already received.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form novalidate @submit.prevent="submitApplyCredit" class="space-y-4">
+          <div class="space-y-2">
+            <Label for="apply-credit-invoice">Invoice</Label>
+            <Select v-model="applyCreditForm.invoice_id">
+              <SelectTrigger id="apply-credit-invoice"><SelectValue placeholder="Select invoice" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="invoice in openInvoices" :key="invoice.id" :value="invoice.id">
+                  {{ invoice.invoice_number }} — <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <InputError :message="applyCreditForm.errors.invoice_id" />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="apply-credit-amount">Amount</Label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{{ currency }}</span>
+              <Input
+                id="apply-credit-amount"
+                v-model.number="applyCreditForm.amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                :max="Math.min(customer.available_credit, selectedInvoice?.balance ?? customer.available_credit)"
+                class="pl-14"
+                :class="{ 'border-destructive': applyCreditForm.errors.amount }"
+              />
+            </div>
+            <InputError :message="applyCreditForm.errors.amount" />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" @click="applyCreditDialogOpen = false" :disabled="applyCreditForm.processing">
+              Cancel
+            </Button>
+            <Button type="submit" :disabled="applyCreditForm.processing || !applyCreditForm.invoice_id">
+              <span v-if="applyCreditForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              Apply Credit
             </Button>
           </DialogFooter>
         </form>

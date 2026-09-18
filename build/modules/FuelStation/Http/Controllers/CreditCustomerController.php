@@ -3,11 +3,13 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Http\Requests\ApplyPaymentCreditRequest;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Services\CustomerStatementService;
+use App\Services\CommandBus;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,7 +42,7 @@ class CreditCustomerController extends Controller
                 'email' => $c->email,
                 'credit_limit' => (float) ($c->credit_limit ?? 0),
                 'current_balance' => (float) ($openBalances[$c->id] ?? 0),
-                'is_credit_blocked' => false, // TODO: Add to customer model
+                'is_credit_blocked' => (bool) $c->is_credit_blocked,
             ]);
 
         // Calculate stats
@@ -73,58 +75,12 @@ class CreditCustomerController extends Controller
             abort(404);
         }
 
-        $openBalance = (float) (\App\Modules\Accounting\Models\Invoice::where('company_id', $companyModel->id)
-            ->where('customer_id', $customerData->id)
-            ->whereNotIn('status', ['void', 'draft'])
-            ->where('balance', '>', 0)
-            ->sum('balance'));
-
-        // Get credit transactions from daily close metadata
-        $transactions = DB::table('acct.transactions')
-            ->where('company_id', $companyModel->id)
-            ->where('transaction_type', 'daily_close')
-            ->whereIn('status', ['posted', 'locked'])
-            ->orderByDesc('transaction_date')
-            ->limit(100)
-            ->get()
-            ->flatMap(function ($txn) use ($customer) {
-                $metadata = json_decode($txn->metadata, true) ?? [];
-                $creditSales = $metadata['credit_sales'] ?? [];
-
-                return collect($creditSales)
-                    ->filter(fn($sale) => ($sale['customer_id'] ?? '') === $customer)
-                    ->map(fn($sale) => [
-                        'id' => $txn->id . '-' . ($sale['customer_id'] ?? ''),
-                        'date' => $txn->transaction_date,
-                        'type' => 'sale',
-                        'description' => $sale['description'] ?? 'Credit sale',
-                        'amount' => (float) ($sale['amount'] ?? 0),
-                        'liters' => (float) ($sale['liters'] ?? 0),
-                    ]);
-            });
-
-        // Get collections/payments
-        $collections = DB::table('acct.transactions')
-            ->where('company_id', $companyModel->id)
-            ->where('transaction_type', 'credit_collection')
-            ->whereRaw("metadata->>'customer_id' = ?", [$customer])
-            ->orderByDesc('transaction_date')
-            ->limit(50)
-            ->get()
-            ->map(fn($txn) => [
-                'id' => $txn->id,
-                'date' => $txn->transaction_date,
-                'type' => 'collection',
-                'description' => $txn->description ?? 'Payment received',
-                'amount' => (float) $txn->total_amount,
-                'reference' => $txn->reference,
-            ]);
-
-        // Merge and sort
-        $allTransactions = $transactions->merge($collections)
-            ->sortByDesc('date')
-            ->values()
-            ->take(50);
+        // Built from the canonical AR-facing models (invoices, payments, credit notes), not
+        // from daily-close metadata, so a standalone invoice or payment that never touched a
+        // close still appears here (see CustomerStatementService for why the close's own
+        // consolidated journal cannot itself carry a per-customer balance).
+        $statement = app(CustomerStatementService::class)->statement($customerData);
+        $openBalance = $statement['closing_balance'];
 
         // Get billing address as string
         $address = null;
@@ -139,6 +95,15 @@ class CreditCustomerController extends Controller
             $address = implode(', ', $parts);
         }
 
+        $openInvoices = app(\App\Modules\Accounting\Services\PaymentAllocationService::class)
+            ->openInvoicesOldestFirst($companyModel->id, $customerData->id)
+            ->map(fn ($invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'balance' => (float) $invoice->balance,
+                'currency' => $invoice->currency,
+            ])->values();
+
         return Inertia::render('FuelStation/CreditCustomers/Show', [
             'customer' => [
                 'id' => $customerData->id,
@@ -149,11 +114,29 @@ class CreditCustomerController extends Controller
                 'address' => $address,
                 'credit_limit' => (float) ($customerData->credit_limit ?? 0),
                 'current_balance' => $openBalance,
-                'is_credit_blocked' => false,
+                'available_credit' => $statement['available_credit'],
+                'is_credit_blocked' => (bool) $customerData->is_credit_blocked,
             ],
-            'transactions' => $allTransactions,
+            'statement' => $statement['rows'],
+            'openInvoices' => $openInvoices,
             'currency' => $companyModel->base_currency ?? 'PKR',
         ]);
+    }
+
+    /**
+     * Apply an existing on-account credit (an advance, or the unapplied remainder of a
+     * bigger payment - see Payment\CreateAction) to one of this buyer's invoices. No new
+     * cash moves and no new journal is posted; see Payment\ApplyCreditAction.
+     */
+    public function applyCredit(ApplyPaymentCreditRequest $request, string $company, string $customer): RedirectResponse
+    {
+        $result = app(CommandBus::class)->dispatch('payment.apply_credit', [
+            'customer_id' => $customer,
+            'invoice_id' => $request->validated('invoice_id'),
+            'amount' => $request->validated('amount'),
+        ], $request->user());
+
+        return redirect()->back()->with('success', $result['message']);
     }
 
     /**
@@ -177,12 +160,17 @@ class CreditCustomerController extends Controller
     }
 
     /**
-     * Toggle credit block status.
-     * NOTE: This is a placeholder - blocking functionality would need a column added to customers table.
+     * Toggle credit block status. A blocked buyer is refused a new credit sale at every
+     * entry point (see DailyCloseCreditSaleService::prepare and FuelSaleService::createSale);
+     * it never touches existing invoices or payments.
      */
     public function toggleBlock(Request $request, string $company, string $customer): RedirectResponse
     {
-        // For now, just return success - actual blocking would require schema changes
-        return redirect()->back()->with('success', 'Credit status updated.');
+        $companyModel = app(CurrentCompany::class)->get();
+
+        $customerModel = Customer::where('company_id', $companyModel->id)->findOrFail($customer);
+        $customerModel->update(['is_credit_blocked' => ! $customerModel->is_credit_blocked]);
+
+        return redirect()->back()->with('success', $customerModel->is_credit_blocked ? 'Credit blocked.' : 'Credit unblocked.');
     }
 }

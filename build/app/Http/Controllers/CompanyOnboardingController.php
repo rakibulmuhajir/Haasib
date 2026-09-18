@@ -195,11 +195,19 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $this->onboardingService->setupBankAccounts($company, $request->validated()['bank_accounts']);
+        try {
+            $this->onboardingService->setupBankAccounts($company, $request->validated()['bank_accounts']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()
+                ->withErrors(['bank_accounts' => 'Could not save banks and cash. Please try again.'])
+                ->with('error', 'Could not save banks and cash. Please try again.');
+        }
 
         if ($this->isFuelOnboardingFlow($request, $company)) {
             return redirect("/{$company->slug}/fuel/onboarding")
-                ->with('success', 'Bank accounts created successfully.');
+                ->with('success', 'Banks and cash saved.');
         }
 
         return redirect("/{$company->slug}/onboarding/default-accounts")

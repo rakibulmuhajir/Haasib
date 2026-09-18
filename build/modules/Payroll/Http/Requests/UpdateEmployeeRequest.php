@@ -9,6 +9,7 @@ use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Services\CurrentCompany;
 use Closure;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateEmployeeRequest extends BaseFormRequest
@@ -57,7 +58,7 @@ class UpdateEmployeeRequest extends BaseFormRequest
             'employment_status' => 'required|in:active,on_leave,suspended,terminated',
             'department' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',
-            'manager_id' => "nullable|uuid|exists:pay.employees,id|not_in:{$employeeId}",
+            'manager_id' => ['nullable', 'uuid', "not_in:{$employeeId}", Rule::exists(Employee::class, 'id')],
             'pay_frequency' => 'required|in:weekly,biweekly,semimonthly,monthly',
             'base_salary' => 'required|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',

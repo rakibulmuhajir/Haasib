@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
-import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp } from 'lucide-vue-next'
+import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp, Plus } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import QuickAddModal from '@/components/forms/QuickAddModal.vue'
 
 interface Customer {
   id: string
@@ -78,6 +79,11 @@ const tableData = computed(() => {
 const goToShow = (row: any) => {
   router.get(`/${companySlug.value}/fuel/credit-customers/${row.id}`)
 }
+
+const showCreate = ref(false)
+const onCreated = (customer: { id: string }) => {
+  router.get(`/${companySlug.value}/fuel/credit-customers/${customer.id}`)
+}
 </script>
 
 <template>
@@ -89,6 +95,11 @@ const goToShow = (row: any) => {
     :icon="UsersRound"
     :breadcrumbs="breadcrumbs"
   >
+    <template #actions>
+      <Button @click="showCreate = true"><Plus class="mr-2 h-4 w-4" />New credit buyer</Button>
+    </template>
+    <QuickAddModal v-model:open="showCreate" entity-type="customer" @created="onCreated" />
+
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">

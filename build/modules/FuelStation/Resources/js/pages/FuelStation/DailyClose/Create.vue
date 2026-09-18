@@ -55,6 +55,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
+import PaymentsReceivedEntry from '../../../components/PaymentsReceivedEntry.vue';
 import { useLexicon } from '@/composables/useLexicon';
 import TankLevelGauge from '../../../components/TankLevelGauge.vue';
 
@@ -227,6 +228,37 @@ interface PendingBillPayment {
     affects_cash_drawer: boolean;
 }
 
+interface PendingFuelInvoice {
+    invoice_id: string;
+    invoice_number: string;
+    customer_id: string;
+    customer_name: string;
+    litres: number;
+    amount: number;
+    reference: string;
+}
+
+interface OpenInvoice {
+    id: string;
+    invoice_number: string;
+    customer_id: string;
+    customer_name: string;
+    balance: number;
+    currency: string;
+}
+
+interface PurchaseSupplier {
+    id: string;
+    name: string;
+}
+
+interface PurchaseItem {
+    id: string;
+    name: string;
+    is_fuel: boolean;
+    unit: string;
+}
+
 interface Features {
     has_partners: boolean;
     has_amanat: boolean;
@@ -259,9 +291,16 @@ const props = defineProps<{
     employees: Employee[];
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
+    pendingFuelInvoices?: PendingFuelInvoice[];
+    openInvoices?: OpenInvoice[];
+    cashAccountIds?: string[];
+    purchaseSuppliers?: PurchaseSupplier[];
+    purchaseItems?: PurchaseItem[];
+    canEnterPurchases?: boolean;
     amanatHolders: AmanatHolder[];
     investors: Investor[];
     bankAccounts: BankAccount[];
+    paymentAccounts: BankAccount[];
     expenseAccounts: ExpenseAccount[];
     otherDepositAccounts: OtherDepositAccount[];
     lubricantItems: LubricantItem[];
@@ -321,6 +360,7 @@ const props = defineProps<{
             customer_id?: string;
             customer_name?: string;
             amount: number;
+            payment_account_id?: string;
             reference?: string;
         }>;
         other_deposits?: Array<{
@@ -339,6 +379,7 @@ const props = defineProps<{
                 }>;
             }
         >;
+        bank_withdrawals?: Array<{ bank_account_id: string; amount: number; reference?: string; purpose?: string }>;
         bank_deposits?: Array<{
             bank_account_id: string;
             amount: number;
@@ -357,6 +398,7 @@ const props = defineProps<{
             customer_id?: string;
             customer_name?: string;
             amount: number;
+            payment_account_id?: string;
         }>;
         expenses?: Array<{
             account_id: string;
@@ -425,6 +467,7 @@ const suppressDateChange = ref(false);
 
 // Check if form has meaningful data worth saving
 const hasFormData = (formData: Record<string, unknown>): boolean => {
+    if ((formData.bank_withdrawals as unknown[] | undefined)?.length) return true;
     // Check nozzle readings - any closing reading entered
     const nozzleReadings = formData.nozzle_readings as
         | Array<{ closing_electronic: number }>
@@ -772,6 +815,14 @@ const form = useForm({
 
     // Tab 3: Money In - Dynamic payment receipts
     opening_cash: props.previousClose.closing_cash || 0,
+    payments_received: [] as {
+        customer_id: string;
+        customer_name: string;
+        invoice_ids: string[];
+        amount: number;
+        payment_account_id: string;
+        reference: string;
+    }[],
     partner_deposits: [] as {
         partner_id: string;
         partner_name: string;
@@ -783,6 +834,7 @@ const form = useForm({
         available_balance: number;
         amount: number;
         reference: string;
+        payment_account_id?: string;
     }[],
     other_deposits: [] as {
         deposit_type: string;
@@ -804,8 +856,19 @@ const form = useForm({
         }
     >,
 
-    // Tab 4: Money Out
-    credit_sales: [] as { customer_id: string; customer_name: string; amount: number; reference: string }[],
+    // Tab 4: Money Out. Pending fuel-sale invoices (credit sales already made through a nozzle)
+    // are pre-checked here exactly like pendingBillPayments below: they are a channel of the
+    // close, never additional sales, and reduce expected cash by their amount.
+    credit_sales: (props.pendingFuelInvoices ?? []).map((invoice) => ({
+        customer_id: invoice.customer_id,
+        customer_name: invoice.customer_name,
+        amount: invoice.amount,
+        reference: invoice.reference,
+        invoice_id: invoice.invoice_id,
+        invoice_number: invoice.invoice_number,
+        pending_fuel_invoice: true,
+    })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean }[],
+    bank_withdrawals: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
     bank_deposits: [] as {
         bank_account_id: string;
         amount: number;
@@ -832,12 +895,26 @@ const form = useForm({
         customer_name: string;
         available_balance: number;
         amount: number;
+        payment_account_id?: string;
     }[],
     expenses: [] as {
         account_id: string;
         account_name: string;
         description: string;
         amount: number;
+    }[],
+
+    // Supplier bills / fuel purchases entered inline instead of via the Bills module.
+    purchases: [] as {
+        supplier_id: string;
+        item_id: string;
+        description: string;
+        quantity: number | null;
+        unit_cost: number | null;
+        tank_id: string;
+        supplier_invoice_number: string;
+        notes: string;
+        paid_now: boolean;
     }[],
 
     // Tab 5: Summary
@@ -913,6 +990,33 @@ const amanatDisbursementError = (index: number, field: string) =>
 const expenseError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`expenses.${index}.${field}`];
 
+const purchaseError = (index: number, field: string) =>
+    (form.errors as Record<string, string>)[`purchases.${index}.${field}`];
+
+const purchaseLineTotal = (row: { quantity: number | null; unit_cost: number | null }) =>
+    Number(row.quantity || 0) * Number(row.unit_cost || 0);
+
+const addPurchaseRow = () => {
+    form.purchases.push({
+        supplier_id: '',
+        item_id: '',
+        description: '',
+        quantity: null,
+        unit_cost: null,
+        tank_id: '',
+        supplier_invoice_number: '',
+        notes: '',
+        paid_now: false,
+    });
+};
+
+const removePurchaseRow = (index: number) => {
+    form.purchases.splice(index, 1);
+};
+
+const isFuelPurchaseItem = (itemId: string) =>
+    (props.purchaseItems ?? []).find((item) => item.id === itemId)?.is_fuel ?? false;
+
 // Reset form to initial empty state (preserving structure from props)
 const resetFormToInitial = () => {
     // Reset nozzle readings - keep structure but clear entered values
@@ -968,8 +1072,10 @@ const resetFormToInitial = () => {
         };
     });
 
+    form.bank_withdrawals = [];
     // Reset money in
     form.opening_cash = props.previousClose.closing_cash || 0;
+    form.payments_received = [];
     form.partner_deposits = [];
     form.amanat_deposits = [];
     form.other_deposits = [];
@@ -983,7 +1089,15 @@ const resetFormToInitial = () => {
     });
 
     // Reset money out
-    form.credit_sales = [];
+    form.credit_sales = (props.pendingFuelInvoices ?? []).map((invoice) => ({
+        customer_id: invoice.customer_id,
+        customer_name: invoice.customer_name,
+        amount: invoice.amount,
+        reference: invoice.reference,
+        invoice_id: invoice.invoice_id,
+        invoice_number: invoice.invoice_number,
+        pending_fuel_invoice: true,
+    }));
     form.bank_deposits = [];
     form.partner_withdrawals = [];
     form.employee_advances = [];
@@ -995,6 +1109,7 @@ const resetFormToInitial = () => {
     }));
     form.amanat_disbursements = [];
     form.expenses = [];
+    form.purchases = [];
 
     // Reset summary
     form.closing_cash = 0;
@@ -1171,6 +1286,7 @@ const hydrateFormForAmendment = () => {
         });
     }
 
+    form.bank_withdrawals = (orig.bank_withdrawals || []).map((row) => ({ ...row, reference: row.reference ?? '', purpose: row.purpose ?? '' }));
     // Hydrate bank deposits
     if (orig.bank_deposits && orig.bank_deposits.length > 0) {
         form.bank_deposits = orig.bank_deposits.map((bd) => ({
@@ -1577,9 +1693,20 @@ const totalNonCashReceipts = computed(() => {
 });
 
 // Money In = opening cash + every cash deposit + TOTAL sales (cash, card, transfer — all of it)
+const totalBankWithdrawals = computed(() => form.bank_withdrawals.reduce((sum, row) => sum + Number(row.amount || 0), 0));
+// Only a payment received into a cash account raises expected drawer cash, matching
+// DailyClosePaymentsReceivedService's affects_cash_drawer flag on the backend; a bank
+// account never touches it.
+const totalPaymentsReceivedCash = computed(() => {
+    const cashIds = new Set(props.cashAccountIds ?? []);
+    return form.payments_received.reduce((sum, row) => (cashIds.has(row.payment_account_id) ? sum + Number(row.amount || 0) : sum), 0);
+});
+
 const totalMoneyIn = computed(() => {
     return (
         form.opening_cash +
+        totalPaymentsReceivedCash.value +
+        totalBankWithdrawals.value +
         totalPartnerDeposits.value +
         totalAmanatDeposits.value +
         totalOtherDeposits.value +
@@ -1842,6 +1969,7 @@ const addAmanatDeposit = () => {
         available_balance: 0,
         amount: 0,
         reference: '',
+        payment_account_id: '',
     });
 };
 
@@ -1884,6 +2012,13 @@ const getOtherDepositTypeLabel = (type: string) => {
         'Other deposit'
     );
 };
+
+const bankWithdrawalError = (index: number, field: string) =>
+    (form.errors as Record<string, string>)[`bank_withdrawals.${index}.${field}`];
+const addBankWithdrawal = () => {
+    form.bank_withdrawals.push({ bank_account_id: '', amount: 0, reference: '', purpose: '' });
+};
+const removeBankWithdrawal = (index: number) => form.bank_withdrawals.splice(index, 1);
 
 const addBankDeposit = () => {
     form.bank_deposits.push({
@@ -1929,6 +2064,7 @@ const addAmanat = () => {
         customer_name: '',
         available_balance: 0,
         amount: 0,
+        payment_account_id: '',
     });
 };
 
@@ -4067,6 +4203,18 @@ const completedWorkflowSteps = computed(() => {
                                         />
                                     </div>
                                     <div class="col-span-3">
+                                        <Label class="text-xs">Receive into</Label>
+                                        <Select v-model="deposit.payment_account_id">
+                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+                                            <SelectContent>
+                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
+                                                    {{ account.code }} - {{ account.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="amanatDepositError(index, 'payment_account_id')" />
+                                    </div>
+                                    <div class="col-span-3">
                                         <Label class="text-xs">Reference</Label>
                                         <Input
                                             v-model="deposit.reference"
@@ -4309,6 +4457,111 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Cash Withdrawn from Bank</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        Cash collected from your bank and added to the station drawer.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="addBankWithdrawal"
+                                >
+                                    <Plus class="mr-1 h-4 w-4" /> Add
+                                </Button>
+                            </div>
+
+                            <div
+                                v-for="(deposit, index) in form.bank_withdrawals"
+                                :key="index"
+                                class="grid grid-cols-5 items-end gap-4"
+                            >
+                                <div>
+                                    <Label class="text-xs">Bank Account</Label>
+                                    <Select v-model="deposit.bank_account_id">
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem
+                                                v-for="b in bankAccounts"
+                                                :key="b.id"
+                                                :value="b.id"
+                                                >{{ b.name }}</SelectItem
+                                            >
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(
+                                                index,
+                                                'bank_account_id',
+                                            )
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Amount</Label>
+                                    <Input
+                                        v-model.number="deposit.amount"
+                                        type="number"
+                                        @focus="selectZeroValue"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'amount')
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Reference</Label>
+                                    <Input
+                                        v-model="deposit.reference"
+                                        placeholder="Slip #"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'reference')
+                                        "
+                                    />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Purpose</Label>
+                                    <Input
+                                        v-model="deposit.purpose"
+                                        placeholder="e.g., cash for station expenses"
+                                    />
+                                    <InputError
+                                        :message="
+                                            bankWithdrawalError(index, 'purpose')
+                                        "
+                                    />
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="removeBankWithdrawal(index)"
+                                >
+                                    <Trash2 class="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-if="totalBankWithdrawals" class="flex justify-between text-sm"><span>Cash Withdrawn from Bank</span><MoneyText :amount="totalBankWithdrawals" :currency="currencyCode" /></div>
+
+                        <PaymentsReceivedEntry
+                            v-model="form.payments_received"
+                            :errors="form.errors as Record<string, string>"
+                            :disabled="submitting || form.processing"
+                            :open-invoices="props.openInvoices ?? []"
+                            :payment-accounts="(props as any).paymentAccounts ?? []"
+                            :currency="currencyCode"
+                        />
+                        <Separator />
+
                         <!-- Money In Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">
                             <h4 class="text-sm font-semibold">
@@ -4419,7 +4672,7 @@ const completedWorkflowSteps = computed(() => {
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" />
+                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" />
                         <Separator />
                         <div class="space-y-4">
                             <div>
@@ -4826,6 +5079,18 @@ const completedWorkflowSteps = computed(() => {
                                                 )
                                             "
                                         />
+                                    </div>
+                                    <div class="w-48">
+                                        <Label class="text-xs">Pay from</Label>
+                                        <Select v-model="amanat.payment_account_id">
+                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+                                            <SelectContent>
+                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
+                                                    {{ account.code }} - {{ account.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="amanatDisbursementError(index, 'payment_account_id')" />
                                     </div>
                                     <div class="w-32">
                                         <Label class="text-xs">Amount</Label>
@@ -5426,6 +5691,122 @@ const completedWorkflowSteps = computed(() => {
                         </div>
 
                         <Separator />
+
+                        <!-- Supplier bills / fuel purchases entered inline (requires bill.create) -->
+                        <div v-if="canEnterPurchases" class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Purchases</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        A supplier bill (and, for fuel, a stock receipt into a tank) posted the moment this close is posted.
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" @click="addPurchaseRow">
+                                    <Plus class="mr-1 h-4 w-4" /> Add
+                                </Button>
+                            </div>
+
+                            <div
+                                v-for="(purchase, index) in form.purchases"
+                                :key="index"
+                                class="space-y-2 rounded-lg border p-3"
+                            >
+                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <div>
+                                        <Label class="text-xs">Supplier</Label>
+                                        <Select v-model="purchase.supplier_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="s in purchaseSuppliers ?? []"
+                                                    :key="s.id"
+                                                    :value="s.id"
+                                                    >{{ s.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'supplier_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Item</Label>
+                                        <Select v-model="purchase.item_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="it in purchaseItems ?? []"
+                                                    :key="it.id"
+                                                    :value="it.id"
+                                                    >{{ it.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'item_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Quantity</Label>
+                                        <Input v-model.number="purchase.quantity" type="number" @focus="selectZeroValue" />
+                                        <InputError :message="purchaseError(index, 'quantity')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Unit cost</Label>
+                                        <Input v-model.number="purchase.unit_cost" type="number" @focus="selectZeroValue" />
+                                        <InputError :message="purchaseError(index, 'unit_cost')" />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <div v-if="isFuelPurchaseItem(purchase.item_id)">
+                                        <Label class="text-xs">Tank</Label>
+                                        <Select v-model="purchase.tank_id">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="t in tanks"
+                                                    :key="t.id"
+                                                    :value="t.id"
+                                                    >{{ t.name }}</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'tank_id')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Supplier invoice #</Label>
+                                        <Input v-model="purchase.supplier_invoice_number" placeholder="Optional" />
+                                    </div>
+                                    <div class="flex items-end gap-2">
+                                        <input
+                                            :id="'purchase-paid-now-' + index"
+                                            v-model="purchase.paid_now"
+                                            type="checkbox"
+                                            class="h-4 w-4"
+                                        />
+                                        <Label :for="'purchase-paid-now-' + index" class="text-xs"
+                                            >Paid now from cash</Label
+                                        >
+                                    </div>
+                                    <div class="flex items-end justify-between gap-2">
+                                        <div class="text-sm font-medium">
+                                            <MoneyText
+                                                :amount="purchaseLineTotal(purchase)"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                            />
+                                        </div>
+                                        <Button variant="ghost" size="icon" @click="removePurchaseRow(index)">
+                                            <Trash2 class="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator v-if="canEnterPurchases" />
 
                         <!-- Money Out Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">

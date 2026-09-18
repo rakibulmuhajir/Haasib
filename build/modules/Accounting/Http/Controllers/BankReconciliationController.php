@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -82,7 +83,7 @@ class BankReconciliationController extends Controller
         $company = CompanyContext::getCompany();
 
         $validated = $request->validate([
-            'bank_account_id' => 'required|uuid|exists:acct.company_bank_accounts,id',
+            'bank_account_id' => ['required', 'uuid', Rule::exists(BankAccount::class, 'id')],
             'statement_date' => 'required|date',
             'statement_ending_balance' => 'required|numeric',
         ]);
@@ -191,7 +192,7 @@ class BankReconciliationController extends Controller
             ->findOrFail($reconciliation);
 
         $validated = $request->validate([
-            'transaction_id' => 'required|uuid|exists:acct.bank_transactions,id',
+            'transaction_id' => ['required', 'uuid', Rule::exists(BankTransaction::class, 'id')],
         ]);
 
         $transaction = BankTransaction::where('bank_account_id', $recon->bank_account_id)

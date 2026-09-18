@@ -218,6 +218,11 @@ trait DemoSupport
             'settings' => $contact === [] ? null : $contact,
         ]);
 
+        // Everything below writes tenant-scoped tables. A seeder is not a
+        // request, so nothing has set the company context for it, and under
+        // enforced row level security every one of those writes is rejected.
+        CompanyContext::setContext($company);
+
         $user->companies()->syncWithoutDetaching([
             $company->id => ['role' => 'owner', 'is_active' => true, 'joined_at' => now()],
         ]);
@@ -283,7 +288,10 @@ trait DemoSupport
 
         $onboarding->completeOnboarding($company->fresh());
 
-        return $company->fresh();
+        $fresh = $company->fresh();
+        CompanyContext::setContext($fresh);
+
+        return $fresh;
     }
 
     protected function accountBySubtype(Company $company, string $subtype): Account

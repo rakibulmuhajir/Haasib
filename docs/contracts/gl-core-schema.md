@@ -6,11 +6,59 @@ Single source of truth for fiscal years, accounting periods, transactions, and j
 - Schema: `acct` on `pgsql`.
 - UUID primary keys with `public.gen_random_uuid()` default.
 - Soft deletes via `deleted_at` on transactions only; journal entries cascade with parent.
-- RLS required with company isolation + super-admin override.
+- RLS required with company isolation + super-admin override. RLS is **not yet enforced at runtime** — see "Row level security: ready, not yet switched on" below.
 - Models must set `$connection = 'pgsql'`, schema-qualified `$table`.
 - Money precision: `debit_amount`/`credit_amount` use `numeric(15,2)`; journals MUST balance at this precision.
 - Foreign currency amounts use `numeric(18,6)` with `exchange_rate numeric(18,8)`.
 - All transactions must have `total_debit = total_credit` (enforced by DB constraint).
+
+## Row level security: ready, not yet switched on
+
+**Today the application still connects as the `postgres` superuser, so every RLS
+policy in this database is bypassed and tenant isolation rests entirely on
+application-level `company_id` scoping.** The `haasib_app` role now exists —
+neither superuser nor `BYPASSRLS` — and the write paths that run outside a
+request carry company context, but the switch itself has not been made: see
+`docs/reviews/2026-09-18-rls-enforcement-readiness.md` for what still blocks it
+and how to perform and roll back the switch.
+
+The rules below are what enforcement requires, and they are worth following now
+so the switch is a configuration change rather than a rewrite:
+
+- **Every write path must have company context.** `app.current_company_id` must
+  hold the row's own `company_id` before an INSERT or UPDATE, or PostgreSQL
+  rejects it with `42501 new row violates row-level security policy`. HTTP
+  requests get this from the `identify.company` middleware via
+  `CompanyContextService`. Console commands, seeders, queued jobs and tests get
+  nothing: they must set it themselves.
+- **Reads without context return nothing, not everything.** A query with no
+  company context matches zero rows and reports success. That reads exactly
+  like "there was no data", so a missing `set_config` looks like an empty
+  screen rather than an error. Check the context before believing an empty
+  result.
+- **Use `CompanyContextService`.** `withContext($company, $callback)` sets the
+  context for one unit of work and restores whatever was there before.
+  `crossCompany($callback)` is the escape hatch for work that legitimately
+  spans companies — a repair pass, a permission sync, a seeder looking up which
+  companies exist. It sets `app.is_super_admin` for the duration and puts the
+  previous value back. Never reach for `NO FORCE ROW LEVEL SECURITY` or a
+  `BYPASSRLS` role instead: a failure then leaves a session setting behind
+  rather than a table with its isolation switched off.
+- **Policies must guard the cast.** Write
+  `company_id = nullif(current_setting('app.current_company_id', true), '')::uuid`.
+  A GUC that has been `RESET` reads back as the empty string, and `''::uuid`
+  raises `22P02` — so an unguarded policy errors where it should have returned
+  nothing.
+- **One connection.** `app.current_company_id` is a PostgreSQL *session*
+  setting. The schema-named connections in `config/database.php` (`acct`,
+  `inv`, `pay`, `fuel`, `auth`) are separate sessions and carry no context at
+  all. Use the default connection with a schema-qualified table name.
+- **Migrations run as the owner**, not as `haasib_app` (connection
+  `pgsql_migrator`). A data-backfilling migration still sees its own rows, but
+  a migration that queries across companies should use the
+  `app.is_super_admin` escape hatch explicitly.
+
+Rollout, verification and rollback: `docs/reviews/2026-09-18-rls-enforcement-rollout.md`.
 
 ## Tables
 
@@ -163,7 +211,7 @@ Single source of truth for fiscal years, accounting periods, transactions, and j
 - Relationships: belongsTo Company; belongsTo FiscalYear; belongsTo AccountingPeriod; hasMany JournalEntry; belongsTo ReversalOf (self); hasOne ReversedBy (self); belongsTo CorrectsTransaction (self); hasOne CorrectedBy (self); belongsTo LockedBy (User); belongsTo AmendedBy (User).
 - Validation:
   - `transaction_number`: required|string|max:50; unique per company (soft-delete aware).
-  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing,fuel_daily_close,fuel_daily_close_reversal.
+  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing,expense,fuel_daily_close,fuel_daily_close_reversal. (`expense` already covered a Daily Close's own inline/post-close expense entries — `Expense\CreateAction`'s standalone `/expenses` page reuses the same value so both entry points are one channel to the ledger, not two.)
   - `transaction_date`: required|date.
   - `posting_date`: required|date.
   - `fiscal_year_id`: required|uuid|exists:acct.fiscal_years,id.
@@ -449,3 +497,19 @@ cover direct SQL mutations as well as application actions and serialize against 
 company row used by opening save/lock. Ordinary settlement may update paid_amount,
 balance, paid_at and settlement status; it cannot change principal or void history.
 No ordinary unlock bypass is introduced.
+
+## PaymentAllocation name collision
+
+Three unrelated tables/models share the name "PaymentAllocation" (or a close
+variant). They are genuinely different mechanisms — not a duplication to be
+merged — distinguished only by schema/namespace:
+
+| Model | Table | Allocates | Nullable target column |
+|---|---|---|---|
+| `App\Modules\Accounting\Models\PaymentAllocation` | `acct.payment_allocations` | A buyer `Payment` to an `Invoice` | `invoice_id` nullable since `2026_09_18_000001_make_payment_allocations_invoice_nullable.php` — a null-invoice row is an on-account credit (advance, or the unapplied remainder of a payment) |
+| `App\Modules\Accounting\Models\BillPaymentAllocation` | `acct.bill_payment_allocations` | A supplier `BillPayment` to a `Bill` (the AP mirror of the row above) | `bill_id` — not nullable; no on-account concept on this side as of this writing |
+| `App\Modules\Umrah\Models\PaymentAllocation` | `umrah.payment_allocations` | A tour-group `GroupPayment` to a `VisaGroup` (also used, via a null `visa_group_id`, to record a `Refund`'s debit against agent advances) | unrelated to invoices entirely — no `invoice_id`/`bill_id` column exists on this table |
+
+Each model's class docblock names its siblings so a future reader who finds
+one by grepping "PaymentAllocation" is not misled into treating them as the
+same concept.

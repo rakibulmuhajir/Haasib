@@ -28,17 +28,14 @@ import {
   Calendar,
   Lock,
   Unlock,
-  Edit,
   ArrowLeft,
   CheckCircle,
   XCircle,
   RotateCcw,
-  GitBranch,
   Fuel,
   Wallet,
   ArrowDownRight,
 } from 'lucide-vue-next'
-import AmendmentChain from './AmendmentChain.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { useLexicon } from '@/composables/useLexicon'
 const { t } = useLexicon()
@@ -50,11 +47,8 @@ interface TransactionData {
   created_at: string
   status: 'posted' | 'locked' | 'reversed' | 'reversal' | 'correction'
   is_locked: boolean
-  is_amendable: boolean
   lock_reason: string | null
   locked_at: string | null
-  amendment_reason: string | null
-  amended_at: string | null
   metadata: {
     date?: string
     opening_cash?: number
@@ -65,6 +59,7 @@ interface TransactionData {
     expected_closing?: number
     fuel_sales?: Record<string, { liters: number; revenue: number; cogs: number }>
     other_sales?: number
+    bank_withdrawals?: number
     bank_deposits?: number
     partner_withdrawals?: number
     employee_advances?: number
@@ -81,17 +76,6 @@ interface TransactionData {
   }
 }
 
-interface ChainItem {
-  id: string
-  transaction_number: string
-  transaction_date: string
-  created_at: string
-  type: 'original' | 'reversal' | 'correction'
-  status: string
-  metadata: Record<string, unknown>
-  amendment_reason: string | null
-}
-
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   transaction: TransactionData
@@ -102,10 +86,8 @@ const props = defineProps<{
     tank: Array<{ id: string; label: string; current_value: number }>
     nozzle: Array<{ id: string; label: string; current_value: number }>
   }
-  reconciliation?: { legacy: boolean; has_post_close_activity?: boolean; audit_events?: any[]; snapshot?: any; current?: any; activity: any[]; corrections?: any[] }
-  amendmentChain: ChainItem[]
+  reconciliation?: { has_post_close_activity?: boolean; audit_events?: any[]; snapshot?: any; current?: any; activity: any[]; corrections?: any[] }
   permissions: {
-    canAmend: boolean
     canLock: boolean
     canUnlock: boolean
   }
@@ -165,8 +147,6 @@ const statusConfig = computed(() => {
   return configs[props.transaction.status] || configs.posted
 })
 
-const hasAmendmentChain = computed(() => props.amendmentChain.length > 1)
-
 const metadata = computed(() => props.transaction.metadata || {})
 
 // Sales that were paid by card/transfer/fuel card went straight to a bank or
@@ -183,7 +163,7 @@ const totalMoneyIn = computed(() => {
   // Opening cash is shown separately below. This total must contain only
   // current-day inflows, otherwise the detail view double-counts the opening
   // drawer balance while the reconciliation table correctly reports money_in.
-  return Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
+  return Number(m.bank_withdrawals || 0) + Number(m.partner_deposits || 0) + Number(m.amanat_deposits || 0) + Number(m.other_deposits || 0) + Number(m.total_revenue || 0)
 })
 
 const totalMoneyOut = computed(() => {
@@ -229,14 +209,13 @@ const unlockTransaction = () => {
     <Card v-if="reconciliation" class="mb-6">
       <CardHeader>
         <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
-        <CardDescription v-if="reconciliation.legacy">This legacy close has no captured source snapshot. Its original declaration is shown below; historical adjustment details cannot be reconstructed reliably.</CardDescription>
-        <CardDescription v-else>Posted {{ formatDateTime(reconciliation.snapshot?.posted_at) }} by {{ reconciliation.snapshot?.posted_by_name || reconciliation.snapshot?.posted_by }} · Business date {{ transaction.transaction_date }}</CardDescription>
+        <CardDescription>Posted {{ formatDateTime(reconciliation.snapshot?.posted_at) }} by {{ reconciliation.snapshot?.posted_by_name || reconciliation.snapshot?.posted_by }} · Business date {{ transaction.transaction_date }}</CardDescription>
         <div v-if="reconciliation.snapshot?.zero_sales_confirmed" class="mt-2 rounded-md border border-status-info/30 bg-status-info/10 px-3 py-2 text-sm">
           <span class="font-medium">Zero-sales day confirmed.</span>
           <span v-if="reconciliation.snapshot?.zero_sales_reason" class="text-muted-foreground"> {{ reconciliation.snapshot.zero_sales_reason }}</span>
         </div>
       </CardHeader>
-      <CardContent v-if="!reconciliation.legacy" class="space-y-6">
+      <CardContent class="space-y-6">
         <table class="w-full text-sm">
           <thead><tr class="border-b text-left"><th class="py-2">Cash</th><th>POSTED SNAPSHOT</th><th>CURRENT / RECONCILED</th></tr></thead>
           <tbody>
@@ -331,15 +310,6 @@ const unlockTransaction = () => {
           </Link>
         </Button>
 
-        <template v-if="permissions.canAmend && transaction.is_amendable">
-          <Button as-child>
-            <Link :href="`/${company.slug}/fuel/daily-close/${transaction.id}/amend`">
-              <Edit class="h-4 w-4 mr-2" />
-              Amend
-            </Link>
-          </Button>
-        </template>
-
         <template v-if="permissions.canLock && !transaction.is_locked && transaction.status === 'posted'">
           <Dialog>
             <DialogTrigger as-child>
@@ -352,7 +322,7 @@ const unlockTransaction = () => {
               <DialogHeader>
                 <DialogTitle>Lock Daily Close?</DialogTitle>
                 <DialogDescription>
-                  Locking this daily close will prevent any amendments. Only an owner can unlock it later.
+                  Locking this daily close will prevent post-close corrections. Only an owner can unlock it later.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -377,7 +347,7 @@ const unlockTransaction = () => {
               <DialogHeader>
                 <DialogTitle>Unlock Daily Close?</DialogTitle>
                 <DialogDescription>
-                  Unlocking this daily close will allow amendments again. Are you sure?
+                  Unlocking this daily close will allow post-close corrections again. Are you sure?
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -426,9 +396,6 @@ const unlockTransaction = () => {
               This is a correction entry
             </template>
           </div>
-          <p v-if="transaction.amendment_reason" class="text-sm text-muted-foreground mt-1">
-            Reason: {{ transaction.amendment_reason }}
-          </p>
         </div>
         <Badge :variant="statusConfig.variant">
           <component :is="statusConfig.icon" class="h-3 w-3 mr-1" />
@@ -436,24 +403,6 @@ const unlockTransaction = () => {
         </Badge>
       </div>
     </div>
-
-    <!-- Amendment Chain -->
-    <template v-if="hasAmendmentChain">
-      <Card class="mb-6">
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2">
-            <GitBranch class="h-5 w-5" />
-            Amendment History
-          </CardTitle>
-          <CardDescription>
-            This entry is part of an amendment chain
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AmendmentChain :chain="amendmentChain" :current-id="transaction.id" :company-slug="company.slug" />
-        </CardContent>
-      </Card>
-    </template>
 
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -535,6 +484,10 @@ const unlockTransaction = () => {
             <div class="flex justify-between items-center py-2">
               <span>Total Sales</span>
               <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.total_revenue" :currency="currency" :fraction-digits="0" /></span>
+            </div>
+            <div v-if="metadata.bank_withdrawals" class="flex justify-between items-center py-2">
+              <span>Cash Withdrawn from Bank</span>
+              <MoneyText :amount="metadata.bank_withdrawals" :currency="currency" />
             </div>
             <div class="flex justify-between items-center py-2 font-semibold">
               <span>Total Money In</span>

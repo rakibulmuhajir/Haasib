@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
+use App\Modules\Accounting\Exceptions\IndustryCoaPackNotSeededException;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\FiscalYearService;
@@ -21,16 +22,33 @@ class CompanyBootstrapService
             return;
         }
 
-        $this->ensureIndustryDefaults($company, $industryCode);
-        $this->ensureBankAccount($company, $userId);
+        try {
+            $this->ensureIndustryDefaults($company, $industryCode);
+            $this->ensureBankAccount($company, $userId);
 
-        $company = $company->fresh();
+            $company = $company->fresh();
 
-        app(CompanyBankAccountSyncService::class)->ensureForCompany($company->id, $userId);
-        app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
-        app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company->fresh());
-        app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
-        app(FiscalYearService::class)->ensureCurrentFiscalYearExists($company->id);
+            app(CompanyBankAccountSyncService::class)->ensureForCompany($company->id, $userId);
+            app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
+            app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company->fresh());
+            app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
+            app(FiscalYearService::class)->ensureCurrentFiscalYearExists($company->id);
+        } catch (IndustryCoaPackNotSeededException $e) {
+            // The company row was already committed by CompanyController@store in its own
+            // transaction before this method ever runs, so there is nothing left to roll
+            // back here. Mark it explicitly incomplete instead of letting it sit there
+            // looking like an ordinary, ready company with no chart of accounts at all --
+            // IdentifyCompany blocks ordinary use of a company in this state until the
+            // Restore Missing Accounts repair path (AccountController::restoreMissing)
+            // clears the flag.
+            $company->forceFill(['bootstrap_incomplete_at' => now()])->saveQuietly();
+
+            throw $e;
+        }
+
+        if ($company->bootstrap_incomplete_at !== null) {
+            $company->forceFill(['bootstrap_incomplete_at' => null])->saveQuietly();
+        }
     }
 
     private function ensureIndustryDefaults(Company $company, string $industryCode): void
@@ -40,6 +58,18 @@ class CompanyBootstrapService
                 'industry_code' => $industryCode,
                 'timezone' => $company->timezone ?? 'UTC',
             ]);
+        } catch (IndustryCoaPackNotSeededException $e) {
+            // Do not swallow this one: an unseeded COA pack means the company would
+            // otherwise report success with no Accounts Receivable/Payable. Let it
+            // propagate so the caller (CompanyController@store) surfaces a visible
+            // "some defaults could not be prepared" error instead of silent success.
+            Log::error('Company bootstrap: industry COA pack is not seeded', [
+                'company_id' => $company->id,
+                'industry_code' => $industryCode,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('Company bootstrap failed to apply industry defaults', [
                 'company_id' => $company->id,

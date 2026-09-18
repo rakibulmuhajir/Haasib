@@ -26,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -156,27 +157,21 @@ class FuelStationOnboardingController extends Controller
             // Table might not exist
         }
 
-        // Get employees for the company - use DB query to avoid model issues
+        // Get employees for the company - use DB query to avoid model issues.
+        // The default connection only: the schema-named connections are separate
+        // sessions, and app.current_company_id is a session setting, so a query
+        // on one of them runs with no tenant context at all under row level
+        // security.
         $employees = collect();
         try {
-            DB::connection('pay')->select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
-            $employees = DB::connection('pay')
-                ->table('employees')
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+            $employees = DB::table('pay.employees')
                 ->where('company_id', $company->id)
                 ->whereNull('deleted_at')
                 ->select(['id', 'first_name', 'last_name', 'phone', 'position', 'base_salary'])
                 ->get();
         } catch (\Throwable $e) {
-            try {
-                DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
-                $employees = DB::table('pay.employees')
-                    ->where('company_id', $company->id)
-                    ->whereNull('deleted_at')
-                    ->select(['id', 'first_name', 'last_name', 'phone', 'position', 'base_salary'])
-                    ->get();
-            } catch (\Throwable $fallbackException) {
-                // Table might not exist
-            }
+            // Table might not exist
         }
 
         // Get dip sticks - use DB query
@@ -608,7 +603,6 @@ class FuelStationOnboardingController extends Controller
             $accountMappings = $this->fuelProductAccountMapper->resolveAccounts(
                 $company->id,
                 $normalizedCategory,
-                $baseCurrency,
                 $request->user()->id
             );
             $payload = [
@@ -991,7 +985,7 @@ class FuelStationOnboardingController extends Controller
             'pumps' => 'required|array|min:1',
             'pumps.*.id' => 'nullable|uuid',
             'pumps.*.name' => 'required|string|max:255',
-            'pumps.*.tank_id' => 'required|uuid|exists:inv.warehouses,id',
+            'pumps.*.tank_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'pumps.*.nozzle_count' => 'required|integer|min:1|max:2',
             'pumps.*.front_electronic' => 'nullable|numeric|min:0',
             'pumps.*.front_manual' => 'nullable|numeric|min:0',
@@ -1183,7 +1177,7 @@ class FuelStationOnboardingController extends Controller
         $validated = $request->validate([
             'effective_date' => 'required|date',
             'rates' => 'required|array|min:1',
-            'rates.*.item_id' => 'required|uuid|exists:inv.items,id',
+            'rates.*.item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
             'rates.*.purchase_rate' => 'required|numeric|min:0',
             'rates.*.sale_rate' => 'required|numeric|min:0',
         ]);
@@ -1284,7 +1278,7 @@ class FuelStationOnboardingController extends Controller
         DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
             $lubricantsAccount = app(\App\Modules\FuelStation\Services\FuelProductAccountMapper::class)
-                ->resolveAccounts($company->id, 'lubricant_packaged', $baseCurrency, $request->user()->id)['asset'];
+                ->resolveAccounts($company->id, 'lubricant_packaged', $request->user()->id)['asset'];
 
             foreach ($validated['lubricants'] as $lubricantData) {
                 $item = null;
@@ -1415,7 +1409,7 @@ class FuelStationOnboardingController extends Controller
             'stock_date' => 'required|date',
             'tank_readings' => 'required|array|min:1',
             'tank_readings.*.id' => 'nullable|uuid',
-            'tank_readings.*.tank_id' => 'required|uuid|exists:inv.warehouses,id',
+            'tank_readings.*.tank_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'tank_readings.*.stick_reading' => 'nullable|numeric|min:0',
             'tank_readings.*.liters' => 'required|numeric|min:0',
             'tank_readings.*.value' => 'nullable|numeric|min:0',

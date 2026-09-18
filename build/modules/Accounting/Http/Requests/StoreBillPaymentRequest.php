@@ -4,6 +4,8 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -52,7 +54,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
         ];
 
         return [
-            'vendor_id' => ['required', 'uuid', 'exists:acct.vendors,id'],
+            'vendor_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')],
             'payment_number' => ['nullable', 'string', 'max:50', $paymentNumberRule],
             'payment_date' => ['required', 'date', 'before_or_equal:today'],
             'amount' => ['required', 'numeric', 'min:0.01'],
@@ -66,7 +68,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'payment_account_id' => [
                 $hasPaymentSplits ? 'nullable' : 'required',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
                     ->where('is_active', true)),
             ],
@@ -74,7 +76,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'payment_splits.*.payment_account_id' => [
                 'required_with:payment_splits',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
                     ->where('is_active', true)),
             ],
@@ -85,13 +87,13 @@ class StoreBillPaymentRequest extends BaseFormRequest
                 'nullable',
                 'uuid',
                 Rule::requiredIf(fn () => $requiresApAccount),
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],
             // Allocations
             'allocations' => ['nullable', 'array'],
-            'allocations.*.bill_id' => ['required_with:allocations', 'uuid', 'exists:acct.bills,id'],
+            'allocations.*.bill_id' => ['required_with:allocations', 'uuid', Rule::exists(Bill::class, 'id')],
             'allocations.*.amount_allocated' => ['required_with:allocations', 'numeric', 'min:0'],
         ];
     }

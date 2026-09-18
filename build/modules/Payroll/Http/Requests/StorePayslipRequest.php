@@ -5,7 +5,11 @@ namespace App\Modules\Payroll\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Models\CompanyCurrency;
+use App\Modules\Payroll\Models\DeductionType;
+use App\Modules\Payroll\Models\EarningType;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CurrentCompany;
 use Closure;
 use Illuminate\Validation\Rule;
@@ -29,8 +33,16 @@ class StorePayslipRequest extends BaseFormRequest
         $company = app(CurrentCompany::class)->get();
 
         return [
-            'payroll_period_id' => "required|uuid|exists:pay.payroll_periods,id,company_id,{$company->id}",
-            'employee_id' => "required|uuid|exists:pay.employees,id,company_id,{$company->id}",
+            'payroll_period_id' => [
+                'required',
+                'uuid',
+                Rule::exists(PayrollPeriod::class, 'id')->where('company_id', $company->id),
+            ],
+            'employee_id' => [
+                'required',
+                'uuid',
+                Rule::exists(Employee::class, 'id')->where('company_id', $company->id),
+            ],
             'currency' => [
                 'required',
                 'string',
@@ -55,12 +67,12 @@ class StorePayslipRequest extends BaseFormRequest
             'notes' => 'nullable|string',
             'lines' => 'array',
             'lines.*.line_type' => 'required|in:earning,deduction,employer',
-            'lines.*.earning_type_id' => 'nullable|uuid|exists:pay.earning_types,id',
-            'lines.*.deduction_type_id' => 'nullable|uuid|exists:pay.deduction_types,id',
+            'lines.*.earning_type_id' => ['nullable', 'uuid', Rule::exists(EarningType::class, 'id')],
+            'lines.*.deduction_type_id' => ['nullable', 'uuid', Rule::exists(DeductionType::class, 'id')],
             'lines.*.salary_advance_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('pay.salary_advances', 'id')->where('company_id', $company->id),
+                Rule::exists(SalaryAdvance::class, 'id')->where('company_id', $company->id),
             ],
             'lines.*.description' => 'nullable|string|max:255',
             'lines.*.quantity' => 'required|numeric|min:0',

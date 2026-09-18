@@ -38,6 +38,11 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next';
 import { computed } from 'vue';
+import {
+    allocationDisplayAmount as computeAllocationDisplayAmount,
+    appliedAllocations as computeAppliedAllocations,
+    unappliedAmount,
+} from '../../lib/paymentAllocations';
 
 interface Invoice {
     id: string;
@@ -134,24 +139,22 @@ const documentDates = computed(() =>
     ),
 );
 
-// Allocation amounts are stored in invoice currency, while a receipt is
-// printed in payment currency. Use the base allocation when a base-currency
-// payment settles a foreign-currency invoice so the receipt still reconciles.
+// Allocation splitting (applied vs. on-account/unapplied) lives in lib/paymentAllocations
+// so it can be unit tested without mounting this whole page -- see
+// tests/js/paymentAllocations.spec.ts and commit f4811b93.
 const allocationDisplayAmount = (allocation: PaymentAllocation) =>
-    allocation.invoice?.currency &&
-    allocation.invoice.currency !== props.payment.currency
-        ? Number(allocation.base_amount_allocated)
-        : Number(allocation.amount_allocated);
+    computeAllocationDisplayAmount(allocation, props.payment.currency);
 
-const allocatedTotal = computed(() =>
-    props.payment.payment_allocations.reduce(
-        (sum, allocation) => sum + allocationDisplayAmount(allocation),
-        0,
-    ),
+const appliedAllocations = computed(() =>
+    computeAppliedAllocations(props.payment.payment_allocations),
 );
 
-const unapplied = computed(
-    () => Number(props.payment.amount) - allocatedTotal.value,
+const unapplied = computed(() =>
+    unappliedAmount(
+        props.payment.payment_allocations,
+        props.payment.amount,
+        props.payment.currency,
+    ),
 );
 
 /**
@@ -160,14 +163,10 @@ const unapplied = computed(
  * total or the receipt is wrong, so the remainder is never left off.
  */
 const documentLines = computed<DocumentLine[]>(() => {
-    const lines: DocumentLine[] = props.payment.payment_allocations.map(
-        (allocation) => ({
-            description: allocation.invoice?.invoice_number
-                ? `Applied to ${allocation.invoice.invoice_number}`
-                : 'Applied to invoice',
-            amount: allocationDisplayAmount(allocation),
-        }),
-    );
+    const lines: DocumentLine[] = appliedAllocations.value.map((allocation) => ({
+        description: `Applied to ${allocation.invoice?.invoice_number}`,
+        amount: allocationDisplayAmount(allocation),
+    }));
 
     if (unapplied.value > 0.005) {
         lines.push({
@@ -290,7 +289,7 @@ const summaryItems = computed(() => [
                     </CardHeader>
                     <CardContent class="space-y-3">
                         <div
-                            v-for="allocation in payment.payment_allocations"
+                            v-for="allocation in appliedAllocations"
                             :key="allocation.id"
                             class="flex items-center justify-between gap-3 text-sm"
                         >
@@ -329,7 +328,7 @@ const summaryItems = computed(() => [
 
                         <p
                             v-if="
-                                !payment.payment_allocations.length &&
+                                !appliedAllocations.length &&
                                 unapplied <= 0.005
                             "
                             class="text-sm text-muted-foreground"

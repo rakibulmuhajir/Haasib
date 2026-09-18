@@ -1,6 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
-import { ClipboardCheck, CreditCard, Droplets, Gauge, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen } from 'lucide-vue-next'
+import { ClipboardCheck, CreditCard, Fuel, Droplets, Gauge, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -32,11 +32,15 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('bills', 'Bill Payments', '/bill-payments', Banknote),
         ...item('vendors', t('vendors'), '/vendors', Truck),
         ...item('settlements', 'Vendor Card Settlement', '/fuel/vendor-cards/pending', CreditCard),
+        ...item('expenses', 'Record Expense', '/expenses', ReceiptText),
       ] },
       { label: 'Customers', items: [
         ...item('customers', 'All Customers', '/customers', Users),
         ...item('customers', 'Credit Customers', '/fuel/credit-customers', CreditCard),
+        ...item('fuelSale', 'Record Fuel Sale', '/fuel/sales/form', Fuel),
         ...item('customers', 'Amanat Depositors', '/fuel/amanat', HandCoins),
+        ...item('payments', 'Payments Received', '/payments', HandCoins),
+        ...item('creditNotes', 'Credit Notes', '/credit-notes', FileMinus),
       ] },
       { label: 'Team & Partners', items: [
         ...item('employees', 'Employees', '/employees', UserCog, context.isPayrollEnabled),
@@ -53,11 +57,16 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Stock Variance & Claims', '/fuel/reports/stock-variance', TrendingUp),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },
+      { label: 'Banking', items: [
+        ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),
+        ...item('banking', 'Bank Transactions', '/banking/transactions', Landmark),
+        ...item('bankFeed', 'Bank Feed', '/banking/feed', ArrowLeftRight),
+        ...item('bankReconciliation', 'Bank Reconciliation', '/banking/reconciliation', Scale),
+      ] },
       { label: t('settings'), items: [
         ...item('settings', 'Station Settings', '/fuel/settings', Settings),
         ...item('warehouses', 'Tanks & Warehouses', '/warehouses', Warehouse, context.isInventoryEnabled),
         ...item('pumps', 'Pumps & Nozzles', '/fuel/pumps', Gauge),
-        ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),
         ...item('settings', 'Setup Wizard', '/fuel/onboarding', Settings),
         { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: BookOpen },
         ...item('journals', 'Advanced Accounting · Journal Entries', '/journals', BookOpen),

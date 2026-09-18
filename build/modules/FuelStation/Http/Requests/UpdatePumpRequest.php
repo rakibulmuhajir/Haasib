@@ -4,6 +4,7 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
 
@@ -31,7 +32,7 @@ class UpdatePumpRequest extends BaseFormRequest
                     ->whereNull('deleted_at')
                     ->ignore($pumpId),
             ],
-            'tank_id' => ['sometimes', 'required', 'uuid', 'exists:inv.warehouses,id'],
+            'tank_id' => ['sometimes', 'required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'current_meter_reading' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ];

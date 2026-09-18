@@ -11,7 +11,6 @@ use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
-use App\Modules\FuelStation\Http\Requests\StoreDailyCloseAmendmentRequest;
 use App\Modules\FuelStation\Http\Requests\UnlockDailyCloseRequest;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Investor;
@@ -21,7 +20,7 @@ use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
-use App\Modules\FuelStation\Services\DailyCloseAmendmentService;
+use App\Modules\FuelStation\Services\DailyCloseLockService;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
@@ -41,7 +40,7 @@ class DailyCloseController extends Controller
 {
     public function __construct(
         private readonly DailyCloseService $dailyCloseService,
-        private readonly DailyCloseAmendmentService $amendmentService,
+        private readonly DailyCloseLockService $lockService,
     ) {}
 
     /**
@@ -164,6 +163,84 @@ class DailyCloseController extends Controller
                     'affects_cash_drawer' => $payment->payment_account_id === $cashAccountId,
                 ];
             });
+    }
+
+    /**
+     * Standalone credit fuel-sale invoices for this date not yet linked to a close. Every
+     * litre already went through a nozzle the close reads, so these are pre-checked as a
+     * channel of the close (see DailyCloseCreditSaleService::pendingFuelInvoiceDetails), never
+     * additional sales.
+     */
+    private function getPendingFuelInvoicesForDailyClose(string $companyId, string $date)
+    {
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereDate('invoice_date', $date)
+            ->whereNull('transaction_id')
+            ->whereHas('saleMetadata', fn ($q) => $q->where('sale_type', \App\Modules\FuelStation\Models\SaleMetadata::TYPE_CREDIT))
+            ->with(['customer:id,name', 'lineItems'])
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(function (\App\Modules\Accounting\Models\Invoice $invoice) {
+                $line = $invoice->lineItems->first();
+                return [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'customer_id' => $invoice->customer_id,
+                    'customer_name' => $invoice->customer?->name ?? 'Buyer',
+                    'litres' => (float) ($line->quantity ?? 0),
+                    'amount' => (float) $invoice->total_amount,
+                    'reference' => $invoice->invoice_number,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Buyers with an outstanding invoice, for the "Payments Received" section of the close:
+     * a searchable list of invoices to settle, each showing its own outstanding balance.
+     */
+    private function getOpenInvoicesForDailyClose(string $companyId)
+    {
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereNotIn('status', ['draft', 'void', 'cancelled', 'paid'])
+            ->where('balance', '>', 0)
+            ->with('customer:id,name')
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(fn (\App\Modules\Accounting\Models\Invoice $invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'customer_id' => $invoice->customer_id,
+                'customer_name' => $invoice->customer?->name ?? 'Buyer',
+                'balance' => (float) $invoice->balance,
+                'currency' => $invoice->currency,
+            ])
+            ->values();
+    }
+
+    /** Suppliers selectable for an inline purchase entered inside the Daily Close. */
+    private function getPurchaseSuppliersForDailyClose(string $companyId)
+    {
+        return \App\Modules\Accounting\Models\Vendor::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /** Purchasable items (fuel + non-fuel) selectable for an inline purchase. */
+    private function getPurchaseItemsForDailyClose(string $companyId)
+    {
+        return Item::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->orderBy('name')
+            ->get(['id', 'name', 'fuel_category', 'unit_of_measure'])
+            ->map(fn (Item $item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'is_fuel' => !is_null($item->fuel_category),
+                'unit' => $item->unit_of_measure ?? 'unit',
+            ]);
     }
 
     private function getPartnersForDailyClose(string $companyId)
@@ -519,6 +596,10 @@ class DailyCloseController extends Controller
         $employees = $this->getEmployeesForAdvances($companyId);
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
+        $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
+        $purchaseSuppliers = $this->getPurchaseSuppliersForDailyClose($companyId);
+        $purchaseItems = $this->getPurchaseItemsForDailyClose($companyId);
+        $canEnterPurchases = auth()->user()?->hasCompanyPermission(Permissions::BILL_CREATE) ?? false;
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -527,6 +608,15 @@ class DailyCloseController extends Controller
             ->where('subtype', 'bank')
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
+        $openInvoices = $this->getOpenInvoicesForDailyClose($companyId);
+        // Which of paymentAccounts (below) are cash, so the Payments Received section can
+        // tell the frontend which rows raise expected drawer cash without redeclaring the
+        // payment-accounts query itself.
+        $cashAccountIds = Account::where('company_id', $companyId)->where('is_active', true)
+            ->whereNull('deleted_at')->where('subtype', 'cash')->pluck('id')->all();
+        $paymentAccounts = Account::where('company_id', $companyId)
+            ->where('is_active', true)->whereNull('deleted_at')->whereIn('subtype', ['cash', 'bank'])
+            ->orderBy('code')->get(['id', 'code', 'name']);
 
         // Get expense accounts
         $expenseAccounts = Account::where('company_id', $companyId)
@@ -624,9 +714,16 @@ class DailyCloseController extends Controller
             'employees' => $employees,
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
+            'pendingFuelInvoices' => $pendingFuelInvoices,
+            'purchaseSuppliers' => $purchaseSuppliers,
+            'purchaseItems' => $purchaseItems,
+            'canEnterPurchases' => $canEnterPurchases,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
+            'openInvoices' => $openInvoices,
+            'cashAccountIds' => $cashAccountIds,
+            'paymentAccounts' => $paymentAccounts,
             'expenseAccounts' => $expenseAccounts,
             'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,
@@ -708,7 +805,6 @@ class DailyCloseController extends Controller
 
         // Get user permissions for UI
         $user = $request->user();
-        $canAmend = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_AMEND);
         $canLock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_LOCK);
         $canUnlock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_UNLOCK);
 
@@ -721,7 +817,6 @@ class DailyCloseController extends Controller
             'closes' => $closes,
             'parkedCloses' => DB::table('fuel.daily_close_drafts')->where('company_id', $company->id)->orderByDesc('business_date')->get(['business_date', 'updated_at']),
             'permissions' => [
-                'canAmend' => $canAmend,
                 'canLock' => $canLock,
                 'canUnlock' => $canUnlock,
             ],
@@ -747,12 +842,7 @@ class DailyCloseController extends Controller
             ->whereNull('deleted_at')
             ->firstOrFail();
 
-        // Get amendment chain if this transaction was amended
-        $chain = $this->amendmentService->getAmendmentChain($txn);
-
         // Get user permissions
-        $user = $request->user();
-        $canAmend = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_AMEND);
         $canLock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_LOCK);
         $canUnlock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_UNLOCK);
 
@@ -775,11 +865,8 @@ class DailyCloseController extends Controller
                 'created_at' => $txn->created_at->toDateTimeString(),
                 'status' => $txn->display_status,
                 'is_locked' => $txn->is_locked,
-                'is_amendable' => $txn->isAmendable(),
                 'lock_reason' => $txn->lock_reason,
                 'locked_at' => $txn->locked_at?->toDateTimeString(),
-                'amendment_reason' => $txn->amendment_reason,
-                'amended_at' => $txn->amended_at?->toDateTimeString(),
                 'metadata' => $metadata,
             ],
             'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->where('type', 'expense')->get(['id', 'name']),
@@ -796,95 +883,13 @@ class DailyCloseController extends Controller
                     ->map(fn ($r) => ['id' => $r->id, 'label' => 'Nozzle '.$r->nozzle_id.' — '.$r->liters_dispensed.'L', 'current_value' => (float) $r->liters_dispensed]),
             ] : ['tank' => [], 'nozzle' => []],
             'reconciliation' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->view($txn),
-            'amendmentChain' => $chain,
             'permissions' => [
-                'canAmend' => $canAmend && $txn->isAmendable(),
                 'canLock' => $canLock && $txn->isLockable(),
                 'canUnlock' => $canUnlock && $txn->is_locked,
             ],
         ]);
     }
 
-    /**
-     * Show the amendment form (pre-filled with original data).
-     */
-    public function amend(Request $request, string $company, string $transaction): Response|RedirectResponse
-    {
-        $companyModel = app(CurrentCompany::class)->get();
-
-        // Check permission
-        $user = $request->user();
-        if (!$user->hasCompanyPermission(Permissions::DAILY_CLOSE_AMEND)) {
-            abort(403, 'You do not have permission to amend daily closes.');
-        }
-
-        $txn = Transaction::where('id', $transaction)
-            ->where('company_id', $companyModel->id)
-            ->where('transaction_type', 'fuel_daily_close')
-            ->whereNull('deleted_at')
-            ->firstOrFail();
-
-        if (!$txn->isAmendable()) {
-            return redirect()->back()->with('error', 'This entry cannot be amended. It may be locked or already reversed.');
-        }
-
-        $date = $txn->transaction_date->toDateString();
-
-        // Get all the same data as create(), but we'll pass the original values
-        $createData = $this->getCreatePageData($companyModel, $date);
-
-        // Add amendment-specific data
-        $createData['isAmendment'] = true;
-
-        $metadata = $txn->metadata ?? [];
-        $formInput = $metadata['form_input'] ?? [];
-
-        $createData['originalTransaction'] = [
-            'id' => $txn->id,
-            'transaction_number' => $txn->transaction_number,
-            'metadata' => $metadata,
-        ];
-
-        // Pass original form data for pre-filling
-        $createData['originalFormData'] = $formInput;
-
-        return Inertia::render('FuelStation/DailyClose/Create', $createData);
-    }
-
-    /**
-     * Store an amendment (reversal + correction).
-     */
-    public function storeAmendment(StoreDailyCloseAmendmentRequest $request, string $company, string $transaction): RedirectResponse
-    {
-        $companyModel = app(CurrentCompany::class)->get();
-
-        $txn = Transaction::where('id', $transaction)
-            ->where('company_id', $companyModel->id)
-            ->where('transaction_type', 'fuel_daily_close')
-            ->whereNull('deleted_at')
-            ->firstOrFail();
-
-        if (!$txn->isAmendable()) {
-            return redirect()->back()->with('error', 'This entry cannot be amended. It may be locked or already reversed.');
-        }
-
-        $validated = $request->validated();
-
-        try {
-            $result = $this->amendmentService->amendDailyClose(
-                $txn,
-                $validated,
-                $request->user(),
-                $validated['amendment_reason']
-            );
-
-            return redirect()
-                ->route('fuel.daily-close.index', ['company' => $companyModel->slug])
-                ->with('success', "Amendment posted. Reversal: {$result['reversal_number']}, Correction: {$result['correction_number']}");
-        } catch (\Throwable $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
-    }
 
     /**
      * Lock a daily close transaction.
@@ -904,7 +909,7 @@ class DailyCloseController extends Controller
         }
 
         try {
-            $this->amendmentService->lockTransaction($txn, $request->user(), 'manual');
+            $this->lockService->lockTransaction($txn, $request->user(), 'manual');
             return redirect()->back()->with('success', 'Daily close locked successfully.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -929,7 +934,7 @@ class DailyCloseController extends Controller
         }
 
         try {
-            $this->amendmentService->unlockTransaction($txn);
+            $this->lockService->unlockTransaction($txn);
             return redirect()->back()->with('success', 'Daily close unlocked successfully.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -945,7 +950,7 @@ class DailyCloseController extends Controller
 
         $validated = $request->validated();
 
-        $count = $this->amendmentService->lockMonth(
+        $count = $this->lockService->lockMonth(
             $companyModel->id,
             $validated['year'],
             $validated['month'],
@@ -957,288 +962,4 @@ class DailyCloseController extends Controller
         return redirect()->back()->with('success', "Locked {$count} daily closes for {$monthName}.");
     }
 
-    /**
-     * Get the amendment chain for a transaction (API endpoint).
-     */
-    public function amendmentChain(Request $request, string $company, string $transaction): \Illuminate\Http\JsonResponse
-    {
-        $companyModel = app(CurrentCompany::class)->get();
-
-        // Check view permission
-        $user = $request->user();
-        if (!$user->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW)) {
-            abort(403, 'You do not have permission to view daily closes.');
-        }
-
-        $txn = Transaction::where('id', $transaction)
-            ->where('company_id', $companyModel->id)
-            ->where('transaction_type', 'fuel_daily_close')
-            ->whereNull('deleted_at')
-            ->firstOrFail();
-
-        $chain = $this->amendmentService->getAmendmentChain($txn);
-
-        return response()->json(['chain' => $chain]);
-    }
-
-    /**
-     * Extract create page data to a reusable method.
-     */
-    private function getCreatePageData(Company $company, string $date): array
-    {
-        $companyId = $company->id;
-
-        // Get fuel items with current rates
-        $priceColumns = DB::table('information_schema.columns')
-            ->where('table_schema', 'inv')
-            ->where('table_name', 'items')
-            ->whereIn('column_name', ['sale_price', 'selling_price'])
-            ->pluck('column_name')
-            ->all();
-        $hasSalePrice = in_array('sale_price', $priceColumns, true);
-        $hasSellingPrice = in_array('selling_price', $priceColumns, true);
-        $fuelSelect = ['id', 'name', 'fuel_category', 'avg_cost'];
-        if ($hasSalePrice) {
-            $fuelSelect[] = 'sale_price';
-        }
-        if ($hasSellingPrice) {
-            $fuelSelect[] = 'selling_price';
-        }
-        $fuelItems = Item::where('company_id', $companyId)
-            ->whereNotNull('fuel_category')
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->orderBy('fuel_category')
-            ->get($fuelSelect)
-            ->each(function ($item) use ($hasSalePrice, $hasSellingPrice) {
-                $salePrice = null;
-                if ($hasSalePrice && isset($item->sale_price)) {
-                    $salePrice = $item->sale_price;
-                } elseif ($hasSellingPrice && isset($item->selling_price)) {
-                    $salePrice = $item->selling_price;
-                }
-                $item->sale_price = $salePrice;
-            });
-
-        $rates = [];
-        foreach ($fuelItems as $item) {
-            $rate = RateChange::getRateForDate($companyId, $item->id, $date);
-            $rates[$item->id] = [
-                'purchase_rate' => (float) ($rate?->purchase_rate ?? $item->avg_cost ?? 0),
-                'sale_rate' => (float) ($rate?->sale_rate ?? $item->sale_price ?? 0),
-            ];
-        }
-
-        // Get tanks with their dip sticks
-        $tanks = Warehouse::where('company_id', $companyId)
-            ->where('warehouse_type', 'tank')
-            ->where('is_active', true)
-            ->with(['linkedItem:id,name,fuel_category', 'dipStick:id,code,name,unit'])
-            ->get(['id', 'code', 'name', 'capacity', 'linked_item_id', 'dip_stick_id']);
-
-        // Get previous day for lookups
-        $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
-
-        $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
-
-        // Get nozzles with pump info, item info, and previous day's closing reading
-        $nozzles = Nozzle::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereHas('pump', fn ($query) => $query->where('is_active', true))
-            ->with([
-                'pump:id,name',
-                'item:id,name,fuel_category',
-                'tank:id,name,code',
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('code')
-            ->get(['id', 'company_id', 'pump_id', 'tank_id', 'item_id', 'code', 'label', 'current_meter_reading', 'last_closing_reading', 'last_manual_reading', 'has_electronic_meter'])
-            ->map(function ($nozzle) use ($companyId, $previousDate, $rates) {
-                $previousReading = NozzleReading::where('company_id', $companyId)
-                    ->where('nozzle_id', $nozzle->id)
-                    ->where('reading_date', $previousDate)
-                    ->first();
-
-                $openingReading = $previousReading?->closing_electronic
-                    ?? $nozzle->last_closing_reading
-                    ?? $nozzle->current_meter_reading
-                    ?? 0;
-                $openingManual = $previousReading?->closing_manual
-                    ?? $nozzle->last_manual_reading
-                    ?? null;
-
-                return [
-                    'id' => $nozzle->id,
-                    'code' => $nozzle->code,
-                    'label' => $nozzle->label,
-                    'pump_id' => $nozzle->pump_id,
-                    'pump_name' => $nozzle->pump?->name,
-                    'tank_id' => $nozzle->tank_id,
-                    'tank_name' => $nozzle->tank?->name,
-                    'item_id' => $nozzle->item_id,
-                    'fuel_name' => $nozzle->item?->name,
-                    'fuel_category' => $nozzle->item?->fuel_category,
-                    'has_electronic_meter' => $nozzle->has_electronic_meter,
-                    'opening_reading' => (float) $openingReading,
-                    'opening_manual' => $openingManual !== null ? (float) $openingManual : null,
-                    'sale_rate' => $rates[$nozzle->item_id]['sale_rate'] ?? 0,
-                ];
-            });
-
-        // Get pumps grouped by tank
-        $pumps = Pump::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->with('tank:id,name,linked_item_id')
-            ->get(['id', 'name', 'tank_id', 'current_meter_reading'])
-            ->map(fn($pump) => [
-                'id' => $pump->id,
-                'name' => $pump->name,
-                'tank_id' => $pump->tank_id,
-                'current_meter_reading' => $pump->current_meter_reading !== null
-                    ? (float) $pump->current_meter_reading
-                    : 0,
-                'nozzle_count' => $pump->nozzle_count ?? 2,
-                'tank' => $pump->tank,
-            ]);
-
-        // Get previous day's closing balance
-        $previousClose = $this->dailyCloseService->getPreviousDayClosing($companyId, $date);
-
-        // Get live people/balance lookups for daily close
-        $partners = $this->getPartnersForDailyClose($companyId);
-        $amanatHolders = $this->getAmanatHoldersForDailyClose($companyId);
-        $investors = $this->getInvestorsForDailyClose($companyId);
-
-        // Get employees
-        $employees = $this->getEmployeesForAdvances($companyId);
-        $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
-        $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
-
-        // Get bank accounts
-        $bankAccounts = Account::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->where('subtype', 'bank')
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-
-        // Get expense accounts
-        $expenseAccounts = Account::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->where('type', 'expense')
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-
-        $otherDepositAccounts = Account::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->whereIn('type', ['revenue', 'other_income', 'liability', 'equity'])
-            ->orderBy('code')
-            ->get(['id', 'code', 'name', 'type']);
-
-        // Get lubricant items
-        $lubricantSelect = ['id', 'name', 'sku', 'brand', 'unit_of_measure', 'cost_price'];
-        if ($hasSalePrice) {
-            $lubricantSelect[] = 'sale_price';
-        }
-        if ($hasSellingPrice) {
-            $lubricantSelect[] = 'selling_price';
-        }
-        $lubricantItems = Item::where('company_id', $companyId)
-            ->where(function ($query) {
-                $query->whereNull('fuel_category')
-                    ->orWhere('fuel_category', 'lubricant');
-            })
-            ->where('item_type', 'product')
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->orderBy('name')
-            ->get($lubricantSelect)
-            ->map(function ($item) use ($hasSalePrice, $hasSellingPrice) {
-                $salePrice = null;
-                if ($hasSalePrice && isset($item->sale_price)) {
-                    $salePrice = $item->sale_price;
-                } elseif ($hasSellingPrice && isset($item->selling_price)) {
-                    $salePrice = $item->selling_price;
-                }
-                return [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'sku' => $item->sku,
-                    'brand' => $item->brand,
-                    'unit' => $item->unit_of_measure ?? 'unit',
-                    'sale_price' => (float) ($salePrice ?? 0),
-                ];
-            });
-
-        // Get today's tank readings
-        $existingTankReadings = TankReading::where('company_id', $companyId)
-            ->whereDate('reading_date', $date)
-            ->get(['id', 'tank_id', 'stick_reading', 'dip_measurement_liters', 'status']);
-
-        // Get station settings
-        $stationSettings = null;
-        try {
-            $stationSettings = StationSettings::where('company_id', $companyId)->first();
-        } catch (\Throwable $e) {
-            // Table might not exist
-        }
-
-        $paymentChannels = $stationSettings?->enabled_payment_channels
-            ?? StationSettings::DEFAULT_PAYMENT_CHANNELS;
-
-        $features = [
-            'has_partners' => $stationSettings?->has_partners ?? true,
-            'has_amanat' => $stationSettings?->has_amanat ?? true,
-            'has_lubricant_sales' => $stationSettings?->has_lubricant_sales ?? true,
-            'has_investors' => $stationSettings?->has_investors ?? false,
-            'dual_meter_readings' => $stationSettings?->dual_meter_readings ?? false,
-        ];
-
-        return [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency ?? 'PKR',
-            ],
-            'parkedDraft' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($companyId, $date),
-            'canonicalActivity' => array_values(app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->sources($companyId, $date)),
-            'date' => $date,
-            'fuelItems' => $fuelItems,
-            'rates' => $rates,
-            'rateChangeSnapshots' => $this->getRateChangeSnapshotsForDailyClose($companyId, $date),
-            'tanks' => $tanks,
-            'pumps' => $pumps,
-            'nozzles' => $nozzles,
-            'partners' => $partners,
-            'employees' => $employees,
-            'approvedPayrollPayouts' => $approvedPayrollPayouts,
-            'pendingBillPayments' => $pendingBillPayments,
-            'amanatHolders' => $amanatHolders,
-            'investors' => $investors,
-            'bankAccounts' => $bankAccounts,
-            'expenseAccounts' => $expenseAccounts,
-            'otherDepositAccounts' => $otherDepositAccounts,
-            'lubricantItems' => $lubricantItems,
-            'existingTankReadings' => $existingTankReadings,
-            'previousTankReadings' => $previousTankReadings->map(fn($r) => [
-                'tank_id' => $r->tank_id,
-                'liters' => (float) $r->dip_measurement_liters,
-                'stick_reading' => (float) $r->stick_reading,
-                'source' => $r->source ?? 'tank_dip',
-                'source_label' => $r->source_label ?? 'Tank dip',
-                'as_of' => $r->as_of ?? null,
-            ])->values(),
-            'previousClose' => $previousClose,
-            'paymentChannels' => $paymentChannels,
-            'features' => $features,
-            'fuelVendor' => $stationSettings?->fuel_vendor ?? 'parco',
-            'fuelCardLabel' => $stationSettings?->fuel_card_label ?? 'Fuel Card',
-            'canFillTestData' => ! app()->environment('production'),
-            'isAmendment' => false,
-            'originalTransaction' => null,
-        ];
-    }
 }

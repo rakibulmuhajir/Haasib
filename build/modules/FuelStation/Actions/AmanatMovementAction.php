@@ -15,7 +15,7 @@ class AmanatMovementAction implements PaletteAction
 
     public static function ruleSet(): array
     {
-        return ['customer_id' => 'required|uuid', 'kind' => 'required|in:deposit,withdraw', 'business_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'reference' => 'nullable|string|max:255', 'notes' => 'nullable|string|max:1000'];
+        return ['customer_id' => 'required|uuid', 'kind' => 'required|in:deposit,withdraw', 'business_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'payment_account_id' => 'nullable|string', 'reference' => 'nullable|string|max:255', 'notes' => 'nullable|string|max:1000'];
     }
     public function handle(array $params): array
     {

@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Models;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -42,6 +43,7 @@ class AmanatTransaction extends Model
         'customer_id',
         'transaction_type',
         'amount',
+        'payment_account_id',
         'fuel_item_id',
         'fuel_quantity',
         'reference',
@@ -54,6 +56,7 @@ class AmanatTransaction extends Model
         'company_id' => 'string',
         'customer_id' => 'string',
         'amount' => 'decimal:2',
+        'payment_account_id' => 'string',
         'fuel_item_id' => 'string',
         'fuel_quantity' => 'decimal:2',
         'journal_entry_id' => 'string',
@@ -85,6 +88,11 @@ class AmanatTransaction extends Model
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
+    }
+
+    public function paymentAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'payment_account_id');
     }
 
     /**

@@ -24,11 +24,13 @@ class FuelStationOnboardingService
         $company = Company::find($companyId);
         $onboarding = CompanyOnboarding::where('company_id', $companyId)->first();
 
+        $bankStep = $this->buildOnboardingStep($onboarding, 'bank-accounts', 'Banks & cash', 'Your operating bank accounts and cash on hand');
+        $bankStep['complete'] = $bankStep['complete'] && $this->isOnboardingStepComplete($onboarding, 'default-accounts');
+
         $steps = [
             'company_identity' => $this->checkCompanyIdentitySetup($company, $onboarding),
             'fiscal_year' => $this->checkFiscalYearSetup($companyId, $onboarding),
-            'bank_accounts' => $this->buildOnboardingStep($onboarding, 'bank-accounts', 'Bank Accounts', 'Business bank and cash accounts'),
-            'default_accounts' => $this->buildOnboardingStep($onboarding, 'default-accounts', 'Default Accounts', 'System account mappings'),
+            'bank_accounts' => $bankStep,
             'partners' => $this->checkPartnersSetup($companyId),
             'employees' => $this->checkEmployeesSetup($companyId),
             'tax_settings' => $this->buildOnboardingStep($onboarding, 'tax-settings', 'Tax Settings', 'Sales tax/VAT configuration'),
@@ -289,6 +291,51 @@ class FuelStationOnboardingService
     }
 
     /**
+     * Configure posting behind the bank/cash step without asking owners to map the ledger.
+     * Preserve existing accounting choices and explicit payment-channel destinations.
+     */
+    public function configureAutomaticAccounts(Company $company, array $accountIds): void
+    {
+        $this->ensureRequiredAccounts($company->id);
+        $company->refresh();
+        $accounts = Account::where('company_id', $company->id)
+            ->whereIn('id', $accountIds)->where('is_active', true)->get();
+        $banks = $accounts->where('subtype', 'bank');
+        $bank = $banks->firstWhere('id', $company->bank_account_id) ?? $banks->first();
+        $cash = $accounts->where('subtype', 'cash')->first();
+        $company->update(['bank_account_id' => $bank?->id ?? $cash?->id ?? $company->bank_account_id]);
+
+        $provisioner = app(\App\Modules\Accounting\Services\DefaultAccountProvisioner::class);
+        $provisioner->ensureCoreDefaults($company);
+        $provisioner->ensureTransitAccounts($company);
+        foreach (['ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id'] as $field) {
+            if (!$company->{$field}) {
+                throw new \RuntimeException('The station accounting defaults could not be prepared.');
+            }
+        }
+        app(\App\Modules\Accounting\Services\PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
+
+        $settings = \App\Modules\FuelStation\Models\StationSettings::forCompany($company->id);
+        $previousBank = $settings->operating_bank_account_id;
+        $channels = $settings->payment_channels ?? [];
+        foreach ($channels as &$channel) {
+            if (empty($channel['bank_account_id']) || $channel['bank_account_id'] === $previousBank) {
+                $channel['bank_account_id'] = $bank?->id;
+            }
+        }
+        unset($channel);
+        $settings->update([
+            'operating_bank_account_id' => $bank?->id ?? $settings->operating_bank_account_id,
+            'cash_account_id' => $cash?->id ?? $settings->cash_account_id,
+            'payment_channels' => $channels,
+        ]);
+        app(StationAccountMapper::class)->ensureMappings($settings, $company->created_by_user_id);
+        foreach (Item::where('company_id', $company->id)->whereNotNull('fuel_category')->get() as $item) {
+            app(FuelProductAccountMapper::class)->ensureItemMappings($item, $company->created_by_user_id);
+        }
+    }
+
+    /**
      * Create required accounts if missing.
      * This creates all fuel station specific accounts needed for daily operations.
      */
@@ -362,7 +409,7 @@ class FuelStationOnboardingService
                 'type' => 'asset',
                 'subtype' => 'inventory',
                 'normal_balance' => 'debit',
-                'currency' => $baseCurrency,
+                'currency' => null,
                 'description' => 'Value of fuel in tanks',
             ],
             [
@@ -371,7 +418,7 @@ class FuelStationOnboardingService
                 'type' => 'asset',
                 'subtype' => 'inventory',
                 'normal_balance' => 'debit',
-                'currency' => $baseCurrency,
+                'currency' => null,
                 'description' => 'Value of motor oils and lubricants',
             ],
 
@@ -570,63 +617,16 @@ class FuelStationOnboardingService
      */
     private function updateCompanyDefaultAccounts(Company $company): void
     {
-        $updates = [];
-
-        // AR Control
-        $arAccount = Account::where('company_id', $company->id)
-            ->where('system_identifier', 'ar_control')
-            ->first();
-        if ($arAccount && !$company->ar_account_id) {
-            $updates['ar_account_id'] = $arAccount->id;
+        if (!$company->expense_account_id) {
+            $expense = Account::where('company_id', $company->id)
+                ->where('type', 'expense')
+                ->orderByRaw("CASE WHEN name IN ('General Expenses', 'General & Administrative') THEN 0 ELSE 1 END")
+                ->orderBy('code')->first();
+            if ($expense) {
+                $company->update(['expense_account_id' => $expense->id]);
+            }
         }
-
-        // AP Control
-        $apAccount = Account::where('company_id', $company->id)
-            ->where('system_identifier', 'ap_control')
-            ->first();
-        if ($apAccount && !$company->ap_account_id) {
-            $updates['ap_account_id'] = $apAccount->id;
-        }
-
-        // Primary Revenue (Fuel Sales)
-        $incomeAccount = Account::where('company_id', $company->id)
-            ->where('system_identifier', 'primary_revenue')
-            ->first();
-        if ($incomeAccount && !$company->income_account_id) {
-            $updates['income_account_id'] = $incomeAccount->id;
-        }
-
-        // Default Expense (General Expenses preferred)
-        $expenseAccount = Account::where('company_id', $company->id)
-            ->where('type', 'expense')
-            ->orderByRaw("CASE WHEN code = '6500' THEN 0 ELSE 1 END")
-            ->orderBy('code')
-            ->first();
-        if ($expenseAccount && !$company->expense_account_id) {
-            $updates['expense_account_id'] = $expenseAccount->id;
-        }
-
-        // Default Bank/Cash (prefer bank if available)
-        $bankAccount = Account::where('company_id', $company->id)
-            ->whereIn('subtype', ['bank', 'cash'])
-            ->orderByRaw("CASE WHEN subtype = 'bank' THEN 0 ELSE 1 END")
-            ->orderBy('code')
-            ->first();
-        if ($bankAccount && !$company->bank_account_id) {
-            $updates['bank_account_id'] = $bankAccount->id;
-        }
-
-        // Retained Earnings
-        $retainedEarnings = Account::where('company_id', $company->id)
-            ->where('system_identifier', 'retained_earnings')
-            ->first();
-        if ($retainedEarnings && !$company->retained_earnings_account_id) {
-            $updates['retained_earnings_account_id'] = $retainedEarnings->id;
-        }
-
-        if (!empty($updates)) {
-            $company->update($updates);
-        }
+        app(\App\Modules\Accounting\Services\DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
     }
 
     /**

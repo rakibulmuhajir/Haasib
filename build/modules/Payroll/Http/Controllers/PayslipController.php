@@ -9,6 +9,7 @@ use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
 use App\Modules\Payroll\Http\Requests\VoidPayslipRequest;
 use App\Modules\Payroll\Http\Requests\StorePayslipRequest;
+use App\Modules\Payroll\Http\Requests\UpdatePayslipRequest;
 use App\Modules\Payroll\Models\DeductionType;
 use App\Modules\Payroll\Models\EarningType;
 use App\Modules\Payroll\Models\Employee;
@@ -195,7 +196,7 @@ class PayslipController extends Controller
         ]);
     }
 
-    public function edit(string $companySlug, string $payslipId): Response
+    public function edit(string $companySlug, string $payslipId): Response|RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
         $this->setPayrollContext($company->id);
@@ -232,6 +233,52 @@ class PayslipController extends Controller
             'earningTypes' => $earningTypes,
             'deductionTypes' => $deductionTypes,
         ]);
+    }
+
+    public function update(UpdatePayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $payslip = Payslip::where('company_id', $company->id)->findOrFail($payslipId);
+
+        if ($payslip->status !== 'draft') {
+            return back()->with('error', 'Only draft payslips can be edited.');
+        }
+
+        $validated = $request->validated();
+
+        try {
+            DB::transaction(function () use ($company, $payslip, $validated, $payrollPostingService) {
+                $payslip->update([
+                    'notes' => $validated['notes'] ?? null,
+                    'exchange_rate' => $payslip->currency === $company->base_currency
+                        ? null
+                        : ($validated['exchange_rate'] ?? $payslip->exchange_rate),
+                ]);
+
+                // The whole line set is rewritten from the form. The advance
+                // recovery lines are not in it -- the posting service deletes
+                // and recomputes those on every save -- so they are dropped
+                // here and put back a moment later from the real outstanding
+                // advances, rather than round-tripping through the browser.
+                $payslip->lines()->delete();
+
+                foreach ($validated['lines'] ?? [] as $line) {
+                    $payslip->lines()->create($line);
+                }
+
+                $payrollPostingService->prepareAutomaticAdvanceDeductions($payslip->refresh());
+            });
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Payslip could not be updated. Check the payslip lines and try again.');
+        }
+
+        return redirect()
+            ->route('payslips.show', ['company' => $company->slug, 'payslip' => $payslip->id])
+            ->with('success', 'Payslip updated successfully.');
     }
 
     public function approve(ApprovePayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse

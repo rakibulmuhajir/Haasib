@@ -4,7 +4,9 @@ namespace App\Modules\Payroll\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Services\CurrentCompany;
+use Illuminate\Validation\Rule;
 
 class StoreDeductionTypeRequest extends BaseFormRequest
 {
@@ -30,7 +32,7 @@ class StoreDeductionTypeRequest extends BaseFormRequest
             'is_pre_tax' => 'boolean',
             'is_statutory' => 'boolean',
             'is_recurring' => 'boolean',
-            'gl_account_id' => 'nullable|uuid|exists:acct.accounts,id',
+            'gl_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'is_active' => 'boolean',
         ];
     }

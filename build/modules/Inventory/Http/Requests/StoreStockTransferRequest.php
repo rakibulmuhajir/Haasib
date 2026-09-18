@@ -4,6 +4,9 @@ namespace App\Modules\Inventory\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Validation\Rule;
 
 class StoreStockTransferRequest extends BaseFormRequest
 {
@@ -16,9 +19,9 @@ class StoreStockTransferRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'source_warehouse_id' => 'required|uuid|exists:inv.warehouses,id|different:destination_warehouse_id',
-            'destination_warehouse_id' => 'required|uuid|exists:inv.warehouses,id',
-            'item_id' => 'required|uuid|exists:inv.items,id',
+            'source_warehouse_id' => ['required', 'uuid', 'different:destination_warehouse_id', Rule::exists(Warehouse::class, 'id')],
+            'destination_warehouse_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
+            'item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
             'quantity' => 'required|numeric|gt:0',
             'notes' => 'nullable|string',
             'movement_date' => 'nullable|date',

@@ -94,7 +94,7 @@ class LeaveRequestController extends Controller
         ]);
     }
 
-    public function edit(string $companySlug, string $leaveRequestId): Response
+    public function edit(string $companySlug, string $leaveRequestId): Response|RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
 
@@ -102,7 +102,7 @@ class LeaveRequestController extends Controller
 
         if ($leaveRequest->status !== 'pending') {
             return redirect()
-                ->route('leave-requests.show', ['company' => $company->slug, 'leaveRequest' => $leaveRequest->id])
+                ->route('leave-requests.show', ['company' => $company->slug, 'leave_request' => $leaveRequest->id])
                 ->with('error', 'Only pending requests can be edited.');
         }
 
@@ -143,7 +143,7 @@ class LeaveRequestController extends Controller
         $leaveRequest->update($request->validated());
 
         return redirect()
-            ->route('leave-requests.show', ['company' => $company->slug, 'leaveRequest' => $leaveRequest->id])
+            ->route('leave-requests.show', ['company' => $company->slug, 'leave_request' => $leaveRequest->id])
             ->with('success', 'Leave request updated successfully.');
     }
 

@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\FuelStation\Http\Requests\Rules\RequiresBillCreatePermission;
+use App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePurchaseRows;
 use App\Modules\FuelStation\Http\Requests\Rules\RequiresSalesOrZeroConfirmation;
 
 class StoreDailyCloseRequest extends BaseFormRequest
@@ -76,6 +78,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_deposits.*.customer_id' => 'required|uuid',
             'amanat_deposits.*.customer_name' => 'nullable|string|max:255',
             'amanat_deposits.*.amount' => 'required|numeric|min:0',
+            'amanat_deposits.*.payment_account_id' => 'nullable|string',
             'amanat_deposits.*.reference' => 'nullable|string|max:255',
 
             'other_deposits' => 'nullable|array',
@@ -121,11 +124,47 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_disbursements.*.customer_id' => 'required|uuid',
             'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
             'amanat_disbursements.*.amount' => 'required|numeric|min:0',
+            'amanat_disbursements.*.payment_account_id' => 'nullable|string',
 
             'expenses' => 'nullable|array',
             'expenses.*.account_id' => 'required|uuid',
             'expenses.*.description' => 'required|string|max:255',
             'expenses.*.amount' => 'required|numeric|min:0',
+
+            // Supplier bills / fuel purchases entered inline, instead of via the Bills
+            // module. Same shape for park (stored as-is) and post (each row must be
+            // complete and becomes a canonical bill through Bill\CreateAction).
+            'purchases' => ['nullable', 'array', new RequiresBillCreatePermission(), new RequiresCompletePurchaseRows()],
+            'purchases.*.supplier_id' => 'nullable|uuid',
+            'purchases.*.item_id' => 'nullable|uuid',
+            'purchases.*.description' => 'nullable|string|max:255',
+            'purchases.*.quantity' => 'nullable|numeric|min:0.01',
+            'purchases.*.unit_cost' => 'nullable|numeric|min:0',
+            'purchases.*.tank_id' => 'nullable|uuid',
+            'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
+            'purchases.*.notes' => 'nullable|string|max:500',
+            'purchases.*.paid_now' => 'nullable|boolean',
+
+            'bank_withdrawals' => 'nullable|array',
+            'bank_withdrawals.*.bank_account_id' => ['required', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
+                ->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)
+                ->where('is_active', true)->where('subtype', 'bank')->whereNull('deleted_at')],
+            'bank_withdrawals.*.amount' => 'required|numeric|min:0.01',
+            'bank_withdrawals.*.reference' => 'nullable|string|max:255',
+            'bank_withdrawals.*.purpose' => 'nullable|string|max:255',
+
+            // Payments received: a buyer settling an invoice, entered inline instead of at
+            // /payments. Same shape for park and post; on post each row must be complete
+            // (see RequiresCompletePaymentsReceivedRows) and becomes a canonical payment
+            // through Payment\CreateAction dispatched via the CommandBus.
+            'payments_received' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaymentsReceivedRows()],
+            'payments_received.*.customer_id' => 'nullable|uuid',
+            'payments_received.*.customer_name' => 'nullable|string|max:255',
+            'payments_received.*.invoice_id' => 'nullable|uuid',
+            'payments_received.*.invoice_number' => 'nullable|string|max:100',
+            'payments_received.*.amount' => 'nullable|numeric|min:0.01',
+            'payments_received.*.payment_account_id' => 'nullable|uuid',
+            'payments_received.*.reference' => 'nullable|string|max:100',
 
             // Tab 5: Summary
             'closing_cash' => 'required|numeric|min:0',
@@ -144,6 +183,20 @@ class StoreDailyCloseRequest extends BaseFormRequest
         ] as $field => $table) {
             $rules[$field] = ['required', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
         }
+        foreach (['amanat_deposits.*.payment_account_id', 'amanat_disbursements.*.payment_account_id'] as $field) {
+            $rules[$field] = ['nullable', 'string'];
+        }
+        // Purchase rows are optional per-row (park stays lenient), but any supplier/item/tank
+        // that is given must belong to this company.
+        foreach ([
+            'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
+            'payments_received.*.customer_id' => 'acct.customers', 'payments_received.*.invoice_id' => 'acct.invoices',
+        ] as $field => $table) {
+            $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
+        }
+        // The account a payment was received into must be this company's own cash or bank account.
+        $rules['payments_received.*.payment_account_id'] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
+            ->where('company_id', $companyId)->where('is_active', true)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')];
         return $rules;
     }
 }

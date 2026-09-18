@@ -85,7 +85,7 @@ class PartnerController extends Controller
             'profit_share_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'drawing_limit_period' => ['required', Rule::in(['none', 'monthly', 'yearly'])],
             'drawing_limit_amount' => ['nullable', 'numeric', 'min:0'],
-            'drawing_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'drawing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'initial_investment' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
         ]);
@@ -229,7 +229,7 @@ class PartnerController extends Controller
             'profit_share_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'drawing_limit_period' => ['required', Rule::in(['none', 'monthly', 'yearly'])],
             'drawing_limit_amount' => ['nullable', 'numeric', 'min:0'],
-            'drawing_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'drawing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'is_active' => ['boolean'],
         ]);
 

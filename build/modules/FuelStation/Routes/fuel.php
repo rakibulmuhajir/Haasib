@@ -92,12 +92,9 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('daily-close', [DailyCloseController::class, 'store'])->name('fuel.daily-close.store');
     Route::get('daily-close/history', [DailyCloseController::class, 'index'])->name('fuel.daily-close.index');
     Route::get('daily-close/{transaction}', [DailyCloseController::class, 'show'])->name('fuel.daily-close.show');
-    Route::get('daily-close/{transaction}/amend', [DailyCloseController::class, 'amend'])->name('fuel.daily-close.amend');
-    Route::post('daily-close/{transaction}/amend', [DailyCloseController::class, 'storeAmendment'])->name('fuel.daily-close.amend.store');
     Route::post('daily-close/{transaction}/lock', [DailyCloseController::class, 'lock'])->name('fuel.daily-close.lock');
     Route::post('daily-close/{transaction}/unlock', [DailyCloseController::class, 'unlock'])->name('fuel.daily-close.unlock');
     Route::post('daily-close/lock-month', [DailyCloseController::class, 'lockMonth'])->name('fuel.daily-close.lock-month');
-    Route::get('daily-close/{transaction}/amendment-chain', [DailyCloseController::class, 'amendmentChain'])->name('fuel.daily-close.amendment-chain');
 
     // Investors
     Route::get('investors', [InvestorController::class, 'index'])->name('fuel.investors.index');
@@ -121,6 +118,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('handovers/{handover}/receive', [AttendantHandoverController::class, 'receive'])->name('fuel.handovers.receive');
 
     // Fuel Sales
+    Route::get('sales/form', [FuelSaleController::class, 'create'])->name('fuel.sales.create');
     Route::post('sales', [FuelSaleController::class, 'store'])->name('fuel.sales.store');
 
     // Vendor Card Settlement
@@ -153,6 +151,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('credit-customers/{customer}', [CreditCustomerController::class, 'show'])->name('fuel.credit-customers.show');
     Route::post('credit-customers/{customer}/limit', [CreditCustomerController::class, 'updateLimit'])->name('fuel.credit-customers.limit');
     Route::post('credit-customers/{customer}/toggle-block', [CreditCustomerController::class, 'toggleBlock'])->name('fuel.credit-customers.toggle-block');
+    Route::post('credit-customers/{customer}/apply-credit', [CreditCustomerController::class, 'applyCredit'])->name('fuel.credit-customers.apply-credit');
 
     // Credit Sales
     Route::get('credit-sales', [CreditSaleController::class, 'index'])->name('fuel.credit-sales.index');

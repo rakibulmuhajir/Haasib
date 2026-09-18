@@ -182,6 +182,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Accounts (Chart of Accounts)
         Route::get('/{company}/accounts', [AccountController::class, 'index'])->name('accounts.index');
+        Route::post('/{company}/accounts/restore-missing', [AccountController::class, 'restoreMissing'])->name('accounts.restore-missing');
         Route::get('/{company}/accounts/create', [AccountController::class, 'create'])->name('accounts.create');
         Route::post('/{company}/accounts', [AccountController::class, 'store'])->name('accounts.store');
         Route::get('/{company}/accounts/{account}', [AccountController::class, 'show'])->whereUuid('account')->name('accounts.show');
@@ -332,6 +333,16 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'update'])->whereUuid('rule')->name('banking.rules.update');
         Route::delete('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'destroy'])->whereUuid('rule')->name('banking.rules.destroy');
 
+        // Manual bank transactions: deposit, withdrawal, transfer, bank charge (Accountant Mode)
+        Route::get('/{company}/banking/transactions', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'index'])->name('banking.transactions.index');
+        Route::get('/{company}/banking/transactions/create', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'create'])->name('banking.transactions.create');
+        Route::post('/{company}/banking/transactions', [\App\Modules\Accounting\Http\Controllers\BankTransactionController::class, 'store'])->name('banking.transactions.store');
+
+        // Standalone expenses
+        Route::get('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/{company}/expenses/create', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'create'])->name('expenses.create');
+        Route::post('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'store'])->name('expenses.store');
+
         // ─────────────────────────────────────────────────────────────────
         // Inventory Module
         // ─────────────────────────────────────────────────────────────────
@@ -449,6 +460,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{company}/payslips', [PayslipController::class, 'store'])->name('payslips.store');
             Route::get('/{company}/payslips/{payslip}', [PayslipController::class, 'show'])->whereUuid('payslip')->name('payslips.show');
             Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
+            Route::put('/{company}/payslips/{payslip}', [PayslipController::class, 'update'])->whereUuid('payslip')->name('payslips.update');
             Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
             Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
             Route::post('/{company}/payslips/{payslip}/void', [PayslipController::class, 'void'])->whereUuid('payslip')->name('payslips.void');

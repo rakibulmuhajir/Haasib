@@ -98,6 +98,36 @@ return [
             'sslmode' => 'prefer',
         ],
 
+        /*
+         * Schema migrations and other DDL run as the role that owns the
+         * tables, which is not the least-privilege role the application
+         * connects as. Defaults to the application credentials so nothing
+         * changes until DB_MIGRATOR_USERNAME is set.
+         */
+        'pgsql_migrator' => [
+            'driver' => 'pgsql',
+            'url' => env('DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_MIGRATOR_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('DB_MIGRATOR_PASSWORD', env('DB_PASSWORD', '')),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public,acct',
+            'sslmode' => 'prefer',
+        ],
+
+        /*
+         * The schema-named connections below are separate PostgreSQL sessions.
+         * app.current_company_id is a session setting, so a query issued on one
+         * of them carries no tenant context and, with row level security
+         * enforced, sees nothing and can write nothing. Nothing in the
+         * application uses them any more; prefer the default connection with a
+         * schema-qualified table name ("acct.invoices"). See
+         * docs/reviews/2026-09-18-rls-enforcement-rollout.md.
+         */
         'acct' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

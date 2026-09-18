@@ -4,6 +4,9 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Validation\Rule;
 
 class StorePaymentRequest extends BaseFormRequest
@@ -26,9 +29,26 @@ class StorePaymentRequest extends BaseFormRequest
 
     public function rules(): array
     {
+        // Rule::exists()/'exists:' must be given the model class, never the bare
+        // 'acct.xxx' table string: Laravel's exists/unique rule splits a dotted table
+        // name on its FIRST dot into connection + table, and config/database.php
+        // defines a connection literally called "acct" -- so 'acct.customers' was read
+        // as connection "acct", table "customers", running the check on a second
+        // Postgres session that carries neither this request's RLS context (current
+        // company/is_super_admin) nor its transaction. Every row-scoped exists check
+        // below silently found nothing and failed, invisibly, because nothing exercised
+        // this FormRequest over HTTP until PaymentAllocationTest's HTTP-level tests did.
+        // Passing the model class instead makes parseTable() read the table and
+        // connection off it, the same fix StoreVendorRequest already applies to
+        // ap_account_id.
         return [
-            'customer_id' => ['required', 'uuid', 'exists:acct.customers,id'],
-            'invoice_id' => ['nullable', 'uuid', 'exists:acct.invoices,id'],
+            'customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
+            'invoice_id' => ['nullable', 'uuid', Rule::exists(Invoice::class, 'id')],
+            'invoice_ids' => ['nullable', 'array'],
+            'invoice_ids.*' => ['uuid', Rule::exists(Invoice::class, 'id')],
+            'allocations' => ['nullable', 'array'],
+            'allocations.*.invoice_id' => ['required_with:allocations', 'uuid', Rule::exists(Invoice::class, 'id')],
+            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
@@ -39,14 +59,14 @@ class StorePaymentRequest extends BaseFormRequest
             'deposit_account_id' => [
                 'required',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('subtype', ['bank', 'cash'])
                     ->where('is_active', true)),
             ],
             'ar_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_receivable')
                     ->where('is_active', true)),
             ],

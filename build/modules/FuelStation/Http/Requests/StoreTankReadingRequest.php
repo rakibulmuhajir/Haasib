@@ -5,6 +5,8 @@ namespace App\Modules\FuelStation\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\FuelStation\Models\TankReading;
+use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Validation\Rule;
 
 class StoreTankReadingRequest extends BaseFormRequest
 {
@@ -17,7 +19,7 @@ class StoreTankReadingRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'tank_id' => ['required', 'uuid', 'exists:inv.warehouses,id'],
+            'tank_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'reading_date' => ['required', 'date'],
             'reading_type' => ['required', 'in:' . implode(',', TankReading::getReadingTypes())],
             'stick_reading' => ['nullable', 'numeric', 'min:0'],

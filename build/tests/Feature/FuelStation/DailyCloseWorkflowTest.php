@@ -426,7 +426,6 @@ test('HTTP park resume post and late expense show snapshot current totals and hi
     expect($page['reconciliation']['has_post_close_activity'])->toBeTrue();
     $history = test()->get($url.'/history')->assertOk()->viewData('page')['props'];
     expect($history['closes'][0]['has_post_close_activity'])->toBeTrue();
-    test()->get($url.'/'.$close->id.'/amend')->assertRedirect();
 });
 
 test('HTTP workflow refuses unauthorized users and other-company close ids', function () {
@@ -452,6 +451,27 @@ test('normal Amanat form has explicit business date and is included once in dail
     expect((float) $close->metadata['variance'])->toBe(0.0);
     expect(\App\Modules\FuelStation\Models\AmanatTransaction::where('company_id', $f['company']->id)->count())->toBe(1);
     expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'amanat_deposit')->count())->toBe(1);
+});
+
+test('Amanat received into a bank does not change drawer cash and posts to that bank', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $amanat = Account::create(['company_id' => $f['company']->id, 'code' => '2200', 'name' => 'Customer Amanat Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'currency' => 'PKR', 'is_active' => true]);
+    $bank = Account::create(['company_id' => $f['company']->id, 'code' => '1010', 'name' => 'Meezan Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $customer = \App\Modules\Accounting\Models\Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'AM-BANK', 'name' => 'Bank Amanat customer', 'base_currency' => 'PKR']);
+
+    test()->post("/{$f['company']->slug}/fuel/amanat/{$customer->id}/deposit", [
+        'business_date' => '2026-09-15', 'amount' => 100, 'payment_account_id' => $bank->id,
+    ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    $amanatTransaction = \App\Modules\FuelStation\Models\AmanatTransaction::where('customer_id', $customer->id)->firstOrFail();
+    expect($amanatTransaction->payment_account_id)->toBe($bank->id);
+    expect($amanatTransaction->journalEntry->account_id)->toBe($bank->id);
+
+    // The money went directly to Meezan, so the physical drawer is unchanged.
+    $f['payload']['closing_cash'] = $f['payload']['opening_cash'];
+    test()->post("/{$f['company']->slug}/fuel/daily-close", $f['payload'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
+    expect((float) $close->metadata['variance'])->toBe(0.0);
 });
 
 
@@ -535,44 +555,6 @@ test('a notes-only invoice or bill edit leaves the posted journal untouched', fu
     expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', $kind)->count())->toBe(1);
 })->with(['invoice', 'bill']);
 
-
-test('a legacy close without a posting_snapshot remains amendable and reversible', function () {
-    $f = closeWorkflowFixture();
-
-    // A legacy close: posted directly (as pre-snapshot code did), with no
-    // metadata['posting_snapshot'] key at all.
-    $legacy = app(GlPostingService::class)->postBalancedTransaction([
-        'company_id' => $f['company']->id, 'transaction_number' => 'FDC-LEGACY-1', 'transaction_type' => 'fuel_daily_close',
-        'date' => '2026-09-15', 'currency' => 'PKR', 'metadata' => ['opening_cash' => 420000, 'closing_cash' => 410000],
-    ], [
-        ['account_id' => $f['accounts']['6180']->id, 'type' => 'debit', 'amount' => 10000],
-        ['account_id' => $f['accounts']['1050']->id, 'type' => 'credit', 'amount' => 10000],
-    ]);
-
-    expect($legacy->isAmendable())->toBeTrue();
-
-    $result = app(\App\Modules\FuelStation\Services\DailyCloseAmendmentService::class)->amendDailyClose(
-        $legacy, $f['payload'], $f['user'], 'Corrected a typo in the original entry'
-    );
-
-    $reversal = Transaction::findOrFail($result['reversal_id']);
-    expect($reversal->transaction_type)->toBe('fuel_daily_close_reversal');
-    expect($legacy->fresh()->reversed_by_id)->toBe($reversal->id);
-    expect(Transaction::findOrFail($result['correction_id'])->corrects_transaction_id)->toBe($legacy->id);
-});
-
-test('a snapshot close cannot be amended or reversed through the legacy amendment path', function () {
-    $f = closeWorkflowFixture();
-    $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
-    $close = Transaction::findOrFail($posted['transaction_id']);
-
-    expect($close->isAmendable())->toBeFalse();
-    expect(fn () => app(\App\Modules\FuelStation\Services\DailyCloseAmendmentService::class)->amendDailyClose(
-        $close, $f['payload'], $f['user'], 'Attempted correction'
-    ))->toThrow(\RuntimeException::class);
-    expect(fn () => app(PostingService::class)->reverseTransaction($close, 'Attempted reversal', '2026-09-15'))->toThrow(\RuntimeException::class);
-});
-
 test('posted close journal cannot be altered or reversed through ordinary accounting paths', function () {
     $f = closeWorkflowFixture();
     $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
@@ -600,4 +582,34 @@ test('normal salary advance form posts once and appears as late activity for its
     expect($view['activity'])->toHaveCount(1);
     $advance = \App\Modules\Payroll\Models\SalaryAdvance::where('company_id', $f['company']->id)->sole();
     expect($advance->journal_entry_id)->not->toBeNull();
+});
+
+test('bank cash withdrawals survive parking and post bank credits with drawer cash only', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $bank = Account::create(['company_id' => $f['company']->id, 'code' => '1010', 'name' => 'Meezan', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $f['payload']['closing_cash'] = 470000;
+    $f['payload']['bank_withdrawals'] = [
+        ['bank_account_id' => $bank->id, 'amount' => 30000, 'reference' => 'ATM-1'],
+        ['bank_account_id' => $bank->id, 'amount' => 20000, 'reference' => 'ATM-2'],
+    ];
+    $url = "/{$f['company']->slug}/fuel/daily-close";
+    test()->post($url, $f['payload'] + ['intent' => 'park'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+    expect(app(DailyCloseReconciliationService::class)->draft($f['company']->id, '2026-09-15')['bank_withdrawals'])->toEqual($f['payload']['bank_withdrawals']);
+    test()->post($url, $f['payload'])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
+    expect((float) $close->metadata['expected_closing'])->toBe(470000.0);
+    expect((float) $close->metadata['variance'])->toBe(0.0);
+    expect((float) $close->metadata['posting_snapshot']['totals']['money_in'])->toBe(50000.0);
+    expect((float) $close->metadata['posting_snapshot']['totals']['total_revenue'])->toBe(0.0);
+    expect((float) $close->journalEntries()->where('account_id', $bank->id)->sum('credit_amount'))->toBe(50000.0);
+    expect((float) $close->journalEntries()->where('account_id', $f['accounts']['1050']->id)->sum('debit_amount'))->toBe(50000.0);
+    expect((float) app(DailyCloseReconciliationService::class)->view($close)['current']['variance'])->toBe(0.0);
+});
+
+test('bank cash withdrawals reject cash accounts and nonpositive amounts', function () {
+    $f = closeWorkflowFixture(); enableCloseHttp($f);
+    $f['payload']['bank_withdrawals'] = [['bank_account_id' => $f['accounts']['1050']->id, 'amount' => -1]];
+    test()->post("/{$f['company']->slug}/fuel/daily-close", $f['payload'])->assertSessionHasErrors(['bank_withdrawals.0.bank_account_id', 'bank_withdrawals.0.amount']);
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
 });

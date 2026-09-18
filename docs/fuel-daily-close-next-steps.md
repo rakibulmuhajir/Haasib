@@ -2,13 +2,17 @@
 
 Keep daily close simple for operators, but make the accounting lifecycle complete.
 
-## Priority 1: Daily Close Correction Flow
+## Priority 1: Daily Close Correction Flow (superseded 2026-09-17)
 
-- Prevent duplicate posting for the same date unless using amendment/correction flow.
-- Keep posted closes read-only.
-- Reverse posted entries instead of deleting or editing GL.
-- Let users copy a reversed close into a new correction draft.
-- Show the amendment chain clearly in close history and close detail.
+Superseded by the owner's decision that a posted Daily Close is never reversed and
+re-posted. What shipped instead: every close is a snapshot close; corrections are dated
+adjustments layered on top (declared expenses, reading corrections, late canonical
+activity captured in `fuel.daily_close_activity`) rather than a reversal+correction pair.
+`Transaction::isAmendable()` now always returns false and the amend/reversal code path
+(`DailyCloseAmendmentService`, the `/amend` routes and page, the amendment chain UI) has
+been removed. See docs/contracts/fuel-schema.md, "Standalone fuel-sale invoices as a
+close channel" and the Daily Close reconciliation section for the mechanism that replaced
+this.
 
 ## Priority 2: Payment Settlement
 

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Models\User;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
@@ -30,7 +31,7 @@ class StoreVendorCreditApplicationRequest extends BaseFormRequest
             'bill_id' => ['required', 'uuid', $billRule],
             'amount_applied' => ['required', 'numeric', 'min:0.01'],
             'applied_at' => ['nullable', 'date'],
-            'user_id' => ['nullable', 'uuid', 'exists:auth.users,id'],
+            'user_id' => ['nullable', 'uuid', Rule::exists(User::class, 'id')],
             'notes' => ['nullable', 'string'],
             'bill_balance_before' => ['required', 'numeric', 'decimal:2'],
             'bill_balance_after' => ['required', 'numeric', 'decimal:2'],

@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Requests;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Validation\Rule;
 
@@ -48,7 +49,7 @@ class StoreWarehouseRequest extends BaseFormRequest
                 'required_if:warehouse_type,tank',
                 'nullable',
                 'uuid',
-                'exists:inv.items,id'
+                Rule::exists(Item::class, 'id'),
             ],
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',

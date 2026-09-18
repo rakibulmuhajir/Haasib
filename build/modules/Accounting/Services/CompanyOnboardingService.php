@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\IndustryCoaPack;
 use App\Modules\Accounting\Models\IndustryCoaTemplate;
+use App\Modules\Accounting\Exceptions\IndustryCoaPackNotSeededException;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -202,6 +203,9 @@ class CompanyOnboardingService
                     $account->update($payload + [
                         'updated_by_user_id' => $this->getCurrentUserId(),
                     ]);
+                    \App\Modules\Accounting\Models\BankAccount::where('company_id', $company->id)
+                        ->where('gl_account_id', $account->id)
+                        ->update(['account_name' => $account->name]);
                     $updatedAccounts[] = $account;
                     continue;
                 }
@@ -238,6 +242,13 @@ class CompanyOnboardingService
             $onboarding = $company->onboarding;
             $onboarding->completeStep('bank-accounts');
             $onboarding->advanceToStep('default-accounts', 4);
+
+            if ($company->industry_code === 'fuel_station') {
+                app(\App\Modules\FuelStation\Services\FuelStationOnboardingService::class)
+                    ->configureAutomaticAccounts($company->fresh(), $syncIds);
+                $onboarding->completeStep('default-accounts');
+                $onboarding->advanceToStep('tax-settings', 5);
+            }
 
             return $createdAccounts;
         });
@@ -393,36 +404,68 @@ class CompanyOnboardingService
      */
     private function createIndustryChartOfAccounts(Company $company, string $industryCode): void
     {
+        $this->applyIndustryCoaTemplates($company, $industryCode, allowUpdateExisting: true);
+
+        app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company);
+    }
+
+    /**
+     * Subtypes that are allowed to have a currency per the
+     * accounts_currency_allowed_chk check constraint.
+     */
+    public const MONETARY_SUBTYPES = [
+        'bank',
+        'cash',
+        'accounts_receivable',
+        'accounts_payable',
+        'credit_card',
+        'other_current_asset',
+        'other_asset',
+        'other_current_liability',
+        'other_liability',
+    ];
+
+    /**
+     * Bank/cash accounts are created explicitly during onboarding (Step 3) so we don't
+     * seed industry-pack bank/cash templates into company COA to avoid duplicates/confusion.
+     */
+    public const SKIP_SUBTYPES = ['bank', 'cash'];
+
+    /**
+     * Copy an industry COA pack's template accounts into a company's chart of accounts.
+     *
+     * Used by both onboarding (where an existing account whose code matches a template
+     * is updated to match it) and by the `accounting:repair-coa` repair path (where
+     * existing accounts must never be touched -- a company may have legitimately
+     * renamed "Operating Bank Account" to "HBL Main Branch", and overwriting that would
+     * be destructive). Pass $allowUpdateExisting = false for create-only semantics.
+     *
+     * Throws when the pack resolves but has zero templates: that is a seeding problem,
+     * not "nothing to do", and must never be reported as a successfully created COA.
+     *
+     * @return array{created: array<int, Account>, updated: array<int, Account>, skipped_conflicts: array<int, array{template: IndustryCoaTemplate, existing: Account}>}
+     */
+    public function applyIndustryCoaTemplates(Company $company, string $industryCode, bool $allowUpdateExisting): array
+    {
         $industryPack = IndustryCoaPack::where('code', $industryCode)->firstOrFail();
 
         $templates = IndustryCoaTemplate::where('industry_pack_id', $industryPack->id)
             ->orderBy('sort_order')
             ->get();
 
-        // Bank/cash accounts are created explicitly during onboarding (Step 3) so we don't
-        // seed industry-pack bank/cash templates into company COA to avoid duplicates/confusion.
-        $skipSubtypes = ['bank', 'cash'];
+        if ($templates->isEmpty()) {
+            throw IndustryCoaPackNotSeededException::forIndustry($industryCode);
+        }
 
-        // Subtypes that are allowed to have currency per the check constraint
-        $monetarySubtypes = [
-            'bank',
-            'cash',
-            'accounts_receivable',
-            'accounts_payable',
-            'credit_card',
-            'other_current_asset',
-            'other_asset',
-            'other_current_liability',
-            'other_liability',
-        ];
+        $result = ['created' => [], 'updated' => [], 'skipped_conflicts' => []];
 
         foreach ($templates as $template) {
-            if (in_array($template->subtype, $skipSubtypes, true)) {
+            if (in_array($template->subtype, self::SKIP_SUBTYPES, true)) {
                 continue;
             }
 
             // Only monetary accounts can have currency set
-            $currency = in_array($template->subtype, $monetarySubtypes)
+            $currency = in_array($template->subtype, self::MONETARY_SUBTYPES, true)
                 ? $company->base_currency
                 : null;
 
@@ -432,21 +475,30 @@ class CompanyOnboardingService
                 ->first();
 
             if ($existingAccount) {
-                // Update existing account to match template
-                $existingAccount->update([
-                    'name' => $template->name,
-                    'type' => $template->type,
-                    'subtype' => $template->subtype,
-                    'normal_balance' => $template->normal_balance,
-                    'currency' => $currency,
-                    'is_contra' => $template->is_contra,
-                    'is_system' => $template->is_system,
-                    'description' => $template->description,
-                ]);
+                if ($allowUpdateExisting) {
+                    // Update existing account to match template
+                    $existingAccount->update([
+                        'name' => $template->name,
+                        'type' => $template->type,
+                        'subtype' => $template->subtype,
+                        'normal_balance' => $template->normal_balance,
+                        'currency' => $currency,
+                        'is_contra' => $template->is_contra,
+                        'is_system' => $template->is_system,
+                        'description' => $template->description,
+                    ]);
+                    $result['updated'][] = $existingAccount;
+                } elseif ($existingAccount->subtype !== $template->subtype) {
+                    // Create-only mode never touches existing accounts. A code match
+                    // with a differing subtype is a genuine conflict that would still
+                    // leave posting broken -- surface it for a human, don't fix it.
+                    $result['skipped_conflicts'][] = ['template' => $template, 'existing' => $existingAccount];
+                }
+
                 continue;
             }
 
-            Account::create([
+            $account = Account::create([
                 'company_id' => $company->id,
                 'code' => $template->code,
                 'name' => $template->name,
@@ -460,9 +512,11 @@ class CompanyOnboardingService
                 'description' => $template->description,
                 'created_by_user_id' => $this->getCurrentUserId(),
             ]);
+
+            $result['created'][] = $account;
         }
 
-        app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company);
+        return $result;
     }
 
     /**

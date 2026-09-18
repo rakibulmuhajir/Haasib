@@ -5,6 +5,10 @@ Single source of truth for fuel station specific operations: pumps, rate changes
 **Module Location:** `modules/FuelStation/`
 **Namespace:** `App\Modules\FuelStation`
 
+### Daily close bank withdrawals
+
+`bank_withdrawals` is an optional list of `{bank_account_id, amount, reference?, purpose?}` in the daily-close form and saved `metadata.form_input`. Each row transfers cash from an active, company-owned bank account in the company base currency into the configured station cash drawer. It increases Money In and expected drawer cash; it does not create revenue. Posting credits the selected bank and includes the matching debit in the close's cash entry. Metadata stores `bank_withdrawals` (total) and `bank_withdrawals_by_account` (amounts by account). Park/resume preserves the rows without posting them.
+
 ---
 
 ## Architectural Decisions (REJECTED → ACCEPTED)
@@ -425,7 +429,8 @@ enum VarianceReason: string {
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
   - `customer_id` uuid not null FK → `acct.customers.id` (RESTRICT/CASCADE).
   - `transaction_type` varchar(20) not null — 'deposit', 'withdrawal', 'fuel_purchase'.
-  - `amount` numeric(15,2) not null.
+    - `amount` numeric(15,2) not null.
+    - `payment_account_id` uuid nullable FK → `acct.accounts.id` (cash or bank account used for a deposit/withdrawal; null on legacy rows and fuel purchases).
   - `fuel_item_id` uuid nullable FK → `inv.items.id` (SET NULL/CASCADE) — if fuel_purchase.
   - `fuel_quantity` numeric(10,2) nullable — liters if fuel_purchase.
   - `reference` varchar(100) nullable.
@@ -439,8 +444,8 @@ enum VarianceReason: string {
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'fuel.amanat_transactions'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','transaction_type','amount','fuel_item_id','fuel_quantity','reference','journal_entry_id','recorded_by_user_id','notes'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','amount'=>'decimal:2','fuel_item_id'=>'string','fuel_quantity'=>'decimal:2','journal_entry_id'=>'string','recorded_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+    - `$fillable = ['company_id','customer_id','transaction_type','amount','payment_account_id','fuel_item_id','fuel_quantity','reference','journal_entry_id','recorded_by_user_id','notes'];`
+    - `$casts = ['company_id'=>'string','customer_id'=>'string','amount'=>'decimal:2','payment_account_id'=>'string','fuel_item_id'=>'string','fuel_quantity'=>'decimal:2','journal_entry_id'=>'string','recorded_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; belongsTo FuelItem (Item); belongsTo JournalEntry.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id (must have is_amanat_holder=true).
@@ -449,8 +454,8 @@ enum VarianceReason: string {
   - `fuel_item_id`: required_if:transaction_type,fuel_purchase.
   - `fuel_quantity`: required_if:transaction_type,fuel_purchase|numeric|gt:0.
 - Business rules:
-  - Deposit: adds to customer.amanat_balance.
-  - Withdrawal: subtracts from customer.amanat_balance.
+    - Deposit: adds to customer.amanat_balance and debits the selected cash/bank account (cash is the legacy default).
+    - Withdrawal: subtracts from customer.amanat_balance and credits the selected cash/bank account (cash is the legacy default).
   - Fuel purchase: subtracts from balance, creates sale.
   - Balance cannot go negative.
   - **Tech debt:** May be refactored to generic `acct.deposits` later.
@@ -886,3 +891,68 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   rather than netted from sales in Money In. Expected cash = opening + in - out.
   Version 1 is normalized for display using its frozen channel amounts without rewriting
   stored snapshots; both posted and current views use the same normalized convention.
+
+### Standalone fuel-sale invoices as a close channel (2026-09-17)
+- Business rule: every litre sold goes through a nozzle the close reads. A standalone
+  credit fuel-sale invoice (`FuelSaleService::createSale`, `sale_type=credit`) is never
+  additional revenue — it is a split of the meter-derived sales into a receivable, same
+  as a credit allocation typed directly into the close.
+- Before a close for its date posts: `DailyCloseCreditSaleService::pendingFuelInvoiceDetails()`
+  finds unlinked (`transaction_id IS NULL`) credit fuel-sale invoices for the company+date
+  and folds them into `credit_sale_details`/`posting_snapshot.credit_sales` alongside
+  manually-typed rows, each detail carrying `source` = `fuel_sale_invoice` (manual rows
+  carry `source` = `manual`). They reduce expected cash exactly like a manual credit row
+  and are linked to the close's transaction on post via the same `attach()` used for
+  manual rows. The `DailyCloseController` Create page pre-loads them as `pendingFuelInvoices`,
+  pre-checked into the credit-sales section; a manual row whose `reference` matches a
+  pending invoice's number is either the page's own echo (same amount — dropped) or a
+  genuine duplicate attempt (different amount — rejected).
+- After a close for its date has already posted (has `metadata.posting_snapshot`):
+  `FuelSaleService::createSale` immediately posts a `fuel_sale_reclass` journal
+  (Dr buyer's AR / Cr the close's frozen `cash_account_id`, `reference_type=acct.invoices`,
+  `reference_id=<invoice id>`, dated the sale date) and links the invoice's `transaction_id`
+  to it. `DailyCloseReconciliationService::sources()`/`view()` pick this transaction up like
+  any other canonical late activity: cash effect = -amount, sales effect = 0 (no revenue
+  account is touched).
+- No new columns were added: this reuses `acct.invoices.transaction_id` (null = pending,
+  set = attached to a close or reclassified) plus the existing `posting_snapshot` metadata.
+
+### Inline supplier bills / fuel purchases in the Daily Close (2026-09-17)
+- `purchases[]` input (park: stored as-is in the draft; post: each row must be complete):
+  `supplier_id`, `item_id`, `quantity`, `unit_cost`, `tank_id` (required when the item has
+  a `fuel_category`), `supplier_invoice_number`, `notes`, `paid_now`. Entering a purchase
+  requires `bill.create` (`RequiresBillCreatePermission`); the Create page hides the
+  section and the FormRequest rejects any row without it.
+- At post, before `DailyCloseReconciliationService::sources()` reads the date (inside the
+  same advisory-locked transaction), `DailyCloseEntryService::purchase()` dispatches the
+  same `bill.create` (status `received`, so `Bill\CreateAction`'s own immediate-delivery
+  receipt posts the stock movement into the chosen tank) and, when `paid_now` is set,
+  `bill_payment.create` commands the Bills module itself uses — no bill/payment logic is
+  duplicated. The resulting bill/payment transactions are then picked up automatically by
+  `sources()` like any other canonical activity for the date; `DailyCloseService` tags the
+  matching `posting_snapshot.sources['journal:<id>']` entries with `source` = `close_purchase`
+  for display. A bill paid inside the same close already carries a `transaction_id`, so it
+  is excluded from `pendingBillPayments` by the same `whereNull('transaction_id')` filter
+  that list already uses.
+
+### Legacy Daily Close amendment removed (2026-09-17)
+- Owner decision: nothing was ever in production with a close lacking a `posting_snapshot`,
+  and a posted Daily Close is never reversed and re-posted. Every close is a snapshot close.
+- Removed entirely: `DailyCloseAmendmentService` (the `amendDailyClose()`/reversal+correction
+  path and `getAmendmentChain()`), the `/{transaction}/amend` and `/{transaction}/amendment-chain`
+  routes and controller methods, `StoreDailyCloseAmendmentRequest`, the `AmendmentChain.vue`
+  component, and the "Amend"/"Amendment History" UI in Show.vue and Index.vue.
+  `Transaction::isAmendable()` now always returns `false`; `PostingService::reverseTransaction`
+  refuses `fuel_daily_close` unconditionally (previously only when a `posting_snapshot` was
+  present). Lock/unlock/lock-month is a separate, unrelated feature and was kept, now in
+  `DailyCloseLockService` (renamed from `DailyCloseAmendmentService`, which no longer amends
+  anything).
+- `fuel.capture_post_close_activity()`'s whitelist for `fuel_daily_close_reversal` transactions
+  (nothing creates that type anymore) was dropped via a new migration
+  (`2026_09_17_230000_drop_legacy_close_reversal_support`) that re-creates the function with
+  `CREATE OR REPLACE`, rather than editing the original `2026_09_15_220000_audit_post_close_activity`
+  migration in place (that one has already run in production).
+- Post-close corrections remain exactly as documented above (declared expenses, reading
+  corrections, late canonical activity captured in `fuel.daily_close_activity`) — nothing
+  about that mechanism changed. What was removed is the alternate, unused path of reversing
+  the whole close and re-posting a correction transaction linked via `corrects_transaction_id`.

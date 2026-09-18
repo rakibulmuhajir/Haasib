@@ -21,7 +21,6 @@ import {
   Building,
   Calendar,
   Landmark,
-  Settings,
   Users,
   UserPlus,
   Percent,
@@ -241,7 +240,6 @@ const stepOrder = [
   'company_identity',
   'fiscal_year',
   'bank_accounts',
-  'default_accounts',
   'partners',
   'employees',
   'tax_settings',
@@ -260,7 +258,6 @@ const stepIcons: Record<string, any> = {
   company_identity: Building,
   fiscal_year: Calendar,
   bank_accounts: Landmark,
-  default_accounts: Settings,
   partners: Users,
   employees: UserPlus,
   tax_settings: Percent,
@@ -309,7 +306,6 @@ const requiredStepIds = new Set([
   'company_identity',
   'fiscal_year',
   'bank_accounts',
-  'default_accounts',
   'fuel_items',
   'tanks',
   'pumps',
@@ -319,8 +315,8 @@ const requiredStepIds = new Set([
 const setupGroups = computed(() => [
   {
     title: 'Foundation',
-    description: 'Company, fiscal year, bank/cash, and default GL accounts.',
-    stepIds: ['company_identity', 'fiscal_year', 'bank_accounts', 'default_accounts'],
+    description: 'Company, fiscal year, banks, and cash.',
+    stepIds: ['company_identity', 'fiscal_year', 'bank_accounts'],
   },
   {
     title: 'Operations',
@@ -414,18 +410,6 @@ const stepReloadMap: Record<string, string[]> = {
   company_identity: ['wizard', 'company', 'industries', 'timezones', 'currencies'],
   fiscal_year: ['wizard', 'company', 'months'],
   bank_accounts: ['wizard', 'company', 'existingBankAccounts', 'currencies'],
-  default_accounts: [
-    'wizard',
-    'company',
-    'arAccounts',
-    'apAccounts',
-    'revenueAccounts',
-    'expenseAccounts',
-    'bankAccounts',
-    'retainedEarningsAccounts',
-    'taxPayableAccounts',
-    'taxReceivableAccounts',
-  ],
   partners: ['wizard', 'partners', 'company'],
   employees: ['wizard', 'employees', 'company'],
   tax_settings: ['wizard', 'company'],
@@ -525,31 +509,28 @@ const bankAccountsForm = useForm({
   bank_accounts: [
     {
       id: null as string | null,
-      account_name: '',
+      account_name: 'Cash on Hand',
       currency: props.company.base_currency || 'PKR',
-      account_type: 'bank' as 'bank' | 'cash',
+      account_type: 'cash' as 'bank' | 'cash',
     },
   ],
   flow: 'fuel',
 })
 
 const applyBankAccountPrefill = () => {
-  if (props.existingBankAccounts.length > 0) {
-    bankAccountsForm.bank_accounts = props.existingBankAccounts.map((account) => ({
-      id: account.id,
-      account_name: account.name,
-      currency: account.currency || props.company.base_currency || 'PKR',
-      account_type: account.subtype === 'cash' ? 'cash' : 'bank',
-    }))
-  } else if (!bankAccountsForm.bank_accounts.length) {
-    bankAccountsForm.bank_accounts = [
-      {
-        id: null,
-        account_name: '',
-        currency: props.company.base_currency || 'PKR',
-        account_type: 'bank',
-      },
-    ]
+  bankAccountsForm.bank_accounts = props.existingBankAccounts.map((account) => ({
+    id: account.id,
+    account_name: ['Operating Bank Account', 'Operating Bank', 'Main Bank'].includes(account.name) ? '' : account.name,
+    currency: account.currency || props.company.base_currency || 'PKR',
+    account_type: account.subtype === 'cash' ? 'cash' : 'bank',
+  }))
+  if (!bankAccountsForm.bank_accounts.some((account) => account.account_type === 'cash')) {
+    bankAccountsForm.bank_accounts.push({
+      id: null,
+      account_name: 'Cash on Hand',
+      currency: props.company.base_currency || 'PKR',
+      account_type: 'cash',
+    })
   }
 }
 
@@ -575,44 +556,6 @@ const removeBankAccount = (index: number) => {
 
 const bankAccountRowError = (index: number, field: string) =>
   (bankAccountsForm.errors as Record<string, string>)[`bank_accounts.${index}.${field}`]
-
-const pickByCode = (accounts: AccountOption[], code: string, fallback?: string | null) => {
-  return fallback || accounts.find((account) => account.code === code)?.id || accounts[0]?.id || ''
-}
-
-const defaultAccountsForm = useForm({
-  ar_account_id: pickByCode(props.arAccounts, '1100', props.company.ar_account_id),
-  ap_account_id: pickByCode(props.apAccounts, '2100', props.company.ap_account_id),
-  income_account_id: pickByCode(props.revenueAccounts, '4100', props.company.income_account_id),
-  expense_account_id: pickByCode(props.expenseAccounts, '6100', props.company.expense_account_id),
-  bank_account_id: pickByCode(props.bankAccounts, '1000', props.company.bank_account_id),
-  retained_earnings_account_id: pickByCode(props.retainedEarningsAccounts, '3100', props.company.retained_earnings_account_id),
-  sales_tax_payable_account_id: props.company.sales_tax_payable_account_id || props.taxPayableAccounts[0]?.id || '',
-  purchase_tax_receivable_account_id: props.company.purchase_tax_receivable_account_id || props.taxReceivableAccounts[0]?.id || '',
-  flow: 'fuel',
-})
-
-const defaultAccountsError = computed(() => Object.values(defaultAccountsForm.errors)[0] ?? '')
-
-watch(
-  () => props.company,
-  (company) => {
-    defaultAccountsForm.ar_account_id = pickByCode(props.arAccounts, '1100', company.ar_account_id)
-    defaultAccountsForm.ap_account_id = pickByCode(props.apAccounts, '2100', company.ap_account_id)
-    defaultAccountsForm.income_account_id = pickByCode(props.revenueAccounts, '4100', company.income_account_id)
-    defaultAccountsForm.expense_account_id = pickByCode(props.expenseAccounts, '6100', company.expense_account_id)
-    defaultAccountsForm.bank_account_id = pickByCode(props.bankAccounts, '1000', company.bank_account_id)
-    defaultAccountsForm.retained_earnings_account_id = pickByCode(
-      props.retainedEarningsAccounts,
-      '3100',
-      company.retained_earnings_account_id
-    )
-    defaultAccountsForm.sales_tax_payable_account_id = company.sales_tax_payable_account_id || props.taxPayableAccounts[0]?.id || ''
-    defaultAccountsForm.purchase_tax_receivable_account_id =
-      company.purchase_tax_receivable_account_id || props.taxReceivableAccounts[0]?.id || ''
-  },
-  { immediate: true }
-)
 
 const partnersForm = useForm({
   partners: [] as PartnerRow[],
@@ -1265,20 +1208,6 @@ const submitBankAccounts = () => {
   })
 }
 
-const submitDefaultAccounts = () => {
-  defaultAccountsForm
-    .transform((data) => ({
-      ...data,
-      sales_tax_payable_account_id: data.sales_tax_payable_account_id || null,
-      purchase_tax_receivable_account_id: data.purchase_tax_receivable_account_id || null,
-    }))
-    .post(`/${companySlug.value}/onboarding/default-accounts`, {
-      preserveScroll: true,
-      preserveState: true,
-      onSuccess: () => nextStep(),
-    })
-}
-
 const submitPartners = () => {
   if (!isProfitShareValid.value) return
   partnersForm.post(`/${companySlug.value}/fuel/onboarding/partners`, {
@@ -1815,8 +1744,9 @@ onMounted(() => {
 
             <!-- Bank Accounts -->
             <div v-if="activeStepId === 'bank_accounts'" class="space-y-6">
+              <InputError :message="bankAccountsForm.errors.bank_accounts" />
               <p class="text-sm text-text-secondary">
-                Add your primary bank and cash accounts. You can edit these later from Chart of Accounts.
+                Add the banks you use, such as UBL, MCB, or Meezan. Cash on hand is included below.
               </p>
 
               <div class="space-y-4">
@@ -1827,9 +1757,9 @@ onMounted(() => {
                 >
                   <CardContent class="pt-6 space-y-4">
                     <div class="flex items-center justify-between">
-                      <h4 class="text-sm font-semibold">Account {{ index + 1 }}</h4>
+                      <h4 class="text-sm font-semibold">{{ account.account_type === 'cash' ? 'Cash on hand' : 'Operating bank account' }}</h4>
                       <Button
-                        v-if="index > 0"
+                        v-if="!account.id && account.account_type !== 'cash'"
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -1840,8 +1770,8 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                      <Label>Account Name <span class="text-status-critical">*</span></Label>
-                      <Input v-model="account.account_name" placeholder="Meezan Bank" />
+                      <Label>{{ account.account_type === 'cash' ? 'Cash account name' : 'Bank account name' }} <span class="text-status-critical">*</span></Label>
+                      <Input v-model="account.account_name" :placeholder="account.account_type === 'cash' ? 'Cash on Hand' : 'e.g. UBL Current Account'" />
                       <InputError :message="bankAccountRowError(index, 'account_name')" />
                     </div>
 
@@ -1860,19 +1790,7 @@ onMounted(() => {
                         </Select>
                         <InputError :message="bankAccountRowError(index, 'currency')" />
                       </div>
-                      <div class="space-y-2">
-                        <Label>Type <span class="text-status-critical">*</span></Label>
-                        <Select v-model="account.account_type" required>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="bank">Bank</SelectItem>
-                            <SelectItem value="cash">Cash</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <InputError :message="bankAccountRowError(index, 'account_type')" />
-                      </div>
+
                     </div>
                   </CardContent>
                 </Card>
@@ -1880,7 +1798,7 @@ onMounted(() => {
 
               <Button type="button" variant="outline" @click="addBankAccount">
                 <Plus class="mr-2 h-4 w-4" />
-                Add Account
+                Add bank account
               </Button>
 
               <div class="flex items-center justify-between pt-6 border-t">
@@ -1889,166 +1807,7 @@ onMounted(() => {
                   Previous
                 </Button>
                 <Button type="button" :disabled="bankAccountsForm.processing" @click="submitBankAccounts">
-                  Save & Continue
-                  <ArrowRight class="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <!-- Default Accounts -->
-            <div v-if="activeStepId === 'default_accounts'" class="space-y-6">
-              <Alert v-if="defaultAccountsError" variant="destructive">
-                <AlertTriangle class="h-4 w-4" />
-                <AlertTitle>Could not save defaults</AlertTitle>
-                <AlertDescription>{{ defaultAccountsError }}</AlertDescription>
-              </Alert>
-              <Alert v-if="!props.transitColumnsReady" class="border-status-attention/30 bg-status-attention/10 text-status-attention">
-                <AlertTriangle class="h-4 w-4 text-status-attention" />
-                <AlertTitle>System update required</AlertTitle>
-                <AlertDescription>{{ props.transitColumnsMessage }}</AlertDescription>
-              </Alert>
-              <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Accounts Receivable <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.ar_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="account in props.arAccounts" :key="account.id" :value="account.id">
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.ar_account_id" />
-                </div>
-                <div class="space-y-2">
-                  <Label>Accounts Payable <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.ap_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="account in props.apAccounts" :key="account.id" :value="account.id">
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.ap_account_id" />
-                </div>
-              </div>
-
-              <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Default Revenue <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.income_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="account in props.revenueAccounts" :key="account.id" :value="account.id">
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.income_account_id" />
-                </div>
-                <div class="space-y-2">
-                  <Label>Default Expense <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.expense_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="account in props.expenseAccounts" :key="account.id" :value="account.id">
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.expense_account_id" />
-                </div>
-              </div>
-
-              <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Default Bank/Cash <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.bank_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="account in props.bankAccounts" :key="account.id" :value="account.id">
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.bank_account_id" />
-                </div>
-                <div class="space-y-2">
-                  <Label>Retained Earnings <span class="text-status-critical">*</span></Label>
-                  <Select v-model="defaultAccountsForm.retained_earnings_account_id" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="account in props.retainedEarningsAccounts"
-                        :key="account.id"
-                        :value="account.id"
-                      >
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.retained_earnings_account_id" />
-                </div>
-              </div>
-
-              <div class="grid gap-4 md:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Sales Tax Payable</Label>
-                  <Select v-model="defaultAccountsForm.sales_tax_payable_account_id">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="account in props.taxPayableAccounts"
-                        :key="account.id"
-                        :value="account.id"
-                      >
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.sales_tax_payable_account_id" />
-                </div>
-                <div class="space-y-2">
-                  <Label>Purchase Tax Receivable</Label>
-                  <Select v-model="defaultAccountsForm.purchase_tax_receivable_account_id">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="account in props.taxReceivableAccounts"
-                        :key="account.id"
-                        :value="account.id"
-                      >
-                        {{ account.code }} - {{ account.name }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <InputError :message="defaultAccountsForm.errors.purchase_tax_receivable_account_id" />
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between pt-6 border-t">
-                <Button type="button" variant="outline" @click="previousStep">
-                  <ArrowLeft class="mr-2 h-4 w-4" />
-                  Previous
-                </Button>
-                <Button type="button" :disabled="defaultAccountsForm.processing" @click="submitDefaultAccounts">
+                  <Spinner v-if="bankAccountsForm.processing" class="mr-2 h-4 w-4" />
                   Save & Continue
                   <ArrowRight class="ml-2 h-4 w-4" />
                 </Button>

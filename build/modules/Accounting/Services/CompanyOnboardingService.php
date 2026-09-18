@@ -203,6 +203,9 @@ class CompanyOnboardingService
                     $account->update($payload + [
                         'updated_by_user_id' => $this->getCurrentUserId(),
                     ]);
+                    \App\Modules\Accounting\Models\BankAccount::where('company_id', $company->id)
+                        ->where('gl_account_id', $account->id)
+                        ->update(['account_name' => $account->name]);
                     $updatedAccounts[] = $account;
                     continue;
                 }
@@ -239,6 +242,13 @@ class CompanyOnboardingService
             $onboarding = $company->onboarding;
             $onboarding->completeStep('bank-accounts');
             $onboarding->advanceToStep('default-accounts', 4);
+
+            if ($company->industry_code === 'fuel_station') {
+                app(\App\Modules\FuelStation\Services\FuelStationOnboardingService::class)
+                    ->configureAutomaticAccounts($company->fresh(), $syncIds);
+                $onboarding->completeStep('default-accounts');
+                $onboarding->advanceToStep('tax-settings', 5);
+            }
 
             return $createdAccounts;
         });

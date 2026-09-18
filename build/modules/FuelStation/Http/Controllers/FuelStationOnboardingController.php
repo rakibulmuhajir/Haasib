@@ -26,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -990,7 +991,7 @@ class FuelStationOnboardingController extends Controller
             'pumps' => 'required|array|min:1',
             'pumps.*.id' => 'nullable|uuid',
             'pumps.*.name' => 'required|string|max:255',
-            'pumps.*.tank_id' => 'required|uuid|exists:inv.warehouses,id',
+            'pumps.*.tank_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'pumps.*.nozzle_count' => 'required|integer|min:1|max:2',
             'pumps.*.front_electronic' => 'nullable|numeric|min:0',
             'pumps.*.front_manual' => 'nullable|numeric|min:0',
@@ -1182,7 +1183,7 @@ class FuelStationOnboardingController extends Controller
         $validated = $request->validate([
             'effective_date' => 'required|date',
             'rates' => 'required|array|min:1',
-            'rates.*.item_id' => 'required|uuid|exists:inv.items,id',
+            'rates.*.item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
             'rates.*.purchase_rate' => 'required|numeric|min:0',
             'rates.*.sale_rate' => 'required|numeric|min:0',
         ]);
@@ -1414,7 +1415,7 @@ class FuelStationOnboardingController extends Controller
             'stock_date' => 'required|date',
             'tank_readings' => 'required|array|min:1',
             'tank_readings.*.id' => 'nullable|uuid',
-            'tank_readings.*.tank_id' => 'required|uuid|exists:inv.warehouses,id',
+            'tank_readings.*.tank_id' => ['required', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'tank_readings.*.stick_reading' => 'nullable|numeric|min:0',
             'tank_readings.*.liters' => 'required|numeric|min:0',
             'tank_readings.*.value' => 'nullable|numeric|min:0',

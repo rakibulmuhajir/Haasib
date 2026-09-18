@@ -37,6 +37,12 @@ A strict double-entry accounting engine concealed behind a consumer-grade, task-
 
 ### Design Principles
 
+Fuel-station onboarding asks for operating bank accounts and cash on hand. Saving these
+accounts prepares AR/AP, revenue, expense, inventory/COGS and posting mappings automatically;
+there is no separate default-account assignment step. Existing mappings remain available in
+accounting settings. Everyday expenses use the fuel industry pack's named categories (such as
+Electricity, Internet & Phone, and Food & Tea), without requiring owners to choose ledger codes.
+
 | Principle | Description | Implementation |
 |-----------|-------------|----------------|
 | **Hide the Plumbing** | Never show journals, debits, credits unless explicitly requested | Owner Mode hides all GL terminology |

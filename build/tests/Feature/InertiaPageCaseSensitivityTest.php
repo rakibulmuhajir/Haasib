@@ -159,15 +159,7 @@ test('every Inertia::render page name resolves to a real file, case-sensitively'
     // renders them but no .vue file exists, so the route answers with a blank screen.
     // They are real bugs, quarantined here so the guard can still fail on anything NEW
     // rather than being disabled outright. Delete an entry as its page is written.
-    $knownMissingPages = [
-        'inventory/stock/ItemStock',
-        'Payroll/DeductionTypes/Edit',
-        'Payroll/EarningTypes/Edit',
-        'Payroll/LeaveRequests/Show',
-        'Payroll/LeaveRequests/Edit',
-        'Payroll/LeaveTypes/Edit',
-        'Payroll/Payslips/Edit',
-    ];
+    $knownMissingPages = [];
 
     $unresolved = [];
     $stillMissing = [];

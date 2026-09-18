@@ -1,24 +1,34 @@
 # Row level security: enforcement readiness
 
 **Date:** 18 September 2026
-**Status:** prepared, **not switched on**. The application still connects as the
-`postgres` superuser, so every RLS policy in this database is bypassed today.
+**Status:** prepared, **not switched on**, and gated behind `RLS_ENFORCEMENT=on`
+so it cannot ride along with an ordinary deploy.
 
 ## What is true right now
 
-Tenant isolation rests entirely on application-level `company_id` scoping. The
-~67 tables carrying policies, plus `fuel.daily_close_activity`,
-`fuel.daily_close_drafts` and `fuel.daily_close_reading_corrections`, are
-protected on paper only: a superuser bypasses row level security
-unconditionally, `FORCE ROW LEVEL SECURITY` included.
+**Production and development differ, and conflating them caused a near-miss.**
+
+*Production* connects as `haasib_app` — not a superuser, no `BYPASSRLS` — and
+that role **owns all 90 tables**. 84 tables have RLS enabled but only 17 are
+`FORCE`d, and all 17 are Umrah's. A table's owner bypasses its own policies
+unless the table is FORCEd, so the other ~67 are inert: the policies exist and
+never run. Isolation there rests on application-level `company_id` scoping.
+
+*Development* connects as the `postgres` superuser, which bypasses RLS
+unconditionally — `FORCE` included. So dev cannot reproduce production's
+behaviour at all, in either direction.
+
+This matters because the two environments fail differently. Verifying on dev
+tells you nothing about what enforcement will do in production.
 
 ## What has been done
 
 | | |
 |---|---|
-| `34d9173a` | Creates `haasib_app` — not a superuser, not `BYPASSRLS`, not the table owner — with only the privileges the application needs. |
+| `34d9173a` | Provisions `haasib_app` where it does not exist — not a superuser, no `BYPASSRLS`. Production already had this role and already connects as it; the migration matters for other environments. Note it **does** own production's tables, which is why FORCE is the switch. |
 | `b914d0d0` | Carries company context into every write path that runs outside an HTTP request: console commands, seeders, queued jobs. |
 | `06b8e6d4` | Converted ~112 `exists:` validation rules off the schema-named connections, which are separate sessions and carry no company context. |
+| `c250a70d` | The same for 16 `unique:` rules, which had never once fired under test for the same reason. |
 
 None of these change runtime behaviour. `.env` still reads
 `DB_USERNAME=postgres`, so the role exists but is unused.
@@ -63,23 +73,22 @@ rollout produces screens that look fine and are silently blank for some tenants.
 
 ## How to perform the switch, when the blocker is cleared
 
-1. Confirm the suite passes as `haasib_app` on the test database.
-2. Verify on a staging copy that `app.current_company_id` is set on every
-   request path, and spot-check that a query without it returns zero rows rather
-   than another company's.
-3. Change `DB_USERNAME` in the server `.env` to `haasib_app` and set its
-   password. Leave `pgsql_migrator` as the owning role so migrations continue to
-   run.
-4. `php artisan config:clear` and restart the workers.
-5. Verify isolation directly: sign in as two companies and confirm each sees
-   only its own data; then, as `haasib_app` with no GUC set, confirm a
-   policy-protected table returns no rows.
+Production is already connected as `haasib_app`, so **no `.env` role change is
+needed** — the switch is the `FORCE` itself.
+
+1. Confirm the suite passes as `haasib_app` on the test database. It does not
+   today: 67 failures, almost all `new row violates row-level security policy`.
+2. Fix those write paths. That is the work; everything else is a step.
+3. On a staging copy of production data, run the migration with
+   `RLS_ENFORCEMENT=on` and exercise the app: post a close, take a payment,
+   record a bill. Writes are the risk, and they fail loudly.
+4. Then production, in a maintenance window, with the rollback below to hand.
 
 ## Rollback
 
-Change `DB_USERNAME` back to `postgres`, `php artisan config:clear`, restart.
-One step, no migration, no data change. Nothing in `34d9173a` or `b914d0d0`
-needs reverting — the role simply goes unused again, exactly as it is today.
+`ALTER TABLE <each> NO FORCE ROW LEVEL SECURITY` returns every table to
+owner-bypass, which is exactly today's behaviour. The migration's `down()` does
+this. No data changes, and the policies themselves can stay in place.
 
 ## Recommendation
 

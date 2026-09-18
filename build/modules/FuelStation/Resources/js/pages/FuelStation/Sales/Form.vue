@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { Fuel, Plus, Calculator, CreditCard, Banknote, Smartphone, Building2, Search } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
 import MoneyText from '@/components/MoneyText.vue'
+import { useFuelSaleCanSubmit } from '../../../composables/useFuelSaleSubmitState'
 
 interface FuelItem {
   id: string
@@ -191,23 +192,18 @@ const resetForm = () => {
   formErrors.value = {}
 }
 
-/**
- * Only a sale settled at the counter needs the payment breakdown to cover the total.
- * A credit sale is owed by the buyer, a vendor-card (parco) sale is collected from the
- * card issuer later, and amanat and investor sales draw on a balance the server applies
- * (FuelSaleService::handleSaleTypeLogic) rather than on cash taken now. Requiring the
- * breakdown to equal the total for those left Complete Sale permanently disabled.
- */
-const settlesAtCounter = computed(() => !['credit', 'amanat', 'investor', 'parco_card'].includes(saleType.value))
-
-const canSubmit = computed(() =>
-  !!selectedPump.value
-  && !!selectedFuelItem.value
-  && !!quantity.value
-  && quantity.value > 0
-  && (!settlesAtCounter.value || totalPaid.value === total.value)
-  && (saleType.value !== 'credit' || !!selectedCustomer.value),
-)
+// The Complete Sale enabled condition lives in useFuelSaleSubmitState so it can be unit
+// tested without mounting this whole form (see commit 11318f67 and
+// tests/js/useFuelSaleSubmitState.spec.ts).
+const { settlesAtCounter, canSubmit } = useFuelSaleCanSubmit({
+  pumpId: computed(() => selectedPump.value?.id),
+  itemId: computed(() => selectedFuelItem.value?.id),
+  quantity,
+  saleType,
+  customerId: computed(() => selectedCustomer.value?.id),
+  totalPaid,
+  total,
+})
 
 const validateForm = () => {
   const errors: Record<string, string[]> = {}

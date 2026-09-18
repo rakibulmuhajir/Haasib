@@ -38,6 +38,11 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next';
 import { computed } from 'vue';
+import {
+    allocationDisplayAmount as computeAllocationDisplayAmount,
+    appliedAllocations as computeAppliedAllocations,
+    unappliedAmount,
+} from '../../lib/paymentAllocations';
 
 interface Invoice {
     id: string;
@@ -134,35 +139,22 @@ const documentDates = computed(() =>
     ),
 );
 
-// Allocation amounts are stored in invoice currency, while a receipt is
-// printed in payment currency. Use the base allocation when a base-currency
-// payment settles a foreign-currency invoice so the receipt still reconciles.
+// Allocation splitting (applied vs. on-account/unapplied) lives in lib/paymentAllocations
+// so it can be unit tested without mounting this whole page -- see
+// tests/js/paymentAllocations.spec.ts and commit f4811b93.
 const allocationDisplayAmount = (allocation: PaymentAllocation) =>
-    allocation.invoice?.currency &&
-    allocation.invoice.currency !== props.payment.currency
-        ? Number(allocation.base_amount_allocated)
-        : Number(allocation.amount_allocated);
+    computeAllocationDisplayAmount(allocation, props.payment.currency);
 
-// An allocation with no invoice IS the on-account credit: money the buyer paid that
-// is held against future invoices. It is stored as a payment_allocations row with a
-// null invoice_id so the ledger invariant (allocations sum to the payment) still
-// holds, so it must be split out here rather than counted as applied -- otherwise it
-// reads as "applied to invoice" and the unapplied figure computes to zero.
 const appliedAllocations = computed(() =>
-    props.payment.payment_allocations.filter((allocation) => allocation.invoice),
+    computeAppliedAllocations(props.payment.payment_allocations),
 );
 
-const allocatedTotal = computed(() =>
-    appliedAllocations.value.reduce(
-        (sum, allocation) => sum + allocationDisplayAmount(allocation),
-        0,
-    ),
-);
-
-// The stored null-invoice rows, plus any residual on an older payment written before
-// the remainder was recorded as a row at all.
 const unapplied = computed(() =>
-    Math.max(0, Number(props.payment.amount) - allocatedTotal.value),
+    unappliedAmount(
+        props.payment.payment_allocations,
+        props.payment.amount,
+        props.payment.currency,
+    ),
 );
 
 /**

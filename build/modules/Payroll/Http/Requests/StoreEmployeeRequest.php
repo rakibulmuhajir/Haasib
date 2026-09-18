@@ -32,7 +32,7 @@ class StoreEmployeeRequest extends BaseFormRequest
                 'nullable',
                 'string',
                 'max:50',
-                "unique:pay.employees,employee_number,NULL,id,company_id,{$company->id},deleted_at,NULL",
+                Rule::unique(Employee::class, 'employee_number')->where('company_id', $company->id)->whereNull('deleted_at'),
             ],
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',

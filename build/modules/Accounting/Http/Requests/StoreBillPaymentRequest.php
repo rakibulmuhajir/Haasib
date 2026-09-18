@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\BillPayment;
 
 class StoreBillPaymentRequest extends BaseFormRequest
 {
@@ -37,7 +38,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             ->isNotEmpty();
         $requiresApAccount = $this->filled('vendor_id') && ! $companyApAccountId && ! $vendorApAccountId;
 
-        $paymentNumberRule = Rule::unique('acct.bill_payments', 'payment_number')
+        $paymentNumberRule = Rule::unique(BillPayment::class, 'payment_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         $baseCurrencyRule = $companyBaseCurrency

@@ -7,6 +7,7 @@ use App\Http\Requests\BaseFormRequest;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\FuelStation\Models\Pump;
 
 class UpdatePumpRequest extends BaseFormRequest
 {
@@ -27,7 +28,7 @@ class UpdatePumpRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('fuel.pumps', 'name')
+                Rule::unique(Pump::class, 'name')
                     ->where('company_id', $company?->id)
                     ->whereNull('deleted_at')
                     ->ignore($pumpId),

@@ -7,6 +7,7 @@ use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\Payroll\Models\DeductionType;
 
 class UpdateDeductionTypeRequest extends BaseFormRequest
 {
@@ -26,7 +27,7 @@ class UpdateDeductionTypeRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:50',
-                "unique:pay.deduction_types,code,{$deductionTypeId},id,company_id,{$company->id},deleted_at,NULL",
+                Rule::unique(DeductionType::class, 'code')->ignore($deductionTypeId, 'id')->where('company_id', $company->id)->whereNull('deleted_at'),
             ],
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',

@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Account;
 
 class UpdateAccountRequest extends BaseFormRequest
 {
@@ -43,7 +44,7 @@ class UpdateAccountRequest extends BaseFormRequest
 
         $accountId = $this->route('account');
 
-        $codeRule = Rule::unique('acct.accounts', 'code')
+        $codeRule = Rule::unique(Account::class, 'code')
             ->ignore($accountId)
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 

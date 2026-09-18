@@ -5,6 +5,8 @@ namespace App\Modules\Payroll\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CurrentCompany;
+use App\Modules\Payroll\Models\LeaveType;
+use Illuminate\Validation\Rule;
 
 class StoreLeaveTypeRequest extends BaseFormRequest
 {
@@ -23,7 +25,7 @@ class StoreLeaveTypeRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:50',
-                "unique:pay.leave_types,code,NULL,id,company_id,{$company->id}",
+                Rule::unique(LeaveType::class, 'code')->where('company_id', $company->id),
             ],
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',

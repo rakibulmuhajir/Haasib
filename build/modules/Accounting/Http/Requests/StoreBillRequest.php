@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Bill;
 
 class StoreBillRequest extends BaseFormRequest
 {
@@ -25,7 +26,7 @@ class StoreBillRequest extends BaseFormRequest
         $companyId = $companyContext->getCompanyId();
         $companyBaseCurrency = $companyContext->getCompany()?->base_currency;
 
-        $billNumberRule = Rule::unique('acct.bills', 'bill_number')
+        $billNumberRule = Rule::unique(Bill::class, 'bill_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         $baseCurrencyRule = $companyBaseCurrency

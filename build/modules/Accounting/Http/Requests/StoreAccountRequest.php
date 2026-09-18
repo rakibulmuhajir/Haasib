@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Account;
 
 class StoreAccountRequest extends BaseFormRequest
 {
@@ -41,7 +42,7 @@ class StoreAccountRequest extends BaseFormRequest
         $companyId = $companyContext->getCompanyId();
         $baseCurrency = $companyContext->getCompany()?->base_currency;
 
-        $codeRule = Rule::unique('acct.accounts', 'code')
+        $codeRule = Rule::unique(Account::class, 'code')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         return [

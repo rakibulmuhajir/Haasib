@@ -33,7 +33,7 @@ class UpdateBankAccountRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('acct.company_bank_accounts', 'account_number')
+                Rule::unique(BankAccount::class, 'account_number')
                     ->where('company_id', $companyId)
                     ->whereNull('deleted_at')
                     ->ignore($bankAccountId),

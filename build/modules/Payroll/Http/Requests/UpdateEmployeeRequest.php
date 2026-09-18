@@ -35,7 +35,7 @@ class UpdateEmployeeRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:50',
-                "unique:pay.employees,employee_number,{$employeeId},id,company_id,{$company->id},deleted_at,NULL",
+                Rule::unique(Employee::class, 'employee_number')->ignore($employeeId, 'id')->where('company_id', $company->id)->whereNull('deleted_at'),
             ],
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',

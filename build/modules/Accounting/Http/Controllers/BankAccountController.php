@@ -101,15 +101,61 @@ class BankAccountController extends Controller
     {
         $company = CompanyContext::getCompany();
 
+        $validated = $request->validated();
+        $validated['gl_account_id'] = $validated['gl_account_id']
+            ?? $this->createLedgerAccountFor($company->id, $validated)->id;
+
         $bankAccount = BankAccount::create([
             'company_id' => $company->id,
             'created_by_user_id' => Auth::id(),
-            ...$request->validated(),
+            ...$validated,
         ]);
 
         return redirect()
             ->route('banking.accounts.show', ['company' => $company->slug, 'bankAccount' => $bankAccount->id])
             ->with('success', 'Bank account created successfully.');
+    }
+
+    /**
+     * Every bank record owns its own ledger account, because every posting hits the ledger
+     * account and not the record: two records sharing one cannot be told apart, and a
+     * transfer between them would debit and credit the same account. Codes come from the
+     * 1000-1049 band the chart of accounts reserves for money accounts, matching
+     * CompanyOnboardingService::setupBankAccounts.
+     */
+    private function createLedgerAccountFor(string $companyId, array $validated): Account
+    {
+        $subtype = match ($validated['account_type']) {
+            'cash' => 'cash',
+            'credit_card' => 'credit_card',
+            default => 'bank',
+        };
+
+        $taken = Account::where('company_id', $companyId)->pluck('code')->all();
+        $code = null;
+        foreach (range(1000, 1049) as $candidate) {
+            if (! in_array((string) $candidate, $taken, true)) {
+                $code = (string) $candidate;
+                break;
+            }
+        }
+
+        if ($code === null) {
+            throw new \RuntimeException('No free ledger account code between 1000 and 1049 for another money account.');
+        }
+
+        return Account::create([
+            'company_id' => $companyId,
+            'code' => $code,
+            'name' => $validated['account_name'],
+            'type' => $subtype === 'credit_card' ? 'liability' : 'asset',
+            'subtype' => $subtype,
+            'normal_balance' => $subtype === 'credit_card' ? 'credit' : 'debit',
+            'currency' => strtoupper($validated['currency']),
+            'is_active' => true,
+            'is_system' => false,
+            'created_by_user_id' => Auth::id(),
+        ]);
     }
 
     public function show(Request $request, string $company, string $bankAccount): Response

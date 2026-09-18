@@ -21,6 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useFormFeedback } from '@/composables/useFormFeedback';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
@@ -31,7 +32,7 @@ import {
     FileText,
     Save,
 } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 
 interface CompanyRef {
     id: string;
@@ -44,6 +45,8 @@ interface InvoiceRef {
     id: string;
     customer_id: string;
     invoice_number: string;
+    invoice_date: string;
+    total_amount: number;
     balance: number;
     currency: string;
 }
@@ -90,9 +93,10 @@ const preselectedInvoice = props.preselect?.invoice_id
     ? props.invoices.find((inv) => inv.id === props.preselect?.invoice_id)
     : null;
 
+const { showError } = useFormFeedback();
+
 const form = useForm({
     customer_id: props.preselect?.customer_id || '',
-    invoice_id: props.preselect?.invoice_id || '',
     amount: moneyNumber(preselectedInvoice?.balance),
     transaction_charge: 0,
     currency: preselectedInvoice?.currency || props.company.base_currency,
@@ -104,6 +108,12 @@ const form = useForm({
     ar_account_id: 'company_default',
 });
 
+// Per-invoice amount the buyer's payment settles, keyed by invoice id. Any invoice not
+// present here (or present at 0) contributes nothing and is omitted from the
+// `allocations` sent to the server; whatever is left of form.amount after these lands
+// on the buyer's account, exactly like leaving every row untouched always has.
+const invoiceAmounts = reactive<Record<string, number>>({});
+
 const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: DollarSign },
     { value: 'bank_transfer', label: 'Bank Transfer', icon: Building },
@@ -112,16 +122,20 @@ const paymentMethods = [
     { value: 'other', label: 'Other', icon: DollarSign },
 ];
 
-// Filter invoices by selected customer
+// Filter invoices by selected customer, oldest first (matches
+// Payment\CreateAction's own oldest-invoice_date-then-invoice_number tie-break, so the
+// "auto-fill oldest-first" button below allocates in the same order the backend would
+// have chosen on its own).
 const customerInvoices = computed(() => {
     if (!form.customer_id) return [];
-    return props.invoices.filter((inv) => inv.customer_id === form.customer_id);
-});
-
-// Selected invoice details
-const selectedInvoice = computed(() => {
-    if (!form.invoice_id) return null;
-    return props.invoices.find((inv) => inv.id === form.invoice_id);
+    return props.invoices
+        .filter((inv) => inv.customer_id === form.customer_id)
+        .slice()
+        .sort((a, b) =>
+            a.invoice_date === b.invoice_date
+                ? a.invoice_number.localeCompare(b.invoice_number)
+                : a.invoice_date.localeCompare(b.invoice_date),
+        );
 });
 
 const netMovement = computed(() =>
@@ -131,34 +145,91 @@ const netMovement = computed(() =>
     ),
 );
 
-// When customer changes, reset invoice selection
+const allocatedTotal = computed(() =>
+    moneyNumber(
+        customerInvoices.value.reduce(
+            (sum, inv) => sum + Number(invoiceAmounts[inv.id] || 0),
+            0,
+        ),
+    ),
+);
+
+const onAccountRemainder = computed(() =>
+    moneyNumber(Math.max(0, Number(form.amount || 0) - allocatedTotal.value)),
+);
+
+const overAllocated = computed(
+    () => allocatedTotal.value > Number(form.amount || 0) + 0.001,
+);
+
+function resetInvoiceAmounts() {
+    for (const key of Object.keys(invoiceAmounts)) delete invoiceAmounts[key];
+    for (const inv of customerInvoices.value) invoiceAmounts[inv.id] = 0;
+}
+
+// Distributes the payment amount across this buyer's open invoices, oldest first,
+// capping each at its own outstanding balance -- the same greedy fill
+// Payment\CreateAction::autoAllocate() performs server-side, just made visible and
+// editable before it is submitted.
+function autoFillOldestFirst() {
+    let remaining = Number(form.amount || 0);
+    for (const inv of customerInvoices.value) {
+        const take = Math.max(0, Math.min(remaining, Number(inv.balance)));
+        invoiceAmounts[inv.id] = moneyNumber(take);
+        remaining = moneyNumber(remaining - take);
+    }
+}
+
+function clearAllocations() {
+    for (const inv of customerInvoices.value) invoiceAmounts[inv.id] = 0;
+}
+
+// When customer changes, reset per-invoice amounts and preselect the sole invoice's
+// balance (and currency) when there is exactly one, mirroring the old single-select
+// convenience.
 watch(
     () => form.customer_id,
     () => {
-        form.invoice_id = '';
-        // Auto-select first invoice if only one available
+        resetInvoiceAmounts();
         if (customerInvoices.value.length === 1) {
-            form.invoice_id = customerInvoices.value[0].id;
-            form.currency = customerInvoices.value[0].currency;
+            const only = customerInvoices.value[0];
+            form.currency = only.currency;
+            if (form.amount === 0) form.amount = moneyNumber(only.balance);
         }
     },
 );
 
-// When invoice is selected, set currency and max amount
+// Keep the invoice-amount map in sync as the invoice list for this customer settles
+// (e.g. after the initial customer_id prop resolves customerInvoices for the first time).
 watch(
-    () => form.invoice_id,
-    () => {
-        if (selectedInvoice.value) {
-            form.currency = selectedInvoice.value.currency;
-            if (form.amount === 0) {
-                form.amount = moneyNumber(selectedInvoice.value.balance);
-            }
+    customerInvoices,
+    (list) => {
+        for (const inv of list) {
+            if (!(inv.id in invoiceAmounts)) invoiceAmounts[inv.id] = 0;
         }
     },
+    { immediate: true },
 );
+
+if (props.preselect?.invoice_id) {
+    invoiceAmounts[props.preselect.invoice_id] = moneyNumber(
+        preselectedInvoice?.balance,
+    );
+}
 
 const submit = () => {
-    form.post(`/${props.company.slug}/payments`);
+    form.transform((data) => ({
+        ...data,
+        allocations: customerInvoices.value
+            .map((inv) => ({
+                invoice_id: inv.id,
+                amount: Number(invoiceAmounts[inv.id] || 0),
+            }))
+            .filter((row) => row.amount > 0.001),
+    })).post(`/${props.company.slug}/payments`, {
+        onError: (errors) => showError(errors),
+        onFinish: () => form.transform((data) => data),
+    });
 };
 
 // Keep the account identity explicit when a Reka Select changes. This is
@@ -255,50 +326,6 @@ const setDepositAccount = (value: string) => {
                             </SelectContent>
                         </Select>
                         <InputError :message="form.errors.ar_account_id" />
-                    </div>
-                    <div>
-                        <Label for="invoice_id">Apply to Invoice *</Label>
-                        <Select
-                            v-model="form.invoice_id"
-                            :disabled="!form.customer_id"
-                            required
-                        >
-                            <SelectTrigger>
-                                <SelectValue
-                                    :placeholder="
-                                        form.customer_id
-                                            ? 'Select an invoice'
-                                            : 'Select a customer first'
-                                    "
-                                />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <template v-if="customerInvoices.length > 0">
-                                    <SelectItem
-                                        v-for="invoice in customerInvoices"
-                                        :key="invoice.id"
-                                        :value="invoice.id"
-                                    >
-                                        {{ invoice.invoice_number }} -
-                                        <MoneyText
-                                            :amount="invoice.balance"
-                                            :currency="invoice.currency"
-                                        />
-                                        due
-                                    </SelectItem>
-                                </template>
-                                <template v-else>
-                                    <SelectItem value="none" disabled>
-                                        {{
-                                            form.customer_id
-                                                ? 'No unpaid invoices'
-                                                : 'Select a customer first'
-                                        }}
-                                    </SelectItem>
-                                </template>
-                            </SelectContent>
-                        </Select>
-                        <InputError :message="form.errors.invoice_id" />
                     </div>
                     <div>
                         <Label for="amount">Amount *</Label>
@@ -408,6 +435,139 @@ const setDepositAccount = (value: string) => {
                         />
                         <InputError :message="form.errors.reference_number" />
                     </div>
+                </CardContent>
+            </Card>
+
+            <!-- Invoice Allocation -->
+            <Card v-if="form.customer_id" variant="form">
+                <CardHeader>
+                    <CardTitle>Invoice Allocation</CardTitle>
+                    <CardDescription>
+                        Choose how much of this payment settles each open
+                        invoice. Anything left over is recorded on the
+                        buyer's account.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div v-if="customerInvoices.length > 0">
+                        <div class="mb-3 flex flex-wrap gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                @click="autoFillOldestFirst"
+                            >
+                                Auto-fill oldest first
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                @click="clearAllocations"
+                            >
+                                Clear
+                            </Button>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-md border">
+                            <table class="w-full text-sm">
+                                <thead class="bg-muted/50 text-left">
+                                    <tr>
+                                        <th class="p-2 font-medium">
+                                            Invoice
+                                        </th>
+                                        <th class="p-2 font-medium">Date</th>
+                                        <th class="p-2 text-right font-medium">
+                                            Total
+                                        </th>
+                                        <th class="p-2 text-right font-medium">
+                                            Outstanding
+                                        </th>
+                                        <th class="p-2 text-right font-medium">
+                                            Apply
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="invoice in customerInvoices"
+                                        :key="invoice.id"
+                                        class="border-t"
+                                    >
+                                        <td class="p-2">
+                                            {{ invoice.invoice_number }}
+                                        </td>
+                                        <td class="p-2">
+                                            {{ invoice.invoice_date }}
+                                        </td>
+                                        <td class="p-2 text-right">
+                                            <MoneyText
+                                                :amount="invoice.total_amount"
+                                                :currency="invoice.currency"
+                                            />
+                                        </td>
+                                        <td class="p-2 text-right">
+                                            <MoneyText
+                                                :amount="invoice.balance"
+                                                :currency="invoice.currency"
+                                            />
+                                        </td>
+                                        <td class="p-2 text-right">
+                                            <Input
+                                                v-model.number="
+                                                    invoiceAmounts[invoice.id]
+                                                "
+                                                type="number"
+                                                min="0"
+                                                :max="invoice.balance"
+                                                step="0.01"
+                                                class="ml-auto w-32 text-right"
+                                            />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-3 text-sm"
+                        >
+                            <span>
+                                Allocated
+                                <MoneyText
+                                    :amount="allocatedTotal"
+                                    :currency="form.currency || 'USD'"
+                                />
+                                of
+                                <MoneyText
+                                    :amount="form.amount"
+                                    :currency="form.currency || 'USD'"
+                                />
+                            </span>
+                            <span>
+                                <MoneyText
+                                    :amount="onAccountRemainder"
+                                    :currency="form.currency || 'USD'"
+                                />
+                                left on account
+                            </span>
+                        </div>
+                        <p
+                            v-if="overAllocated"
+                            class="text-sm text-destructive"
+                        >
+                            Allocated amount exceeds the payment amount by
+                            <MoneyText
+                                :amount="allocatedTotal - Number(form.amount || 0)"
+                                :currency="form.currency || 'USD'"
+                            />.
+                        </p>
+                        <InputError :message="form.errors.allocations" />
+                    </div>
+                    <p v-else class="text-sm text-muted-foreground">
+                        This buyer has no open invoices — the full payment
+                        will be recorded on their account.
+                    </p>
                 </CardContent>
             </Card>
 

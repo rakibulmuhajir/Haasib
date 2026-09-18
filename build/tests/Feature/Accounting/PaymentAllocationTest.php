@@ -1,12 +1,21 @@
 <?php
 
+use App\Models\Company;
+use App\Models\User;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\PaymentAllocation;
+use App\Modules\Accounting\Models\PostingTemplate;
+use App\Modules\Accounting\Models\PostingTemplateLine;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
+use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
 
 // Reuses statementFixture() from CustomerStatementTest.php (company, AR/cash/revenue
@@ -249,4 +258,210 @@ test('a cancelled invoice cannot be allocated to', function () {
         'method' => 'cash', 'date' => '2026-09-15',
         'deposit_account_id' => $f['cash']->id, 'ar_account_id' => $f['ar']->id,
     ]))->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+// --- HTTP-level tests below: the explicit per-invoice allocation UI (standalone
+// /payments page) posts through StorePaymentRequest -> PaymentController::store ->
+// payment.create, unlike the tests above which dispatch the command bus directly. This
+// fixture mirrors CreateVendorTest's vendorTestCompany() (real RBAC bootstrap plus owner
+// role and actingAs) plus statementFixture()'s AR/cash accounts, posting templates and an
+// open accounting period, since PostingService::postPayment needs both to run at all.
+function httpAllocationFixture(): array
+{
+    $owner = User::factory()->withoutTwoFactor()->create();
+    $company = Company::create([
+        'name' => 'Payment Alloc HTTP Co '.str()->random(8),
+        'slug' => 'payment-alloc-http-'.str()->lower(str()->random(10)),
+        'base_currency' => 'PKR',
+    ]);
+
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$owner->id]);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+
+    app(CompanyRbacBootstrapper::class)->bootstrap($company);
+
+    DB::table('auth.company_user')->insert([
+        'company_id' => $company->id,
+        'user_id' => $owner->id,
+        'role' => 'owner',
+        'joined_at' => now(),
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    app(CompanyContextService::class)->withContext(
+        $company,
+        fn () => app(CompanyContextService::class)->assignRole($owner, 'owner'),
+    );
+
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    $fy = FiscalYear::create(['company_id' => $company->id, 'name' => '2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']);
+    AccountingPeriod::create(['company_id' => $company->id, 'fiscal_year_id' => $fy->id, 'name' => 'September', 'period_number' => 9, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
+
+    $ar = Account::create(['company_id' => $company->id, 'code' => '1100', 'name' => 'AR', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $cash = Account::create(['company_id' => $company->id, 'code' => '1050', 'name' => 'Cash', 'type' => 'asset', 'subtype' => 'cash', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
+    $revenue = Account::create(['company_id' => $company->id, 'code' => '4100', 'name' => 'Sales Revenue', 'type' => 'revenue', 'subtype' => 'other_income', 'normal_balance' => 'credit']);
+
+    foreach (['AR_INVOICE', 'AR_PAYMENT'] as $docType) {
+        $template = PostingTemplate::create(['company_id' => $company->id, 'doc_type' => $docType, 'name' => $docType, 'is_active' => true, 'is_default' => true, 'effective_from' => '2026-01-01', 'version' => 1]);
+        PostingTemplateLine::create(['template_id' => $template->id, 'role' => 'AR', 'account_id' => $ar->id]);
+        if ($docType === 'AR_INVOICE') {
+            PostingTemplateLine::create(['template_id' => $template->id, 'role' => 'REVENUE', 'account_id' => $revenue->id]);
+        }
+    }
+
+    $customer = Customer::create(['company_id' => $company->id, 'customer_number' => 'C-1', 'name' => 'HTTP buyer', 'base_currency' => 'PKR', 'ar_account_id' => $ar->id, 'credit_limit' => 50000, 'is_active' => true]);
+
+    return compact('owner', 'company', 'ar', 'cash', 'customer');
+}
+
+function httpAllocationInvoice(array $f, float $total, string $date, ?Customer $customer = null): Invoice
+{
+    return Invoice::create([
+        'company_id' => $f['company']->id,
+        'customer_id' => ($customer ?? $f['customer'])->id,
+        'invoice_number' => 'INV-HTTP-'.str()->random(6),
+        'invoice_date' => $date,
+        'due_date' => $date,
+        'status' => 'sent',
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'subtotal' => $total,
+        'total_amount' => $total,
+        'paid_amount' => 0,
+        'balance' => $total,
+    ]);
+}
+
+test('posting explicit per-invoice amounts through the HTTP endpoint allocates exactly those amounts and puts the remainder on account', function () {
+    $f = httpAllocationFixture();
+    $i1 = httpAllocationInvoice($f, 1000, '2026-09-01');
+    $i2 = httpAllocationInvoice($f, 2000, '2026-09-05');
+
+    $response = $this->actingAs($f['owner'])->post("/{$f['company']->slug}/payments", [
+        'customer_id' => $f['customer']->id,
+        'allocations' => [
+            ['invoice_id' => $i1->id, 'amount' => 400],
+            ['invoice_id' => $i2->id, 'amount' => 600],
+        ],
+        'amount' => 1500,
+        'currency' => 'PKR',
+        'payment_method' => 'cash',
+        'payment_date' => '2026-09-15',
+        'deposit_account_id' => $f['cash']->id,
+    ]);
+
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect();
+
+    expect((float) $i1->fresh()->balance)->toBe(600.0)
+        ->and((float) $i2->fresh()->balance)->toBe(1400.0);
+
+    $payment = Payment::where('company_id', $f['company']->id)->sole();
+    expect((float) $payment->amount)->toBe(1500.0);
+
+    $onAccountRow = PaymentAllocation::where('payment_id', $payment->id)->whereNull('invoice_id')->sole();
+    expect((float) $onAccountRow->amount_allocated)->toBe(500.0);
+});
+
+test('zero-amount allocation rows submitted through the HTTP endpoint are ignored', function () {
+    $f = httpAllocationFixture();
+    $i1 = httpAllocationInvoice($f, 1000, '2026-09-01');
+    $i2 = httpAllocationInvoice($f, 1000, '2026-09-05');
+
+    // The UI omits zero-amount rows before submitting, so this exercises the server
+    // holding that contract even if a row slips through as an explicit zero rather than
+    // being dropped client-side.
+    $response = $this->actingAs($f['owner'])->post("/{$f['company']->slug}/payments", [
+        'customer_id' => $f['customer']->id,
+        'allocations' => [
+            ['invoice_id' => $i1->id, 'amount' => 300],
+        ],
+        'amount' => 300,
+        'currency' => 'PKR',
+        'payment_method' => 'cash',
+        'payment_date' => '2026-09-15',
+        'deposit_account_id' => $f['cash']->id,
+    ]);
+
+    $response->assertSessionHasNoErrors();
+    expect((float) $i1->fresh()->balance)->toBe(700.0)
+        ->and((float) $i2->fresh()->balance)->toBe(1000.0);
+
+    $payment = Payment::where('company_id', $f['company']->id)->sole();
+    expect(PaymentAllocation::where('payment_id', $payment->id)->count())->toBe(1);
+});
+
+test('HTTP allocations summing above the payment amount are rejected with a field-level error', function () {
+    $f = httpAllocationFixture();
+    $i1 = httpAllocationInvoice($f, 1000, '2026-09-01');
+    $i2 = httpAllocationInvoice($f, 1000, '2026-09-05');
+
+    $response = $this->actingAs($f['owner'])->post("/{$f['company']->slug}/payments", [
+        'customer_id' => $f['customer']->id,
+        'allocations' => [
+            ['invoice_id' => $i1->id, 'amount' => 400],
+            ['invoice_id' => $i2->id, 'amount' => 400],
+        ],
+        'amount' => 500,
+        'currency' => 'PKR',
+        'payment_method' => 'cash',
+        'payment_date' => '2026-09-15',
+        'deposit_account_id' => $f['cash']->id,
+    ]);
+
+    $response->assertSessionHasErrors('allocations');
+    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(0);
+});
+
+test('an HTTP allocation naming an invoice of another buyer is rejected', function () {
+    $f = httpAllocationFixture();
+    $mine = httpAllocationInvoice($f, 1000, '2026-09-01');
+
+    $otherCustomer = Customer::create([
+        'company_id' => $f['company']->id, 'customer_number' => 'C-2', 'name' => 'Other buyer',
+        'base_currency' => 'PKR', 'ar_account_id' => $f['ar']->id, 'is_active' => true,
+    ]);
+    $otherBuyerInvoice = httpAllocationInvoice($f, 1000, '2026-09-01', $otherCustomer);
+
+    $response = $this->actingAs($f['owner'])->post("/{$f['company']->slug}/payments", [
+        'customer_id' => $f['customer']->id,
+        'allocations' => [
+            ['invoice_id' => $mine->id, 'amount' => 500],
+            ['invoice_id' => $otherBuyerInvoice->id, 'amount' => 500],
+        ],
+        'amount' => 1000,
+        'currency' => 'PKR',
+        'payment_method' => 'cash',
+        'payment_date' => '2026-09-15',
+        'deposit_account_id' => $f['cash']->id,
+    ]);
+
+    $response->assertSessionHasErrors();
+    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(0);
+});
+
+test('an HTTP allocation naming an invoice of another company is rejected', function () {
+    $f = httpAllocationFixture();
+    $other = httpAllocationFixture();
+    $theirInvoice = httpAllocationInvoice($other, 1000, '2026-09-01');
+
+    $response = $this->actingAs($f['owner'])->post("/{$f['company']->slug}/payments", [
+        'customer_id' => $f['customer']->id,
+        'allocations' => [
+            ['invoice_id' => $theirInvoice->id, 'amount' => 500],
+        ],
+        'amount' => 500,
+        'currency' => 'PKR',
+        'payment_method' => 'cash',
+        'payment_date' => '2026-09-15',
+        'deposit_account_id' => $f['cash']->id,
+    ]);
+
+    $response->assertSessionHasErrors();
+    expect(Payment::where('company_id', $f['company']->id)->count())->toBe(0);
 });

@@ -79,8 +79,9 @@ class PaymentController extends Controller
         $invoices = Invoice::where('company_id', $company->id)
             ->whereIn('status', ['approved', 'sent', 'viewed', 'partial', 'overdue'])
             ->where('balance', '>', 0)
+            ->orderBy('invoice_date')
             ->orderBy('invoice_number')
-            ->get(['id', 'customer_id', 'invoice_number', 'balance', 'currency']);
+            ->get(['id', 'customer_id', 'invoice_number', 'invoice_date', 'total_amount', 'balance', 'currency']);
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 

@@ -14,11 +14,15 @@ use Illuminate\Support\Facades\DB;
  */
 function onboardingCoaFailureCompany(): Company
 {
-    return Company::create([
+    $company = Company::create([
         'name' => 'Unseeded Pack Co '.str()->random(8),
         'slug' => 'unseeded-pack-'.str()->lower(str()->random(10)),
         'base_currency' => 'USD',
     ]);
+
+    enterCompany($company);
+
+    return $company;
 }
 
 function seedEmptyIndustryPack(string $code): void

@@ -26,6 +26,14 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_DATABASE" value="haasib_test" force="true"/>
+        <!--
+            Under enforced row level security a read with no company context
+            returns nothing and reports success. This makes that a test failure
+            at a desk rather than a blank screen in production. Set
+            DB_TENANT_CONTEXT_GUARD=log (or off) inline to turn it down for one
+            run. See docs/reviews/2026-09-18-rls-enforcement-readiness.md.
+        -->
+        <env name="DB_TENANT_CONTEXT_GUARD" value="throw"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

@@ -54,6 +54,10 @@ test('every fuel category maps without violating the currency constraint', funct
         fn () => app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $category, $user->id)
     );
 
+    // withContext put the session back where it found it; reading the company's
+    // own accounts means being in the company.
+    enterCompany($company);
+
     expect(Account::whereIn('id', collect($accounts)->pluck('id'))->whereNotNull('currency')->count())->toBe(0);
 })->with(['petrol', 'hi_octane', 'diesel', 'lubricant_open', 'lubricant_packaged']);
 

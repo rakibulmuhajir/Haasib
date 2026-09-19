@@ -96,6 +96,7 @@ test('a bootstrap failure leaves the company marked incomplete instead of silent
     $response->assertSessionHas('error');
 
     $company = Company::where('name', 'like', 'Bootstrap Atomicity Co%')->sole();
+    enterCompany($company);
     expect($company->bootstrap_incomplete_at)->not->toBeNull();
     expect(Account::where('company_id', $company->id)->count())->toBe(0);
 });

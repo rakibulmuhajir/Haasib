@@ -367,6 +367,9 @@ test('audit trigger works as a restricted role without leaking tenant context or
     DB::statement("SELECT set_config('app.is_super_admin', 'false', true)");
     DB::statement("SELECT set_config('app.current_company_id', '', true)");
     DB::statement("SET LOCAL ROLE {$role}");
+    // Reading with no company context is the point of this block, not an
+    // accident, so the tenant context guard is stood down for its duration.
+    app(\App\Support\Database\TenantContextGuard::class)->ignoring(function () use ($f, $posted, $role) {
     try {
         expect(DB::selectOne('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user')->rolsuper)->toBeFalse();
         DB::table('pg_temp.payments')->insert(['id' => (string) str()->uuid(), 'company_id' => $f['company']->id, 'payment_date' => '2026-09-15', 'amount' => 10]);
@@ -378,6 +381,7 @@ test('audit trigger works as a restricted role without leaking tenant context or
         expect(DB::table('fuel.daily_close_activity')->count())->toBe(0);
         expect(fn () => DB::transaction(fn () => DB::table('pg_temp.payments')->insert(['id' => (string) str()->uuid(), 'company_id' => $f['company']->id, 'payment_date' => '2026-09-15', 'amount' => 20])))->toThrow(\Illuminate\Database\QueryException::class);
     } finally { DB::statement('RESET ROLE'); }
+    });
     DB::statement('ALTER TABLE pg_temp.payments ENABLE ROW LEVEL SECURITY');
     DB::statement("CREATE POLICY source_tenant ON pg_temp.payments WITH CHECK (company_id = nullif(current_setting('app.current_company_id',true),'')::uuid)");
     DB::statement("SELECT set_config('app.current_company_id', '', true)");

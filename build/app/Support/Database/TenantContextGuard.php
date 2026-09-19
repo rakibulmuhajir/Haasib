@@ -57,6 +57,8 @@ class TenantContextGuard
 
     private bool $inspecting = false;
 
+    private bool $suspended = false;
+
     /**
      * @param  list<string>  $connections
      */
@@ -72,7 +74,7 @@ class TenantContextGuard
 
     public function handle(QueryExecuted $event): void
     {
-        if (! $this->enabled() || $this->inspecting) {
+        if (! $this->enabled() || $this->inspecting || $this->suspended) {
             return;
         }
 
@@ -308,6 +310,27 @@ class TenantContextGuard
         $this->tableCache = [];
 
         return $this->tenantTables = $lookup;
+    }
+
+    /**
+     * Run work the guard must not complain about.
+     *
+     * For the one legitimate case: a test that *deliberately* reads with no
+     * company context in order to prove the read comes back empty rather than
+     * returning everything. Not an escape hatch for application code — code
+     * that legitimately spans companies uses CompanyContext::crossCompany(),
+     * which the guard already honours.
+     */
+    public function ignoring(callable $callback): mixed
+    {
+        $previous = $this->suspended;
+        $this->suspended = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->suspended = $previous;
+        }
     }
 
     /** Forget the cached schema survey. Migrations invalidate it. */

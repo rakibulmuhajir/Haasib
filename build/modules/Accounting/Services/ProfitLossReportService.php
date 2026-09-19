@@ -36,7 +36,7 @@ class ProfitLossReportService
         $accounts = $rows->map(function ($r) {
             $debit = (float) ($r->debit ?? 0);
             $credit = (float) ($r->credit ?? 0);
-            $net = $this->net($r->normal_balance, $debit, $credit);
+            $net = $this->net($r->type, $debit, $credit);
 
             return [
                 'id' => $r->id,
@@ -51,8 +51,8 @@ class ProfitLossReportService
             ];
         });
 
-        $incomeTypes = ['revenue', 'other_income'];
-        $expenseTypes = ['expense', 'cogs', 'other_expense'];
+        $incomeTypes = self::INCOME_TYPES;
+        $expenseTypes = self::EXPENSE_TYPES;
 
         $income = $accounts->whereIn('type', $incomeTypes)->values()->all();
         $expenses = $accounts->whereIn('type', $expenseTypes)->values()->all();
@@ -74,11 +74,34 @@ class ProfitLossReportService
         ];
     }
 
-    private function net(string $normalBalance, float $debit, float $credit): float
+    private const INCOME_TYPES = ['revenue', 'other_income'];
+    private const EXPENSE_TYPES = ['expense', 'cogs', 'other_expense'];
+
+    /**
+     * Sign comes from the account's section of the statement, not from the account's own
+     * normal_balance. A contra account sits in the section it offsets while carrying the
+     * opposite normal balance — 4210 Sales Discounts is revenue/debit — so keying off
+     * normal_balance made a discount *add* to income instead of reducing it.
+     */
+    private function net(string $accountType, float $debit, float $credit): float
     {
-        return $normalBalance === 'credit'
+        return in_array($accountType, self::INCOME_TYPES, true)
             ? ($credit - $debit)
             : ($debit - $credit);
+    }
+
+    /**
+     * The same rule in SQL, for the grouped breakdowns.
+     */
+    private function netSql(string $section): string
+    {
+        $types = $section === 'income' ? self::INCOME_TYPES : self::EXPENSE_TYPES;
+        $list = "'".implode("', '", $types)."'";
+        $signed = $section === 'income'
+            ? 'je.credit_amount - je.debit_amount'
+            : 'je.debit_amount - je.credit_amount';
+
+        return "SUM(CASE WHEN a.type IN ({$list}) THEN {$signed} ELSE 0 END)";
     }
 
     /**
@@ -89,8 +112,8 @@ class ProfitLossReportService
         return $this->baseLineQuery($companyId, $startDate, $endDate)
             ->selectRaw("
                 to_char(t.transaction_date, 'YYYY-MM') AS period,
-                SUM(CASE WHEN a.type IN ('revenue', 'other_income') THEN CASE WHEN a.normal_balance = 'credit' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END) AS income,
-                SUM(CASE WHEN a.type IN ('expense', 'cogs', 'other_expense') THEN CASE WHEN a.normal_balance = 'credit' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END) AS expenses
+                {$this->netSql('income')} AS income,
+                {$this->netSql('expenses')} AS expenses
             ")
             ->groupByRaw("to_char(t.transaction_date, 'YYYY-MM')")
             ->orderBy('period')
@@ -112,12 +135,12 @@ class ProfitLossReportService
         return $this->baseLineQuery($companyId, $startDate, $endDate)
             ->selectRaw("
                 COALESCE(NULLIF(t.reference_type, ''), t.transaction_type) AS source,
-                SUM(CASE WHEN a.type IN ('revenue', 'other_income') THEN CASE WHEN a.normal_balance = 'credit' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END) AS income,
-                SUM(CASE WHEN a.type IN ('expense', 'cogs', 'other_expense') THEN CASE WHEN a.normal_balance = 'credit' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END) AS expenses,
+                {$this->netSql('income')} AS income,
+                {$this->netSql('expenses')} AS expenses,
                 COUNT(DISTINCT t.id) AS transaction_count
             ")
             ->groupByRaw("COALESCE(NULLIF(t.reference_type, ''), t.transaction_type)")
-            ->orderByDesc(DB::raw('ABS(SUM(CASE WHEN a.type IN (\'revenue\', \'other_income\') THEN CASE WHEN a.normal_balance = \'credit\' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END) - SUM(CASE WHEN a.type IN (\'expense\', \'cogs\', \'other_expense\') THEN CASE WHEN a.normal_balance = \'credit\' THEN je.credit_amount - je.debit_amount ELSE je.debit_amount - je.credit_amount END ELSE 0 END))'))
+            ->orderByDesc(DB::raw("ABS({$this->netSql('income')} - {$this->netSql('expenses')})"))
             ->get()
             ->map(fn ($row) => [
                 'source' => (string) $row->source,
@@ -157,7 +180,7 @@ class ProfitLossReportService
                     'description' => $row->description ? (string) $row->description : null,
                     'debit' => round($debit, 2),
                     'credit' => round($credit, 2),
-                    'net' => round($this->net((string) $row->normal_balance, $debit, $credit), 2),
+                    'net' => round($this->net((string) $row->account_type, $debit, $credit), 2),
                 ];
             })
             ->all();

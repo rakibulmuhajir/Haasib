@@ -13,6 +13,7 @@ use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\SaleMetadata;
+use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Services\CurrentCompany;
@@ -58,11 +59,15 @@ class FuelSaleService
             $unitPrice = $this->determineUnitPrice($saleType, $currentRate, $data);
             $lineTotal = $quantity * $unitPrice;
 
-            // Apply bulk discount if applicable
+            // A negotiated rate is a discount however the buyer settles it. Honouring it only
+            // for sale_type=bulk silently threw the discount away on a credit sale — the most
+            // common discounted case at a pump, a transport firm buying on account — while
+            // StoreFuelSaleRequest accepted and validated the field. Investor sales are
+            // excluded: they already price at purchase_rate and carry their own commission.
             $discount = 0;
             $discountReason = null;
-            if ($saleType === SaleMetadata::TYPE_BULK && isset($data['discount_per_liter'])) {
-                $discount = $quantity * $data['discount_per_liter'];
+            if ($saleType !== SaleMetadata::TYPE_INVESTOR && (float) ($data['discount_per_liter'] ?? 0) > 0) {
+                $discount = round($quantity * (float) $data['discount_per_liter'], 2);
                 $discountReason = SaleMetadata::DISCOUNT_BULK;
             }
 
@@ -112,6 +117,13 @@ class FuelSaleService
             // Decrement inventory for the fuel item
             $this->decrementInventory($company->id, $data['item_id'], $quantity, $data['pump_id'] ?? null, $invoice);
 
+            // The close posts revenue gross, at the posted pump rate the meters imply. A sale
+            // below that rate therefore has to give the difference back somewhere, or the
+            // drawer comes up short by exactly the discount.
+            if ($discount > 0) {
+                $this->postDiscount($company, $invoice, $discount, $data['sale_date'] ?? now()->toDateString());
+            }
+
             // Every litre already went through a nozzle the Daily Close reads: a credit
             // sale is never additional revenue. If the close for this date has not posted
             // yet, it will pick this invoice up as a pending channel (see
@@ -160,6 +172,64 @@ class FuelSaleService
         }
 
         return $customer->id;
+    }
+
+    /**
+     * A discount is contra revenue, never an expense and never reduced revenue at source:
+     * the nozzle did dispense those litres, and the Daily Close posts them at the posted
+     * pump rate. The buyer simply handed over less, so the shortfall comes out of the
+     * drawer and lands in Sales Discounts.
+     *
+     * Posted as its own dated transaction rather than folded into the close, so it works
+     * identically whether the close for this date has posted yet or not:
+     * DailyCloseReconciliationService::sources() picks up every posted transaction on the
+     * business date, counts the credit against drawer cash, and nets the contra debit off
+     * the day's sales.
+     */
+    private function postDiscount(Company $company, Invoice $invoice, float $discount, string $saleDate): void
+    {
+        $discount = round($discount, 2);
+        if ($discount <= 0) {
+            return;
+        }
+
+        $discountAccountId = app(StationAccountMapper::class)
+            ->resolveMappedAccountId($company->id, 'sales_discount_account_id', Auth::id());
+        $drawerAccountId = $this->drawerAccountId($company->id, $saleDate);
+        if (! $discountAccountId || ! $drawerAccountId) {
+            throw new \RuntimeException('Set up a sales discount account and a cash drawer account before recording a discounted sale.');
+        }
+
+        $description = "Discount given — Invoice {$invoice->invoice_number}";
+
+        app(GlPostingService::class)->postBalancedTransaction([
+            'company_id' => $company->id,
+            'transaction_type' => 'fuel_sale_discount',
+            'date' => $saleDate,
+            'currency' => $company->base_currency ?: 'PKR',
+            'description' => $description,
+            'reference_type' => 'acct.invoices',
+            'reference_id' => $invoice->id,
+        ], [
+            ['account_id' => $discountAccountId, 'type' => 'debit', 'amount' => $discount, 'description' => $description],
+            ['account_id' => $drawerAccountId, 'type' => 'credit', 'amount' => $discount, 'description' => $description],
+        ]);
+    }
+
+    /**
+     * The drawer the close for this date settles against: its own snapshot account once it
+     * has posted, so a late discount lands where the close already counted cash.
+     */
+    private function drawerAccountId(string $companyId, string $saleDate): ?string
+    {
+        $close = Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereDate('transaction_date', $saleDate)
+            ->whereNotNull('metadata->posting_snapshot')
+            ->first();
+
+        return $close?->metadata['posting_snapshot']['cash_account_id']
+            ?? app(DailyCloseService::class)->cashAccountId($companyId);
     }
 
     /**

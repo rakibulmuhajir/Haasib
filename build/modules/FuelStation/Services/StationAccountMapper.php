@@ -24,6 +24,15 @@ class StationAccountMapper
             'names' => ['Fallback Fuel Sales', 'Fuel Sales - Other'],
             'create' => ['code' => '4190', 'name' => 'Fallback Fuel Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
         ],
+        // Contra revenue: the pump did dispense those litres at the posted rate, so the
+        // discount is a debit against sales rather than an expense or reduced revenue at
+        // source. DailyCloseReconciliationService::sources() nets revenue-type accounts as
+        // credit minus debit, so a debit here correctly lowers the day's sales too.
+        'sales_discount_account_id' => [
+            'codes' => ['4210'],
+            'names' => ['Sales Discounts', 'Sales Discount'],
+            'create' => ['code' => '4210', 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'sales', 'normal_balance' => 'debit', 'is_contra' => true],
+        ],
         'fuel_cogs_account_id' => [
             'codes' => ['5190', '5100'],
             'names' => ['Fallback Fuel Cost of Goods Sold', 'Cost of Fuel - Other'],
@@ -89,6 +98,33 @@ class StationAccountMapper
         }
 
         return $settings->fresh();
+    }
+
+    /**
+     * Resolve one mapped account without touching the rest of the settings.
+     *
+     * ensureMappings() also rewrites every payment channel, which is far more than a single
+     * sale needs and drags unrelated channel configuration into the sale's transaction.
+     */
+    public function resolveMappedAccountId(string $companyId, string $field, ?string $userId = null): ?string
+    {
+        $definition = self::DEFINITIONS[$field] ?? null;
+        if (!$definition) {
+            return null;
+        }
+
+        $settings = StationSettings::firstOrCreate(['company_id' => $companyId]);
+        $existing = $this->validAccountId($settings->{$field}, $companyId);
+        if ($existing) {
+            return $existing;
+        }
+
+        $company = Company::query()->findOrFail($companyId);
+        $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
+        $account = $this->resolveAccount($companyId, $definition, $baseCurrency, $userId);
+        $settings->update([$field => $account->id]);
+
+        return $account->id;
     }
 
     public function applyAutomaticPayloadMappings(StationSettings $settings, array $payload, ?string $userId = null): array

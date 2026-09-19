@@ -105,6 +105,7 @@ class StationSettings extends Model
         'payment_channels',
         'cash_account_id',
         'fuel_sales_account_id',
+        'sales_discount_account_id',
         'fuel_cogs_account_id',
         'fuel_inventory_account_id',
         'cash_over_short_account_id',

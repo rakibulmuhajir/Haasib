@@ -63,12 +63,26 @@ DB_TENANT_CONTEXT_GUARD=log
 DB_TENANT_CONTEXT_GUARD=throw
 ```
 
-Set it in `.env` for a dev server, or inline for one run:
+**The test suite runs with it in `throw` mode**, set in `phpunit.xml`, so a
+missing context is a test failure. Turn it down for one run, or up for a dev
+server, inline:
 
 ```bash
-DB_TENANT_CONTEXT_GUARD=throw php artisan test
+DB_TENANT_CONTEXT_GUARD=log php artisan test
+DB_TENANT_CONTEXT_GUARD=off php artisan test
 DB_TENANT_CONTEXT_GUARD=log php artisan octane:start --server=frankenphp --port=9001
 ```
+
+A test that reads with **no** context deliberately — to prove the read comes
+back empty rather than returning everything — stands the guard down for exactly
+that block:
+
+```php
+app(TenantContextGuard::class)->ignoring(fn () => /* … */);
+```
+
+That is not an escape hatch for application code. Code that legitimately spans
+companies uses `CompanyContext::crossCompany()`, which the guard already honours.
 
 `config/database.php` holds `tenant_context_guard.mode` and
 `tenant_context_guard.connections` (default: the app's default connection; the
@@ -82,6 +96,9 @@ Laravel's connection with no company context — including the reads that would
 otherwise return an empty result and report success. It found
 `DemoSupport::asCompany` clearing the context instead of restoring it, a fault
 whose only other symptom was a seeded demo company with no accounting periods.
+Switched on over the whole suite it flagged nine more reads, every one of them a
+test asserting against a company's rows from outside that company: assertions
+that would have passed for the wrong reason, or failed with no explanation.
 
 **What it cannot see.**
 

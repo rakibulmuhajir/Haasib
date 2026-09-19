@@ -858,7 +858,10 @@ test('locked opening documents reject ordinary updates and direct journal revers
     app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.lock', [], $f['user'], true));
     $invoice = Invoice::findOrFail($saved['data']['invoice_ids'][0]);
     $bill = Bill::findOrFail($saved['data']['bill_ids'][0]);
-    $before = JournalEntry::where('company_id', $f['company']->id)->get()->toArray();
+    // No ORDER BY means PostgreSQL may hand these back in a different heap
+    // order after the rejected updates below, which has nothing to do with
+    // what this test is proving.
+    $before = JournalEntry::where('company_id', $f['company']->id)->orderBy('id')->get()->toArray();
     app(CompanyContextService::class)->withContext($stale, function () use ($f, $invoice, $bill, $customer, $saved) {
         expect(fn () => app(CommandBus::class)->dispatch('invoice.update', [
             'id' => $invoice->id, 'customer' => $customer->id, 'currency' => 'PKR',
@@ -874,7 +877,7 @@ test('locked opening documents reject ordinary updates and direct journal revers
     });
     expect((float) $invoice->fresh()->total_amount)->toBe(100.0);
     expect((float) $bill->fresh()->total_amount)->toBe(100.0);
-    expect(JournalEntry::where('company_id', $f['company']->id)->get()->toArray())->toBe($before);
+    expect(JournalEntry::where('company_id', $f['company']->id)->orderBy('id')->get()->toArray())->toBe($before);
 });
 
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import { computed, ref } from 'vue'
-import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import {
@@ -149,10 +150,21 @@ const lockSingle = (closeId: string) => {
   })
 }
 
-const unlockSingle = (closeId: string) => {
-  router.post(`/${props.company.slug}/fuel/daily-close/${closeId}/unlock`, {}, {
+// Reopening a settled day always costs a reason — it is kept permanently against the day.
+const unlockTarget = ref<{ id: string; label: string } | null>(null)
+const unlockForm = useForm({ reason: '' })
+
+const promptUnlock = (close: { id: string; transaction_number: string }) => {
+  unlockForm.reset()
+  unlockForm.clearErrors()
+  unlockTarget.value = { id: close.id, label: close.transaction_number }
+}
+
+const confirmUnlock = () => {
+  if (!unlockTarget.value) return
+  unlockForm.post(`/${props.company.slug}/fuel/daily-close/${unlockTarget.value.id}/unlock`, {
     preserveScroll: true,
-    onError: () => toast.error('Failed to unlock'),
+    onSuccess: () => { unlockTarget.value = null; unlockForm.reset() },
   })
 }
 </script>
@@ -286,9 +298,9 @@ const unlockSingle = (closeId: string) => {
                   </template>
 
                   <template v-if="permissions.canUnlock && close.is_locked">
-                    <DropdownMenuItem @click="unlockSingle(close.id)" class="flex items-center">
+                    <DropdownMenuItem @click="promptUnlock(close)" class="flex items-center">
                       <Lock class="h-4 w-4 mr-2" />
-                      Unlock
+                      Reopen day
                     </DropdownMenuItem>
                   </template>
                 </DropdownMenuContent>
@@ -342,6 +354,35 @@ const unlockSingle = (closeId: string) => {
         <DialogFooter>
           <Button variant="outline" @click="lockMonthOpen = false">Cancel</Button>
           <Button @click="lockMonth">Lock Month</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Reopen Day Dialog -->
+    <Dialog :open="unlockTarget !== null" @update:open="(open) => { if (!open) unlockTarget = null }">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reopen {{ unlockTarget?.label }}?</DialogTitle>
+          <DialogDescription>
+            Post-close corrections become possible again. This reopening is recorded permanently
+            against the day, with your name and the reason below.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-2">
+          <Label for="reopen-reason">Reason for reopening</Label>
+          <Textarea
+            id="reopen-reason"
+            v-model="unlockForm.reason"
+            rows="3"
+            placeholder="e.g. Attendant reported nozzle 1 closing reading was transposed."
+          />
+          <p v-if="unlockForm.errors.reason" class="text-sm text-status-critical">
+            {{ unlockForm.errors.reason }}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="unlockTarget = null">Cancel</Button>
+          <Button :disabled="unlockForm.processing" @click="confirmUnlock">Reopen day</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

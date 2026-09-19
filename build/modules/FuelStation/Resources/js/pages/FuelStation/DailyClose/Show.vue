@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -87,6 +88,7 @@ const props = defineProps<{
     nozzle: Array<{ id: string; label: string; current_value: number }>
   }
   reconciliation?: { has_post_close_activity?: boolean; audit_events?: any[]; snapshot?: any; current?: any; activity: any[]; corrections?: any[] }
+  unlockHistory?: Array<{ id: string; unlocked_at: string | null; unlocked_by: string | null; reason: string; previously_locked_at: string | null }>
   permissions: {
     canLock: boolean
     canUnlock: boolean
@@ -188,10 +190,18 @@ const lockTransaction = () => {
   })
 }
 
+// Reopening a settled day is kept forever in fuel.daily_close_unlocks, so the reason is
+// required server-side. Inline error on the field, per the error-handling contract.
+const unlockForm = useForm({ reason: '' })
+const unlockOpen = ref(false)
+
 const unlockTransaction = () => {
-  router.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/unlock`, {}, {
+  unlockForm.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/unlock`, {
     preserveScroll: true,
-    onError: () => toast.error('Failed to unlock daily close'),
+    onSuccess: () => {
+      unlockOpen.value = false
+      unlockForm.reset()
+    },
   })
 }
 </script>
@@ -206,6 +216,30 @@ const unlockTransaction = () => {
     :breadcrumbs="breadcrumbs"
   >
     <DailyCloseNav :company="company" history />
+
+    <Card v-if="unlockHistory?.length" class="mb-6 border-status-attention/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <Unlock class="h-4 w-4" />
+          This day has been reopened {{ unlockHistory.length }} time{{ unlockHistory.length === 1 ? '' : 's' }}
+        </CardTitle>
+        <CardDescription>
+          A settled day was unlocked so it could be changed. Each reopening is kept permanently.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul class="space-y-3">
+          <li v-for="entry in unlockHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
+            <p class="text-sm font-medium">
+              {{ entry.unlocked_by || 'Unknown user' }}
+              <span class="font-normal text-muted-foreground">· {{ formatDateTime(entry.unlocked_at) }}</span>
+            </p>
+            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
+
     <Card v-if="reconciliation" class="mb-6">
       <CardHeader>
         <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
@@ -336,7 +370,7 @@ const unlockTransaction = () => {
         </template>
 
         <template v-if="permissions.canUnlock && transaction.is_locked">
-          <Dialog>
+          <Dialog v-model:open="unlockOpen">
             <DialogTrigger as-child>
               <Button variant="outline">
                 <Unlock class="h-4 w-4 mr-2" />
@@ -345,16 +379,29 @@ const unlockTransaction = () => {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Unlock Daily Close?</DialogTitle>
+                <DialogTitle>Reopen this daily close?</DialogTitle>
                 <DialogDescription>
-                  Unlocking this daily close will allow post-close corrections again. Are you sure?
+                  Post-close corrections become possible again. This reopening is recorded permanently
+                  against the day, with your name and the reason below.
                 </DialogDescription>
               </DialogHeader>
+              <div class="space-y-2">
+                <Label for="unlock-reason">Reason for reopening</Label>
+                <Textarea
+                  id="unlock-reason"
+                  v-model="unlockForm.reason"
+                  rows="3"
+                  placeholder="e.g. Attendant reported nozzle 1 closing reading was transposed."
+                />
+                <p v-if="unlockForm.errors.reason" class="text-sm text-status-critical">
+                  {{ unlockForm.errors.reason }}
+                </p>
+              </div>
               <DialogFooter>
                 <DialogClose as-child>
                   <Button variant="outline">Cancel</Button>
                 </DialogClose>
-                <Button @click="unlockTransaction">Unlock</Button>
+                <Button :disabled="unlockForm.processing" @click="unlockTransaction">Reopen day</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

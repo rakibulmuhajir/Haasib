@@ -869,6 +869,15 @@ class DailyCloseController extends Controller
                 'locked_at' => $txn->locked_at?->toDateTimeString(),
                 'metadata' => $metadata,
             ],
+            // Every reopening of this day, oldest first. Append-only, so this is the whole
+            // story even where a day was reopened and relocked several times.
+            'unlockHistory' => $this->lockService->unlockHistory($txn)->map(fn ($row) => [
+                'id' => $row->id,
+                'unlocked_at' => $row->unlocked_at?->toDateTimeString(),
+                'unlocked_by' => $row->unlockedBy?->name,
+                'reason' => $row->reason,
+                'previously_locked_at' => $row->previously_locked_at?->toDateTimeString(),
+            ])->values(),
             'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->where('type', 'expense')->get(['id', 'name']),
             'canAddActivity' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE),
             'canCorrectReadings' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CORRECT) && !empty($metadata['posting_snapshot']),
@@ -934,8 +943,8 @@ class DailyCloseController extends Controller
         }
 
         try {
-            $this->lockService->unlockTransaction($txn);
-            return redirect()->back()->with('success', 'Daily close unlocked successfully.');
+            $this->lockService->unlockTransaction($txn, $request->user(), $request->validated()['reason']);
+            return redirect()->back()->with('success', 'Daily close reopened. The reason has been recorded.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

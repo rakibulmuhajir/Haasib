@@ -4,6 +4,22 @@
 1. Check schema contract: `docs/contracts/{schema}-schema.md`
 2. Read relevant: `AI_PROMPTS/{topic}_REMEDIATION.md`
 
+## 🧪 Tests Are Opt-In — Do Not Run Them Unattended
+**Write the tests. Do not run them without being asked.**
+
+The suite is slow (full run ~13 min, `npm run build` ~3 min). Running it
+repeatedly is the single biggest waste of time in this repo.
+
+- Finish the task, then **ask whether to run the tests** and wait for an answer.
+- No full-suite sweeps, no "just to be safe" re-runs, no baseline comparisons
+  unless explicitly asked for.
+- **Never run two test processes at once** — they share the `haasib_test`
+  database and clobber each other with "relation already exists".
+- When asked to run them, run only the suites the change actually touches:
+  `php artisan test tests/Feature/{Module}`
+- State plainly that tests were written but not run. Don't claim verification
+  that didn't happen.
+
 ## ❌ Never Do
 ```php
 $table->id()                           // → uuid('id')->primary()

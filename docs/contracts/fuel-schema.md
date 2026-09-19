@@ -829,6 +829,39 @@ Posted snapshot physical tank/nozzle observations and close-owned stock movement
 
 Post-close audit also covers invoice/bill lines, customer/supplier payments, Amanat, partner movements and salary advances. Effective dates come from document dates or linked journals, never entry timestamps. These source-document edits are audit evidence; reconciliation amounts remain derived from canonical posted journals and stock movements.
 
+### fuel.daily_close_unlocks (2026-09-19)
+- Append-only record of every reopening of a locked Daily Close: who, when, why,
+  and the lock that was replaced. Not a ledger and not a source for any total.
+- id UUID PK; company_id UUID FK auth.companies; close_transaction_id UUID FK
+  acct.transactions; unlocked_at timestamp; unlocked_by_user_id nullable UUID FK
+  auth.users; reason text (required, min 10 chars at the request layer);
+  previously_locked_at timestamp nullable; previously_locked_by_user_id nullable
+  UUID FK auth.users; previous_lock_reason varchar(50) nullable.
+- Company RLS, index (company_id, close_transaction_id, unlocked_at), and an
+  append-only trigger (fuel.prevent_unlock_trail_mutation) refusing UPDATE/DELETE.
+- Why a table and not columns on acct.transactions: Transaction::unlock() clears
+  locked_at, locked_by_user_id and lock_reason, so a reopened day was previously
+  indistinguishable from a day never locked. fuel.capture_post_close_activity
+  returns early for fuel_daily_close rows by design (the close row churns during
+  posting), so the post-close audit does not cover it either. A day may also be
+  locked and reopened repeatedly; the audit question is the sequence, not the
+  most recent event.
+- Columns are plain timestamp, not timestamptz: the application runs UTC while the
+  Postgres session is Asia/Karachi, and copying acct.transactions.locked_at
+  (timestamp) into a timestamptz column skews the stored instant by five hours.
+
+### fuel.station_settings.sales_discount_account_id (2026-09-19)
+- Nullable UUID FK acct.accounts. Where a discount given on a fuel sale is posted.
+- Resolved and created on demand by StationAccountMapper (code 4210
+  "Sales Discounts", type revenue, normal_balance debit, is_contra true).
+- The Daily Close posts revenue from the meters at the posted pump rate, so a sale
+  below that rate must debit contra revenue and credit the drawer. Without it the
+  discount surfaced as an unexplained cash shortage on the close, which is the
+  signal a manager uses to detect theft. FuelSaleService posts it as its own dated
+  transaction (transaction_type fuel_sale_discount, reference_type acct.invoices),
+  so DailyCloseReconciliationService::sources() picks it up whether or not the
+  close for that date has already posted.
+
 ### fuel.daily_close_reading_corrections (2026-09-16)
 - Controlled correction of a physical tank or nozzle reading belonging to an
   already-posted (posting_snapshot) Daily Close. The original

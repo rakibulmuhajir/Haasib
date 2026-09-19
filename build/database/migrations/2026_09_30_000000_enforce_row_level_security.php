@@ -26,16 +26,17 @@ return new class extends Migration
 {
     private const GUCS = ['app.current_company_id', 'app.is_super_admin', 'app.current_user_id', 'app.company_base_currency'];
 
+    public function shouldRun(): bool
+    {
+        // Skipping through the migrator leaves this migration pending. Returning
+        // only from up() would incorrectly record it as applied.
+        return strtolower((string) env('RLS_ENFORCEMENT', 'off')) === 'on';
+    }
+
     public function up(): void
     {
-        // Row level security enforcement is deliberately gated. Production already runs as
-        // haasib_app, which owns its tables, so FORCEing them switches enforcement on for
-        // ~67 tables in one step -- and the suite still fails 67 tests as that role, almost
-        // all "new row violates row-level security policy". Until those write paths are
-        // fixed this migration must not run as part of an ordinary deploy. Set
-        // RLS_ENFORCEMENT=on in the environment to apply it deliberately.
-        // See docs/reviews/2026-09-18-rls-enforcement-readiness.md.
-        if (strtolower((string) env('RLS_ENFORCEMENT', 'off')) !== 'on') {
+        // Keep direct invocations gated as well as normal artisan migrations.
+        if (! $this->shouldRun()) {
             return;
         }
 

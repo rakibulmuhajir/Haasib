@@ -42,8 +42,12 @@ policies' super-admin escape hatch.
 security enabled, and has at least one policy whose expression reads
 `app.current_company_id`. That is computed from `pg_policy` at runtime, so it
 tracks the schema rather than a hand-maintained list, and it deliberately
-excludes `auth.companies` — looking a company up by slug with no context set is
-how the application *enters* a company.
+excludes `auth.companies` and `auth.company_user` — the two tables you read to find out
+*which* company you are in, on every request, before any context exists.
+`auth.companies` falls out for having no `company_id` of its own;
+`auth.company_user` is named explicitly in `TenantContextGuard::BOOTSTRAP_TABLES`,
+because the enforce migration rescopes its policy to read the GUC while also
+admitting the caller's own membership rows by `app.current_user_id`.
 
 It keeps a cheap in-process mirror of the session settings so the hot path costs
 no round trip, and when the mirror suspects a violation it asks the session
@@ -109,6 +113,12 @@ that would have passed for the wrong reason, or failed with no explanation.
 - Queries on connections other than the guarded ones.
 - Anything that never reaches the database — a cached response, a query
   short-circuited in PHP.
+- The two bootstrap tables above. A genuine leak through `auth.company_user`
+  would not be flagged.
+- Whether the context that is set belongs to the *service* as well as the
+  session. `CompanyContext` keeps its own in-memory company alongside the GUC,
+  and code that reads the service (`VisaVendorParty`, for one) can disagree
+  with the session the guard inspects.
 - Production. By design.
 
 ## Running the suite as the application role
@@ -234,6 +244,24 @@ needed** — the switch is the `FORCE` itself.
 `RLS_ENFORCEMENT` stays unset everywhere by default. Setting it is the
 deliberate act.
 
+The two opt-in migrations use Laravel's `shouldRun()` hook, so an ordinary
+deployment with enforcement off leaves them **pending**, rather than recording
+a successful no-op. After staging verification, clear cached configuration and
+run `RLS_ENFORCEMENT=on php artisan migrate --force` with the intended migration
+credentials. Clearing configuration matters because the gate reads the environment;
+Laravel does not load `.env` when configuration is cached. Rebuild production
+caches afterwards. The normal deploy script already clears caches before migrating.
+
+**If an earlier deployment already ran the old gates:** inspect `migrate:status`
+and the actual role grants, policies and FORCE flags first. Changing the flag
+does not rerun a migration already recorded as applied. If a migration is
+confirmed to have been recorded without applying its changes, repair only that
+specific migration-history entry under a controlled maintenance procedure before
+activation. Do not run a blanket rollback or delete migration history blindly:
+the enforcement migration's `down()` removes FORCE from all forced tables,
+including pre-existing Umrah enforcement. This code change does not automatically
+modify existing migration history.
+
 ## Where it stands
 
 ```
@@ -241,14 +269,20 @@ deliberate act.
 Tests:    7 skipped, 901 passed (5494 assertions)
 
 # DB_USERNAME=haasib_app DB_MIGRATOR_USERNAME=postgres RLS_ENFORCEMENT=on php artisan test
-Tests:    PENDING
+Tests:    2 skipped, 906 passed (5510 assertions)
 
 # npm run test:js
-PENDING
+Test Files: 3 passed
+Tests:      21 passed
 ```
 
 The seven skips are the five `RowLevelSecurityTest` cases, which need enforcement
 applied, and the two that need a privileged database role.
+
+The PHP results above are from the saved verification logs (`v_super.txt` and
+`w_app.txt`, 19 September); JavaScript was rerun successfully on 19 September.
+After the deployment fixes, focused migration-gate and deployment rollback tests
+also cover opting in after a disabled run and failures after the asset swap.
 
 ## Rollback
 

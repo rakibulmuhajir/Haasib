@@ -194,12 +194,8 @@ log "Swapping the new frontend assets into place"
 rm -rf "${BUILD_DIR}"
 mv "${STAGING_DIR}" "${BUILD_DIR}"
 
-# Past this point the assets are complete and belong to the code that was just
-# merged. A later step failing is a reason to look at that step, not to put the
-# previous release's assets back under the new code and guarantee a manifest
-# that names files nothing built. The snapshot stays on disk until the end so a
-# rollback by hand is still one mv away.
-ASSETS_NEED_RESTORING=0
+# Keep the snapshot armed until every deployment step succeeds. The EXIT trap
+# rolls code back on a later failure, so it must restore that code's assets too.
 
 log "Clearing stale Laravel caches"
 php artisan optimize:clear

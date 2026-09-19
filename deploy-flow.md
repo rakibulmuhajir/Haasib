@@ -7,14 +7,34 @@
 | App root | `/var/www/haasib` (Laravel lives in `build/`) |
 | Deploy | `ssh -i ~/.ssh/munshi.pem ubuntu@52.76.76.243 'cd /var/www/haasib && ./deploy.sh'` |
 
-`deploy.sh` runs on the server, not here: it fetches `origin/main`, takes the app
-down, installs dependencies, builds assets into a staging directory it only swaps
-in once the build finished, migrates, syncs permissions, and brings the app back
-up. It refuses to run if the server worktree is dirty or has diverged from main.
+Merge and push the release to `main`, then wait for **Publish frontend assets**
+to succeed for that exact commit before running `deploy.sh` on the server.
+GitHub builds the frontend and publishes it to `assets/main`; the server does
+not run npm or compile assets. The script verifies the published `SOURCE_SHA`
+matches the code being deployed before swapping the assets into place.
+
+`deploy.sh` fetches `origin/main`, takes the app down, installs PHP dependencies,
+fetches the matching assets into a staging directory, migrates, syncs permissions,
+and brings the app back up. It refuses a dirty or diverged server checkout.
+If a later step fails, it restores both the previous code and previous assets.
+Database migrations and Composer dependency changes are not automatically undone;
+review those separately after a failure. CI runs the focused deployment rollback
+and migration-gate checks as well as an asset build. The asset publishing workflow
+runs separately, and neither workflow runs the full application test suites.
+Wait for both CI and asset publication to pass for the release commit.
+
+Keep `RLS_ENFORCEMENT` unset/off for an ordinary deployment. The two opt-in
+migrations remain pending until enforcement is deliberately enabled. Follow
+`docs/reviews/2026-09-18-rls-enforcement-readiness.md` for staging verification
+and activation, including the check for previously recorded no-op migrations.
 
 ---
 
 # Notes from the first build of this server
+
+Historical notes below are not the current deployment procedure. In particular,
+do not commit compiled assets to main or build them on the production server;
+use the CI asset publication procedure above.
 
 You hit three separate booby traps that look related, but weren’t.
 

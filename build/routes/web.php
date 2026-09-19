@@ -9,6 +9,7 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\UsersPageController;
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AccountingDefaultsController;
+use App\Modules\Accounting\Http\Controllers\BalanceSheetReportController;
 use App\Modules\Accounting\Http\Controllers\BankAccountController;
 use App\Modules\Accounting\Http\Controllers\BankFeedController;
 use App\Modules\Accounting\Http\Controllers\BankReconciliationController;
@@ -24,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\PaymentController;
 use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
+use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
 use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
 use App\Modules\Accounting\Http\Controllers\VendorController;
 use App\Modules\Accounting\Http\Controllers\VendorCreditController;
@@ -102,6 +104,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Reports (MVP)
         Route::get('/{company}/reports/profit-loss', [ProfitLossReportController::class, 'index'])->name('reports.profit-loss');
+        Route::get('/{company}/reports/trial-balance', [TrialBalanceReportController::class, 'index'])->name('reports.trial-balance');
+        Route::get('/{company}/reports/balance-sheet', [BalanceSheetReportController::class, 'index'])->name('reports.balance-sheet');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {

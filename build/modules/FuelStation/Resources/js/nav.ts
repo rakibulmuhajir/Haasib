@@ -54,6 +54,8 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Product Profitability', '/fuel/reports/product-profitability', Package),
         ...item('reports', 'Expenses', '/fuel/reports/expenses', ReceiptText),
         ...item('reports', t('profitAndLoss'), '/reports/profit-loss', BarChart3),
+        ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
+        ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
         ...item('reports', 'Stock Variance & Claims', '/fuel/reports/stock-variance', TrendingUp),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },

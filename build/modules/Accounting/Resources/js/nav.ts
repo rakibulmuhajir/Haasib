@@ -15,6 +15,7 @@ import {
   Landmark,
   RefreshCcw,
   Wand2,
+  Scale,
 } from 'lucide-vue-next'
 
 export const accountingNav: ModuleNavConfig = {
@@ -32,6 +33,8 @@ export const accountingNav: ModuleNavConfig = {
           { title: 'Journal Entries', href: `/${slug}/journals`, icon: FileText },
           { title: t('chartOfAccounts'), href: `/${slug}/accounts`, icon: BookOpen },
           { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
+          { title: 'Trial Balance', href: `/${slug}/reports/trial-balance`, icon: Scale },
+          { title: 'Balance Sheet', href: `/${slug}/reports/balance-sheet`, icon: Scale },
           {
             title: 'Setup',
             icon: Settings,

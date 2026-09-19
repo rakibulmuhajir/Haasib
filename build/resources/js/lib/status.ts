@@ -164,6 +164,15 @@ export const statusMeta = {
     // day, so it reads plain rather than as an accomplishment.
     ok: { label: 'In stock', tone: 'neutral' },
 
+    // -- Ledger integrity -------------------------------------------------
+    // Whether the two columns of a trial balance, or the two halves of a
+    // balance sheet, agree. This is a genuine pass or fail, not a direction:
+    // a ledger that does not balance has a one-sided entry in it somewhere and
+    // every figure derived from it is unsafe until that is found. Red is
+    // earned here in a way it is not for money merely going out.
+    balanced: { label: 'Balanced', tone: 'success' },
+    out_of_balance: { label: 'Out of balance', tone: 'critical' },
+
     // -- Visa processing -------------------------------------------------
     // A visa group moves through these on its way to a traveller. The middle
     // steps are progress reports, not achievements, so only the two that end

@@ -80,6 +80,13 @@ function secondPdoConnection(): PDO
 function rawInsertBillPayment(PDO $pdo, array $f, string $vendorId, ?string $paymentAccountId, string $date, string $number): string
 {
     $id = (string) Str::uuid();
+
+    // A genuinely separate session carries no company context of its own, and
+    // under enforced row level security the insert below is refused without
+    // one. Every real second session sets this too.
+    $pdo->prepare("select set_config('app.current_company_id', ?, false)")
+        ->execute([$f['company']->id]);
+
     $stmt = $pdo->prepare('insert into acct.bill_payments
         (id, company_id, vendor_id, payment_number, payment_date, amount, currency, base_currency, base_amount, payment_method, payment_account_id, created_by_user_id)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -147,7 +154,10 @@ test('a writer blocked by the close’s exclusive lock fails fast, then succeeds
 
     $otherCompanyUser = User::factory()->create();
     $otherCompany = Company::create(['name' => 'Other co', 'slug' => 'other-'.Str::random(12), 'owner_id' => $otherCompanyUser->id, 'base_currency' => 'PKR']);
+
+    enterCompany($otherCompany);
     $otherVendor = Vendor::create(['company_id' => $otherCompany->id, 'vendor_number' => 'VEND-0001', 'name' => 'Other vendor', 'base_currency' => 'PKR', 'is_active' => true, 'created_by_user_id' => $otherCompanyUser->id]);
+    enterCompany($f['company']);
 
     // Checkpoint so the second, genuinely separate PDO connection below can see
     // all of the above rows (see the comment in the previous test).

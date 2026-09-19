@@ -16,12 +16,31 @@ use Illuminate\Support\Facades\Schema;
 
 class CompanyBootstrapService
 {
+    public function __construct(private readonly CompanyContextService $companyContext) {}
+
+    /**
+     * Everything this writes -- the chart of accounts, the default bank and
+     * cash accounts, posting templates, the first fiscal year -- belongs to
+     * the company being bootstrapped, and under enforced row level security a
+     * write whose company_id does not match app.current_company_id is refused
+     * outright. The caller has just created the company and is not necessarily
+     * inside it, so enter it here and leave the caller's own context exactly
+     * as it was found.
+     */
     public function bootstrap(Company $company, ?string $industryCode, ?string $userId = null): void
     {
         if (! $industryCode) {
             return;
         }
 
+        $this->companyContext->withContext(
+            $company,
+            fn () => $this->bootstrapWithinCompany($company, $industryCode, $userId)
+        );
+    }
+
+    private function bootstrapWithinCompany(Company $company, string $industryCode, ?string $userId): void
+    {
         try {
             $this->ensureIndustryDefaults($company, $industryCode);
             $this->ensureBankAccount($company, $userId);

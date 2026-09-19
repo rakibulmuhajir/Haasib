@@ -27,6 +27,8 @@ function amanatHistoryHttpFixture(): array
         'base_currency' => 'PKR',
     ]);
 
+    enterCompany($company);
+
     if (! DB::table('public.currencies')->where('code', 'PKR')->exists()) {
         DB::table('public.currencies')->insert(['code' => 'PKR', 'name' => 'Pakistani Rupee', 'symbol' => 'Rs']);
     }

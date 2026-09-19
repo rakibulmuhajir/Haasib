@@ -49,15 +49,7 @@ function dashboardWidgetsCompany(): array
 
 function dashboardWidgetsMember(Company $company, User $user, string $role): void
 {
-    DB::table('auth.company_user')->insert([
-        'company_id' => $company->id,
-        'user_id' => $user->id,
-        'role' => $role,
-        'joined_at' => now(),
-        'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    addCompanyMemberRow($company, $user, $role);
 
     CompanyContext::withContext($company, fn () => CompanyContext::assignRole($user, $role));
 }

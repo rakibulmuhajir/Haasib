@@ -110,33 +110,16 @@ class CompanyController extends Controller
                 'is_active' => true,
             ]);
 
-            DB::table('auth.company_user')->updateOrInsert(
-                [
-                    'company_id' => $company->id,
-                    'user_id' => $owner->id,
-                ],
-                [
-                    'role' => 'owner',
-                    'invited_by_user_id' => Auth::id(),
-                    'joined_at' => now(),
-                    'is_active' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]
-            );
+            // Everything below belongs to the company that has just been
+            // created, and under enforced row level security a write whose
+            // company_id does not match app.current_company_id is refused. The
+            // session is still in whatever company the creator was working in
+            // -- or in none at all -- so enter the new one first.
+            return CompanyContext::withContext($company, function () use ($company, $data, $owner) {
+                $this->seedNewCompany($company, $data, $owner);
 
-            app(CompanyRbacBootstrapper::class)->bootstrap($company, $owner);
-
-            if (! empty($data['secondary_currency'])) {
-                CompanyCurrency::create([
-                    'company_id' => $company->id,
-                    'currency_code' => strtoupper((string) $data['secondary_currency']),
-                    'exchange_rate' => $data['secondary_exchange_rate'],
-                    'enabled_at' => now(),
-                ]);
-            }
-
-            return $company;
+                return $company;
+            });
         });
 
         $bootstrapFailed = false;
@@ -163,6 +146,39 @@ class CompanyController extends Controller
         }
 
         return $redirect;
+    }
+
+    /**
+     * The company's own first rows: its owner's membership, its roles, and any
+     * secondary currency. Runs inside the new company's context.
+     */
+    private function seedNewCompany(Company $company, array $data, User $owner): void
+    {
+        DB::table('auth.company_user')->updateOrInsert(
+            [
+                'company_id' => $company->id,
+                'user_id' => $owner->id,
+            ],
+            [
+                'role' => 'owner',
+                'invited_by_user_id' => Auth::id(),
+                'joined_at' => now(),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        app(CompanyRbacBootstrapper::class)->bootstrap($company, $owner);
+
+        if (! empty($data['secondary_currency'])) {
+            CompanyCurrency::create([
+                'company_id' => $company->id,
+                'currency_code' => strtoupper((string) $data['secondary_currency']),
+                'exchange_rate' => $data['secondary_exchange_rate'],
+                'enabled_at' => now(),
+            ]);
+        }
     }
 
     /**

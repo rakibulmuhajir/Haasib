@@ -58,6 +58,20 @@ beforeEach(function () {
         $this->markTestSkipped('The '.APP_ROLE.' role is not provisioned in this database.');
     }
 
+    // Both the grants and the FORCE flags come from the migrations gated
+    // behind RLS_ENFORCEMENT. Without them the role cannot read a single
+    // table, and what these tests would be measuring is the absence of a
+    // GRANT rather than the presence of isolation. Run the suite with
+    // RLS_ENFORCEMENT=on to exercise them.
+    $granted = DB::selectOne(
+        'SELECT has_table_privilege(?, ?, ?) AS granted',
+        [APP_ROLE, 'acct.customers', 'SELECT']
+    );
+
+    if ($granted === null || ! $granted->granted) {
+        $this->markTestSkipped('Row level security enforcement is not applied here; run with RLS_ENFORCEMENT=on.');
+    }
+
     expect((bool) $role->rolsuper)->toBeFalse();
     expect((bool) $role->rolbypassrls)->toBeFalse();
 });

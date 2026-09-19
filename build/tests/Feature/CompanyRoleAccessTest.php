@@ -32,20 +32,13 @@ function createRoleAccessCompany(): array
 
 function addRoleAccessMember(Company $company, User $user, string $role): void
 {
-    DB::table('auth.company_user')->insert([
-        'company_id' => $company->id,
-        'user_id' => $user->id,
-        'role' => $role,
-        'joined_at' => now(),
-        'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    // The membership row is the company's own, so it has to be written from
+    // inside the company: row level security refuses it otherwise.
+    app(CompanyContextService::class)->withContext($company, function () use ($company, $user, $role) {
+        addCompanyMemberRow($company, $user, $role);
 
-    app(CompanyContextService::class)->withContext(
-        $company,
-        fn () => app(CompanyContextService::class)->assignRole($user, $role),
-    );
+        app(CompanyContextService::class)->assignRole($user, $role);
+    });
 }
 
 test('owner can remove a manager', function () {

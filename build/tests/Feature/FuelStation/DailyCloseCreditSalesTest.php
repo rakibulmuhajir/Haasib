@@ -97,7 +97,9 @@ test('invalid credit allocations roll back the entire close', function (string $
     if ($invalid === 'duplicate') { $f['payload']['credit_sales'][] = $f['payload']['credit_sales'][0]; }
     if ($invalid === 'foreign') {
         $other = Company::create(['name' => 'Other', 'slug' => 'other-'.str()->random(10), 'base_currency' => 'PKR']);
+        enterCompany($other);
         $outsider = Customer::create(['company_id' => $other->id, 'customer_number' => 'C-2', 'name' => 'Other', 'base_currency' => 'PKR']);
+        enterCompany($f['company']);
         $f['payload']['credit_sales'][0]['customer_id'] = $outsider->id;
     }
     expect(fn () => creditClosePost($f))->toThrow(\Illuminate\Validation\ValidationException::class);

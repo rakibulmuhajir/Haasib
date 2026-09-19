@@ -393,12 +393,15 @@ trait DemoSupport
     protected function asCompany(Company $company, User $user, callable $callback): mixed
     {
         Auth::login($user);
-        CompanyContext::setContext($company);
 
         try {
-            return $callback();
+            // withContext restores whatever company the caller was already in.
+            // clearContext() used to be called here instead, which left the
+            // seeder with no company context at all for everything that
+            // followed -- and under enforced row level security everything
+            // that followed then read nothing and wrote nothing.
+            return CompanyContext::withContext($company, $callback);
         } finally {
-            CompanyContext::clearContext();
             Auth::logout();
         }
     }

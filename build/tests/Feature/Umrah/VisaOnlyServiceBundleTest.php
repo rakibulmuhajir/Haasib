@@ -166,6 +166,9 @@ test('a standard_bus group can still sell a visa-only voucher', function () {
 });
 
 test('the backfill maps an existing self-arranged voucher from visa_transport to visa', function () {
+    // This runs a migration's up() in-place, which is DDL on umrah.vouchers.
+    requiresPrivilegedDatabaseRole('Running a migration in place needs the owning connection, not the application role.');
+
     [$company] = serviceBundleTestCompany();
     $group = serviceBundleTestGroup($company, VisaGroup::TRANSPORT_NONE);
 

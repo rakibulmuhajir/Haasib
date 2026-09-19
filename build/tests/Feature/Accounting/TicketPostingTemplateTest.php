@@ -20,6 +20,8 @@ function ticketPostingTemplateCompany(): Company
         'base_currency' => 'USD',
     ]);
 
+    enterCompany($company);
+
     if (! DB::table('public.currencies')->where('code', 'USD')->exists()) {
         DB::table('public.currencies')->insert(['code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$']);
     }

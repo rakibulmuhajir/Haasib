@@ -7,7 +7,10 @@ use App\Services\CompanyContextService;
 use App\Services\CurrentCompany;
 use App\Support\Database\TenantContextGuard;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -54,6 +57,8 @@ class AppServiceProvider extends ServiceProvider
             Event::listen(QueryExecuted::class, fn (QueryExecuted $event) => $guard->handle($event));
         }
 
+        $this->runMigrationsAcrossEveryCompany();
+
         RateLimiter::for('commands', fn($request) =>
             Limit::perMinute(120)->by($request->user()?->id ?: $request->ip())
         );
@@ -61,5 +66,46 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('catalog', fn($request) =>
             Limit::perMinute(300)->by($request->user()?->id ?: $request->ip())
         );
+    }
+
+    /**
+     * A migration is cross-company work by definition.
+     *
+     * Data migrations enumerate auth.companies and backfill their rows. Under
+     * enforced row level security, run by a role that has no company context,
+     * that enumeration returns **zero rows** and the migration reports a clean
+     * run having touched nothing -- and where it does write, the write is
+     * refused. Neither failure is visible in a deploy log.
+     *
+     * So the migration session is put into the policies' own super-admin
+     * escape hatch for its duration, and taken back out afterwards. This is
+     * the same hatch console commands and seeders use; it is not a bypass of
+     * row level security, it is the policies' documented answer to "this
+     * caller legitimately spans every tenant".
+     */
+    private function runMigrationsAcrossEveryCompany(): void
+    {
+        $previous = null;
+
+        Event::listen(MigrationsStarted::class, function () use (&$previous) {
+            if (DB::connection()->getDriverName() !== 'pgsql') {
+                return;
+            }
+
+            $previous = (string) (DB::selectOne(
+                "SELECT current_setting('app.is_super_admin', true) AS value"
+            )->value ?? '');
+
+            DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+        });
+
+        Event::listen(MigrationsEnded::class, function () use (&$previous) {
+            if (DB::connection()->getDriverName() !== 'pgsql') {
+                return;
+            }
+
+            DB::select("SELECT set_config('app.is_super_admin', ?, false)", [$previous ?? '']);
+            $previous = null;
+        });
     }
 }

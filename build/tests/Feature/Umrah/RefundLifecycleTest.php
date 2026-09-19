@@ -120,15 +120,7 @@ function refundJournalTotals(?string $transactionId): array
 
 function refundTestMember(Company $company, User $user, string $role): void
 {
-    DB::table('auth.company_user')->insert([
-        'company_id' => $company->id,
-        'user_id' => $user->id,
-        'role' => $role,
-        'joined_at' => now(),
-        'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    addCompanyMemberRow($company, $user, $role);
 
     app(CompanyContextService::class)->withContext(
         $company,

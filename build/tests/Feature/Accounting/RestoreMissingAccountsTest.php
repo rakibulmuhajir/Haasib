@@ -49,15 +49,9 @@ function restoreMissingCompanyWithMember(string $industryCode, string $role = 'o
 
     app(CompanyRbacBootstrapper::class)->bootstrap($company);
 
-    DB::table('auth.company_user')->insert([
-        'company_id' => $company->id,
-        'user_id' => $user->id,
-        'role' => $role,
-        'joined_at' => now(),
-        'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    enterCompany($company);
+
+    addCompanyMemberRow($company, $user, $role);
 
     app(CompanyContextService::class)->withContext(
         $company,
@@ -101,11 +95,13 @@ it('rejects a request for another company the user does not belong to', function
     $fixtureA = restoreMissingCompanyWithMember($industryCode, 'owner');
     $fixtureB = restoreMissingCompanyWithMember($industryCode, 'owner');
 
-    // fixtureA's user is not a member of fixtureB's company.
+    // fixtureA's user is not a member of fixtureB's company. Under enforced
+    // row level security that company is not visible to them at all, so
+    // IdentifyCompany answers 404 before RBAC gets the chance to answer 403.
     $response = $this->actingAs($fixtureA['user'])
         ->post("/{$fixtureB['company']->slug}/accounts/restore-missing");
 
-    $response->assertForbidden();
+    expect($response->getStatusCode())->toBeIn([403, 404]);
 });
 
 it('reports nothing missing when the company already has every standard account', function () {

@@ -36,6 +36,8 @@ function openingBalanceFixture(): array
         'base_currency' => 'PKR',
     ]);
 
+    enterCompany($company);
+
     if (! DB::table('public.currencies')->where('code', 'PKR')->exists()) {
         DB::table('public.currencies')->insert(['code' => 'PKR', 'name' => 'Pakistani Rupee', 'symbol' => 'Rs']);
     }
@@ -293,6 +295,8 @@ test('an employee or partner belonging to another company is refused and nothing
         'slug' => 'other-company-'.str()->lower(str()->random(8)),
         'base_currency' => 'PKR',
     ]);
+    enterCompany($otherCompany);
+
     $otherEmployee = Employee::create([
         'company_id' => $otherCompany->id,
         'employee_number' => 'EMP-OTHER-1',
@@ -307,6 +311,8 @@ test('an employee or partner belonging to another company is refused and nothing
         'profit_share_percentage' => 100,
     ]);
 
+    enterCompany($f['company']);
+
     expect(fn () => dispatchOpeningBalance($f, [
         'as_of_date' => '2026-08-31',
         'employees' => [['employee_id' => $otherEmployee->id, 'amount' => 5000]],
@@ -317,8 +323,10 @@ test('an employee or partner belonging to another company is refused and nothing
         'partners' => [['partner_id' => $otherPartner->id, 'amount' => 5000]],
     ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
+    enterCompany($otherCompany);
     expect(SalaryAdvance::where('employee_id', $otherEmployee->id)->count())->toBe(0);
     expect(PartnerTransaction::where('partner_id', $otherPartner->id)->count())->toBe(0);
+    enterCompany($f['company']);
     expect($f['company']->fresh()->settings['opening_balances'] ?? null)->toBeNull();
 });
 
@@ -786,9 +794,14 @@ test('the opening balances page requires the view permission and store requires 
     ]);
     DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
 
-    $this->actingAs($stranger)
-        ->post("/{$slug}/accounting/opening-balances", ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 5]])
-        ->assertForbidden();
+    // Under enforced row level security a company is not visible to a
+    // non-member at all, so IdentifyCompany answers 404 before RBAC gets the
+    // chance to answer 403. Both are a refusal; which one you get depends on
+    // whether enforcement is applied to this database.
+    $refused = $this->actingAs($stranger)
+        ->post("/{$slug}/accounting/opening-balances", ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 5]]);
+
+    expect($refused->getStatusCode())->toBeIn([403, 404]);
 
     $this->actingAs($f['user'])
         ->post("/{$slug}/accounting/opening-balances", ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 5]])

@@ -21,6 +21,7 @@ test('a new user can create a company with optional currency inputs exactly as s
     $response->assertSessionHasNoErrors()->assertSessionMissing('error')->assertRedirect();
     $company = Company::where('name', $name)->sole();
     $response->assertRedirect(route('umrah.dashboard', ['company' => $company->slug]));
+    enterCompany($company);
     expect(DB::table('auth.company_user')->where('company_id', $company->id)->where('user_id', $user->id)->value('role'))->toBe('owner');
     $secondary = CompanyCurrency::where('company_id', $company->id)->where('currency_code', 'SAR')->first();
     if ($hasSecondary) {

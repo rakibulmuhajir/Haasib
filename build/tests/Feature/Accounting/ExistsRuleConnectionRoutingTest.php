@@ -220,6 +220,9 @@ test('a bank transaction toggle naming a transaction from another company is not
     $f = existsRuleFixture();
     $other = existsRuleFixture();
 
+    // Building the second fixture left the session inside the second company.
+    enterCompany($f['company']);
+
     $reconciliation = BankReconciliation::create([
         'company_id' => $f['company']->id, 'bank_account_id' => $f['bankAccount']->id,
         'statement_date' => '2026-09-15', 'statement_ending_balance' => 1000,

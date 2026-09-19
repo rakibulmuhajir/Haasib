@@ -49,16 +49,21 @@ class VisaVendorParty
          * the handler reads its company from ambient context, and one of these
          * can be created where none is set -- a seeder, a test, a command.
          */
-        $result = CompanyContext::withContext($company, fn () => $this->bus->dispatch('vendor.create', [
-            'name' => $data['name'],
-            'vendor_type' => Vendor::TYPE_SERVICE_PROVIDER,
-            'email' => $data['email'] ?? null,
-            'phone' => $data['phone'] ?? null,
-            'logo_url' => $data['logo_url'] ?? null,
-            'base_currency' => $company->base_currency,
-        ], null, true));
+        return CompanyContext::withContext($company, function () use ($company, $data) {
+            $result = $this->bus->dispatch('vendor.create', [
+                'name' => $data['name'],
+                'vendor_type' => Vendor::TYPE_SERVICE_PROVIDER,
+                'email' => $data['email'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'logo_url' => $data['logo_url'] ?? null,
+                'base_currency' => $company->base_currency,
+            ], null, true);
 
-        return Vendor::findOrFail($result['data']['id']);
+            // Read it back inside the same context it was written in: outside
+            // it, enforced row level security returns no row and findOrFail
+            // reports the supplier that was just created as missing.
+            return Vendor::findOrFail($result['data']['id']);
+        });
     }
 
     /**

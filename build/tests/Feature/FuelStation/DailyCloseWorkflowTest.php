@@ -221,6 +221,11 @@ test('entry time never assigns business date and company sources never leak', fu
     workflowExpense($f, '2026-09-16');
     $other = closeWorkflowFixture();
     workflowExpense($other);
+
+    // Building the second fixture left the session inside the second company;
+    // the close being examined belongs to the first.
+    enterCompany($f['company']);
+
     $view = app(DailyCloseReconciliationService::class)->view(Transaction::findOrFail($posted['transaction_id']));
     expect($view['activity'])->toBe([]);
     expect($view['current']['variance'])->toBe(-10000.0);

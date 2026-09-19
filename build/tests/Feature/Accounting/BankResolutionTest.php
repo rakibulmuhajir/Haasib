@@ -38,6 +38,8 @@ class BankResolutionTest extends TestCase
             'owner_id' => $this->user->id,
             'slug' => 'test-corp',
         ]);
+
+        enterCompany($this->company);
         
         // Ensure currencies exist (assuming seeder/factory usually handles this, but manual here for safety)
         if (!DB::table('public.currencies')->where('code', 'USD')->exists()) {

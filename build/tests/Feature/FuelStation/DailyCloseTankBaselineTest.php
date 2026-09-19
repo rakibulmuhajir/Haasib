@@ -19,6 +19,8 @@ function tankBaselineFixture(): array
         'base_currency' => 'PKR',
     ]);
 
+    enterCompany($company);
+
     $item = Item::create([
         'company_id' => $company->id,
         'sku' => 'DIESEL-'.str()->lower(str()->random(6)),

@@ -47,6 +47,13 @@ function ticketingCompany(array $overrides = []): object
         'base_currency' => 'PKR',
     ], $overrides));
 
+    // Enforced row level security refuses a write whose company_id does not
+    // match app.current_company_id, and returns nothing at all on a read. A
+    // fixture that creates a company has to enter it before writing any of
+    // that company's rows, exactly as the application does.
+    enterCompany($company);
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+
     if (! DB::table('public.currencies')->where('code', $company->base_currency)->exists()) {
         DB::table('public.currencies')->insert([
             'code' => $company->base_currency,
@@ -663,15 +670,7 @@ function ticketingAccountBalance(Company $company, string $code): float
  */
 function ticketingAddCompanyMember(Company $company, User $user, string $role): void
 {
-    DB::table('auth.company_user')->insert([
-        'company_id' => $company->id,
-        'user_id' => $user->id,
-        'role' => $role,
-        'joined_at' => now(),
-        'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    addCompanyMemberRow($company, $user, $role);
 
     app(CompanyContextService::class)->withContext(
         $company,

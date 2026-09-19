@@ -119,6 +119,10 @@ test('an other-company invoice or account is rejected', function () {
     $f = creditCloseFixture();
     $other = creditCloseFixture();
     $otherInvoice = openInvoiceFixture($other);
+
+    // Building the second fixture left the session inside the second company.
+    enterCompany($f['company']);
+
     $f['payload']['credit_sales'] = [];
 
     $f['payload']['payments_received'] = [[

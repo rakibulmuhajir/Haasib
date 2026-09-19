@@ -13,6 +13,7 @@ it('prepares fuel accounting when the owner saves named banks and cash, without 
         'slug' => 'simple-fuel-'.str()->lower(str()->random(8)),
         'base_currency' => 'PKR',
     ]);
+    enterCompany($company);
     $service = app(CompanyOnboardingService::class);
     $company = $service->setupCompanyIdentity($company, ['industry_code' => 'fuel_station']);
     app(\App\Modules\FuelStation\Services\FuelStationOnboardingService::class)->ensureRequiredAccounts($company->id);

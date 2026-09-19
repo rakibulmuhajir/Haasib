@@ -246,9 +246,14 @@ class TenantContextGuard
     }
 
     /**
-     * Company-scoped means: row level security is on, and at least one policy
-     * reads app.current_company_id. Those are exactly the tables where a
-     * missing context silently changes the answer.
+     * Company-scoped means: the table carries a company_id, row level security
+     * is on, and at least one policy reads app.current_company_id. Those are
+     * exactly the tables where a missing context silently changes the answer.
+     *
+     * The company_id requirement deliberately excludes auth.companies itself.
+     * Its policy reads the GUC, but looking a company up by slug with no
+     * context set is how the application *enters* a company -- it is the one
+     * legitimate tenant-table read that happens before any context exists.
      *
      * @return array<string, string> lookup key => schema-qualified name
      */
@@ -271,6 +276,10 @@ class TenantContextGuard
                 ."JOIN pg_namespace n ON n.oid = c.relnamespace\n"
                 ."WHERE c.relkind = 'r'\n"
                 ."  AND c.relrowsecurity\n"
+                ."  AND EXISTS (\n"
+                ."      SELECT 1 FROM pg_attribute a\n"
+                ."      WHERE a.attrelid = c.oid AND a.attname = 'company_id' AND a.attnum > 0 AND NOT a.attisdropped\n"
+                ."  )\n"
                 ."  AND EXISTS (\n"
                 ."      SELECT 1 FROM pg_policy p\n"
                 ."      WHERE p.polrelid = c.oid\n"

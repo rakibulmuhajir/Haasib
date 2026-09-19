@@ -22,6 +22,8 @@ test('a received payment charge reduces bank movement while leaving AR gross', f
         'base_currency' => 'PKR',
     ]);
 
+    enterCompany($company);
+
     foreach ([['PKR', 'Pakistani Rupee', '₨']] as [$code, $name, $symbol]) {
         DB::table('public.currencies')->insertOrIgnore(['code' => $code, 'name' => $name, 'symbol' => $symbol]);
     }

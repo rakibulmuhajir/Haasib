@@ -71,6 +71,10 @@ test('the happy path creates a fully-built company with AR, AP and retained earn
     $response->assertSessionHasNoErrors();
     $company = Company::where('name', 'like', 'Bootstrap Atomicity Co%')->sole();
 
+    // The request restored the session to the context it started in. Reading
+    // the new company's rows means entering it, as any later request would.
+    enterCompany($company);
+
     expect($company->bootstrap_incomplete_at)->toBeNull();
     expect($company->ar_account_id)->not->toBeNull();
     expect($company->ap_account_id)->not->toBeNull();

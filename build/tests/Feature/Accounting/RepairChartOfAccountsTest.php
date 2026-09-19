@@ -8,12 +8,16 @@ use Illuminate\Support\Facades\Artisan;
 
 function repairCoaCompany(string $industryCode, ?string $baseCurrency = 'USD'): Company
 {
-    return Company::create([
+    $company = Company::create([
         'name' => 'Repair Co '.str()->random(8),
         'slug' => 'repair-co-'.str()->lower(str()->random(10)),
         'base_currency' => $baseCurrency,
         'industry_code' => $industryCode,
     ]);
+
+    enterCompany($company);
+
+    return $company;
 }
 
 function seedRepairCoaPack(): string
@@ -143,6 +147,9 @@ it('covers every company with --all', function () {
     Artisan::call('accounting:repair-coa', ['--all' => true]);
 
     foreach ([$companyA, $companyB] as $company) {
+        // Reading one company's rows means being in that company.
+        enterCompany($company);
+
         expect(Account::where('company_id', $company->id)->where('subtype', 'accounts_receivable')->exists())->toBeTrue();
     }
 });

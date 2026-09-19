@@ -27,12 +27,16 @@ function creditNoteCompany(string $baseCurrency = 'PKR'): Company
 {
     $user = User::factory()->create();
 
-    return Company::create([
+    $company = Company::create([
         'name' => 'Credit Note Currency Co '.str()->random(8),
         'slug' => 'credit-note-currency-'.str()->lower(str()->random(10)),
         'owner_id' => $user->id,
         'base_currency' => $baseCurrency,
     ]);
+
+    enterCompany($company);
+
+    return $company;
 }
 
 it('records a credit note in a foreign currency with its rate', function () {

@@ -31,7 +31,12 @@ function ticketAccountsCompany(): Company
 function runTicketAccountsBackfillMigration(): void
 {
     $migration = require database_path('migrations/2026_08_23_000001_add_ticket_accounts_to_existing_companies.php');
-    $migration->up();
+
+    // Calling up() in place skips the migrator, and with it the super-admin
+    // escape hatch AppServiceProvider puts every migration run into. A data
+    // migration that enumerates auth.companies without it sees no companies
+    // at all and backfills nothing.
+    app(\App\Services\CompanyContextService::class)->crossCompany(fn () => $migration->up());
 }
 
 it('gives an existing umrah company the six ticket accounts', function () {

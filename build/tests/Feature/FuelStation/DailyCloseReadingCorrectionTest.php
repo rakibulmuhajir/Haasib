@@ -352,6 +352,8 @@ test('a nozzle correction affects only its frozen supplying tank and leaves down
 });
 
 test('audit trigger works as a restricted role without leaking tenant context or bypassing source RLS', function () {
+    requiresPrivilegedDatabaseRole('Creating a throwaway database role needs a privileged connection.');
+
     $f = correctionFixture();
     $posted = app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
     $role = 'close_test_'.strtolower(str()->random(10));

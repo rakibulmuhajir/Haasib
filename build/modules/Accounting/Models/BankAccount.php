@@ -16,8 +16,11 @@ class BankAccount extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'acct.company_bank_accounts';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -132,7 +135,9 @@ class BankAccount extends Model
      */
     public function hasTransactions(): bool
     {
-        return $this->transactions()->exists();
+        return $this->transactions()->exists()
+            || ($this->gl_account_id && JournalEntry::where('company_id', $this->company_id)
+                ->where('account_id', $this->gl_account_id)->exists());
     }
 
     /**

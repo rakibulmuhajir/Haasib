@@ -4,7 +4,6 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
@@ -130,11 +129,7 @@ class AmanatController extends Controller
             'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
             'paymentAccounts' => Account::where('company_id', $company->id)
                 ->where('is_active', true)->whereNull('deleted_at')
-                ->where(function ($query) use ($company) {
-                    $query->whereIn('subtype', ['cash', 'bank'])
-                        ->orWhereIn('id', BankAccount::where('company_id', $company->id)
-                            ->where('is_active', true)->whereNull('deleted_at')->pluck('gl_account_id'));
-                })
+                ->whereIn('subtype', ['cash', 'bank'])
                 ->orderBy('code')
                 ->get(['id', 'code', 'name', 'subtype']),
         ]);

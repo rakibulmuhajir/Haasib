@@ -21,6 +21,7 @@ function bankTransactionFixture(): array
     $bank1 = Account::create(['company_id' => $company->id, 'code' => '1020', 'name' => 'Operating Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR']);
     $bank2 = Account::create(['company_id' => $company->id, 'code' => '1021', 'name' => 'Savings Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR']);
     $charges = Account::create(['company_id' => $company->id, 'code' => '6300', 'name' => 'Bank Charges', 'type' => 'expense', 'subtype' => 'operating_expense', 'normal_balance' => 'debit', 'currency' => null]);
+
     return compact('user', 'company', 'cash', 'bank1', 'bank2', 'charges');
 }
 
@@ -43,6 +44,20 @@ test('a withdrawal posts Dr Cash Cr Bank', function () {
     $entries = Transaction::findOrFail($result['data']['id'])->journalEntries;
     expect((float) $entries->where('account_id', $f['cash']->id)->sum('debit_amount'))->toBe(500.0);
     expect((float) $entries->where('account_id', $f['bank1']->id)->sum('credit_amount'))->toBe(500.0);
+});
+
+test('a bank record linked to cash cannot turn a withdrawal into a same-account journal', function () {
+    $f = bankTransactionFixture();
+    \App\Modules\Accounting\Models\BankAccount::create([
+        'company_id' => $f['company']->id, 'account_name' => 'Misconfigured Main Bank',
+        'account_number' => 'LEGACY', 'account_type' => 'checking', 'currency' => 'PKR',
+        'gl_account_id' => $f['cash']->id, 'is_active' => true,
+    ]);
+    expect(fn () => dispatchBankTxn($f, [
+        'kind' => 'withdrawal', 'date' => '2026-09-18', 'amount' => 25000,
+        'cash_account_id' => $f['cash']->id, 'bank_account_id' => $f['cash']->id,
+    ]))->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
 });
 
 test('a transfer posts Dr destination Cr source', function () {

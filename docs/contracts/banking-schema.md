@@ -99,13 +99,14 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - `routing_number`: nullable|string|max:50.
   - `opening_balance`: numeric.
   - `opening_balance_date`: nullable|date.
-  - `gl_account_id`: nullable|uuid|exists:acct.accounts,id (must be bank/cash subtype).
+  - `gl_account_id`: nullable|uuid; active, undeleted account in the same company, not linked to another undeleted bank record. Subtype must match: cash → cash, credit_card → credit_card, checking/savings/other → bank. Applies on create and update.
   - `is_primary`: boolean.
   - `is_active`: boolean.
 - Business rules:
   - Only one `is_primary = true` per company (enforce via app/trigger).
   - Currency immutable after transactions exist.
-  - GL account must be bank or cash subtype.
+  - An explicit null GL selection creates a separate matching ledger account on create or update. Existing ledger postings are never moved or reclassified by this operation.
+  - Account type and GL linkage cannot change after bank transactions or linked ledger entries exist. A legacy record linked to a cash ledger with history must be replaced with a separately created bank record; do not rewrite historical postings.
   - current_balance updated by triggers on bank_transactions.
   - Cannot delete account with unreconciled transactions.
 

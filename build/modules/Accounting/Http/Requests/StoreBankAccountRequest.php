@@ -43,17 +43,17 @@ class StoreBankAccountRequest extends BaseFormRequest
             'gl_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists(Account::class, 'id')->where('company_id', $companyId),
+                Rule::exists(Account::class, 'id')->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at'),
                 Rule::unique(BankAccount::class, 'gl_account_id')
                     ->where('company_id', $companyId)
                     ->whereNull('deleted_at'),
-                function (string $attribute, mixed $value, \Closure $fail) {
+                function (string $attribute, mixed $value, \Closure $fail) use ($companyId) {
                     $want = match ($this->input('account_type')) {
                         'cash' => 'cash',
                         'credit_card' => 'credit_card',
                         default => 'bank',
                     };
-                    $subtype = Account::whereKey($value)->value('subtype');
+                    $subtype = Account::where('company_id', $companyId)->whereKey($value)->value('subtype');
                     if ($subtype !== null && $subtype !== $want) {
                         $fail("That ledger account is a {$subtype} account; a {$this->input('account_type')} account needs a {$want} one.");
                     }

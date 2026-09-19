@@ -102,3 +102,84 @@ test('a cash drawer record gets a cash ledger account, not a bank one', function
     $record = BankAccount::where('company_id', $f['company']->id)->where('account_name', 'Front Drawer')->sole();
     expect(Account::whereKey($record->gl_account_id)->value('subtype'))->toBe('cash');
 });
+
+test('bank ledger repair creates a separate bank account and posts the withdrawal and Amanat to it', function () {
+    $f = bankMappingFixture();
+    $record = BankAccount::create([
+        'company_id' => $f['company']->id, 'account_name' => 'Main Bank',
+        'account_number' => 'MAIN-REPAIR', 'account_type' => 'checking',
+        'currency' => 'PKR', 'gl_account_id' => $f['cash']->id, 'is_active' => true,
+    ]);
+
+    $this->put("/{$f['company']->slug}/banking/accounts/{$record->id}", [
+        'account_name' => 'Main Bank', 'account_number' => 'MAIN-REPAIR',
+        'account_type' => 'checking', 'currency' => 'PKR', 'gl_account_id' => null,
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $bankId = $record->fresh()->gl_account_id;
+    expect($bankId)->not->toBe($f['cash']->id)
+        ->and(Account::findOrFail($bankId)->subtype)->toBe('bank')
+        ->and($f['cash']->fresh()->subtype)->toBe('cash');
+
+    $this->post("/{$f['company']->slug}/banking/transactions", [
+        'kind' => 'withdrawal', 'date' => '2026-09-18', 'amount' => 25000,
+        'cash_account_id' => $f['cash']->id, 'bank_account_id' => $bankId,
+    ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    $transaction = \App\Modules\Accounting\Models\Transaction::where('company_id', $f['company']->id)
+        ->where('reference_type', 'acct.bank_transactions')->sole();
+    expect((float) $transaction->journalEntries->where('account_id', $bankId)->sum('credit_amount'))->toBe(25000.0)
+        ->and((float) $transaction->journalEntries->where('account_id', $f['cash']->id)->sum('debit_amount'))->toBe(25000.0);
+
+    $amanat = app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Modules\FuelStation\Services\AmanatService::class)->deposit($f['customer'], [
+        'amount' => 60000, 'payment_account_id' => $bankId, 'business_date' => '2026-09-18',
+    ])
+    );
+    expect($amanat->payment_account_id)->toBe($bankId);
+    $entry = \Illuminate\Support\Facades\DB::table('acct.journal_entries')->where('id', $amanat->journal_entry_id)->first();
+    expect($entry->account_id)->toBe($bankId)->and((float) $entry->debit_amount)->toBe(60000.0);
+
+    // Manual movements post directly to the ledger, without an imported bank-feed row.
+    // They must still prevent remapping the account and losing its displayed history.
+    $this->put("/{$f['company']->slug}/banking/accounts/{$record->id}", [
+        'account_name' => 'Main Bank', 'account_number' => 'MAIN-REPAIR',
+        'account_type' => 'checking', 'currency' => 'PKR', 'gl_account_id' => null,
+    ])->assertSessionHasErrors('gl_account_id');
+    expect($record->fresh()->gl_account_id)->toBe($bankId);
+});
+
+test('bank ledger update rejects cash and shared ledger mappings', function () {
+    $f = bankMappingFixture();
+    postBankAccount($f)->assertSessionHasNoErrors();
+    postBankAccount($f, ['account_name' => 'Other Bank'])->assertSessionHasNoErrors();
+    $record = BankAccount::where('company_id', $f['company']->id)->where('account_name', 'Meezan')->sole();
+    $other = BankAccount::where('company_id', $f['company']->id)->where('account_name', 'Other Bank')->sole();
+    foreach ([$f['cash']->id, $other->gl_account_id] as $invalidId) {
+        $this->put("/{$f['company']->slug}/banking/accounts/{$record->id}", [
+            'account_name' => $record->account_name, 'account_number' => $record->account_number,
+            'account_type' => 'checking', 'currency' => 'PKR', 'gl_account_id' => $invalidId,
+        ])->assertSessionHasErrors('gl_account_id');
+    }
+    expect($record->fresh()->gl_account_id)->toBe($record->gl_account_id);
+});
+
+test('a legacy bank linked to posted cash can be deactivated without rewriting the ledger', function () {
+    $f = bankMappingFixture();
+    $record = BankAccount::create([
+        'company_id' => $f['company']->id, 'account_name' => 'Legacy Bank',
+        'account_number' => 'LEGACY-CASH', 'account_type' => 'checking',
+        'currency' => 'PKR', 'gl_account_id' => $f['cash']->id, 'is_active' => true,
+    ]);
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Modules\FuelStation\Services\AmanatService::class)->deposit($f['customer'], [
+        'amount' => 15000, 'payment_account_id' => $f['cash']->id, 'business_date' => '2026-09-18',
+    ])
+    );
+    $this->put("/{$f['company']->slug}/banking/accounts/{$record->id}", [
+        'account_name' => $record->account_name, 'account_number' => $record->account_number,
+        'account_type' => 'checking', 'gl_account_id' => $f['cash']->id, 'is_active' => false,
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    expect($record->fresh()->is_active)->toBeFalse()
+        ->and($record->fresh()->gl_account_id)->toBe($f['cash']->id)
+        ->and($f['cash']->fresh()->subtype)->toBe('cash');
+});

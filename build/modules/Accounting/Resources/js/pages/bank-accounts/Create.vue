@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,6 +90,11 @@ const handleSubmit = () => {
       preserveScroll: true,
     })
 }
+
+const matchingGlAccounts = computed(() => {
+  const subtype = form.account_type === 'cash' ? 'cash' : form.account_type === 'credit_card' ? 'credit_card' : 'bank'
+  return props.glAccounts.filter(account => account.subtype === subtype)
+})
 
 const handleCancel = () => {
   router.get(`/${props.company.slug}/banking/accounts`)
@@ -199,9 +205,9 @@ const handleCancel = () => {
                   <SelectValue placeholder="Link to GL account" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem :value="noneValue">No GL account</SelectItem>
+                  <SelectItem :value="noneValue">Create automatically</SelectItem>
                   <SelectItem
-                    v-for="gl in glAccounts"
+                    v-for="gl in matchingGlAccounts"
                     :key="gl.id"
                     :value="gl.id"
                   >

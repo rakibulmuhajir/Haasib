@@ -3,7 +3,6 @@
 namespace App\Modules\FuelStation\Services;
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -279,15 +278,6 @@ class AmanatService
             ->where('is_active', true)
             ->whereIn('subtype', ['cash', 'bank']);
 
-        $linkedBankGlIds = BankAccount::where('company_id', $companyId)
-            ->where('is_active', true)->whereNull('deleted_at')->pluck('gl_account_id');
-        if ($linkedBankGlIds->isNotEmpty()) {
-            $query->orWhere(function ($q) use ($linkedBankGlIds, $companyId) {
-                $q->where('company_id', $companyId)->where('is_active', true)
-                    ->whereNull('deleted_at')->whereIn('id', $linkedBankGlIds);
-            });
-        }
-
         if ($accountId) {
             return $query->whereKey($accountId)->firstOrFail();
         }
@@ -314,7 +304,8 @@ class AmanatService
             'code' => '2200',
             'name' => 'Customer Amanat Deposits',
             'type' => 'liability',
-            'subtype' => 'current_liability',
+            'subtype' => 'other_current_liability',
+            'normal_balance' => 'credit',
             'is_active' => true,
             'currency' => 'PKR',
         ]);

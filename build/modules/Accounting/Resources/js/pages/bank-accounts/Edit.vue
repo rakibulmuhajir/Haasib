@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -113,6 +114,11 @@ const handleSubmit = () => {
     })
 }
 
+const matchingGlAccounts = computed(() => {
+  const subtype = form.account_type === 'cash' ? 'cash' : form.account_type === 'credit_card' ? 'credit_card' : 'bank'
+  return props.glAccounts.filter(account => account.subtype === subtype || account.id === props.bankAccount.gl_account_id)
+})
+
 const handleCancel = () => {
   router.get(`/${props.company.slug}/banking/accounts/${props.bankAccount.id}`)
 }
@@ -130,7 +136,7 @@ const handleCancel = () => {
       <Alert v-if="hasTransactions" variant="warning">
         <AlertTriangle class="h-4 w-4" />
         <AlertDescription>
-          This account has transactions. Currency and opening balance cannot be changed.
+          This account has transactions. Currency, account type, ledger account and opening balance cannot be changed.
         </AlertDescription>
       </Alert>
 
@@ -166,7 +172,7 @@ const handleCancel = () => {
 
             <div class="space-y-2">
               <Label for="account_type">Account Type *</Label>
-              <Select v-model="form.account_type">
+              <Select v-model="form.account_type" :disabled="hasTransactions">
                 <SelectTrigger id="account_type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -226,14 +232,14 @@ const handleCancel = () => {
 
             <div class="space-y-2">
               <Label for="gl_account_id">GL Account (optional)</Label>
-              <Select v-model="form.gl_account_id">
+              <Select v-model="form.gl_account_id" :disabled="hasTransactions">
                 <SelectTrigger id="gl_account_id">
                   <SelectValue placeholder="Link to GL account" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem :value="noneValue">No GL account</SelectItem>
+                  <SelectItem :value="noneValue">Create automatically</SelectItem>
                   <SelectItem
-                    v-for="gl in glAccounts"
+                    v-for="gl in matchingGlAccounts"
                     :key="gl.id"
                     :value="gl.id"
                   >
@@ -242,6 +248,7 @@ const handleCancel = () => {
                 </SelectContent>
               </Select>
               <InputError :message="form.errors.gl_account_id" />
+              <p v-if="!hasTransactions" class="text-xs text-muted-foreground">Choose Create automatically to give this account its own ledger account when you save.</p>
             </div>
           </div>
         </CardContent>

@@ -59,6 +59,11 @@ class CreateAction implements PaletteAction
 
         // Resolve customer (UUID, email, or fuzzy name match)
         $customer = $this->resolveCustomer($params['customer'], $company->id);
+        if ($customer->is_credit_blocked) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'customer_id' => 'This customer is blocked from credit sales. Unblock the customer before creating an invoice.',
+            ]);
+        }
 
         return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer) {
             // Calculate dates
@@ -195,9 +200,7 @@ class CreateAction implements PaletteAction
                 ],
                 'redirect' => "/{$company->slug}/invoices/{$invoice->id}",
             ];
-        }); // retry on deadlock (40P01): Invoice::generateInvoiceNumber() above takes
-        // a lockForUpdate() row lock ahead of this insert into an audited table; see the
-        // lock-order comment in the audit_post_close_activity migration.
+        });
     }
 
     private function resolveCustomer(string $identifier, string $companyId): Customer
@@ -209,6 +212,9 @@ class CreateAction implements PaletteAction
                 ->where('is_active', true)
                 ->first();
             if ($customer) return $customer;
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'customer_id' => 'Choose an active customer in this company.',
+            ]);
         }
 
         // Try exact customer number

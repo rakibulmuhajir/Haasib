@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
 
 class Invoice extends Model
 {
@@ -119,25 +118,6 @@ class Invoice extends Model
      */
     public static function generateInvoiceNumber(string $companyId): string
     {
-        // Get company settings
-        $company = \App\Models\Company::find($companyId);
-        $base = $company->invoice_prefix ?? 'INV-';
-        $startNumber = $company->invoice_start_number ?? 1001;
-
-        $last = DB::connection('pgsql')->table('acct.invoices')
-            ->where('company_id', $companyId)
-            ->whereNotNull('invoice_number')
-            ->lockForUpdate()
-            ->orderByDesc('created_at')
-            ->orderByDesc('invoice_number')
-            ->value('invoice_number');
-
-        $next = $startNumber;
-
-        if ($last && preg_match('/(\d+)$/' , $last, $m)) {
-            $next = max((int) $m[1] + 1, $startNumber);
-        }
-
-        return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+        return app(\App\Modules\Accounting\Services\InvoiceNumberService::class)->next($companyId);
     }
 }

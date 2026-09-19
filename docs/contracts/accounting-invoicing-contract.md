@@ -136,6 +136,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `line_items`: required|array|min:1 with validated fields below.
 - Business rules:
   - Invoice number unique per company.
+  - Ordinary invoice numbering uses the highest numeric suffix under the exact configured company prefix, including deleted numbers. Other prefixes and creation timestamps do not affect the sequence. Allocation and invoice insert share a transaction-scoped company lock.
+  - New invoices require an active company customer who is not blocked from credit sales.
   - Due date >= invoice date.
   - Totals in transaction currency; balance = total_amount - paid_amount.
   - base_amount = ROUND(total_amount * COALESCE(exchange_rate,1), 2).

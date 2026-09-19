@@ -123,7 +123,17 @@ class InvoiceController extends Controller
             'line_items' => $validated['line_items'],
         ];
 
-        $result = $commandBus->dispatch('invoice.create', $params, $request->user());
+        try {
+            $result = $commandBus->dispatch('invoice.create', $params, $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'The invoice could not be created. Please try again.')->withInput();
+        }
 
         return redirect()
             ->route('invoices.show', ['company' => $company->slug, 'invoice' => $result['data']['id']])

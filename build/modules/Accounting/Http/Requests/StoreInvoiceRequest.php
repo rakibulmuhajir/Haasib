@@ -19,7 +19,9 @@ class StoreInvoiceRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
+            'customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')
+                ->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)
+                ->where('is_active', true)->whereNull('deleted_at')],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'numeric', 'min:0.01'],
@@ -80,7 +82,7 @@ class StoreInvoiceRequest extends BaseFormRequest
     {
         return [
             'customer_id.required' => 'Choose who this invoice is for.',
-            'customer_id.exists' => 'That customer is no longer on file. Pick another.',
+            'customer_id.exists' => 'Choose an active customer in this company. Inactive customers cannot receive new invoices.',
             'line_items.required' => 'Add at least one thing being billed.',
             'line_items.min' => 'Add at least one thing being billed.',
             'line_items.*.description.required' => 'Say what was sold.',

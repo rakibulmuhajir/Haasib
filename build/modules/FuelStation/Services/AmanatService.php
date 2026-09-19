@@ -3,6 +3,7 @@
 namespace App\Modules\FuelStation\Services;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -23,15 +24,15 @@ class AmanatService
             "amanat_transaction_number:{$companyId}:{$prefix}:{$date}",
         ]);
 
-        $base = $prefix . '-' . strtoupper(substr($customerId, 0, 8)) . '-' . date('Ymd', strtotime($date));
+        $base = $prefix.'-'.strtoupper(substr($customerId, 0, 8)).'-'.date('Ymd', strtotime($date));
         $lastSequence = Transaction::where('company_id', $companyId)
-            ->where('transaction_number', 'like', $base . '-%')
+            ->where('transaction_number', 'like', $base.'-%')
             ->selectRaw('MAX((RIGHT(transaction_number, 4))::integer) as max_sequence')
             ->value('max_sequence');
 
         $sequence = ((int) $lastSequence) + 1;
 
-        return $base . '-' . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+        return $base.'-'.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -45,12 +46,14 @@ class AmanatService
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($customer, $data) {
             $company = app(CurrentCompany::class)->get();
-            if ($customer->company_id !== $company->id) { throw new \InvalidArgumentException('Customer does not belong to this company.'); }
+            if ($customer->company_id !== $company->id) {
+                throw new \InvalidArgumentException('Customer does not belong to this company.');
+            }
             $amount = $data['amount'];
 
             // Ensure customer has fuel profile with amanat flag
             $profile = CustomerProfile::getOrCreateForCustomer($company->id, $customer->id);
-            if (!$profile->is_amanat_holder) {
+            if (! $profile->is_amanat_holder) {
                 $profile->update(['is_amanat_holder' => true]);
             }
 
@@ -116,7 +119,9 @@ class AmanatService
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($customer, $data) {
             $company = app(CurrentCompany::class)->get();
-            if ($customer->company_id !== $company->id) { throw new \InvalidArgumentException('Customer does not belong to this company.'); }
+            if ($customer->company_id !== $company->id) {
+                throw new \InvalidArgumentException('Customer does not belong to this company.');
+            }
             $amount = $data['amount'];
 
             // Get profile and validate balance
@@ -273,6 +278,15 @@ class AmanatService
         $query = Account::where('company_id', $companyId)
             ->where('is_active', true)
             ->whereIn('subtype', ['cash', 'bank']);
+
+        $linkedBankGlIds = BankAccount::where('company_id', $companyId)
+            ->where('is_active', true)->whereNull('deleted_at')->pluck('gl_account_id');
+        if ($linkedBankGlIds->isNotEmpty()) {
+            $query->orWhere(function ($q) use ($linkedBankGlIds, $companyId) {
+                $q->where('company_id', $companyId)->where('is_active', true)
+                    ->whereNull('deleted_at')->whereIn('id', $linkedBankGlIds);
+            });
+        }
 
         if ($accountId) {
             return $query->whereKey($accountId)->firstOrFail();

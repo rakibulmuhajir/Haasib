@@ -4,8 +4,8 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\FuelStation\Models\SaleMetadata;
 use App\Modules\FuelStation\Services\FuelSaleService;
 use App\Modules\Inventory\Models\Item;
-use App\Services\CompanyRbacBootstrapper;
 use App\Services\CompanyContextService;
+use App\Services\CompanyRbacBootstrapper;
 
 /**
  * A standalone fuel credit sale is the entry point the Daily Close imports from:
@@ -135,6 +135,42 @@ test('a sale dated to another day is not imported into this close', function () 
         ->get("/{$f['company']->slug}/fuel/daily-close?date=2026-09-15")
         ->assertOk()
         ->assertInertia(fn ($page) => $page->has('pendingFuelInvoices', 0));
+});
+
+test('a ten litre cash sale without a customer succeeds and reuses a tenant walk-in customer', function (string $saleType) {
+    $f = standaloneFuelSaleFixture();
+    $item = Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $payload = [
+        'sale_type' => $saleType, 'item_id' => $item->id, 'quantity' => 10,
+        'sale_date' => '2026-09-19', 'customer_id' => null,
+        'discount_per_liter' => $saleType === SaleMetadata::TYPE_BULK ? 5 : null,
+    ];
+    $url = "/{$f['company']->slug}/fuel/sales";
+    $this->from("/{$f['company']->slug}/fuel/sales/form")->post($url, $payload)
+        ->assertRedirect()->assertSessionHasNoErrors()
+        ->assertSessionHas('success', 'Fuel sale recorded successfully.');
+
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $expected = $saleType === SaleMetadata::TYPE_BULK ? 2950.0 : 3000.0;
+    expect($invoice->customer->company_id)->toBe($f['company']->id)
+        ->and($invoice->customer->customer_number)->toBe('CASH-FUEL')
+        ->and($invoice->customer->base_currency)->toBe('PKR')
+        ->and($invoice->status)->toBe('paid')
+        ->and((float) $invoice->paid_amount)->toBe($expected)
+        ->and((float) $invoice->balance)->toBe(0.0);
+    $this->post($url, $payload)->assertRedirect()->assertSessionHas('success');
+    expect(Invoice::where('company_id', $f['company']->id)->distinct()->pluck('customer_id')->all())
+        ->toBe([$invoice->customer_id]);
+})->with([SaleMetadata::TYPE_RETAIL, SaleMetadata::TYPE_BULK]);
+
+test('a cash sale preserves a selected customer', function () {
+    $f = standaloneFuelSaleFixture();
+    $item = Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $invoice = app(FuelSaleService::class)->createSale([
+        'sale_type' => SaleMetadata::TYPE_RETAIL, 'item_id' => $item->id,
+        'quantity' => 10, 'customer_id' => $f['customer']->id,
+    ]);
+    expect($invoice->customer_id)->toBe($f['customer']->id);
 });
 
 test('a blocked buyer is refused and no invoice is created', function () {

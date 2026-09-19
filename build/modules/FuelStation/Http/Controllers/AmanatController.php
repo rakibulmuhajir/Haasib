@@ -3,15 +3,16 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BankAccount;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Services\AmanatService;
 use App\Services\CurrentCompany;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -111,11 +112,11 @@ class AmanatController extends Controller
         $transactions = AmanatTransaction::where('company_id', $company->id)
             ->where('customer_id', $customerModel->id)
             ->select('fuel.amanat_transactions.*')
-            ->selectRaw("COALESCE((SELECT t.transaction_date FROM acct.journal_entries je
+            ->selectRaw('COALESCE((SELECT t.transaction_date FROM acct.journal_entries je
                 JOIN acct.transactions t ON t.id = je.transaction_id
                 WHERE je.id = fuel.amanat_transactions.journal_entry_id
                   AND t.company_id = fuel.amanat_transactions.company_id),
-                fuel.amanat_transactions.created_at::date) AS transaction_date")
+                fuel.amanat_transactions.created_at::date) AS transaction_date')
             ->with(['fuelItem', 'recordedBy', 'journalEntry.transaction', 'paymentAccount'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('fuel.amanat_transactions.created_at')
@@ -128,8 +129,12 @@ class AmanatController extends Controller
             'transactions' => $transactions,
             'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
             'paymentAccounts' => Account::where('company_id', $company->id)
-                ->where('is_active', true)
-                ->whereIn('subtype', ['cash', 'bank'])
+                ->where('is_active', true)->whereNull('deleted_at')
+                ->where(function ($query) use ($company) {
+                    $query->whereIn('subtype', ['cash', 'bank'])
+                        ->orWhereIn('id', BankAccount::where('company_id', $company->id)
+                            ->where('is_active', true)->whereNull('deleted_at')->pluck('gl_account_id'));
+                })
                 ->orderBy('code')
                 ->get(['id', 'code', 'name', 'subtype']),
         ]);
@@ -152,6 +157,7 @@ class AmanatController extends Controller
         abort_unless($customer, 404);
         try {
             app(\App\Services\CommandBus::class)->dispatch('fuel.amanat.movement', $request->validated() + ['customer_id' => $customer->id, 'kind' => $method], $request->user());
+
             return back()->with('success', 'Amanat movement recorded for the selected business date.');
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
@@ -181,6 +187,6 @@ class AmanatController extends Controller
             $sequence = 1;
         }
 
-        return 'CUST-' . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
+        return 'CUST-'.str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
     }
 }

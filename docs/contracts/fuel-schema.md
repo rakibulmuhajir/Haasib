@@ -892,6 +892,19 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   Version 1 is normalized for display using its frozen channel amounts without rewriting
   stored snapshots; both posted and current views use the same normalized convention.
 
+### Standalone cash-sale customer (2026-09-19)
+- Retail and bulk cash sales may omit `customer_id`. The service creates or reuses
+  the current company's active `acct.customers` row with reserved customer number
+  `CASH-FUEL`, name `Walk-in fuel customer`, type `walk_in`, company base currency,
+  and zero-day payment terms. First-use creation is serialized within the sale
+  transaction. No global customer is shared across tenants, and invoice customer
+  IDs remain mandatory. Explicit customer selections are preserved and must be
+  active members of the current company's customer master.
+- Other sale types require an explicit customer; missing customers produce a
+  business error, not a database constraint failure. Cash invoices retain their
+  existing paid status and zero balance; this does not introduce an extra payment
+  or revenue journal alongside the daily close.
+
 ### Standalone fuel-sale invoices as a close channel (2026-09-17)
 - Business rule: every litre sold goes through a nozzle the close reads. A standalone
   credit fuel-sale invoice (`FuelSaleService::createSale`, `sale_type=credit`) is never

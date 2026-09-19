@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBankTransactionRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Models\Transaction;
 use App\Services\CommandBus;
 use App\Services\CurrentCompany;
@@ -93,6 +94,7 @@ class BankTransactionController extends Controller
                 'debit' => (float) $line->debit_amount,
                 'credit' => (float) $line->credit_amount,
             ]);
+
             return [
                 'id' => $transaction->id,
                 'date' => $transaction->transaction_date->toDateString(),
@@ -120,6 +122,7 @@ class BankTransactionController extends Controller
                 ->where('acct.journal_entries.account_id', $account->id)
                 ->selectRaw('COALESCE(SUM(debit_amount),0) as d, COALESCE(SUM(credit_amount),0) as c')
                 ->first();
+
             return [$account->id => round((float) ($debit->d ?? 0) - (float) ($debit->c ?? 0), 2)];
         });
 
@@ -143,10 +146,25 @@ class BankTransactionController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
 
+        $linked = BankAccount::where('company_id', $company->id)
+            ->where('is_active', true)->whereNull('deleted_at')
+            ->whereHas('glAccount', fn ($q) => $q->where('is_active', true)->whereNull('deleted_at'))
+            ->with('glAccount:id,code,name,subtype')
+            ->get();
+
         $cashAccounts = Account::where('company_id', $company->id)->where('is_active', true)
             ->whereNull('deleted_at')->where('subtype', 'cash')->orderBy('code')->get(['id', 'code', 'name']);
         $bankAccounts = Account::where('company_id', $company->id)->where('is_active', true)
             ->whereNull('deleted_at')->where('subtype', 'bank')->orderBy('code')->get(['id', 'code', 'name']);
+
+        // Bank-account records are the user-facing source of truth. Include their
+        // linked GL accounts even when an older record predates subtype cleanup.
+        $linkedBankIds = $linked->filter(fn ($row) => $row->account_type !== 'cash')
+            ->pluck('gl_account_id')->filter()->all();
+        if ($linkedBankIds) {
+            $bankAccounts = Account::whereIn('id', $linkedBankIds)->get(['id', 'code', 'name'])
+                ->concat($bankAccounts->whereNotIn('id', $linkedBankIds))->sortBy('code')->values();
+        }
         $expenseAccounts = Account::where('company_id', $company->id)->where('is_active', true)
             ->whereNull('deleted_at')->where('type', 'expense')->orderBy('code')->get(['id', 'code', 'name']);
 

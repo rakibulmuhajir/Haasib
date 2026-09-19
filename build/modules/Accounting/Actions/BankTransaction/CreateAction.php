@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Validation\ValidationException;
 
@@ -52,9 +53,18 @@ class CreateAction implements PaletteAction
         $account = function (string $id, array $subtypes) use ($companyId) {
             $acc = Account::where('company_id', $companyId)->where('is_active', true)
                 ->whereNull('deleted_at')->whereIn('subtype', $subtypes)->find($id);
-            if (!$acc) {
+            if (! $acc && in_array('bank', $subtypes, true)) {
+                $acc = Account::where('company_id', $companyId)->where('is_active', true)
+                    ->whereNull('deleted_at')
+                    ->whereKey(BankAccount::where('company_id', $companyId)
+                        ->where('is_active', true)->whereNull('deleted_at')
+                        ->where('account_type', '!=', 'cash')->pluck('gl_account_id'))
+                    ->find($id);
+            }
+            if (! $acc) {
                 throw ValidationException::withMessages(['account' => 'Choose an account belonging to this company.']);
             }
+
             return $acc;
         };
 
@@ -100,7 +110,7 @@ class CreateAction implements PaletteAction
                 $bank = $account($params['bank_account_id'], ['bank']);
                 $expense = Account::where('company_id', $companyId)->where('is_active', true)
                     ->whereNull('deleted_at')->where('type', 'expense')->find($params['expense_account_id']);
-                if (!$expense) {
+                if (! $expense) {
                     throw ValidationException::withMessages(['expense_account_id' => 'Choose an expense account belonging to this company.']);
                 }
                 $transaction = $posting->postBankTransaction([

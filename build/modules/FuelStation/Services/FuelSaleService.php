@@ -17,7 +17,6 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class FuelSaleService
@@ -41,13 +40,13 @@ class FuelSaleService
 
             // Get current rate for the fuel item
             $currentRate = RateChange::getCurrentRate($company->id, $data['item_id']);
-            if (!$currentRate) {
+            if (! $currentRate) {
                 throw new \InvalidArgumentException('No current rate found for this fuel item.');
             }
 
             // A blocked buyer is refused a new credit sale outright (an over-limit buyer
             // only warns, on the frontend, and is not enforced here).
-            if ($saleType === SaleMetadata::TYPE_CREDIT && !empty($data['customer_id'])) {
+            if ($saleType === SaleMetadata::TYPE_CREDIT && ! empty($data['customer_id'])) {
                 $customer = Customer::where('company_id', $company->id)->find($data['customer_id']);
                 if ($customer?->is_credit_blocked) {
                     throw new \InvalidArgumentException("{$customer->name} is blocked from further credit sales.");
@@ -70,7 +69,7 @@ class FuelSaleService
             // Create invoice (using actual Invoice model columns)
             $invoice = Invoice::create([
                 'company_id' => $company->id,
-                'customer_id' => $data['customer_id'] ?? null,
+                'customer_id' => $this->resolveCustomerId($company, $saleType, $data),
                 'invoice_number' => $this->generateInvoiceNumber($company->id),
                 'invoice_date' => $data['sale_date'] ?? now()->toDateString(),
                 'due_date' => $this->calculateDueDate($saleType, $data),
@@ -89,7 +88,7 @@ class FuelSaleService
                 'company_id' => $company->id,
                 'invoice_id' => $invoice->id,
                 'line_number' => 1,
-                'description' => $data['description'] ?? 'Fuel sale - ' . ($data['item_id'] ?? 'Unknown'),
+                'description' => $data['description'] ?? 'Fuel sale - '.($data['item_id'] ?? 'Unknown'),
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
                 'discount_rate' => $discount > 0 ? ($discount / $lineTotal) * 100 : 0,
@@ -126,6 +125,43 @@ class FuelSaleService
         });
     }
 
+    private function resolveCustomerId(Company $company, string $saleType, array $data): string
+    {
+        if (! empty($data['customer_id'])) {
+            $customer = Customer::where('company_id', $company->id)
+                ->where('is_active', true)->find($data['customer_id']);
+            if (! $customer) {
+                throw new \InvalidArgumentException('Select an active customer from this company.');
+            }
+
+            return $customer->id;
+        }
+
+        if (! in_array($saleType, [SaleMetadata::TYPE_RETAIL, SaleMetadata::TYPE_BULK], true)) {
+            throw new \InvalidArgumentException('Select a customer for this sale type.');
+        }
+
+        // Serialize first-use creation within the sale transaction. The invoice
+        // still has a real tenant customer; no nullable FK or shared global party.
+        Company::whereKey($company->id)->lockForUpdate()->firstOrFail();
+        $customer = Customer::firstOrCreate([
+            'company_id' => $company->id,
+            'customer_number' => 'CASH-FUEL',
+        ], [
+            'name' => 'Walk-in fuel customer',
+            'customer_type' => Customer::TYPE_WALK_IN,
+            'base_currency' => $company->base_currency ?: 'PKR',
+            'payment_terms' => 0,
+            'is_active' => true,
+            'created_by_user_id' => Auth::id(),
+        ]);
+        if (! $customer->is_active) {
+            throw new \InvalidArgumentException('Activate the walk-in fuel customer or select another customer.');
+        }
+
+        return $customer->id;
+    }
+
     /**
      * A standalone credit fuel-sale invoice entered after the day's close already posted
      * cannot wait for the next close to reduce expected cash. Post the reclassification
@@ -138,12 +174,12 @@ class FuelSaleService
             ->whereDate('transaction_date', $saleDate)
             ->whereNotNull('metadata->posting_snapshot')
             ->first();
-        if (!$close) {
+        if (! $close) {
             return;
         }
 
         $cashAccountId = $close->metadata['posting_snapshot']['cash_account_id'] ?? null;
-        if (!$cashAccountId || !$invoice->customer_id) {
+        if (! $cashAccountId || ! $invoice->customer_id) {
             return;
         }
 
@@ -152,7 +188,7 @@ class FuelSaleService
         $arId = $customer?->ar_account_id ?: $company->default_ar_account_id;
         $ar = Account::where('company_id', $companyId)->where('is_active', true)->where('subtype', 'accounts_receivable')
             ->when($arId, fn ($q) => $q->whereKey($arId), fn ($q) => $q->orderBy('code'))->first();
-        if (!$ar) {
+        if (! $ar) {
             throw new \RuntimeException('Set up a base-currency receivables account for this buyer before recording this sale.');
         }
 
@@ -192,7 +228,7 @@ class FuelSaleService
         Invoice $invoice
     ): void {
         $item = Item::find($itemId);
-        if (!$item) {
+        if (! $item) {
             return; // Item not found, skip inventory tracking
         }
 
@@ -204,14 +240,14 @@ class FuelSaleService
         }
 
         // If no warehouse from pump, try to find tank linked to this fuel item
-        if (!$warehouseId) {
+        if (! $warehouseId) {
             $warehouseId = \App\Modules\Inventory\Models\Warehouse::where('company_id', $companyId)
                 ->where('warehouse_type', 'tank')
                 ->where('linked_item_id', $itemId)
                 ->value('id');
         }
 
-        if (!$warehouseId) {
+        if (! $warehouseId) {
             return; // No warehouse found, skip stock movement
         }
 
@@ -262,6 +298,7 @@ class FuelSaleService
         // Credit sales have payment terms
         if ($saleType === SaleMetadata::TYPE_CREDIT) {
             $days = $data['payment_terms_days'] ?? 30;
+
             return now()->addDays($days)->toDateString();
         }
 
@@ -318,7 +355,7 @@ class FuelSaleService
                 $this->handleInvestorSale($invoice, $data);
                 break;
 
-            // Other types don't need additional logic at sale time
+                // Other types don't need additional logic at sale time
         }
     }
 
@@ -328,7 +365,7 @@ class FuelSaleService
      */
     private function handleAmanatSale(Invoice $invoice, array $data): void
     {
-        if (!$invoice->customer_id) {
+        if (! $invoice->customer_id) {
             throw new \InvalidArgumentException('Amanat sales require a customer.');
         }
 
@@ -349,7 +386,7 @@ class FuelSaleService
      */
     private function handleInvestorSale(Invoice $invoice, array $data): void
     {
-        if (!isset($data['investor_id'])) {
+        if (! isset($data['investor_id'])) {
             throw new \InvalidArgumentException('Investor sales require an investor_id.');
         }
 
@@ -378,7 +415,7 @@ class FuelSaleService
 
         if ($remainingUnits > 0) {
             throw new \InvalidArgumentException(
-                "Investor does not have enough units. Requested: {$unitsToConsume}, Available: " .
+                "Investor does not have enough units. Requested: {$unitsToConsume}, Available: ".
                 ($unitsToConsume - $remainingUnits)
             );
         }

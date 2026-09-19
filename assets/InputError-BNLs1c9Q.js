@@ -1,0 +1,1 @@
+import{d as t,c as s,m as r,t as o,o as a,_ as n}from"./app-D_LsKzRF.js";const c={key:0,class:"input-error",role:"alert"},m=t({__name:"InputError",props:{message:{}},setup(e){return(p,_)=>e.message?(a(),s("p",c,o(e.message),1)):r("",!0)}}),l=n(m,[["__scopeId","data-v-2ec72269"]]);export{l as I};

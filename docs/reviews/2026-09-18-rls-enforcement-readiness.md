@@ -1,6 +1,6 @@
 # Row level security: enforcement readiness
 
-**Date:** 18 September 2026
+**Date:** 18 September 2026, updated 19 September 2026
 **Status:** prepared, **not switched on**, and gated behind `RLS_ENFORCEMENT=on`
 so it cannot ride along with an ordinary deploy.
 
@@ -21,46 +21,6 @@ behaviour at all, in either direction.
 This matters because the two environments fail differently. Verifying on dev
 tells you nothing about what enforcement will do in production.
 
-## What has been done
-
-| | |
-|---|---|
-| `34d9173a` | Provisions `haasib_app` where it does not exist — not a superuser, no `BYPASSRLS`. Production already had this role and already connects as it; the migration matters for other environments. Note it **does** own production's tables, which is why FORCE is the switch. |
-| `b914d0d0` | Carries company context into every write path that runs outside an HTTP request: console commands, seeders, queued jobs. |
-| `06b8e6d4` | Converted ~112 `exists:` validation rules off the schema-named connections, which are separate sessions and carry no company context. |
-| `c250a70d` | The same for 16 `unique:` rules, which had never once fired under test for the same reason. |
-
-None of these change runtime behaviour. `.env` still reads
-`DB_USERNAME=postgres`, so the role exists but is unused.
-
-## What blocks the switch
-
-Running the full PHP suite as `haasib_app` against the test database:
-
-```
-Tests: 67 failed, 151 passed (741 assertions)
-```
-
-The failures are overwhelmingly one shape:
-
-```
-SQLSTATE[42501]: Insufficient privilege: 7 ERROR:
-new row violates row-level security policy for table "..."
-```
-
-58 of them. These are write paths — mostly test fixtures, but each one has to
-be examined rather than assumed — that insert rows without
-`app.current_company_id` matching the row's own `company_id`. Under a superuser
-they succeed silently; under `haasib_app` PostgreSQL refuses them. **This is the
-work that remains**, and it is not a configuration problem: until those paths
-set context, switching the role turns a passing suite into a failing
-application.
-
-One further failure is structural: the migration that creates the role cannot
-run as the role it creates (`permission denied to create role`). Role creation
-belongs to a privileged connection — `pgsql_migrator` — not to the application
-connection.
-
 ## Why the failures are dangerous rather than merely noisy
 
 A read without company context returns **nothing**, and reports success. It does
@@ -71,28 +31,205 @@ write without context does error, which is the louder and safer half.
 This asymmetry is why the switch should not be made hopefully. An incomplete
 rollout produces screens that look fine and are silently blank for some tenants.
 
-## How to perform the switch, when the blocker is cleared
+## The tenant context guard (development and test only)
+
+`app/Support/Database/TenantContextGuard.php` closes the silent half. It watches
+the query stream and raises when a query touches a company-scoped table while
+the PostgreSQL session carries no `app.current_company_id` and is not in the
+policies' super-admin escape hatch.
+
+**Company-scoped** means: the table has a `company_id` column, has row level
+security enabled, and has at least one policy whose expression reads
+`app.current_company_id`. That is computed from `pg_policy` at runtime, so it
+tracks the schema rather than a hand-maintained list, and it deliberately
+excludes `auth.companies` — looking a company up by slug with no context set is
+how the application *enters* a company.
+
+It keeps a cheap in-process mirror of the session settings so the hot path costs
+no round trip, and when the mirror suspects a violation it asks the session
+itself before raising. Context set by a path the guard never saw is therefore not
+mistaken for no context at all.
+
+**Switching it on and off**
+
+```bash
+# off (the default everywhere, and forced off in production)
+DB_TENANT_CONTEXT_GUARD=off
+
+# complain in the log and carry on
+DB_TENANT_CONTEXT_GUARD=log
+
+# raise, so a violation is a test failure or a stack trace at a desk
+DB_TENANT_CONTEXT_GUARD=throw
+```
+
+Set it in `.env` for a dev server, or inline for one run:
+
+```bash
+DB_TENANT_CONTEXT_GUARD=throw php artisan test
+DB_TENANT_CONTEXT_GUARD=log php artisan octane:start --server=frankenphp --port=9001
+```
+
+`config/database.php` holds `tenant_context_guard.mode` and
+`tenant_context_guard.connections` (default: the app's default connection; the
+schema-named connections and `pgsql_migrator` are separate sessions and are not
+guarded). `AppServiceProvider` forces the mode to `off` when
+`app()->environment('production')`, so the guard cannot be switched on there by
+an environment variable alone.
+
+**What it catches.** Any read or write reaching a company-scoped table through
+Laravel's connection with no company context — including the reads that would
+otherwise return an empty result and report success. It found
+`DemoSupport::asCompany` clearing the context instead of restoring it, a fault
+whose only other symptom was a seeded demo company with no accounting periods.
+
+**What it cannot see.**
+
+- Whether the context that *is* set is the **right** company. It answers "is
+  there a tenant context", not "is it the correct one". Cross-company leakage
+  with a context set is invisible to it; only the policies stop that.
+- Raw PDO used outside Laravel's connection, which emits no `QueryExecuted`.
+- Queries on connections other than the guarded ones.
+- Anything that never reaches the database — a cached response, a query
+  short-circuited in PHP.
+- Production. By design.
+
+## Running the suite as the application role
+
+The suite normally runs as `postgres`, which proves nothing about enforcement.
+To run it as the least-privilege role production connects as, with enforcement
+actually applied:
+
+```bash
+cd build
+DB_USERNAME=haasib_app DB_MIGRATOR_USERNAME=postgres RLS_ENFORCEMENT=on php artisan test
+```
+
+- `DB_USERNAME=haasib_app` — the application connection becomes the restricted
+  role. It is not a superuser and has no `BYPASSRLS`.
+- `DB_MIGRATOR_USERNAME=postgres` — DDL and role creation run on the
+  `pgsql_migrator` connection, as they do in an environment where the
+  application role does not own the schema. `RefreshApplicationDatabase`
+  already migrates on that connection.
+- `RLS_ENFORCEMENT=on` — runs the two gated migrations: the one that provisions
+  `haasib_app` and its grants, and the one that FORCEs every RLS-enabled table
+  and guards the policy expressions.
+
+Both roles must exist locally and be able to log in. Only `haasib` and
+`haasib_test` are ever touched.
+
+Two tests skip under the application role — one creates a throwaway database
+role, one runs a migration's `up()` in place. Both need privileges production
+would never grant the application connection; `requiresPrivilegedDatabaseRole()`
+in `tests/Pest.php` is how they say so.
+
+## What the run found
+
+The first run as `haasib_app` with enforcement applied:
+
+```
+Tests:    352 failed, 546 passed (3014 assertions)
+```
+
+Almost all of them `SQLSTATE[42501] ... new row violates row-level security
+policy`. Each one was examined rather than assumed. The split:
+
+| | count | |
+|---|---|---|
+| **(a) fixture never set company context** | 30 test files | A test that creates a company has to enter it before writing that company's rows, exactly as the application does. `enterCompany()` and `addCompanyMemberRow()` in `tests/Pest.php` give fixtures one way to say that. |
+| **(b) application code writing or reading without context** | **5** | These would have broken production. |
+| **(c) policy wrong** | 0 | The unguarded `::uuid` casts (`pay.salary_advances`, `pay.salary_advance_recoveries`, `fuel.dip_sticks`, `umrah.operation_views`) are already rewritten by the enforce migration's `guardPolicyExpressions()`, and `RowLevelSecurityTest` asserts no policy is left casting the GUC without a null guard. Nothing further was needed, and no policy was loosened. |
+
+### The five (b) faults — what would have broken production
+
+1. **`app/Http/Controllers/CompanyController.php:118`** — `store()` wrote the
+   owner's `auth.company_user` row, the company's RBAC roles and its secondary
+   currency while the session was still in whichever company the creator came
+   from, or in none at all. **Company creation was the first thing enforcement
+   would have broken.** Now wrapped in `CompanyContext::withContext($company, …)`.
+
+2. **`app/Services/CompanyBootstrapService.php:30`** — built a company's chart of
+   accounts, default bank and cash accounts, posting templates and first fiscal
+   year with no company context at all. Every one of those writes would have been
+   refused, leaving a company that exists and cannot be used.
+
+3. **`modules/Umrah/Services/VisaVendorParty.php:51`** — created the supplier
+   inside `withContext` and then read it back **outside** it, so `findOrFail`
+   reported a row it had just created as missing.
+
+4. **`database/seeders/Demo/DemoSupport.php:393`** — `asCompany()` called
+   `clearContext()` on the way out instead of restoring the context the caller
+   had. Everything after the first product-setup call ran with no company
+   context: reads returned nothing, writes were refused. This is the fault the
+   tenant context guard found.
+
+5. **Data migrations, all of them** — a migration that enumerates
+   `auth.companies` and backfills their rows reads **zero rows** under
+   enforcement and reports a clean run having touched nothing. Nothing in a
+   deploy log would show it.
+   `AppServiceProvider::runMigrationsAcrossEveryCompany()` now puts the
+   migration session into the policies' own super-admin escape hatch for the
+   duration of `MigrationsStarted` … `MigrationsEnded`. A migration is
+   cross-company work by definition; this is the same hatch console commands and
+   seeders already use, not a bypass.
+
+### Two deliberate behaviour changes
+
+- **A company a user does not belong to now answers 404, not 403.** Under the
+  rescoped `companies_select_policy` the company is not visible to a non-member,
+  so `IdentifyCompany` cannot find it and aborts before RBAC is consulted. This
+  is stricter — it stops leaking the existence of a company — and the affected
+  tests assert "refused" rather than a specific code, because which one you get
+  depends on whether enforcement is applied to the database under test.
+- **`RowLevelSecurityTest` skips unless enforcement is applied.** Without the
+  gated migrations `haasib_app` holds no grants at all, so those tests would be
+  measuring the absence of a `GRANT` rather than the presence of isolation.
+
+## Proof of isolation
+
+`tests/Feature/Security/RowLevelSecurityTest.php` connects as `haasib_app` (via
+`SET LOCAL ROLE`, inside the test's own transaction) and asserts, against real
+rows:
+
+- with context set to company A, `acct.customers` returns A's rows and not B's,
+  and the same query with context set to B returns B's and not A's;
+- with **no** context, the same table returns **zero rows and no error** — the
+  GUC reads as the empty string, which is the case that used to raise
+  `invalid input syntax for type uuid`;
+- a write naming another company's `company_id` is refused;
+- a company is visible to its own members and to nobody else;
+- every RLS-enabled table also FORCEs it, and no policy casts the tenant GUC
+  without a null guard.
+
+## How to perform the switch
 
 Production is already connected as `haasib_app`, so **no `.env` role change is
 needed** — the switch is the `FORCE` itself.
 
-1. Confirm the suite passes as `haasib_app` on the test database. It does not
-   today: 67 failures, almost all `new row violates row-level security policy`.
-2. Fix those write paths. That is the work; everything else is a step.
-3. On a staging copy of production data, run the migration with
-   `RLS_ENFORCEMENT=on` and exercise the app: post a close, take a payment,
-   record a bill. Writes are the risk, and they fail loudly.
-4. Then production, in a maintenance window, with the rollback below to hand.
+1. Confirm the suite passes as `haasib_app` on the test database, with the exact
+   command above.
+2. On a staging copy of production data, run the migration with
+   `RLS_ENFORCEMENT=on` and exercise the app: **create a company**, post a close,
+   take a payment, record a bill, run a report that should have rows. Writes fail
+   loudly; the reads are what need eyes on them.
+3. Then production, in a maintenance window, with the rollback below to hand.
+
+`RLS_ENFORCEMENT` stays unset everywhere by default. Setting it is the
+deliberate act.
 
 ## Rollback
 
 `ALTER TABLE <each> NO FORCE ROW LEVEL SECURITY` returns every table to
-owner-bypass, which is exactly today's behaviour. The migration's `down()` does
-this. No data changes, and the policies themselves can stay in place.
+owner-bypass, which is exactly today's behaviour. The enforce migration's
+`down()` does this for every forced table. No data changes, and the policies
+themselves can stay in place.
 
-## Recommendation
+## What has been done
 
-Do not switch until the 67 failures are resolved and the suite passes as
-`haasib_app`. The preparatory work is safe to merge and deploy as it stands: it
-changes no runtime behaviour, and it means the eventual switch is a
-configuration change rather than a rewrite.
+| | |
+|---|---|
+| `34d9173a` | Provisions `haasib_app` where it does not exist — not a superuser, no `BYPASSRLS`. |
+| `b914d0d0` | Carries company context into console commands, seeders and queued jobs. |
+| `06b8e6d4` | Converted ~112 `exists:` validation rules off the schema-named connections. |
+| `c250a70d` | The same for 16 `unique:` rules. |
+| *(this branch)* | The tenant context guard; the five (b) fixes; the fixture work; the running instructions above. |

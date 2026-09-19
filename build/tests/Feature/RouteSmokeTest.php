@@ -58,6 +58,14 @@ test('every GET page route renders without a server error', function () {
     $user = User::where('email', 'demo@haasib.app')->firstOrFail();
     $this->actingAs($user);
 
+    // Under enforced row level security a company is visible to its members
+    // and to nobody else, and membership is read from app.current_user_id.
+    // IdentifyCompany sets it on every request; outside one, the test must.
+    \Illuminate\Support\Facades\DB::select(
+        "SELECT set_config('app.current_user_id', ?, false)",
+        [$user->id]
+    );
+
     $trading = Company::where('slug', DemoTradingCompanySeeder::SLUG)->firstOrFail();
     $fuel = Company::where('slug', DemoFuelStationSeeder::SLUG)->firstOrFail();
     $umrah = Company::where('slug', DemoTravelAgencySeeder::SLUG)->firstOrFail();

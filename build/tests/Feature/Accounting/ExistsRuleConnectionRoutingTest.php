@@ -235,7 +235,10 @@ test('a bank transaction toggle naming a transaction from another company is not
         ['transaction_id' => $other['bankTransaction']->id]
     );
 
-    $response->assertStatus(404);
+    // Refused either way. Without enforcement the exists rule sees the other
+    // company's row and the controller's own scoped findOrFail 404s; with
+    // enforcement the row is invisible, so validation rejects it first.
+    expect($response->getStatusCode())->toBeIn([404, 422]);
 });
 
 /**

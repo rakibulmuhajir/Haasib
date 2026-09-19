@@ -343,6 +343,7 @@ test('movement csv respects summary roles agent privacy and tenant isolation', f
     operationsAddMember($f['company'], $accountant, 'accountant');
     $agentUser = User::factory()->withoutTwoFactor()->create();
     operationsAddMember($f['company'], $agentUser, 'agent');
+    enterCompany($f['company']);
     $f['agent']->update(['user_id' => $agentUser->id]);
     CompanyContext::setContext($f['company']);
     $url = '/'.$f['company']->slug.'/umrah/operations/report/csv?'.http_build_query(operationsFilters());

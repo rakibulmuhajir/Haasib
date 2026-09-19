@@ -210,6 +210,10 @@ test('a row owner never waits on the close lock and retries after the other proc
     ['vendor' => $vendor] = apVendorAndBill($f);
     $id = rawInsertBillPayment(DB::connection()->getPdo(), $f, $vendor->id, $f['accounts']['1050']->id, '2026-09-15', 'RACE-1');
     DB::commit(); DB::beginTransaction();
+    // Committing runs CompanyContextService's deferred context reset, so the
+    // session comes back out of the company. Re-enter it, as a real request
+    // would.
+    enterCompany($f['company']);
     $pdo = DB::connection()->getPdo();
     $pdo->exec('SAVEPOINT race_owner');
     DB::table('acct.bill_payments')->where('id', $id)->lockForUpdate()->first();

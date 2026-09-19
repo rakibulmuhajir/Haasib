@@ -313,15 +313,25 @@ test('an employee or partner belonging to another company is refused and nothing
 
     enterCompany($f['company']);
 
-    expect(fn () => dispatchOpeningBalance($f, [
-        'as_of_date' => '2026-08-31',
-        'employees' => [['employee_id' => $otherEmployee->id, 'amount' => 5000]],
-    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    // Refused either way: without enforcement the row is found and rejected as
+    // belonging to another company; with enforcement it is never visible, and
+    // validation rejects the id outright.
+    foreach ([
+        ['employees' => [['employee_id' => $otherEmployee->id, 'amount' => 5000]]],
+        ['partners' => [['partner_id' => $otherPartner->id, 'amount' => 5000]]],
+    ] as $rows) {
+        $refusal = null;
 
-    expect(fn () => dispatchOpeningBalance($f, [
-        'as_of_date' => '2026-08-31',
-        'partners' => [['partner_id' => $otherPartner->id, 'amount' => 5000]],
-    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        try {
+            dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31'] + $rows);
+        } catch (\Throwable $e) {
+            $refusal = $e;
+        }
+
+        expect($refusal)->toBeInstanceOf(\Throwable::class)
+            ->and($refusal instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                || $refusal instanceof \Illuminate\Validation\ValidationException)->toBeTrue();
+    }
 
     enterCompany($otherCompany);
     expect(SalaryAdvance::where('employee_id', $otherEmployee->id)->count())->toBe(0);

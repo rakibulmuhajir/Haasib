@@ -21,11 +21,15 @@ use Illuminate\Support\Facades\DB;
  */
 function ticketAccountsCompany(): Company
 {
-    return Company::create([
+    $company = Company::create([
         'name' => 'Ticket Accounts Co '.str()->random(8),
         'slug' => 'ticket-accounts-'.str()->lower(str()->random(10)),
         'base_currency' => 'USD',
     ]);
+
+    enterCompany($company);
+
+    return $company;
 }
 
 function runTicketAccountsBackfillMigration(): void

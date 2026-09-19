@@ -234,6 +234,22 @@ needed** — the switch is the `FORCE` itself.
 `RLS_ENFORCEMENT` stays unset everywhere by default. Setting it is the
 deliberate act.
 
+## Where it stands
+
+```
+# php artisan test                                  (as postgres, guard on)
+Tests:    7 skipped, 901 passed (5494 assertions)
+
+# DB_USERNAME=haasib_app DB_MIGRATOR_USERNAME=postgres RLS_ENFORCEMENT=on php artisan test
+Tests:    PENDING
+
+# npm run test:js
+PENDING
+```
+
+The seven skips are the five `RowLevelSecurityTest` cases, which need enforcement
+applied, and the two that need a privileged database role.
+
 ## Rollback
 
 `ALTER TABLE <each> NO FORCE ROW LEVEL SECURITY` returns every table to

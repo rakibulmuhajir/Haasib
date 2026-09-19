@@ -147,7 +147,9 @@ test('as the application role a missing company context returns nothing rather t
     // raise "invalid input syntax for type uuid".
     expect(DB::selectOne("SELECT current_setting('app.current_company_id', true) AS v")->v)->toBe('');
 
-    $count = asAppRole(fn () => DB::table('acct.customers')->count());
+    // Reading with no company context is the assertion, not an accident.
+    $count = app(\App\Support\Database\TenantContextGuard::class)
+        ->ignoring(fn () => asAppRole(fn () => DB::table('acct.customers')->count()));
 
     expect($count)->toBe(0);
 });

@@ -408,6 +408,9 @@ test('pricing writes are forbidden for accountant operations and agent roles', f
 test('another company cannot supply the vendor agent or category for a pricing rule', function () {
     $f = commercialPricingFixture();
     $foreign = ticketingCompany();
+    // VisaVendorParty reads its company from CompanyContext's own state, not
+    // from the GUC, so the service has to be moved as well as the session.
+    CompanyContext::setContext($foreign->company);
     $foreignVendor = VisaVendor::create([
         'company_id' => $foreign->company->id, 'vendor_number' => 'FOREIGN-PRICE', 'name' => 'Other Company Supplier',
         'service_type' => VisaVendor::SERVICE_VISA_PROVIDER, 'adult_retail_amount' => 999, 'adult_cost_amount' => 500,

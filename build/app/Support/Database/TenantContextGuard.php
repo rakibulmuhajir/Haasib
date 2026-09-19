@@ -62,6 +62,24 @@ class TenantContextGuard
     /**
      * @param  list<string>  $connections
      */
+    /**
+     * Tables you read to find out which company you are in.
+     *
+     * auth.company_user is company-scoped once the enforce migration rescopes
+     * it, but its policy also admits the caller's own membership rows by
+     * app.current_user_id -- which is the point: IdentifyCompany and
+     * CheckFirstTimeUser read it on every request *before* any company context
+     * exists, to decide which company the request is for. Flagging that is
+     * noise, not a finding. auth.companies is excluded already, by having no
+     * company_id column of its own.
+     *
+     * @var list<string>
+     */
+    private const BOOTSTRAP_TABLES = ['auth.company_user'];
+
+    /**
+     * @param  list<string>  $connections
+     */
     public function __construct(
         private readonly string $mode = self::MODE_OFF,
         private readonly array $connections = [],
@@ -301,6 +319,11 @@ class TenantContextGuard
 
         foreach ($rows as $row) {
             $qualified = $row->schema_name.'.'.$row->table_name;
+
+            if (in_array(strtolower($qualified), self::BOOTSTRAP_TABLES, true)) {
+                continue;
+            }
+
             $lookup[strtolower($qualified)] = $qualified;
             // An unqualified reference resolves through search_path; treat a
             // bare name as scoped if any schema has a scoped table by it.

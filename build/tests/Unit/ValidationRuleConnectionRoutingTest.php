@@ -21,22 +21,34 @@
  * is textual, so the cheap comprehensive check beats thirty expensive specific ones.
  */
 
-use Illuminate\Support\Facades\File;
-
 /** Connection names in config/database.php that also read as schema prefixes. */
 const AMBIGUOUS_PREFIXES = ['acct', 'auth', 'inv', 'pay', 'tax', 'fuel', 'hsp', 'crm', 'umrah'];
 
+/**
+ * Plain SPL rather than the File facade and base_path(): tests/Unit does not boot the
+ * application container (see tests/Pest.php, which binds TestCase to Feature only), so a
+ * facade here dies with "Target class [files] does not exist".
+ */
+function validationRuleRoot(): string
+{
+    return dirname(__DIR__, 2);
+}
+
 function validationRuleFiles(): array
 {
-    $roots = array_filter([
-        base_path('app'),
-        base_path('modules'),
-    ], fn ($path) => is_dir($path));
-
+    $root = validationRuleRoot();
     $files = [];
-    foreach ($roots as $root) {
-        foreach (File::allFiles($root) as $file) {
-            if ($file->getExtension() === 'php') {
+
+    foreach (['app', 'modules'] as $directory) {
+        $path = $root.DIRECTORY_SEPARATOR.$directory;
+        if (! is_dir($path)) {
+            continue;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[] = $file->getPathname();
             }
         }
@@ -64,7 +76,7 @@ test('no validation rule names a schema-qualified table, which Laravel reads as 
             }
             foreach ($patterns as $pattern) {
                 if (preg_match($pattern, $line)) {
-                    $relative = str_replace(base_path().DIRECTORY_SEPARATOR, '', $path);
+                    $relative = str_replace(validationRuleRoot().DIRECTORY_SEPARATOR, '', $path);
                     $offenders[] = $relative.':'.($number + 1).'  '.trim($line);
                     break;
                 }

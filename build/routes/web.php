@@ -153,7 +153,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/customers/{customer}', [CustomerController::class, 'show'])->whereUuid('customer')->name('customers.show');
         Route::get('/{company}/customers/{customer}/edit', [CustomerController::class, 'edit'])->whereUuid('customer')->name('customers.edit');
         Route::get('/{company}/customers/{customer}/tax-default', [CustomerController::class, 'taxDefault'])->whereUuid('customer')->name('customers.tax-default');
-        Route::put('/{company}/customers/{customer}', [CustomerController::class, 'update'])->whereUuid('customer')->name('customers.update');
+        // PUT and PATCH both, because the page has two kinds of caller. The Edit form sends
+        // the whole record with PUT; the inline fields on Show send one key at a time with
+        // PATCH, via useInlineEdit. The endpoint already supports the partial write - every
+        // rule in the FormRequest is nullable and update() passes validated() straight
+        // through - so registering PUT alone was what made every inline save return 405.
+        Route::match(['put', 'patch'], '/{company}/customers/{customer}', [CustomerController::class, 'update'])->whereUuid('customer')->name('customers.update');
         Route::delete('/{company}/customers/{customer}', [CustomerController::class, 'destroy'])->whereUuid('customer')->name('customers.destroy');
 
         // Invoice routes (Accounting module)
@@ -208,7 +213,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/vendors/{vendor}', [VendorController::class, 'show'])->whereUuid('vendor')->name('vendors.show');
         Route::get('/{company}/vendors/{vendor}/edit', [VendorController::class, 'edit'])->whereUuid('vendor')->name('vendors.edit');
         Route::get('/{company}/vendors/{vendor}/tax-default', [VendorController::class, 'taxDefault'])->whereUuid('vendor')->name('vendors.tax-default');
-        Route::put('/{company}/vendors/{vendor}', [VendorController::class, 'update'])->whereUuid('vendor')->name('vendors.update');
+        // PUT and PATCH both, because the page has two kinds of caller. The Edit form sends
+        // the whole record with PUT; the inline fields on Show send one key at a time with
+        // PATCH, via useInlineEdit. The endpoint already supports the partial write - every
+        // rule in the FormRequest is nullable and update() passes validated() straight
+        // through - so registering PUT alone was what made every inline save return 405.
+        Route::match(['put', 'patch'], '/{company}/vendors/{vendor}', [VendorController::class, 'update'])->whereUuid('vendor')->name('vendors.update');
         Route::delete('/{company}/vendors/{vendor}', [VendorController::class, 'destroy'])->whereUuid('vendor')->name('vendors.destroy');
 
         // Bills

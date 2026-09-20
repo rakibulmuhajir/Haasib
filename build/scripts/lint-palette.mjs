@@ -421,6 +421,43 @@ function scanDeadSlots(files) {
  */
 const GRAMMAR = [
     {
+        key: 'inputWithoutId',
+        label: 'fields with no id, so nothing can label or address them',
+        /*
+         * shadcn's Input is an unopinionated primitive: it forwards an id but never
+         * invents one. So a field only becomes addressable if the page remembers to pass
+         * one, and most do not. The cost is accessibility first -- a <Label> cannot point
+         * at a field that has no id, so a screen reader announces nothing and clicking the
+         * label does not focus the input. Testability is the second-order symptom: the
+         * Daily Close screen had 35 numeric fields and not one could be selected by
+         * anything but its position on the page.
+         *
+         * Prefer FormField, which generates the id and wires the label to it.
+         */
+        allow: [
+            'resources/js/components/ui/input/Input.vue',
+            'resources/js/components/FormField.vue',
+            'resources/js/pages/Design/Index.vue',
+        ],
+        pattern: /<Input(?![\w-])(?:(?!>)(?!:?id=)[\s\S])*>/g,
+        fix: 'Use FormField, or pass an id and point the Label at it with for=.',
+    },
+    {
+        key: 'labelWithoutFor',
+        label: 'labels pointing at nothing',
+        /*
+         * A <Label> with no for= is decoration. It reads as a label to a sighted user and
+         * as nothing at all to everyone else, and it does not focus the field when clicked.
+         */
+        allow: [
+            'resources/js/components/ui/label/Label.vue',
+            'resources/js/components/FormField.vue',
+            'resources/js/pages/Design/Index.vue',
+        ],
+        pattern: /<Label(?![\w-])(?:(?!>)(?!:?for=)[\s\S])*>/g,
+        fix: 'Point the label at its field: <Label for="x"> with <Input id="x">, or use FormField.',
+    },
+    {
         key: 'rawTable',
         label: 'hand-written <table> elements',
         /*

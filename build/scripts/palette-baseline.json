@@ -11,7 +11,9 @@
     "statusAsText": 0,
     "statusSlotAsText": 0,
     "handRolledMoney": 0,
-    "deadSlot": 0
+    "deadSlot": 0,
+    "inputWithoutId": 428,
+    "labelWithoutFor": 654
   },
   "note": "May only decrease. Run --update after removing violations."
 }

@@ -114,6 +114,26 @@ npm run format:check
 
 ---
 
+## Seven-day fuel station scenario
+
+A controlled week at a fixed station, every figure decided in advance so each day's expected
+result is known before the software is asked.
+
+```powershell
+# Build the station (idempotent — purges and rebuilds its own company)
+php artisan db:seed --force --class='Database\Seeders\ScenarioFuelStationSeeder'
+
+# The same week through the service layer — 10 assertions, all passing
+php artisan test tests/Feature/FuelStation/SevenDayOperationsTest.php
+```
+
+Login `scenario@haasib.test` / `scenario-password`, company `scenario-mehran-fuel`.
+
+Step-by-step instructions for driving it through the UI, with the expected outcome after
+each of the seven days, are in **`docs/fuel-seven-day-e2e.md`**.
+
+---
+
 ## Rebuilding the dev database
 
 Destroys all dev data. **Take a dump first**: `pg_dump -U postgres haasib > haasib.sql`

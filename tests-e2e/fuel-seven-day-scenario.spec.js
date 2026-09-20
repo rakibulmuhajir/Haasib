@@ -72,6 +72,22 @@ const dismissDraft = async (page) => {
   }
 };
 
+const clickIfPresent = async (page, name) => {
+  const btn = page.getByRole('button', { name }).first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+    await page.waitForTimeout(600);
+  }
+};
+
+const setFieldIfPresent = async (page, testId, value) => {
+  const field = page.locator(`[data-testid="${testId}"]`);
+  if (await field.count()) {
+    await field.fill('');
+    await field.fill(String(value));
+  }
+};
+
 const setField = async (page, testId, value) => {
   const field = page.locator(`[data-testid="${testId}"]`);
   await expect(field, `field ${testId} should exist`).toBeVisible({ timeout: 10000 });
@@ -79,9 +95,14 @@ const setField = async (page, testId, value) => {
   await field.fill(String(value));
 };
 
+/**
+ * The five steps are shadcn Tabs, so each trigger carries role="tab", NOT role="button".
+ * getByRole('button', …) matches nothing here and times out looking — which reads exactly
+ * like the step being gated behind an earlier one. It is not; there is no gating at all.
+ */
 const openSection = async (page, name) => {
-  await page.getByRole('button', { name, exact: false }).first().click();
-  await page.waitForTimeout(400);
+  await page.getByRole('tab', { name }).click({ timeout: 15000 });
+  await page.waitForTimeout(500);
 };
 
 /** Everything addressable in the current section, for the sections without hooks yet. */
@@ -111,6 +132,8 @@ test.describe('Mehran Filling Station — seven controlled days', () => {
 
   test('post the week through the UI and read the results back', async ({ page }) => {
     const discovery = [];
+    // Tall enough that the tab strip and the save buttons are never below the fold.
+    await page.setViewportSize({ width: 1440, height: 1200 });
     await login(page);
 
     // The company must be the scenario one, not whatever was last visited.
@@ -120,6 +143,8 @@ test.describe('Mehran Filling Station — seven controlled days', () => {
 
     const meters = [...METER_START];
     const dips = { 0: OPENING.petrol, 1: OPENING.diesel };
+    let drawer = OPENING.cash;
+    const results = [];
 
     for (let day = 0; day < DAYS; day++) {
       const [petrolLitres, dieselLitres, petrolShrink, dieselShrink] = VOLUMES[day];
@@ -140,17 +165,17 @@ test.describe('Mehran Filling Station — seven controlled days', () => {
         const closing = opening + litres;
         meters[n] = closing;
 
+        // Both meter pairs. The day's sales total is derived from the readings, and
+        // leaving the manual pair at zero made the form insist the day had no sales.
         await setField(page, `nozzle-${n}-opening-electronic`, opening);
         await setField(page, `nozzle-${n}-closing-electronic`, closing);
+        await setFieldIfPresent(page, `nozzle-${n}-opening-manual`, opening);
+        await setFieldIfPresent(page, `nozzle-${n}-closing-manual`, closing);
         await setField(page, `nozzle-${n}-sale-rate`, RATE[fuel](day));
       }
       discovery.push(await describeSection(page, `day${day}-meter-sales`));
 
-      const saveMeters = page.getByRole('button', { name: /Save Meter Sales/i }).first();
-      if (await saveMeters.isVisible().catch(() => false)) {
-        await saveMeters.click();
-        await page.waitForTimeout(600);
-      }
+      await clickIfPresent(page, /Save Meter Sales/i);
 
       // --- Tank dip --------------------------------------------------------
       await openSection(page, /Tank Dip/i);
@@ -169,28 +194,48 @@ test.describe('Mehran Filling Station — seven controlled days', () => {
         }
       }
       discovery.push(await describeSection(page, `day${day}-tank-dip`));
+      await clickIfPresent(page, /Save Tank Dip/i);
 
-      // --- Cash in / cash out ----------------------------------------------
-      // These sections carry no test hooks yet, so record them rather than guess.
+      // --- Cash in ---------------------------------------------------------
+      // Opening cash is yesterday's drawer. Credit sales, expenses, amanat and banking
+      // all live behind "Add" buttons that build dynamic rows with no hooks yet, so this
+      // run covers the all-cash day: everything the pump took stays in the drawer.
       await openSection(page, /Cash In/i);
+      await setField(page, 'opening-cash', drawer);
       discovery.push(await describeSection(page, `day${day}-cash-in`));
+      await clickIfPresent(page, /Save Cash In/i);
 
+      // --- Cash out --------------------------------------------------------
       await openSection(page, /Cash Out/i);
       discovery.push(await describeSection(page, `day${day}-cash-out`));
+      await clickIfPresent(page, /Save Cash Out/i);
 
-      // --- Review ----------------------------------------------------------
+      // --- Review and post -------------------------------------------------
       await openSection(page, /Review/i);
+      const fuelRevenue = petrolLitres * RATE.petrol(day) + dieselLitres * RATE.diesel(day);
+      const closing = Number((drawer + fuelRevenue).toFixed(2));
+      await setField(page, 'closing-cash', closing);
       discovery.push(await describeSection(page, `day${day}-review`));
+
+      await page.getByRole('button', { name: /Post Daily Close/i }).first().click({ timeout: 20000 });
+      await page.waitForTimeout(2500);
+
+      // Quote the page's own complaint rather than just saying "did not post".
+      const problems = await page.evaluate(() => {
+        const lines = document.body.innerText.split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean);
+        return lines.filter((l) => /must be|cannot|invalid|failed|required|exceed|does not/i.test(l)).slice(0, 8);
+      });
+      expect(problems, `day ${day} did not post: ${JSON.stringify(problems)}`).toEqual([]);
+
+      results.push({ day, date, fuelRevenue, opening: drawer, closing });
+      drawer = closing;
 
       fs.writeFileSync('tests-e2e/_scenario-discovery.json', JSON.stringify(discovery, null, 2));
 
-      // Only the first day is asserted end to end until the cash sections have hooks.
-      if (day === 0) {
-        const reviewText = await page.evaluate(() => document.body.innerText);
-        expect(reviewText).toMatch(/Review/i);
-      }
     }
 
     fs.writeFileSync('tests-e2e/_scenario-discovery.json', JSON.stringify(discovery, null, 2));
+    fs.writeFileSync('tests-e2e/_scenario-results.json', JSON.stringify(results, null, 2));
+    expect(results).toHaveLength(DAYS);
   });
 });

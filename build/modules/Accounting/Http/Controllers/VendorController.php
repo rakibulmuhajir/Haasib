@@ -137,6 +137,11 @@ class VendorController extends Controller
             ->take(25)
             ->get(['id', 'payment_number', 'payment_date', 'amount', 'currency', 'payment_method', 'reference_number']);
 
+        // The running ledger, the payables mirror of the buyer statement. Built from the
+        // canonical AP records rather than the two lists above, which show recent activity
+        // but never a balance.
+        $statement = app(\App\Modules\Accounting\Services\VendorStatementService::class)->statement($record);
+
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/vendors/Show', [
@@ -155,6 +160,8 @@ class VendorController extends Controller
             ],
             'bills' => $bills,
             'payments' => $payments,
+            'statement' => $statement['rows'],
+            'statementClosingBalance' => $statement['closing_balance'],
             'currencies' => $currencies,
             'canEdit' => true,
         ]);

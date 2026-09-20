@@ -102,15 +102,40 @@ interface PaymentRef {
   reference_number: string | null
 }
 
+type StatementRow = {
+  date: string | null
+  type: string
+  reference: string | null
+  description: string
+  debit: number
+  credit: number
+  balance: number
+  source_id: string | null
+  link: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   vendor: VendorRef
   summary: SummaryRef
   bills: BillRef[]
   payments: PaymentRef[]
+  statement: StatementRow[]
+  statementClosingBalance: number
   currencies: CurrencyOption[]
   canEdit: boolean
 }>()
+
+const statementColumns = [
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
+  { key: 'debit', label: 'Paid', kind: 'out' as const },
+  { key: 'credit', label: 'Billed', kind: 'in' as const },
+  { key: 'balance', label: 'Balance owed', kind: 'amount' as const },
+]
+
+const statementRows = computed(() => props.statement ?? [])
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -381,6 +406,40 @@ const cancelAddressEdit = () => {
                 Vendor Credit
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <!-- Statement of account: the running balance the two lists below cannot show -->
+        <Card class="border-rule-default bg-surface-raised" variant="register">
+          <CardHeader class="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle class="font-medium text-text-secondary">Statement of Account</CardTitle>
+              <CardDescription>Every bill, payment and credit, oldest first, with what is still owed</CardDescription>
+            </div>
+            <div class="text-right">
+              <p class="text-text-metadata">Closing balance</p>
+              <MoneyText :amount="statementClosingBalance" :currency="vendor.base_currency || company.base_currency" locale="en-PK" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <LedgerRegister
+              :columns="statementColumns"
+              :data="statementRows"
+              :key-field="(row, index) => `${row.type}-${row.source_id ?? 'opening'}-${index}`"
+              clickable
+              @row-click="(row) => row.link && router.visit(`/${company.slug}/${row.link}`)"
+            >
+              <template #empty>Nothing recorded against this supplier yet.</template>
+              <template #cell-debit="{ row }">
+                <MoneyText :amount="row.debit" :currency="vendor.base_currency || company.base_currency" locale="en-PK" :show-currency="false" dash-zero />
+              </template>
+              <template #cell-credit="{ row }">
+                <MoneyText :amount="row.credit" :currency="vendor.base_currency || company.base_currency" locale="en-PK" :show-currency="false" dash-zero />
+              </template>
+              <template #cell-balance="{ row }">
+                <MoneyText :amount="row.balance" :currency="vendor.base_currency || company.base_currency" locale="en-PK" :show-currency="false" />
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
 

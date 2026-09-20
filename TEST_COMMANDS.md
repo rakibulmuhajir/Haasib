@@ -2,6 +2,24 @@
 
 Run everything from `D:\projects\haasib\build`.
 
+> ## Never run `migrate:fresh`, and never trust `--env=testing`
+>
+> There is **no `.env.testing` file**, so `php artisan <anything> --env=testing` falls back
+> to `.env`, where `DB_DATABASE=haasib` — the **dev** database.
+>
+> On 2026-09-20 `php artisan migrate:fresh --force --env=testing` was run in the belief it
+> targeted `haasib_test`. It destroyed the dev database's data. There was no backup; it was
+> rebuilt from the demo seeders, and anything a seeder cannot reproduce was lost.
+>
+> `migrate:fresh` is also broken here whatever the database: it drops only the `public`
+> schema, leaves `auth`, `acct`, `inv`, `tax`, `pay`, `fuel`, `umrah` standing, then dies on
+> `relation "item_categories" already exists`. **That error is what a half-destroyed
+> database looks like — do not read it as harmless.**
+>
+> The suite migrates itself and `phpunit.xml` pins `DB_DATABASE=haasib_test`. Just run
+> `php artisan test …`. To reset the dev database, use **Rebuilding the dev database** at the
+> bottom of this file — after taking a dump.
+
 > **Never run two test processes at once.** They share the `haasib_test` database and
 > collide with `relation "…" already exists`. Finish one before starting the next.
 
@@ -93,3 +111,39 @@ npm run format:check
   reach for `migrate:fresh`.
 - **Baseline whole-suite result: 8 failed, 929 passed.** Some failures live in modules
   untouched by recent work (Umrah, Payroll).
+
+---
+
+## Rebuilding the dev database
+
+Destroys all dev data. **Take a dump first**: `pg_dump -U postgres haasib > haasib.sql`
+
+`migrate:fresh` cannot do this correctly (it leaves every non-public schema behind), so drop
+the schemas explicitly:
+
+```powershell
+php artisan tinker --execute="
+  \$db = DB::connection()->getDatabaseName();
+  if (\$db !== 'haasib') { echo 'ABORT: '.\$db; exit(1); }
+  foreach (['auth','acct','inv','tax','pay','fuel','hsp','crm','audit','umrah'] as \$s) {
+    DB::statement('DROP SCHEMA IF EXISTS '.\$s.' CASCADE');
+  }
+  DB::statement('DROP SCHEMA IF EXISTS public CASCADE');
+  DB::statement('CREATE SCHEMA public');
+"
+php artisan migrate --force
+php artisan db:seed --force
+php artisan db:seed --force --class='Database\Seeders\DemoDataSeeder'
+```
+
+That leaves three companies under one login — **demo@haasib.app / demo-password**:
+
+| Company | Industry | What it carries |
+|---|---|---|
+| Meridian Trading Co. | retail | GL, AR/AP, 5 customers, 4 vendors, overheads |
+| Crescent Fuel Station | energy | 3 tanks, 4 pumps, 7 nozzles, 30 posted daily closes, settlements |
+| Bab-al-Salam Travel | services | 3 agents, 3 groups, approved vouchers, agent advances |
+
+`php artisan db:seed` on its own adds `test@example.com`, which belongs to **no** company —
+logging in as that user shows an empty company switcher and an empty menu, because every
+module's `nav.ts` begins `if (!slug) return []`.

@@ -4,6 +4,19 @@
 1. Check schema contract: `docs/contracts/{schema}-schema.md`
 2. Read relevant: `AI_PROMPTS/{topic}_REMEDIATION.md`
 
+## 💥 Destructive Commands
+**Never run `migrate:fresh`, `migrate:refresh`, `db:wipe`, or `--env=testing` anything.**
+
+There is no `.env.testing`, so `--env=testing` resolves to `.env` → `DB_DATABASE=haasib`,
+the **dev** database. `migrate:fresh` also only drops the `public` schema, leaving the other
+nine, then fails with `relation "item_categories" already exists` — that error means the
+database is already half-destroyed, not that the command was a no-op.
+
+This wiped the dev database on 2026-09-20. There was no backup. See `TEST_COMMANDS.md`.
+
+Before any command that can drop or overwrite: print the resolved database name first and
+check it. The test suite migrates itself — you never need to migrate by hand for tests.
+
 ## 🧪 Tests Are Opt-In — Do Not Run Them Unattended
 **Write the tests. Do not run them without being asked.**
 

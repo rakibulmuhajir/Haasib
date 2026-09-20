@@ -2627,7 +2627,7 @@ const completedWorkflowSteps = computed(() => {
                     >
                         <div class="space-y-1.5">
                             <Label>Date</Label>
-                            <Input v-model="form.date" type="date" />
+                            <Input v-model="form.date" data-testid="business-date" type="date" />
                             <p class="text-xs text-muted-foreground">
                                 Close each day the next morning, after the tank
                                 dip.
@@ -2840,7 +2840,7 @@ const completedWorkflowSteps = computed(() => {
                                                         form.nozzle_readings[
                                                             idx
                                                         ].opening_electronic
-                                                    "
+                                                    " :data-testid="'nozzle-' + idx + '-opening-electronic'"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="1"
@@ -2862,7 +2862,7 @@ const completedWorkflowSteps = computed(() => {
                                                         form.nozzle_readings[
                                                             idx
                                                         ].closing_electronic
-                                                    "
+                                                    " :data-testid="'nozzle-' + idx + '-closing-electronic'"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="1"
@@ -2899,7 +2899,7 @@ const completedWorkflowSteps = computed(() => {
                                                         form.nozzle_readings[
                                                             idx
                                                         ].sale_rate
-                                                    "
+                                                    " :data-testid="'nozzle-' + idx + '-sale-rate'"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="0.01"
@@ -3007,7 +3007,7 @@ const completedWorkflowSteps = computed(() => {
                                                                         idx
                                                                     ]
                                                                         .opening_manual
-                                                                "
+                                                                " :data-testid="'nozzle-' + idx + '-opening-manual'"
                                                                 type="number"
                                                                 @focus="
                                                                     selectZeroValue
@@ -3037,7 +3037,7 @@ const completedWorkflowSteps = computed(() => {
                                                                         idx
                                                                     ]
                                                                         .closing_manual
-                                                                "
+                                                                " :data-testid="'nozzle-' + idx + '-closing-manual'"
                                                                 type="number"
                                                                 @focus="
                                                                     selectZeroValue
@@ -3652,7 +3652,7 @@ const completedWorkflowSteps = computed(() => {
                                             <Input
                                                 v-model.number="
                                                     tank.stick_reading
-                                                "
+                                                " :data-testid="'tank-' + index + '-stick'"
                                                 type="number"
                                                 step="0.1"
                                                 placeholder="cm"
@@ -3673,7 +3673,7 @@ const completedWorkflowSteps = computed(() => {
                                                 >Dip this morning (L)</Label
                                             >
                                             <Input
-                                                v-model.number="tank.liters"
+                                                v-model.number="tank.liters" :data-testid="'tank-' + index + '-liters'"
                                                 type="number"
                                                 step="1"
                                                 @focus="selectZeroValue"
@@ -3940,7 +3940,7 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                                 <div class="w-48">
                                     <Input
-                                        v-model.number="form.opening_cash"
+                                        v-model.number="form.opening_cash" data-testid="opening-cash"
                                         type="number"
                                         @focus="selectZeroValue"
                                         class="text-right text-lg font-semibold"
@@ -6177,7 +6177,7 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                                 <div class="w-64">
                                     <Input
-                                        v-model.number="form.closing_cash"
+                                        v-model.number="form.closing_cash" data-testid="closing-cash"
                                         type="number"
                                         @focus="selectZeroValue"
                                         class="h-14 text-right text-2xl font-bold"

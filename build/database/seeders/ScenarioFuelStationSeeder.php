@@ -13,6 +13,7 @@ use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Actions\Product\SetupAction;
+use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\FuelStationOnboardingService;
 use App\Modules\Payroll\Models\Employee;
@@ -77,6 +78,9 @@ class ScenarioFuelStationSeeder extends Seeder
     ];
 
     public const BANKS = ['HBL Current', 'Meezan Current', 'UBL Savings'];
+
+    /** The one buyer who leaves trust money with the station. */
+    public const AMANAT_HOLDER = 'Karachi Cement Haulage';
 
     /** Salaries sum to 100,000 so a month's payroll is a round figure. */
     public const EMPLOYEES = [
@@ -248,6 +252,19 @@ class ScenarioFuelStationSeeder extends Seeder
                 'credit_limit' => 200000,
                 'payment_terms' => 15,
                 'is_active' => true,
+            ]);
+        }
+
+        // Every buyer is a credit customer; the amanat depositor additionally needs a
+        // fuel CustomerProfile flagged is_amanat_holder, or DailyCloseService refuses the
+        // deposit with "Selected Amanat depositor was not found."
+        foreach (Customer::where('company_id', $company->id)->orderBy('customer_number')->get() as $i => $customer) {
+            CustomerProfile::create([
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'is_credit_customer' => true,
+                'is_amanat_holder' => $customer->name === self::AMANAT_HOLDER,
+                'is_investor' => false,
             ]);
         }
 

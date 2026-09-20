@@ -521,15 +521,18 @@ closing **2851650**
 
 ---
 
-### Day 13 - Friday 13 March - payday
+### Day 13 - Friday 13 March
 
-**Before the close**, run payroll at `/payroll`:
-
-1. Run the monthly payroll for **March 2026**.
-2. Approve all three payslips, dated **2026-03-13**.
-3. Mark them paid **from the cash drawer**.
-
-Net pay: Muhammad Ali 35,000, Ahmed Raza 32,000, Usman Khan 33,000 = **100,000**.
+> **Payroll cannot be exercised on a back-dated day, and this is a real limitation, not a
+> gap in the script.**
+>
+> `PayrollDashboardController::runMonthly()` builds the period from `now()->startOfMonth()`,
+> so it always runs the *current* month regardless of the business date. The close then picks
+> payslips up with `whereDate('approved_at', $date)`, and `approved_at` is stamped when you
+> press Approve. A payslip can therefore never carry `approved_at = 2026-03-13`.
+>
+> Payroll is tested separately below, against today's date. **Report this** — a station
+> closing yesterday's register cannot post yesterday's wages.
 
 | Nozzle | Opening | Closing |
 |---|---|---|
@@ -539,21 +542,12 @@ Net pay: Muhammad Ali 35,000, Ahmed Raza 32,000, Usman Khan 33,000 = **100,000**
 | D2B | 403625 | 404000 |
 
 Lubricants **3** pk, **2** L - Dip Petrol **17418.5**, Diesel **11977.0**
-Close: opening **2851650**, no credit sales, deposit UBL **150000**, closing **3135250**
+Close: opening **2851650**, no credit sales, deposit UBL **150000**, closing **3235250**
 
 | Expected | |
 |---|---|
 | Fuel sales | 526,200.00 |
-| Payroll paid | 100,000.00 |
 | **Cash variance** | **0.00** |
-
-The **100,000 payroll** should already be listed in Cash Out. A variance of **+100,000** means
-the close never saw the payslips; **-100,000** means it counted them twice.
-
-> If the payslips carry deductions or an advance recovery, net pay will not be 100,000. Use
-> the **actual net** the payroll screen shows and adjust the closing cash by the same amount.
-> The check is that the close and the payroll screen agree, not that the figure matches a
-> number written here.
 
 ---
 
@@ -567,8 +561,8 @@ the close never saw the payslips; **-100,000** means it counted them twice.
 | D2B | 404000 | 404400 |
 
 Lubricants **5** pk, **4** L - Dip Petrol **16415.5**, Diesel **11174.5**
-Close: opening **3135250**, credit Al-Habib Transport **35000**, deposit HBL **260000**,
-closing **3411850**
+Close: opening **3235250**, credit Al-Habib Transport **35000**, deposit HBL **260000**,
+closing **3511850**
 
 | Expected | |
 |---|---|
@@ -584,9 +578,8 @@ closing **3411850**
 | Fuel sales, week 2 | 3,249,400.00 |
 | Lubricant sales, week 2 | 95,800.00 |
 | Payments received | 120,000.00 |
-| Payroll paid | 100,000.00 |
 | Banked | 1,450,000.00 |
-| Closing cash | 3,411,850.00 |
+| Closing cash | 3,511,850.00 |
 | Closing dip | Petrol 16,415.5 L, Diesel 11,174.5 L |
 
 ### Receivables after two weeks - `/reports/receivables-aging`
@@ -608,8 +601,23 @@ To watch the aging buckets fill, post one more day on 17 March or later.
 ### Supplier - PSO Depot - Korangi
 **3,336,000.00** - two bills totalling 5,336,000 less the 2,000,000 paid on day 11.
 
-### Payroll - `/payroll`
-Three payslips for March 2026, all paid, total **100,000.00**, none left approved-but-unpaid.
+### Payroll - a standalone check, against today's date
+
+Because payroll cannot be back-dated (see day 13), run it on its own, on whatever today is:
+
+1. `/payroll` - run the monthly payroll. Three payslips: 35,000 + 32,000 + 33,000 = **100,000**.
+2. Approve all three, then mark them paid **from the cash drawer**.
+3. Open a daily close for **today's date**. The **100,000** must appear in Cash Out
+   ready-made.
+
+| Expected | |
+|---|---|
+| Payslips generated | 3 |
+| Total net pay | 100,000.00 |
+| Shown on today's close | 100,000.00, without being typed in |
+
+A variance of **+100,000** means the close never saw the payslips; **-100,000** means it
+counted them twice. Reset the scenario afterwards - this close is not part of the 14 days.
 
 ### Trial balance and balance sheet as at 2026-03-14
 Both must still balance. Difference 0.00 on each.

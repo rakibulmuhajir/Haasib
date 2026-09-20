@@ -70,47 +70,80 @@ class HandleInertiaRequests extends Middleware
             ];
         };
 
-        $isGodMode = $request->user()?->isGodMode() ?? false;
-
-        // Get user's companies. God-mode users can enter any active company without membership.
-        $companies = $request->user()
-            ? ($isGodMode
-                ? \DB::table('auth.companies as c')
-                    ->where('c.is_active', true)
-                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
-                    ->orderBy('c.name')
-                    ->get()
-                : \DB::table('auth.company_user as cu')
-                    ->join('auth.companies as c', 'cu.company_id', '=', 'c.id')
-                    ->where('cu.user_id', $request->user()->id)
-                    ->where('cu.is_active', true)
-                    ->where('c.is_active', true)
-                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
-                    ->orderBy('c.name')
-                    ->get())
-            : collect();
-
-        // If no current company (on global routes), use last accessed company for display
-        if (! $currentCompany && $request->user()) {
-            $rememberedSlug = session('last_company_slug');
-            $currentCompany = $companies->firstWhere('slug', $rememberedSlug) ?: $companies->first();
-
-            if ($currentCompany && $currentCompany->slug !== $rememberedSlug) {
-                session(['last_company_slug' => $currentCompany->slug]);
+        /*
+         * Deferred on purpose — do not make this eager again.
+         *
+         * Inertia calls share() BEFORE $next($request), so anything computed here runs
+         * before CheckFirstTimeUser and IdentifyCompany have set app.current_user_id.
+         * Under enforced row level security the auth.companies policy then matches on
+         * nothing: not super admin, no company context, no user id. The query comes back
+         * empty, so the switcher renders blank and every module nav bails out on the
+         * missing slug — the whole sidebar disappears.
+         *
+         * It only ever showed up in production. A superuser connection bypasses RLS
+         * entirely, so in local development the same query returns rows and the menu looks
+         * fine. Worse, app.current_user_id set with is_local=false survives on a pooled
+         * connection, so a request could read the GUC left behind by the PREVIOUS request
+         * and show whichever companies that user could see.
+         *
+         * Resolving inside a closure defers it to render time, after the middleware that
+         * establishes the tenant context. fuelNavigation below was already written this
+         * way for the same reason.
+         */
+        $resolved = null;
+        $resolve = function () use ($request, &$resolved): array {
+            if ($resolved !== null) {
+                return $resolved;
             }
-        }
 
-        // Current company role for the authenticated user (used for mode gating)
-        $currentCompanyRole = null;
-        if ($currentCompany && $request->user()) {
-            $currentCompanyRole = $isGodMode
-                ? 'super_admin'
-                : \DB::table('auth.company_user')
-                    ->where('company_id', $currentCompany->id)
-                    ->where('user_id', $request->user()->id)
-                    ->where('is_active', true)
-                    ->value('role');
-        }
+            $isGodMode = $request->user()?->isGodMode() ?? false;
+            $currentCompany = CompanyContext::getCompany();
+
+            // God-mode users can enter any active company without membership.
+            $companies = $request->user()
+                ? ($isGodMode
+                    ? \DB::table('auth.companies as c')
+                        ->where('c.is_active', true)
+                        ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                        ->orderBy('c.name')
+                        ->get()
+                    : \DB::table('auth.company_user as cu')
+                        ->join('auth.companies as c', 'cu.company_id', '=', 'c.id')
+                        ->where('cu.user_id', $request->user()->id)
+                        ->where('cu.is_active', true)
+                        ->where('c.is_active', true)
+                        ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                        ->orderBy('c.name')
+                        ->get())
+                : collect();
+
+            // On a global route there is no company in context; show the last one visited.
+            if (! $currentCompany && $request->user()) {
+                $rememberedSlug = session('last_company_slug');
+                $currentCompany = $companies->firstWhere('slug', $rememberedSlug) ?: $companies->first();
+
+                if ($currentCompany && $currentCompany->slug !== $rememberedSlug) {
+                    session(['last_company_slug' => $currentCompany->slug]);
+                }
+            }
+
+            $role = null;
+            if ($currentCompany && $request->user()) {
+                $role = $isGodMode
+                    ? 'super_admin'
+                    : \DB::table('auth.company_user')
+                        ->where('company_id', $currentCompany->id)
+                        ->where('user_id', $request->user()->id)
+                        ->where('is_active', true)
+                        ->value('role');
+            }
+
+            return $resolved = [
+                'company' => $currentCompany,
+                'companies' => $companies,
+                'role' => $role,
+            ];
+        };
 
         return [
             ...parent::share($request),
@@ -118,8 +151,8 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
-                'currentCompany' => $serializeCompany($currentCompany),
-                'currentCompanyRole' => $currentCompanyRole,
+                'currentCompany' => fn () => $serializeCompany($resolve()['company']),
+                'currentCompanyRole' => fn () => $resolve()['role'],
                 'fuelNavigation' => function () use ($request) {
                     // Resolve after IdentifyCompany has run. The display fallback above
                     // can be a stdClass from a different, previously visited company.
@@ -137,7 +170,7 @@ class HandleInertiaRequests extends Middleware
                         ? app(FuelNavigationAccess::class)->forUser($company, $user)
                         : null;
                 },
-                'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
+                'companies' => fn () => $resolve()['companies']->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

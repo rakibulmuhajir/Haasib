@@ -378,6 +378,244 @@ Meezan 160,000 + 150,000 = **310,000.00** · UBL 120,000 + 180,000 = **300,000.0
 
 ---
 
+## Week 2 — 8-14 March - payments in, payroll out
+
+Week 1 never moved money **into** the drawer from anything but a sale, and never paid a wage.
+Week 2 adds both, plus a payment to the supplier, and carries straight on from where week 1
+closed.
+
+**Do not reset between the weeks.** Week 2 opens on week 1's closing position, and that
+continuity is itself worth testing:
+
+| | |
+|---|---|
+| Cash | 1,640,650.00 |
+| Petrol dip | 22,383.5 L |
+| Diesel dip | 15,738.0 L |
+| Meters | P1A 102800 - P1B 202800 - D2A 302125 - D2B 402125 |
+| Receivables | 360,000.00 |
+| Owed to PSO Depot | 5,336,000.00 |
+
+Rates stay at 306.00 / 314.00 all week - week 1 already tested a revision.
+
+**Staff** (seeded, `/employees`): Muhammad Ali and Ahmed Raza, Pump Attendants; Usman Khan,
+Station Manager. Salaries 35,000 + 32,000 + 33,000 = **100,000**.
+
+Every day: tea **600** and meals **1400**, entered in the close.
+
+---
+
+### Day 8 - Sunday 8 March - a buyer settles
+
+**Before the close** - `/payments/create`: **Al-Habib Transport** pays **70,000**, cash,
+dated 2026-03-08, against their open invoices. That clears their balance in full.
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 102800 | 103150 |
+| P1B | 202800 | 203150 |
+| D2A | 302125 | 302375 |
+| D2B | 402125 | 402375 |
+
+Lubricants **3** pk, **4** L - Dip Petrol **21681.5**, Diesel **15236.5**
+Close: opening cash **1640650**, credit Indus Travel **25000**, deposit HBL **200000**,
+closing cash **1866450**
+
+| Expected | |
+|---|---|
+| Fuel sales | 371,200.00 |
+| **Cash variance** | **0.00** |
+| Al-Habib balance | **0.00** |
+
+The 70,000 payment should already be listed in Cash In. A variance of **-70,000** means the
+close never saw it; **+70,000** means it was counted twice.
+
+---
+
+### Day 9 - Monday 9 March
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 103150 | 103525 |
+| P1B | 203150 | 203525 |
+| D2A | 302375 | 302650 |
+| D2B | 402375 | 402650 |
+
+Lubricants **5** pk, **2** L - Dip Petrol **20929.5**, Diesel **14685.0**
+Close: opening **1866450**, no credit sales, deposit Meezan **220000**, closing **2060850**
+
+| Expected | |
+|---|---|
+| Fuel sales | 402,200.00 |
+| **Cash variance** | **0.00** |
+
+---
+
+### Day 10 - Tuesday 10 March - part payment
+
+**Before the close** - `/payments/create`: **Sindh Goods Carriers** pays **50,000**, cash.
+They owed 90,000, so 40,000 remains.
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 103525 | 103925 |
+| P1B | 203525 | 203925 |
+| D2A | 302650 | 302950 |
+| D2B | 402650 | 402950 |
+
+Lubricants **2** pk, **6** L - Dip Petrol **20127.0**, Diesel **14083.5**
+Close: opening **2060850**, credit Pak Freight Lines **40000**, deposit UBL **180000**,
+closing **2333450**
+
+| Expected | |
+|---|---|
+| Fuel sales | 433,200.00 |
+| **Cash variance** | **0.00** |
+| Sindh Goods balance | **40,000.00** |
+
+---
+
+### Day 11 - Wednesday 11 March - paying the supplier
+
+**Before the close** - `/bill-payments/create`: pay **PSO Depot - Korangi** **2,000,000**
+from **HBL Current** (bank, not the drawer), dated 2026-03-11, against the oldest bill.
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 103925 | 104350 |
+| P1B | 203925 | 204350 |
+| D2A | 302950 | 303275 |
+| D2B | 402950 | 403275 |
+
+Lubricants **6** pk, **3** L - Dip Petrol **19274.5**, Diesel **13431.5**
+Close: opening **2333450**, no credit sales, deposit HBL **240000**, closing **2573350**
+
+| Expected | |
+|---|---|
+| Fuel sales | 464,200.00 |
+| **Cash variance** | **0.00** |
+| Owed to PSO Depot | **3,336,000.00** |
+
+This one is paid from the **bank**, so it must **not** touch the drawer. A cash variance of
+-2,000,000 means the close treated a bank payment as cash.
+
+---
+
+### Day 12 - Thursday 12 March
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 104350 | 104800 |
+| P1B | 204350 | 204800 |
+| D2A | 303275 | 303625 |
+| D2B | 403275 | 403625 |
+
+Lubricants **4** pk, **5** L - Dip Petrol **18371.5**, Diesel **12729.5**
+Close: opening **2573350**, credit Karachi Cement Haulage **30000**, deposit Meezan **200000**,
+closing **2851650**
+
+| Expected | |
+|---|---|
+| Fuel sales | 495,200.00 |
+| **Cash variance** | **0.00** |
+
+---
+
+### Day 13 - Friday 13 March - payday
+
+**Before the close**, run payroll at `/payroll`:
+
+1. Run the monthly payroll for **March 2026**.
+2. Approve all three payslips, dated **2026-03-13**.
+3. Mark them paid **from the cash drawer**.
+
+Net pay: Muhammad Ali 35,000, Ahmed Raza 32,000, Usman Khan 33,000 = **100,000**.
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 104800 | 105275 |
+| P1B | 204800 | 205275 |
+| D2A | 303625 | 304000 |
+| D2B | 403625 | 404000 |
+
+Lubricants **3** pk, **2** L - Dip Petrol **17418.5**, Diesel **11977.0**
+Close: opening **2851650**, no credit sales, deposit UBL **150000**, closing **3135250**
+
+| Expected | |
+|---|---|
+| Fuel sales | 526,200.00 |
+| Payroll paid | 100,000.00 |
+| **Cash variance** | **0.00** |
+
+The **100,000 payroll** should already be listed in Cash Out. A variance of **+100,000** means
+the close never saw the payslips; **-100,000** means it counted them twice.
+
+> If the payslips carry deductions or an advance recovery, net pay will not be 100,000. Use
+> the **actual net** the payroll screen shows and adjust the closing cash by the same amount.
+> The check is that the close and the payroll screen agree, not that the figure matches a
+> number written here.
+
+---
+
+### Day 14 - Saturday 14 March
+
+| Nozzle | Opening | Closing |
+|---|---|---|
+| P1A | 105275 | 105775 |
+| P1B | 205275 | 205775 |
+| D2A | 304000 | 304400 |
+| D2B | 404000 | 404400 |
+
+Lubricants **5** pk, **4** L - Dip Petrol **16415.5**, Diesel **11174.5**
+Close: opening **3135250**, credit Al-Habib Transport **35000**, deposit HBL **260000**,
+closing **3411850**
+
+| Expected | |
+|---|---|
+| Fuel sales | 557,200.00 |
+| **Cash variance** | **0.00** |
+
+---
+
+## End of week 2 verification
+
+| | |
+|---|---|
+| Fuel sales, week 2 | 3,249,400.00 |
+| Lubricant sales, week 2 | 95,800.00 |
+| Payments received | 120,000.00 |
+| Payroll paid | 100,000.00 |
+| Banked | 1,450,000.00 |
+| Closing cash | 3,411,850.00 |
+| Closing dip | Petrol 16,415.5 L, Diesel 11,174.5 L |
+
+### Receivables after two weeks - `/reports/receivables-aging`
+
+Week 1 added 360,000, week 2 added 130,000, buyers paid 120,000 - total **370,000.00**.
+
+| Buyer | Owed |
+|---|---|
+| Karachi Cement Haulage | 90,000.00 |
+| Pak Freight Lines | 85,000.00 |
+| Mehran Logistics | 75,000.00 |
+| Indus Travel | 45,000.00 |
+| Sindh Goods Carriers | 40,000.00 |
+| Al-Habib Transport | 35,000.00 |
+
+All still **not yet due** - the oldest invoice (1 March, 15-day terms) falls due on 16 March.
+To watch the aging buckets fill, post one more day on 17 March or later.
+
+### Supplier - PSO Depot - Korangi
+**3,336,000.00** - two bills totalling 5,336,000 less the 2,000,000 paid on day 11.
+
+### Payroll - `/payroll`
+Three payslips for March 2026, all paid, total **100,000.00**, none left approved-but-unpaid.
+
+### Trial balance and balance sheet as at 2026-03-14
+Both must still balance. Difference 0.00 on each.
+
+---
+
 ## Reset
 
 ```powershell

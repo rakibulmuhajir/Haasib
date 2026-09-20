@@ -15,6 +15,7 @@ use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Actions\Product\SetupAction;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\FuelStationOnboardingService;
+use App\Modules\Payroll\Models\Employee;
 use App\Modules\FuelStation\Services\StationAccountMapper;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
@@ -76,6 +77,13 @@ class ScenarioFuelStationSeeder extends Seeder
     ];
 
     public const BANKS = ['HBL Current', 'Meezan Current', 'UBL Savings'];
+
+    /** Salaries sum to 100,000 so a month's payroll is a round figure. */
+    public const EMPLOYEES = [
+        ['Muhammad', 'Ali', 'Pump Attendant', 35000],
+        ['Ahmed', 'Raza', 'Pump Attendant', 32000],
+        ['Usman', 'Khan', 'Station Manager', 33000],
+    ];
 
     public function run(): void
     {
@@ -255,6 +263,24 @@ class ScenarioFuelStationSeeder extends Seeder
             ]);
         }
 
+        foreach (self::EMPLOYEES as $i => [$first, $last, $position, $salary]) {
+            Employee::create([
+                'company_id' => $company->id,
+                'employee_number' => sprintf('EMP-%04d', $i + 1),
+                'first_name' => $first,
+                'last_name' => $last,
+                'hire_date' => '2025-06-01',
+                'employment_type' => 'full_time',
+                'employment_status' => 'active',
+                'department' => 'Forecourt',
+                'position' => $position,
+                'pay_frequency' => 'monthly',
+                'base_salary' => $salary,
+                'currency' => 'PKR',
+                'is_active' => true,
+            ]);
+        }
+
         // Without these the fuel routes bounce to the onboarding wizard, so the browser
         // scenario would never reach the daily close.
         DB::table('auth.companies')->where('id', $company->id)->update([
@@ -305,6 +331,10 @@ class ScenarioFuelStationSeeder extends Seeder
             'fuel.rate_changes', 'fuel.nozzles', 'fuel.pumps', 'fuel.dip_chart_entries',
             'fuel.dip_sticks', 'fuel.investor_lots', 'fuel.investors',
             'fuel.customer_profiles', 'fuel.station_settings',
+            'pay.payslip_lines', 'pay.payslips', 'pay.salary_advance_recoveries',
+            'pay.salary_advances', 'pay.employee_benefits', 'pay.leave_requests',
+            'pay.payroll_periods', 'pay.employees', 'pay.benefit_plans',
+            'pay.deduction_types', 'pay.earning_types', 'pay.leave_types',
             'inv.cogs_entries', 'inv.cost_layers', 'inv.item_costs', 'inv.stock_movements',
             'inv.stock_levels', 'inv.stock_receipt_lines', 'inv.stock_receipts',
             'inv.items', 'inv.item_categories', 'inv.warehouses', 'inv.cost_policies',

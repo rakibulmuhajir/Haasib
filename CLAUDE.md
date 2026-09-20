@@ -91,6 +91,7 @@ npm run dev
 ```
 
 ## 📚 Key Docs
+- **Test commands: `TEST_COMMANDS.md`** — how to run them, and the known pre-existing failures
 - **Design system: `docs/ledger-design-system.md`** — read before building any page
 - Tokens/skins: `docs/theming.md`
 - Schemas: `docs/contracts/`

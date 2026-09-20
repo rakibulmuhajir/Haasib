@@ -26,8 +26,12 @@ function expenseAttachmentFixture(): array
 {
     Storage::fake('local');
 
-    $user = User::factory()->create();
-    $company = Company::create(['name' => 'Receipt Co', 'slug' => 'receipt-co-'.str()->random(8), 'owner_id' => $user->id, 'base_currency' => 'PKR']);
+    // Mirrors ledgerIndexFixture(), the fixture the other HTTP-level Accounting tests use:
+    // withoutTwoFactor so an authenticated POST is not bounced to the 2FA challenge, and
+    // app.current_user_id set before anything is written.
+    $user = User::factory()->withoutTwoFactor()->create();
+    $company = Company::create(['name' => 'Receipt Co', 'slug' => 'receipt-co-'.str()->lower(str()->random(10)), 'base_currency' => 'PKR']);
+    DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
     DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
     DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
     $fy = FiscalYear::create(['company_id' => $company->id, 'name' => '2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']);
@@ -63,11 +67,15 @@ function expensePayload(array $f): array
 test('an expense keeps the bill that was attached to it', function () {
     $f = expenseAttachmentFixture();
 
-    test()->actingAs($f['user'])
+    $response = test()->actingAs($f['user'])
         ->post("/{$f['company']->slug}/expenses", expensePayload($f) + [
             'attachment' => UploadedFile::fake()->create('k-electric-september.pdf', 200, 'application/pdf'),
-        ])
-        ->assertRedirect();
+        ]);
+
+    // A failed post also redirects (back, with an error), so a bare assertRedirect proves
+    // nothing. Name the reason instead.
+    expect(session('error'))->toBeNull();
+    $response->assertSessionHasNoErrors()->assertRedirect();
 
     $attachment = TransactionAttachment::where('company_id', $f['company']->id)->sole();
     expect($attachment->original_name)->toBe('k-electric-september.pdf')
@@ -100,9 +108,11 @@ test('the document is stored privately, never under the public disk', function (
 test('an expense without a bill still records perfectly well', function () {
     $f = expenseAttachmentFixture();
 
-    test()->actingAs($f['user'])
-        ->post("/{$f['company']->slug}/expenses", expensePayload($f))
-        ->assertRedirect();
+    $response = test()->actingAs($f['user'])
+        ->post("/{$f['company']->slug}/expenses", expensePayload($f));
+
+    expect(session('error'))->toBeNull();
+    $response->assertSessionHasNoErrors()->assertRedirect();
 
     expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'expense')->count())->toBe(1)
         ->and(TransactionAttachment::where('company_id', $f['company']->id)->count())->toBe(0);

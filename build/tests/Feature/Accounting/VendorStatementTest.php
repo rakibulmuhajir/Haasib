@@ -82,6 +82,8 @@ test('a vendor credit reduces what is owed', function () {
         'company_id' => $f['company']->id, 'vendor_id' => $f['vendor']->id,
         'credit_number' => 'VC-1', 'credit_date' => '2026-09-05', 'amount' => 15000,
         'currency' => 'PKR', 'base_currency' => 'PKR', 'status' => 'received',
+        // acct.vendor_credits.reason is NOT NULL.
+        'reason' => 'Short delivery on the September tanker',
     ]);
 
     $statement = app(VendorStatementService::class)->statement($f['vendor']->fresh());

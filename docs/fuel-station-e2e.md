@@ -1,4 +1,6 @@
-# Seven-Day Fuel Station E2E — Controlled Test Script
+# Fuel Station E2E — Controlled Test Script
+
+Two trading weeks, 1–14 March 2026.
 
 Every figure below is fixed in advance. Type exactly what is written; the expected result
 after each day is stated, so a mismatch is a defect rather than a judgement call.

@@ -114,9 +114,9 @@ npm run format:check
 
 ---
 
-## Seven-day fuel station scenario
+## Fuel station scenario
 
-A controlled week at a fixed station, every figure decided in advance so each day's expected
+A controlled two weeks at a fixed station, every figure decided in advance so each day's expected
 result is known before the software is asked.
 
 ```powershell
@@ -130,7 +130,9 @@ php artisan test tests/Feature/FuelStation/SevenDayOperationsTest.php
 Login `scenario@haasib.test` / `scenario-password`, company `scenario-mehran-fuel`.
 
 Step-by-step instructions for driving it through the UI, with the expected outcome after
-each of the seven days, are in **`docs/fuel-seven-day-e2e.md`**.
+each day, are in **`docs/fuel-station-e2e.md`** — two weeks, 1–14 March 2026. Week 1 covers
+trading, the rate change and a planted cash shortage; week 2 adds payments received, paying
+the supplier, and payroll.
 
 ---
 

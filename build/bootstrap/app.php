@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleAppearance;
+use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\CheckFirstTimeUser;
@@ -29,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleAppearance::class,
+            // Before HandleInertiaRequests: Inertia resolves shared data during its own
+            // handle(), so anything it reads needs the tenant context to exist already.
+            EstablishTenantContext::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             CheckFirstTimeUser::class,

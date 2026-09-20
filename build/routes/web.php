@@ -24,6 +24,7 @@ use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\PaymentController;
 use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
+use App\Modules\Accounting\Http\Controllers\ReceivablesAgingReportController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
 use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
@@ -106,6 +107,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/profit-loss', [ProfitLossReportController::class, 'index'])->name('reports.profit-loss');
         Route::get('/{company}/reports/trial-balance', [TrialBalanceReportController::class, 'index'])->name('reports.trial-balance');
         Route::get('/{company}/reports/balance-sheet', [BalanceSheetReportController::class, 'index'])->name('reports.balance-sheet');
+        Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {
@@ -346,6 +348,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('/{company}/expenses/create', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('/{company}/expenses', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'store'])->name('expenses.store');
+        Route::get('/{company}/expenses/attachments/{attachment}', [\App\Modules\Accounting\Http\Controllers\ExpenseController::class, 'downloadAttachment'])->whereUuid('attachment')->name('expenses.attachments.download');
 
         // ─────────────────────────────────────────────────────────────────
         // Inventory Module

@@ -591,5 +591,42 @@ public function expenseAccount(): BelongsTo
 
 ---
 
+## acct.transaction_attachments (2026-09-20)
+
+The paper behind a posted transaction — the supplier's bill behind an expense, a repair
+receipt, a delivery note. An expense with no document is an assertion; with the bill
+attached it is evidence.
+
+- id UUID PK; company_id UUID FK auth.companies; transaction_id UUID FK acct.transactions
+  (cascade on delete); disk varchar(32) default 'local'; path varchar(512);
+  original_name varchar(255); mime_type varchar(128) nullable; size_bytes bigint nullable;
+  uploaded_by_user_id nullable UUID FK auth.users; timestamps.
+- Company RLS and index (company_id, transaction_id).
+- Hung off acct.transactions rather than off expenses specifically: an expense here IS a
+  transaction (Expense\CreateAction posts an ordinary journal), and bills and manual
+  journals need the same thing. One table, not one per document type.
+- **Files live on the `local` (private) disk, never `public`.** A supplier invoice carries
+  account numbers and pricing; under /storage it would be readable by guessing a filename.
+  Served only via ExpenseController::downloadAttachment, after the company scope and
+  Permissions::EXPENSE_VIEW are both checked. Paths are namespaced by company id.
+- Accepted: pdf, png, jpg, jpeg, webp, heic; max 10 MB
+  (TransactionAttachmentService::ACCEPTED / MAX_KILOBYTES, mirrored in StoreExpenseRequest).
+- The upload is handled in the controller, not in Expense\CreateAction: the same command is
+  dispatched from the CLI palette where there is no upload, and an UploadedFile has no
+  business travelling as a command-bus parameter.
+
+## Vendor statement (2026-09-20)
+
+`VendorStatementService` is the payables mirror of `CustomerStatementService`: built from
+the canonical AP records (bills, bill payments, vendor credits) rather than journal lines,
+because a consolidated journal carries no per-supplier dimension.
+
+Sign convention is the payable's own, not the receivable's borrowed: a **bill is a CREDIT**
+raising what is owed, a **payment or vendor credit is a DEBIT** reducing it, and the running
+balance is what is still payable. A positive closing balance means money is owed out.
+Draft, void and cancelled documents are excluded. Surfaced on the vendor detail page.
+
+---
+
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.

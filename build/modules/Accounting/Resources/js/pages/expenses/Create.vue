@@ -35,9 +35,17 @@ const form = useForm({
   paid_from_account_id: '',
   description: '',
   reference: '',
+  attachment: null as File | null,
 })
 
-const submit = () => form.post(`/${companySlug.value}/expenses`)
+// forceFormData: an expense with no file still has to post as multipart once the form
+// carries a file field, otherwise the null arrives as the string "null".
+const submit = () => form.post(`/${companySlug.value}/expenses`, { forceFormData: true })
+
+const onFile = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  form.attachment = input.files?.[0] ?? null
+}
 </script>
 
 <template>
@@ -94,6 +102,13 @@ const submit = () => form.post(`/${companySlug.value}/expenses`)
           <Label>Reference</Label>
           <Input v-model="form.reference" maxlength="100" />
           <InputError :message="form.errors.reference" />
+        </div>
+
+        <div class="space-y-1">
+          <Label for="expense-attachment">Bill or receipt</Label>
+          <Input id="expense-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic" @change="onFile" />
+          <p class="text-text-metadata">Optional. A PDF or a photo, up to 10 MB. Kept private to this company.</p>
+          <InputError :message="form.errors.attachment" />
         </div>
 
         <Button :disabled="form.processing" @click="submit">{{ form.processing ? 'Saving…' : 'Record expense' }}</Button>

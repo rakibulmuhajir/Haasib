@@ -16,6 +16,7 @@ import {
   RefreshCcw,
   Wand2,
   Scale,
+  Clock,
 } from 'lucide-vue-next'
 
 export const accountingNav: ModuleNavConfig = {
@@ -35,6 +36,7 @@ export const accountingNav: ModuleNavConfig = {
           { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
           { title: 'Trial Balance', href: `/${slug}/reports/trial-balance`, icon: Scale },
           { title: 'Balance Sheet', href: `/${slug}/reports/balance-sheet`, icon: Scale },
+          { title: 'Receivables Aging', href: `/${slug}/reports/receivables-aging`, icon: Clock },
           {
             title: 'Setup',
             icon: Settings,

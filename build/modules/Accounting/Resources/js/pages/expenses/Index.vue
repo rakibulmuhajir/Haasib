@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptText, Plus, Search } from 'lucide-vue-next'
+import { ReceiptText, Plus, Search, Paperclip } from 'lucide-vue-next'
 
 interface Expense {
   id: string
@@ -20,6 +20,7 @@ interface Expense {
   amount: number
   expense_account: string | null
   paid_from: string | null
+  attachments: Array<{ id: string; name: string }>
 }
 
 interface PaginatedExpenses {
@@ -81,6 +82,7 @@ const columns = [
   { key: 'expense_account', label: 'Account', kind: 'text' as const },
   { key: 'paid_from', label: 'Paid From', kind: 'text' as const },
   { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'attachments', label: 'Bill', kind: 'text' as const },
 ]
 
 const tableData = computed(() => props.expenses.data.map((e) => ({ ...e, id: e.id })))
@@ -131,6 +133,22 @@ const goToJournal = (row: any) => router.get(`/${companySlug.value}/journals/${r
           @row-click="goToJournal"
           @page-change="handlePage"
         >
+          <template #cell-attachments="{ row }">
+            <!-- .stop: the row itself opens the journal, the link opens the document. -->
+            <a
+              v-for="file in row.attachments"
+              :key="file.id"
+              :href="`/${companySlug}/expenses/attachments/${file.id}`"
+              class="inline-flex items-center gap-1 underline"
+              :title="file.name"
+              @click.stop
+            >
+              <Paperclip class="h-3.5 w-3.5" />
+              <span class="sr-only">{{ file.name }}</span>
+            </a>
+            <span v-if="!row.attachments?.length" class="text-text-metadata">—</span>
+          </template>
+
           <template #empty>
             <EmptyState title="No expenses yet" description="Record an expense paid from cash or bank." />
           </template>

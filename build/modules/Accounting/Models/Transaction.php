@@ -98,6 +98,12 @@ class Transaction extends Model
         return $this->hasMany(JournalEntry::class, 'transaction_id');
     }
 
+    /** Supporting documents — the supplier's bill behind an expense, and the like. */
+    public function attachments()
+    {
+        return $this->hasMany(TransactionAttachment::class, 'transaction_id');
+    }
+
     public function reversalOf()
     {
         return $this->belongsTo(self::class, 'reversal_of_id');

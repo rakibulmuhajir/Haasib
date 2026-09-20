@@ -1,6 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
-import { ClipboardCheck, CreditCard, Fuel, Droplets, Gauge, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale } from 'lucide-vue-next'
+import { ClipboardCheck, CreditCard, Fuel, Droplets, Gauge, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale, Clock } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -56,6 +56,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', t('profitAndLoss'), '/reports/profit-loss', BarChart3),
         ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
         ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
+        ...item('reports', 'Receivables Aging', '/reports/receivables-aging', Clock),
         ...item('reports', 'Stock Variance & Claims', '/fuel/reports/stock-variance', TrendingUp),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },

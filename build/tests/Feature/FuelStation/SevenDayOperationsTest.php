@@ -18,6 +18,7 @@ use App\Modules\Accounting\Services\ReceivablesAgingReportService;
 use App\Modules\Accounting\Services\TrialBalanceReportService;
 use App\Modules\Accounting\Services\VendorStatementService;
 use App\Modules\FuelStation\Actions\Product\SetupAction;
+use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
@@ -227,10 +228,14 @@ function sevenDayFixture(): array
         'company_id' => $company->id, 'name' => '2026',
         'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open',
     ]);
-    AccountingPeriod::create([
-        'company_id' => $company->id, 'fiscal_year_id' => $fy->id, 'name' => 'March',
-        'period_number' => 3, 'start_date' => '2026-03-01', 'end_date' => '2026-03-31',
-    ]);
+    // February too: the opening-balance journal is dated the day before trading starts,
+    // and GlPostingService refuses a date with no open period.
+    foreach ([[2, 'February', '2026-02-01', '2026-02-28'], [3, 'March', '2026-03-01', '2026-03-31']] as [$num, $pname, $from, $to]) {
+        AccountingPeriod::create([
+            'company_id' => $company->id, 'fiscal_year_id' => $fy->id, 'name' => $pname,
+            'period_number' => $num, 'start_date' => $from, 'end_date' => $to,
+        ]);
+    }
 
     // Three banks and the drawer, named so the statements read like the real thing.
     $existingBank = Account::where('company_id', $company->id)->where('subtype', 'bank')->orderBy('code')->firstOrFail();
@@ -269,7 +274,9 @@ function sevenDayFixture(): array
         ->ensureMappings(StationSettings::where('company_id', $company->id)->firstOrFail(), $user->id);
 
     // Products, tanks, pumps, nozzles and opening stock, through the real action.
-    app(SetupAction::class)->handle([
+    // SetupAction resolves the tenant through the CompanyContext facade rather than
+    // CurrentCompany, so it has to run inside an explicit context.
+    app(CompanyContextService::class)->withContext($company, fn () => app(SetupAction::class)->handle([
         'effective_date' => WEEK_START,
         'products' => [
             [
@@ -297,25 +304,25 @@ function sevenDayFixture(): array
                 ],
             ],
             [
-                'type' => 'lubricant', 'name' => 'Mobil Super 4L', 'packaging' => 'packaged',
+                'type' => 'lubricant', 'name' => 'Mobil Super 4L', 'lubricant_format' => 'packaged', 'packaging' => 'packaged',
                 'unit_of_measure' => 'piece', 'purchase_rate' => 1900.00, 'sale_rate' => LUBE_PACKAGED_PRICE,
-                'opening_quantity' => 60,
+                'opening_quantity' => 0,
             ],
             [
-                'type' => 'lubricant', 'name' => 'Open Engine Oil', 'packaging' => 'open',
+                'type' => 'lubricant', 'name' => 'Open Engine Oil', 'lubricant_format' => 'open', 'packaging' => 'open',
                 'unit_of_measure' => 'liter', 'purchase_rate' => 820.00, 'sale_rate' => LUBE_OPEN_PRICE,
-                'opening_quantity' => 200,
+                'opening_quantity' => 0,
             ],
         ],
-    ]);
+    ]));
 
     $items = Item::where('company_id', $company->id)->get()->keyBy('name');
     $tanks = Warehouse::where('company_id', $company->id)->where('warehouse_type', 'tank')->get()->keyBy('linked_item_id');
     $nozzles = Nozzle::where('company_id', $company->id)->orderBy('code')->get()->keyBy('code');
 
     // Opening balances: the drawer float and the fuel already in the ground.
-    $openingStock = OPENING_PETROL_LITRES * COST_PETROL + OPENING_DIESEL_LITRES * COST_DIESEL
-        + 60 * 1900.00 + 200 * 820.00;
+    // Fuel only: lubricants open at zero because opening stock needs a warehouse.
+    $openingStock = OPENING_PETROL_LITRES * COST_PETROL + OPENING_DIESEL_LITRES * COST_DIESEL;
     app(GlPostingService::class)->postBalancedTransaction([
         'company_id' => $company->id, 'transaction_type' => 'journal',
         'date' => '2026-02-28', 'currency' => 'PKR', 'description' => 'Opening balances',
@@ -340,6 +347,14 @@ function sevenDayFixture(): array
         'payment_terms' => 15,
         'is_active' => true,
     ]));
+
+    // An amanat depositor is a customer carrying a fuel CustomerProfile flagged as an
+    // amanat holder; a plain acct.customers row is refused by the close.
+    CustomerProfile::create([
+        'company_id' => $company->id,
+        'customer_id' => $customers[3]->id,
+        'is_amanat_holder' => true,
+    ]);
 
     $vendors = collect([
         ['PSO Depot — Korangi', 'fuel_refinery'],

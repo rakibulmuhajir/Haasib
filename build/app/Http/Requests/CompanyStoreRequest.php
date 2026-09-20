@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\IndustryCoaPack;
 
 class CompanyStoreRequest extends FormRequest
 {
@@ -49,7 +50,7 @@ class CompanyStoreRequest extends FormRequest
                 'required',
                 'string',
                 Rule::in($industryCodes),
-                Rule::exists('acct.industry_coa_packs', 'code')->where('is_active', true),
+                Rule::exists(IndustryCoaPack::class, 'code')->where('is_active', true),
             ],
             'country' => ['required', 'string', 'size:2', Rule::in($countryCodes)],
             'country_id' => ['nullable', 'uuid'],

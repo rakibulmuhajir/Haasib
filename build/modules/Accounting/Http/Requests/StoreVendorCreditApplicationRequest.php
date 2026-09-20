@@ -7,6 +7,8 @@ use App\Http\Requests\BaseFormRequest;
 use App\Models\User;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\VendorCredit;
+use App\Modules\Accounting\Models\Bill;
 
 class StoreVendorCreditApplicationRequest extends BaseFormRequest
 {
@@ -20,10 +22,10 @@ class StoreVendorCreditApplicationRequest extends BaseFormRequest
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
 
-        $vendorCreditRule = Rule::exists('acct.vendor_credits', 'id')
+        $vendorCreditRule = Rule::exists(VendorCredit::class, 'id')
             ->where(fn ($q) => $q->where('company_id', $companyId));
 
-        $billRule = Rule::exists('acct.bills', 'id')
+        $billRule = Rule::exists(Bill::class, 'id')
             ->where(fn ($q) => $q->where('company_id', $companyId));
 
         return [

@@ -7,6 +7,7 @@ use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Inventory\Models\ItemCategory;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\TaxRate;
 
 class StoreItemRequest extends BaseFormRequest
 {
@@ -39,7 +40,7 @@ class StoreItemRequest extends BaseFormRequest
             'cost_price' => 'numeric|min:0',
             'selling_price' => 'numeric|min:0',
             'currency' => 'required|string|size:3',
-            'tax_rate_id' => 'nullable|uuid|exists:tax.tax_rates,id',
+            'tax_rate_id' => ['nullable', 'uuid', Rule::exists(TaxRate::class, 'id')],
             'income_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'expense_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'asset_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],

@@ -8,6 +8,7 @@ use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Account;
 
 class UpdateDefaultAccountsRequest extends BaseFormRequest
 {
@@ -21,7 +22,7 @@ class UpdateDefaultAccountsRequest extends BaseFormRequest
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
 
-        $accountExists = fn () => Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)->whereNull('deleted_at');
+        $accountExists = fn () => Rule::exists(Account::class, 'id')->where('company_id', $companyId)->whereNull('deleted_at');
         $requireSubtype = function (array|string $subtype) use ($companyId) {
             $subtypes = (array) $subtype;
             return function (string $attribute, mixed $value, \Closure $fail) use ($companyId, $subtypes) {

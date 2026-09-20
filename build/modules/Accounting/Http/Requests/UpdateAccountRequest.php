@@ -49,7 +49,7 @@ class UpdateAccountRequest extends BaseFormRequest
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         return [
-            'parent_id' => ['nullable', 'uuid', Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)],
+            'parent_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyId)],
             'code' => ['required', 'string', 'max:50', $codeRule],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($this->types)],

@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use App\Modules\Accounting\Models\Account;
 
 class StoreSaleRequest extends BaseFormRequest
 {
@@ -23,7 +24,7 @@ class StoreSaleRequest extends BaseFormRequest
             'deposit_account_id' => [
                 'required',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->whereIn('subtype', ['bank', 'cash'])
                     ->where('is_active', true)),
             ],
@@ -34,7 +35,7 @@ class StoreSaleRequest extends BaseFormRequest
             'line_items.*.income_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('type', 'revenue')
                     ->where('is_active', true)),
             ],

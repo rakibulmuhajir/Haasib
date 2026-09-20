@@ -5,6 +5,7 @@ namespace App\Http\Requests\Onboarding;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\IndustryCoaPack;
 
 class StoreCompanyIdentityRequest extends BaseFormRequest
 {
@@ -23,7 +24,7 @@ class StoreCompanyIdentityRequest extends BaseFormRequest
                 'required',
                 'string',
                 Rule::in($industryCodes),
-                Rule::exists('acct.industry_coa_packs', 'code')->where('is_active', true),
+                Rule::exists(IndustryCoaPack::class, 'code')->where('is_active', true),
             ],
             'registration_number' => 'nullable|string|max:100',
             'trade_name' => 'nullable|string|max:255',

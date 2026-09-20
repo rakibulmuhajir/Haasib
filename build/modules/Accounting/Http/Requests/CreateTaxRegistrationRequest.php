@@ -6,6 +6,8 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Jurisdiction;
+use App\Modules\Accounting\Models\CompanyTaxRegistration;
 
 class CreateTaxRegistrationRequest extends BaseFormRequest
 {
@@ -24,12 +26,12 @@ class CreateTaxRegistrationRequest extends BaseFormRequest
         $registrationId = $this->route('id');
 
         return [
-            'jurisdiction_id' => ['required', 'uuid', 'exists:tax.jurisdictions,id'],
+            'jurisdiction_id' => ['required', 'uuid', Rule::exists(Jurisdiction::class, 'id')],
             'registration_number' => [
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('tax.company_tax_registrations')
+                Rule::unique(CompanyTaxRegistration::class)
                     ->where(fn ($query) => $query->where('company_id', $companyId))
                     ->ignore($registrationId),
             ],

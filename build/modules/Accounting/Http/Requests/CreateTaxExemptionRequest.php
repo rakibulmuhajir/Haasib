@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\TaxExemption;
 
 class CreateTaxExemptionRequest extends BaseFormRequest
 {
@@ -28,7 +29,7 @@ class CreateTaxExemptionRequest extends BaseFormRequest
                 'required',
                 'string',
                 'max:50',
-                Rule::unique('tax.tax_exemptions')
+                Rule::unique(TaxExemption::class)
                     ->where(fn ($query) => $query->where('company_id', $companyId)->whereNull('deleted_at'))
                     ->ignore($exemptionId),
             ],

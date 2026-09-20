@@ -7,6 +7,8 @@ use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Jurisdiction;
+use App\Modules\Accounting\Models\TaxRate;
 
 class CreateTaxRateRequest extends BaseFormRequest
 {
@@ -21,12 +23,12 @@ class CreateTaxRateRequest extends BaseFormRequest
         $companyId = app(CurrentCompany::class)->get()?->id;
 
         return [
-            'jurisdiction_id' => ['required', 'uuid', 'exists:tax.jurisdictions,id'],
+            'jurisdiction_id' => ['required', 'uuid', Rule::exists(Jurisdiction::class, 'id')],
             'code' => [
                 'required',
                 'string',
                 'max:50',
-                Rule::unique('tax.tax_rates')
+                Rule::unique(TaxRate::class)
                     ->where(fn ($query) => $query->where('company_id', $companyId)->whereNull('deleted_at')),
             ],
             'name' => ['required', 'string', 'max:255'],

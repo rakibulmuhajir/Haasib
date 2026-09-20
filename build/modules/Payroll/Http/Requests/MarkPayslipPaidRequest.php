@@ -28,7 +28,7 @@ class MarkPayslipPaidRequest extends BaseFormRequest
             'payment_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')
+                Rule::exists(Account::class, 'id')
                     ->where('company_id', $company->id)
                     ->whereIn('subtype', ['bank', 'cash'])
                     ->where('is_active', true),

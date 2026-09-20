@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 use App\Modules\Accounting\Models\VendorCredit;
+use App\Modules\Accounting\Models\Vendor;
 
 class StoreVendorCreditRequest extends BaseFormRequest
 {
@@ -29,10 +30,10 @@ class StoreVendorCreditRequest extends BaseFormRequest
         $creditNumberRule = Rule::unique(VendorCredit::class, 'credit_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
-        $vendorRule = Rule::exists('acct.vendors', 'id')
+        $vendorRule = Rule::exists(Vendor::class, 'id')
             ->where(fn ($q) => $q->where('company_id', $companyId));
 
-        $billRule = Rule::exists('acct.bills', 'id')
+        $billRule = Rule::exists(Bill::class, 'id')
             ->where(fn ($q) => $q->where('company_id', $companyId));
 
         $baseCurrencyRule = $companyBaseCurrency

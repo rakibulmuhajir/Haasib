@@ -6,6 +6,9 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\TaxRate;
+use App\Modules\Accounting\Models\Jurisdiction;
+use App\Modules\Accounting\Models\TaxGroup;
 
 class CreateTaxGroupRequest extends BaseFormRequest
 {
@@ -24,12 +27,12 @@ class CreateTaxGroupRequest extends BaseFormRequest
         $taxGroupId = $this->route('id');
 
         return [
-            'jurisdiction_id' => ['required', 'uuid', 'exists:tax.jurisdictions,id'],
+            'jurisdiction_id' => ['required', 'uuid', Rule::exists(Jurisdiction::class, 'id')],
             'code' => [
                 'required',
                 'string',
                 'max:50',
-                Rule::unique('tax.tax_groups')
+                Rule::unique(TaxGroup::class)
                     ->where(fn ($query) => $query->where('company_id', $companyId)->whereNull('deleted_at'))
                     ->ignore($taxGroupId),
             ],
@@ -38,7 +41,7 @@ class CreateTaxGroupRequest extends BaseFormRequest
             'is_active' => ['boolean'],
             'description' => ['nullable', 'string'],
             'components' => ['nullable', 'array'],
-            'components.*.tax_rate_id' => ['required_with:components', 'uuid', 'exists:tax.tax_rates,id'],
+            'components.*.tax_rate_id' => ['required_with:components', 'uuid', Rule::exists(TaxRate::class, 'id')],
             'components.*.priority' => ['nullable', 'integer', 'min:1'],
         ];
     }

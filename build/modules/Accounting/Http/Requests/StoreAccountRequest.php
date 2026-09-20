@@ -7,6 +7,7 @@ use App\Http\Requests\BaseFormRequest;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountTemplate;
 
 class StoreAccountRequest extends BaseFormRequest
 {
@@ -46,8 +47,8 @@ class StoreAccountRequest extends BaseFormRequest
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         return [
-            'template_id' => ['nullable', 'uuid', Rule::exists('acct.account_templates', 'id')->where('is_active', true)],
-            'parent_id' => ['nullable', 'uuid', Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)],
+            'template_id' => ['nullable', 'uuid', Rule::exists(AccountTemplate::class, 'id')->where('is_active', true)],
+            'parent_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyId)],
             'code' => ['required', 'string', 'max:50', $codeRule],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($this->types)],

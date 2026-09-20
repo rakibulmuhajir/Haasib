@@ -4,6 +4,8 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\TaxRate;
+use Illuminate\Validation\Rule;
 
 class DeleteTaxRateRequest extends BaseFormRequest
 {
@@ -21,7 +23,7 @@ class DeleteTaxRateRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'id' => ['required', 'uuid', 'exists:tax.tax_rates,id'],
+            'id' => ['required', 'uuid', Rule::exists(TaxRate::class, 'id')],
         ];
     }
 }

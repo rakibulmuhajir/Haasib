@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Customer;
 use Illuminate\Validation\Rule;
+use App\Modules\Accounting\Models\Account;
 
 class StoreCustomerRequest extends BaseFormRequest
 {
@@ -30,7 +31,7 @@ class StoreCustomerRequest extends BaseFormRequest
             'ar_account_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                Rule::exists(Account::class, 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_receivable')
                     ->where('is_active', true)),
             ],

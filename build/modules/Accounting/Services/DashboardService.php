@@ -7,25 +7,154 @@ use Carbon\Carbon;
 
 class DashboardService
 {
+    /**
+     * What the company actually holds, read from the general ledger.
+     *
+     * This used to sum acct.company_bank_accounts.current_balance, which is the
+     * statement side: acct.update_account_balance() maintains it from imported bank feed
+     * rows, and nothing else writes it. Haasib's money does not arrive that way. A daily
+     * close posts journals; so does an invoice payment, a bill payment and a transfer.
+     * None of them creates a feed row.
+     *
+     * So on a station that had traded for five days and held 3,527,862 in the ledger, this
+     * returned 0.00, and the dashboard reported it to the owner as the company's cash. A
+     * figure that is only correct for companies importing bank statements is not a cash
+     * position; it is a bank reconciliation input that was being read as one.
+     *
+     * The ledger is the source of truth for what is held, so this reads the ledger.
+     */
     public function getCashPosition(string $companyId): array
     {
-        $accounts = DB::table('acct.company_bank_accounts')
-            ->where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->select('account_name', 'current_balance', 'currency')
+        $accounts = DB::table('acct.accounts as a')
+            ->leftJoin('acct.journal_entries as j', 'j.account_id', '=', 'a.id')
+            ->where('a.company_id', $companyId)
+            ->whereIn('a.subtype', ['cash', 'bank'])
+            ->where('a.is_active', true)
+            ->whereNull('a.deleted_at')
+            ->groupBy('a.id', 'a.code', 'a.name', 'a.subtype', 'a.currency')
+            ->orderBy('a.code')
+            ->selectRaw('a.name, a.subtype, a.currency, COALESCE(SUM(j.debit_amount) - SUM(j.credit_amount), 0) as balance')
             ->get();
 
-        $total = $accounts->sum('current_balance'); // Simplified: assumes same currency for total (V1)
+        return [
+            'total' => (float) $accounts->sum('balance'),
+            // Kept separate because they answer different questions: one is countable in the
+            // drawer tonight, the other has to clear.
+            'cash' => (float) $accounts->where('subtype', 'cash')->sum('balance'),
+            'bank' => (float) $accounts->where('subtype', 'bank')->sum('balance'),
+            'accounts' => $accounts->map(fn ($a) => [
+                'name' => $a->name,
+                'balance' => (float) $a->balance,
+                'currency' => $a->currency,
+                'kind' => $a->subtype,
+            ])->values()->toArray(),
+        ];
+    }
+
+    /**
+     * Where the company stands: what it holds, what is owed to it, and what it owes.
+     *
+     * Every figure comes from the general ledger, so the four cannot disagree with each
+     * other or with the reports. Receivables and payables are the control-account balances
+     * rather than a sum over invoice and bill rows - a document that was posted but later
+     * adjusted in the ledger would otherwise show one number here and another on the books.
+     *
+     * @return array{cash: float, bank: float, receivable: float, payable: float, net: float, accounts: array}
+     */
+    public function getFinancialPosition(string $companyId): array
+    {
+        $position = $this->getCashPosition($companyId);
+
+        $control = function (array $subtypes, bool $creditNormal) use ($companyId): float {
+            $balance = (float) DB::table('acct.accounts as a')
+                ->leftJoin('acct.journal_entries as j', 'j.account_id', '=', 'a.id')
+                ->where('a.company_id', $companyId)
+                ->whereIn('a.subtype', $subtypes)
+                ->whereNull('a.deleted_at')
+                ->sum(DB::raw('COALESCE(j.debit_amount, 0) - COALESCE(j.credit_amount, 0)'));
+
+            // A payable sits credit-normal, so its ledger balance is negative when money is
+            // owed. Flip it here rather than at the call site, where the sign convention
+            // would have to be remembered.
+            return $creditNormal ? -$balance : $balance;
+        };
+
+        $receivable = $control(['accounts_receivable'], false);
+        $payable = $control(['accounts_payable'], true);
+
+        $byKind = collect($position['accounts'])->groupBy('kind');
 
         return [
-            'total' => (float) $total,
-            'accounts' => $accounts->map(fn($a) => [
-                'name' => $a->account_name,
-                'balance' => (float) $a->current_balance,
-                'currency' => $a->currency
-            ])->toArray()
+            'cash' => $position['cash'],
+            'bank' => $position['bank'],
+            'receivable' => $receivable,
+            'payable' => $payable,
+            'net' => round($position['cash'] + $position['bank'] + $receivable - $payable, 2),
+            'accounts' => $position['accounts'],
+
+            // What each figure is made of, so a number on the dashboard can be opened
+            // rather than merely read. Every list is ordered largest first: the question
+            // behind the click is almost always "who is most of it".
+            'breakdown' => [
+                'cash' => $this->asBreakdown($byKind->get('cash', collect()), $position['cash']),
+                'bank' => $this->asBreakdown($byKind->get('bank', collect()), $position['bank']),
+                'receivable' => $this->asBreakdown($this->receivableByCustomer($companyId), $receivable),
+                'payable' => $this->asBreakdown($this->payableByVendor($companyId), $payable),
+            ],
         ];
+    }
+
+    /**
+     * Normalise a breakdown and reconcile it to the figure it explains.
+     *
+     * The headline comes from the control account, the detail from the documents behind it.
+     * They should agree, and when they do not, a journal has touched the control account
+     * without a document - which is worth seeing, not hiding. The remainder row makes the
+     * parts add up to the whole they are shown under, so the drill-down can never silently
+     * contradict the number the user clicked.
+     */
+    private function asBreakdown($rows, float $total): array
+    {
+        $items = collect($rows)
+            ->map(fn ($r) => ['label' => (string) ($r['label'] ?? $r['name'] ?? 'Unnamed'), 'amount' => round((float) ($r['amount'] ?? $r['balance'] ?? 0), 2)])
+            ->filter(fn ($r) => $r['amount'] != 0.0)
+            ->sortByDesc('amount')
+            ->values();
+
+        $remainder = round($total - $items->sum('amount'), 2);
+        if (abs($remainder) >= 0.01) {
+            $items->push(['label' => 'Other ledger entries', 'amount' => $remainder]);
+        }
+
+        return $items->all();
+    }
+
+    private function receivableByCustomer(string $companyId)
+    {
+        return DB::table('acct.invoices as i')
+            ->join('acct.customers as c', 'c.id', '=', 'i.customer_id')
+            ->where('i.company_id', $companyId)
+            ->whereNotIn('i.status', ['void', 'draft'])
+            ->where('i.balance', '>', 0)
+            ->whereNull('i.deleted_at')
+            ->groupBy('c.id', 'c.name')
+            ->selectRaw('c.name as label, SUM(i.balance) as amount')
+            ->get()
+            ->map(fn ($r) => ['label' => $r->label, 'amount' => (float) $r->amount]);
+    }
+
+    private function payableByVendor(string $companyId)
+    {
+        return DB::table('acct.bills as b')
+            ->join('acct.vendors as v', 'v.id', '=', 'b.vendor_id')
+            ->where('b.company_id', $companyId)
+            ->whereNotIn('b.status', ['void', 'draft'])
+            ->where('b.balance', '>', 0)
+            ->whereNull('b.deleted_at')
+            ->groupBy('v.id', 'v.name')
+            ->selectRaw('v.name as label, SUM(b.balance) as amount')
+            ->get()
+            ->map(fn ($r) => ['label' => $r->label, 'amount' => (float) $r->amount]);
     }
 
     public function getMoneyInOut(string $companyId): array

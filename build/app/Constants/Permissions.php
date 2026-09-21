@@ -111,6 +111,13 @@ class Permissions
 
     public const POSTING_TEMPLATE_DELETE = 'posting_template.delete';
 
+    /**
+     * See the company's financial position on the dashboard: what is held, owed to it, and
+     * owed by it. Separate from report.view because this sits on the company home, which
+     * everyone opens, rather than behind a report someone chose to run.
+     */
+    public const FINANCIAL_POSITION_VIEW = 'financial_position.view';
+
     public const REPORT_VIEW = 'report.view';
 
     public const REPORT_EXPORT = 'report.export';

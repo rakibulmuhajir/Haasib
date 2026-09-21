@@ -6,6 +6,7 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import FinancialPosition from '@/components/FinancialPosition.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
 import Derivation from '@/components/Derivation.vue'
 import type { DerivationLine } from '@/components/Derivation.vue'
@@ -270,6 +271,15 @@ const props = defineProps<{
   currentUserRole: string
   financials: Financials
   dashboard: DashboardData
+  /** Present only for users permitted to see the company's position; null otherwise. */
+  financialPosition?: {
+    cash: number
+    bank: number
+    receivable: number
+    payable: number
+    net: number
+    breakdown: Record<'cash' | 'bank' | 'receivable' | 'payable', Array<{ label: string; amount: number }>>
+  } | null
   isFuelStation?: boolean
   fuelDashboard?: FuelHomeDashboard | null
   productDashboardDate?: string
@@ -1179,6 +1189,14 @@ const startActions = computed(() => {
 
       <!-- Overview Tab (Dashboard) -->
       <TabsContent value="overview" class="space-y-6">
+        <!-- First thing on the page, because it is the question a partner or manager opens
+             the dashboard to answer. Absent entirely for anyone without the permission. -->
+        <FinancialPosition
+          v-if="financialPosition"
+          :position="financialPosition"
+          :currency="company.base_currency"
+        />
+
 
         <template v-if="isFuelStationCompany">
           <Card variant="detail" class="border-rule-subtle bg-surface-raised">

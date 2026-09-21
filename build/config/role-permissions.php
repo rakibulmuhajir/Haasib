@@ -24,6 +24,9 @@ return [
     ],
 
     'manager' => [
+        // Financial position on the dashboard
+        'financial_position.view',
+
         // Company
         'company.invite-user',
         'company.manage-users',

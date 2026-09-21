@@ -466,6 +466,10 @@ class CompanyController extends Controller
         }
 
         // Fetch new Dashboard Data
+        // Gated: the company's position is not for everyone who can open the company home.
+        // Resolved in a closure so the queries do not run for a user who will not see it.
+        $canSeeFinancialPosition = $request->user()?->hasCompanyPermission(Permissions::FINANCIAL_POSITION_VIEW) ?? false;
+
         $cashPosition = $this->dashboardService->getCashPosition($company->id);
         $moneyInOut = $this->dashboardService->getMoneyInOut($company->id);
         $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
@@ -554,6 +558,9 @@ class CompanyController extends Controller
                 'quick_stats' => $quickStats,
                 'recent_activity' => $recentActivity,
             ],
+            'financialPosition' => $canSeeFinancialPosition
+                ? fn () => $this->dashboardService->getFinancialPosition($company->id)
+                : null,
             // New Dashboard Data Structure
             'dashboard' => [
                 'cash_position' => $cashPosition,

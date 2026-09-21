@@ -335,7 +335,28 @@ class DailyCloseService
             $otherSalesDetails = [];
             if (!empty($data['other_sales'])) {
                 foreach ($data['other_sales'] as $sale) {
-                    $amount = (float) $sale['amount'];
+                    // Derived here, never taken from the request.
+                    //
+                    // This used to post (float) $sale['amount'] - a figure computed in the
+                    // browser - straight into a revenue posting, with quantity and unit_price
+                    // validated, stored, and then ignored. Two things followed.
+                    //
+                    // A UI bug became a ledger bug. The lubricant rows stopped recalculating
+                    // when quantity changed, so day one of the manual E2E would have posted
+                    // 3,500 of lubricant revenue instead of 12,900 - and it would have
+                    // balanced, because the close reconciles against the same wrong number.
+                    // Wrong and self-consistent is the worst way for money to be wrong.
+                    //
+                    // And the three fields were independent as far as this method was
+                    // concerned, so a request could carry a quantity and a price that did not
+                    // multiply to the amount. other_sales_details then fed exactly that
+                    // contradiction to ProductProfitabilityReportService.
+                    //
+                    // The client may still send an amount; it is simply not what gets posted.
+                    $quantity = (float) ($sale['quantity'] ?? 0);
+                    $unitPrice = (float) ($sale['unit_price'] ?? 0);
+                    $amount = round($quantity * $unitPrice, 2);
+
                     $otherSalesTotal += $amount;
                     $item = Item::where('id', $sale['item_id'])
                         ->where('company_id', $companyId)
@@ -351,12 +372,14 @@ class DailyCloseService
                         );
                     }
 
+                    // Stored from the same three numbers that were posted, so the line can
+                    // always be re-derived from what it records.
                     $otherSalesDetails[] = [
                         'item_id' => $sale['item_id'],
                         'item_name' => $sale['item_name'],
-                        'quantity' => $sale['quantity'],
-                        'unit_price' => $sale['unit_price'],
-                        'amount' => $sale['amount'],
+                        'quantity' => $quantity,
+                        'unit_price' => $unitPrice,
+                        'amount' => $amount,
                     ];
                 }
             }

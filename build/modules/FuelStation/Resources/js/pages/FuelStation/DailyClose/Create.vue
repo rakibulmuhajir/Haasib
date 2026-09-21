@@ -1818,10 +1818,20 @@ const setOtherSaleItem = (index: number) => {
     }
 };
 
-// Recalculate amount when quantity or price changes
+/**
+ * Call this from `@update:model-value`, not `@input`.
+ *
+ * Input is a component, not a native element. `@input` only reaches its inner element as a
+ * fallthrough listener, so whether it sees the new quantity depends on which of the two
+ * handlers on that element Vue happens to run first. These two fields were the only two in
+ * this form wired that way - every other recalculation here uses the declared emit - and
+ * they were the two that silently kept the amount from the previous value. A lubricant line
+ * entered as 4 x 2,400 posted 2,400.
+ */
 const recalculateOtherSaleAmount = (index: number) => {
     const sale = form.other_sales[index];
-    sale.amount = sale.quantity * sale.unit_price;
+    // Rounded the way the server rounds it, so the figure on screen is the figure posted.
+    sale.amount = Math.round(sale.quantity * sale.unit_price * 100) / 100;
 };
 
 const testSeedForDate = computed(() => {
@@ -3253,7 +3263,7 @@ const completedWorkflowSteps = computed(() => {
                                             min="1"
                                             step="1"
                                             class="text-right"
-                                            @input="
+                                            @update:model-value="
                                                 recalculateOtherSaleAmount(
                                                     index,
                                                 )
@@ -3276,7 +3286,7 @@ const completedWorkflowSteps = computed(() => {
                                             @focus="selectZeroValue"
                                             step="0.01"
                                             class="text-right"
-                                            @input="
+                                            @update:model-value="
                                                 recalculateOtherSaleAmount(
                                                     index,
                                                 )

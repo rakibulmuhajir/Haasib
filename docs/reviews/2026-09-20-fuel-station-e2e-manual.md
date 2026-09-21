@@ -150,3 +150,26 @@ has not actually run yet.
 
 Do not enter the app's expected cash as the counted figure. That forces the variance to zero
 and the day proves nothing - which is what happened on day 3.
+
+---
+
+## Final browser run — Days 1–7 posted — 21 September 2026
+
+The remaining browser execution was completed manually against `scenario-mehran-fuel`.
+Days 1 through 6 were already posted and verified. Day 7 was then entered through all four
+sections and posted successfully.
+
+### Day 7 results
+
+- Meter sales: Diesel 800 L (Rs 251,200), Petrol 950 L (Rs 290,700), and lubricants
+  (Rs 22,300), for total sales of **Rs 564,200**.
+- Tank dip: Petrol variance **−3 L** and Diesel variance **−3 L**; total loss **−6 L**.
+- Cash out: Karachi Cement Haulage credit sale Rs 50,000, HBL deposit Rs 190,000, tea
+  Rs 600, and meals Rs 1,400.
+- Expected and counted closing cash: **Rs 1,640,650**.
+- Cash variance: **Rs 0**.
+- History status: **Posted** (FDC-20260307).
+
+The history screen, using the All time range, shows seven posted closes dated 1–7 March.
+Day 5 retains the deliberate **−Rs 350** shortage; the other six closes show zero cash
+variance. This completes the seven-day browser posting run.

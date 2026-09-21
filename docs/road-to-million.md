@@ -112,6 +112,103 @@ back cleanly, which is genuinely good work, but users see maintenance mode on ev
 
 ---
 
+## The core was meant to be an engine, and the modules have drifted
+
+This was the original design and it is worth saying plainly what has happened to it, because
+the drift is not obvious from any one file - it only shows when you count.
+
+The intent was a WordPress-shaped one: a core that does everything it can, exposing the
+accounting primitives through named extension points, with modules registering against them
+rather than reimplementing them. A fuel station, an umrah operator and a hotel all post a
+sale, take a payment, hold a deposit and close a period. Those are the same operations. Only
+the vocabulary and the screens differ.
+
+### What already exists, and is the right shape
+
+Two extension points are already built, and they are genuinely good:
+
+- **`CommandBus` + the `PaletteAction` contract** (`config/command-bus.php`). A named action
+  carries its own `rules()` and `permission()`, and `dispatch()` enforces both before calling
+  `handle()`. Any caller - controller, another module, the command palette - gets validation
+  and authorisation for free. This is the action registry.
+- **`WidgetRegistry` + `DashboardWidget`** (`app/Dashboard/`). A module registers a widget from
+  its service provider and the core composes the dashboard. This is the filter.
+
+So the mechanism is not missing. It is unadopted.
+
+### The count
+
+| | |
+|---|---|
+| Actions registered by Accounting | 80 |
+| Actions registered by FuelStation | 6 |
+| Actions registered by Payroll | 1 |
+| Modules using `WidgetRegistry` | 1 (Umrah) |
+| Laravel events dispatched anywhere | **0** |
+
+FuelStation is the largest module by surface - daily close, sales, amanat, tanks, nozzles,
+rates, handovers - and it exposes six actions. The rest of its behaviour lives in services it
+calls directly. Umrah is the only module that registers a dashboard widget; FuelStation grew
+its own `FuelDashboardService::getHomeCards()` instead, which the core cannot see, compose or
+reorder.
+
+And there are no domain events at all. Nothing in the system can say "a sale was posted" and
+let another module respond. Every cross-module interaction is therefore a direct call, which
+is why the modules know about each other.
+
+### What the drift actually costs
+
+Not theory - all of these were found in a single week:
+
+- **Two cash positions.** `Accounting\DashboardService::getCashPosition()` and
+  `Umrah\Dashboard\Widgets\CashPositionWidget` both answer "how much money is there". One of
+  them was reading the bank-feed column and reported 0.00 against a ledger holding 3,527,862.
+- **Two opening-balance writers.** The bank account form wrote a column; `OpeningBalance\SaveAction`
+  posted the journal. Neither knew about the other, so the screen and the books disagreed by
+  the entire balance.
+- **Posting rules living in the module.** `DailyCloseService` composes its own journal lines
+  before handing them to the core posting service. The mechanics are shared; the *rules* for
+  how a fuel sale becomes debits and credits are not. The next module that sells something
+  will write them again.
+- **One idiom, thirty-two copies.** The `Rule::exists('acct.accounts', ...)` connection-splitting
+  defect appeared in 32 rules across 21 files, because every module wrote its own validation
+  instead of calling a shared one.
+
+The pattern is the same each time: a module solved a problem the core had already solved,
+slightly differently, and the two drifted until they disagreed about money.
+
+### What closing the gap looks like
+
+In rough order of value:
+
+1. **Make the core's primitives callable, and make calling them the only way.** "Record a sale",
+   "take a payment", "post an expense", "hold a deposit", "close a period" should each be one
+   named action on the bus, owned by Accounting, with the module supplying the vocabulary and
+   the accounts. A module's service composes those calls; it does not compose journal lines.
+2. **Add domain events.** `SalePosted`, `PaymentReceived`, `PeriodClosed`. This is the hook half
+   of the WordPress analogy and it is entirely missing. It is what lets the fuel module react
+   to an accounting event without Accounting knowing FuelStation exists - and it is how the
+   daily close should learn about a bank transfer rather than querying for one.
+3. **Move the remaining dashboards onto `WidgetRegistry`.** FuelStation's home cards first. The
+   core then owns composition, ordering and permissions in one place.
+4. **Enforce it.** The repo already has the pattern twice - `ValidationRuleConnectionRoutingTest`
+   and `InlineEditRouteVerbsTest` scan the codebase for a forbidden idiom. A third scan should
+   fail the build when a module composes a journal line, writes a financial column directly, or
+   queries another module's tables.
+
+Point 4 is the one that makes the rest stick. `CLAUDE.md` already says `new Service()` should be
+`Bus::dispatch()`; nothing enforces it, so the rule has been quietly losing for months.
+
+### The honest caveat
+
+This is a refactor with no visible output, on a system that works. It should not be done as a
+project. It should be done as a rule: **every new module capability goes on the bus, and every
+time a bug is fixed in a duplicated implementation, that duplicate collapses into the core.**
+The opening balance fix in this session is the shape - two screens, one command, and the
+statement column reduced from a second truth to a derived one.
+
+---
+
 ## Look and feel
 
 ### Burn down the palette baseline
@@ -160,5 +257,9 @@ not defended at all.
 3. `tests/Feature` in CI.
 4. Route helpers at the call sites.
 5. Dual-write audit and the enforcing scan.
-6. Palette baseline, accessibility, empty states.
-7. Zero-downtime deploys, custom error pages.
+6. Domain events, and the first core primitive moved onto the bus.
+7. Palette baseline, accessibility, empty states.
+8. Zero-downtime deploys, custom error pages.
+
+Items 5 and 6 are the same work seen from two sides: the audit finds the duplicates, the
+engine is where they go.

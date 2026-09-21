@@ -16,6 +16,66 @@ prove the thing the module is actually built on.
 
 ---
 
+## How this run is to be done
+
+**Through the browser, by hand. Not through the service.**
+
+There are two ways this week has been put through the software and they answer different
+questions. `SevenDayOperationsTest` calls `DailyCloseService` directly and passes 10/10 - the
+posting engine is proven and does not need proving again. Nothing in this document is about
+the engine. This run exists to test the **screens**, and the only way to test a screen is to
+use it.
+
+So: no tinker, no artisan, no calling a service to "save time" on a day that is tedious to
+enter. A day entered any way other than through the UI has not been tested, and recording it
+as passed is worse than skipping it.
+
+**Go straight through to day 14 without a break.** The days chain - each opening cash is the
+previous day's closing - so a day entered wrongly invalidates every day after it. A run that
+stops at day 5 and resumes tomorrow is a run whose second half is testing yesterday's
+mistakes.
+
+### The four rules a previous run broke
+
+Every one of these produced a day that looked fine and proved nothing.
+
+1. **Do the "before the close" steps first, on their own pages.** Day 3 wants a delivery bill,
+   an electricity expense and a standalone credit sale entered *elsewhere*; day 4 wants its
+   200,000 banked at the bank screen. Those four steps are most of the integration this script
+   exists to test. When they were skipped, day 3's closing cash came out exactly 74,000 high -
+   42,000 + 2,000 + 30,000 - and the close was right; the setup was missing.
+
+2. **Never type the app's expected figure into the counted-cash box.** That forces the variance
+   to zero and the day proves nothing. Count what the script says was counted, and if the
+   variance is not what the script predicts, that is the finding - write it down, do not adjust
+   the count until it matches.
+
+3. **Never use the form's test-seed button.** Days 4 and 5 of a previous run were filled with
+   it, which is why their expenses read "Test station expense" and their deposits bore no
+   relation to the script.
+
+4. **Check the buyer on every credit sale.** A previous run put all three credit sales against
+   Al-Habib Transport because the name was picked from a stale "recent" list. The close stores
+   faithfully whatever it is handed.
+
+### Before you start
+
+- Rebuild the frontend bundle, or you will be testing code that is no longer there. A stale
+  Vite build is what made the buyer search appear broken.
+- Clear any saved draft for the dates you are about to enter. The form autosaves to
+  `localStorage` under `daily-close-draft-<companyId>-<date>`, so a reload restores whatever
+  was last on screen - including a wrong figure you were about to correct.
+- Re-seed. It purges its own company, so the week starts clean.
+
+### Recording the result
+
+For each day write down: the four expected figures from the script, what the screen actually
+showed, and whether they match. A day is **passed** only if it was entered as specified and
+the figures agree. If something is entered wrongly, say so and mark the day invalid - an
+invalid day is a useful fact, a day silently adjusted until it balanced is not.
+
+---
+
 ## 0. Setup
 
 ```powershell

@@ -4,9 +4,19 @@ import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 import { useVModel } from '@vueuse/core'
 
+/**
+ * modelValue accepts null because half the forms in the app legitimately hold one: a
+ * nullable amount starts as null and is null again once cleared. The component already
+ * handled it - a native input renders null as an empty box - but the type said otherwise,
+ * so every such binding was a type error at the call site and the real ones hid among them.
+ *
+ * Only the inbound prop widens. The element emits what the user typed, which is a string,
+ * or a number once the `number` modifier has parsed it - never null - so the emit signature
+ * stays as it is.
+ */
 const props = defineProps<{
-  defaultValue?: string | number
-  modelValue?: string | number
+  defaultValue?: string | number | null
+  modelValue?: string | number | null
   class?: HTMLAttributes['class']
   /**
    * `v-model.number` and `v-model.trim` are handled here rather than by Vue.

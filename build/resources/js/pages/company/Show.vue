@@ -389,8 +389,8 @@ const buildProductRow = (index = 0) => ({
   new_tank: null as null | {
     name: string
     code: string
-    capacity: string | number
-    low_level_alert: string | number
+    capacity: string
+    low_level_alert: string
   },
   create_pump_points: true,
   pump_setups: [buildPumpSetup(index)],
@@ -679,9 +679,10 @@ const submitProducts = () => {
       productsForm.products = [buildProductRow()]
       productsForm.clearErrors()
       productsDialogOpen.value = false
+      // reload() sets preserveScroll itself, after spreading these options, so passing
+      // it here never had any effect.
       router.reload({
         only: ['fuelDashboard', 'fuelTanks'],
-        preserveScroll: true,
       })
     },
     onError: (errors) => {

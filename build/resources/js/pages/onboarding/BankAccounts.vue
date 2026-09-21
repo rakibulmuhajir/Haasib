@@ -34,7 +34,8 @@ const props = defineProps<Props>()
 const form = useForm({
   bank_accounts: [
     {
-      id: null,
+      // Null until saved; onMounted replaces these with the existing accounts' own ids.
+      id: null as string | null,
       account_name: '',
       currency: props.company.base_currency,
       account_type: 'bank' as 'bank' | 'cash',

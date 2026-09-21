@@ -157,6 +157,8 @@ class SaveAction implements PaletteAction
             // sees the fresh settings without needing its own DB round trip.
             $contextCompany->settings = $settings;
 
+            $this->syncStatementOpenings($company->id, $params, $accounts, $asOf);
+
             return [
                 'message' => 'Opening balances saved as of '.$asOf,
                 'data' => ['journal_id' => $journalId, 'invoice_ids' => $invoiceIds, 'bill_ids' => $billIds],
@@ -165,6 +167,68 @@ class SaveAction implements PaletteAction
         // (company row above, invoices/bills created below) after the exclusive advisory
         // lock; retry is a backstop against the narrow window described in the lock-order
         // comment in the protect_locked_openings migration.
+    }
+
+    /**
+     * Mirror the opening figures onto the bank-statement side.
+     *
+     * acct.company_bank_accounts.opening_balance is not a second copy of the ledger truth.
+     * It is the statement-side baseline: acct.update_account_balance() adds the imported feed
+     * rows to it to get current_balance, and BankReconciliationController uses it as a
+     * reconciliation's starting balance. Reconciliation exists to compare that side against
+     * the ledger, so neither number can be derived from the other — collapse them and the
+     * feature has nothing left to compare.
+     *
+     * They do have to start equal, and nothing kept them that way. The bank account form
+     * wrote the column and never posted a journal; this action posted the journal and never
+     * touched the column. Owning both here is what makes one write leave the pair coherent.
+     *
+     * The trigger only recomputes current_balance when a feed row changes, so moving the
+     * baseline has to recompute it too, or the balance stays stale until the next import.
+     */
+    private function syncStatementOpenings(string $companyId, array $params, array $accounts, string $asOf): void
+    {
+        $byGlAccount = [];
+
+        if (! empty($accounts['cash'])) {
+            $byGlAccount[$accounts['cash']] = (float) ($params['cash']['amount'] ?? 0);
+        }
+
+        foreach ($params['banks'] ?? [] as $bank) {
+            $byGlAccount[$bank['account_id']] = (float) $bank['amount'];
+        }
+
+        $rows = DB::table('acct.company_bank_accounts')
+            ->where('company_id', $companyId)
+            ->whereNull('deleted_at')
+            ->get(['id', 'gl_account_id', 'opening_balance']);
+
+        foreach ($rows as $row) {
+            // A generation replaces the whole set, so an account left out of this one opens
+            // at zero. Without that, an account dropped from the form keeps the figure from
+            // a previous save and its current_balance stays overstated for good.
+            $amount = round((float) ($row->gl_account_id !== null
+                ? ($byGlAccount[$row->gl_account_id] ?? 0)
+                : 0), 2);
+
+            if ($amount === round((float) $row->opening_balance, 2)) {
+                continue;
+            }
+
+            $feed = (float) DB::table('acct.bank_transactions')
+                ->where('bank_account_id', $row->id)
+                ->whereNull('deleted_at')
+                ->sum('amount');
+
+            DB::table('acct.company_bank_accounts')
+                ->where('id', $row->id)
+                ->update([
+                    'opening_balance' => $amount,
+                    'opening_balance_date' => $amount > 0 ? $asOf : null,
+                    'current_balance' => round($feed + $amount, 2),
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     private function guardNotLocked($company): void

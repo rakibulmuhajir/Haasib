@@ -64,6 +64,11 @@ interface BankAccountRef {
   notes: string | null
 }
 
+interface OpeningBalanceState {
+  locked: boolean
+  locked_at: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   bankAccount: BankAccountRef
@@ -72,7 +77,14 @@ const props = defineProps<{
   glAccounts: GlAccountOption[]
   accountTypes: AccountTypeOption[]
   hasTransactions: boolean
+  openingBalances: OpeningBalanceState
 }>()
+
+// The lock note is the only date this form renders; SaveAction stores locked_at as an ISO
+// timestamp, so parse rather than slice.
+const formatDate = (value: string | null): string =>
+  value ? new Date(value).toLocaleDateString() : '—'
+
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -322,9 +334,20 @@ const handleCancel = () => {
       <Card v-if="!hasTransactions" variant="form">
         <CardHeader>
           <CardTitle>Opening Balance</CardTitle>
-          <CardDescription>Adjust the starting balance for this account</CardDescription>
+          <CardDescription>
+            The balance this account started with. Posted to the ledger as part of the
+            company's opening position, the same entry the Opening Balances page makes.
+          </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
+          <p
+            v-if="openingBalances.locked"
+            class="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
+          >
+            Opening balances were locked on {{ formatDate(openingBalances.locked_at) }} and can no
+            longer be changed.
+          </p>
+
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label for="opening_balance">Opening Balance</Label>
@@ -334,6 +357,7 @@ const handleCancel = () => {
                 type="number"
                 step="0.01"
                 placeholder="0.00"
+                :disabled="openingBalances.locked"
               />
               <InputError :message="form.errors.opening_balance" />
             </div>
@@ -344,6 +368,7 @@ const handleCancel = () => {
                 id="opening_balance_date"
                 v-model="form.opening_balance_date"
                 type="date"
+                :disabled="openingBalances.locked"
               />
               <InputError :message="form.errors.opening_balance_date" />
             </div>

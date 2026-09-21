@@ -11,12 +11,15 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bank;
 use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
+use App\Services\CommandBus;
 use App\Services\CompanyCurrencyOptions;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -95,6 +98,7 @@ class BankAccountController extends Controller
             'currencies' => $currencies,
             'glAccounts' => $glAccounts,
             'accountTypes' => $this->getAccountTypes(),
+            'openingBalances' => $this->openingBalanceState($company),
         ]);
     }
 
@@ -106,15 +110,105 @@ class BankAccountController extends Controller
         $validated['gl_account_id'] = $validated['gl_account_id']
             ?? $this->createLedgerAccountFor($company->id, $validated)->id;
 
+        // The opening balance is not this form's to write. It is a ledger position, and the
+        // only thing that may post one is opening_balance.save; writing the column here is
+        // what used to leave the figure showing on screen with nothing behind it in the
+        // ledger. Pulled out of the attributes, then set through the command below.
+        $opening = $this->takeOpening($validated);
+
         $bankAccount = BankAccount::create([
             'company_id' => $company->id,
             'created_by_user_id' => Auth::id(),
             ...$validated,
         ]);
 
+        $error = $this->applyOpening($bankAccount, $opening, $request->user());
+
+        if ($error !== null) {
+            return redirect()
+                ->route('banking.accounts.show', ['company' => $company->slug, 'bankAccount' => $bankAccount->id])
+                ->with('error', 'Bank account created, but the opening balance was not set: '.$error);
+        }
+
         return redirect()
             ->route('banking.accounts.show', ['company' => $company->slug, 'bankAccount' => $bankAccount->id])
             ->with('success', 'Bank account created successfully.');
+    }
+
+    /**
+     * Whether the opening position has been locked, so the form can render the field
+     * read-only rather than letting someone type a figure the save is going to refuse.
+     *
+     * This is a courtesy, not the enforcement. SaveAction::guardNotLocked and the
+     * acct.protect_locked_opening trigger are what actually hold the line, and they still
+     * run whatever the page does.
+     *
+     * @return array{locked: bool, locked_at: ?string}
+     */
+    private function openingBalanceState($company): array
+    {
+        $opening = ($company->settings ?? [])['opening_balances'] ?? [];
+
+        return [
+            'locked' => ! empty($opening['locked_at']),
+            'locked_at' => $opening['locked_at'] ?? null,
+        ];
+    }
+
+    /**
+     * Lift the opening balance out of the attributes so it cannot reach the column, and
+     * return what the command needs. Null when the form did not offer one.
+     *
+     * @return array{amount: float, as_of_date: ?string}|null
+     */
+    private function takeOpening(array &$validated): ?array
+    {
+        $amount = $validated['opening_balance'] ?? null;
+        $asOf = $validated['opening_balance_date'] ?? null;
+
+        unset($validated['opening_balance'], $validated['opening_balance_date']);
+
+        return $amount === null ? null : [
+            'amount' => (float) $amount,
+            'as_of_date' => $asOf ?: null,
+        ];
+    }
+
+    /**
+     * Set the opening balance through opening_balance.set_account, which is the single write
+     * path for one: it merges into the current opening set and delegates to SaveAction, so
+     * the lock, the date bound and the ledger posting all apply exactly as they do on the
+     * Opening Balances page.
+     *
+     * Returns null on success, or the reason it did not happen. The account itself has
+     * already been saved by the time this runs, so a refusal here — locked balances, a date
+     * after the first posted transaction — must not read as though the whole save failed.
+     */
+    private function applyOpening(BankAccount $account, ?array $opening, $user): ?string
+    {
+        if ($opening === null || $account->gl_account_id === null) {
+            return null;
+        }
+
+        // Nothing to post and nothing to clear: an account created at zero should not
+        // reverse and repost the company's whole opening generation for no change.
+        if ($opening['amount'] === 0.0 && (float) $account->opening_balance === 0.0) {
+            return null;
+        }
+
+        try {
+            app(CommandBus::class)->dispatch('opening_balance.set_account', [
+                'gl_account_id' => $account->gl_account_id,
+                'amount' => $opening['amount'],
+                'as_of_date' => $opening['as_of_date'],
+            ], $user);
+        } catch (ValidationException $e) {
+            return collect($e->errors())->flatten()->first() ?? 'validation failed.';
+        } catch (AuthorizationException $e) {
+            return 'you do not have permission to set opening balances.';
+        }
+
+        return null;
     }
 
     /**
@@ -237,6 +331,7 @@ class BankAccountController extends Controller
             'glAccounts' => $glAccounts,
             'accountTypes' => $this->getAccountTypes(),
             'hasTransactions' => $account->hasTransactions(),
+            'openingBalances' => $this->openingBalanceState($companyModel),
         ]);
     }
 
@@ -247,8 +342,12 @@ class BankAccountController extends Controller
         $account = BankAccount::where('company_id', $companyModel->id)
             ->findOrFail($bankAccount);
 
-        DB::transaction(function () use ($account, $request, $companyModel) {
+        $opening = null;
+
+        DB::transaction(function () use ($account, $request, $companyModel, &$opening) {
             $validated = $request->validated();
+            // See store(): the opening balance goes through the command, never the column.
+            $opening = $this->takeOpening($validated);
             // An explicit automatic selection creates a separate ledger; old cash
             // postings remain on their original account.
             if (array_key_exists('gl_account_id', $validated) && $validated['gl_account_id'] === null) {
@@ -256,6 +355,18 @@ class BankAccountController extends Controller
             }
             $account->update(['updated_by_user_id' => Auth::id(), ...$validated]);
         });
+
+        // Outside the transaction above on purpose: SaveAction opens its own, takes an
+        // exclusive advisory lock as its first statement and retries on deadlock. Nesting it
+        // inside another write transaction would hold that lock for the outer transaction's
+        // lifetime and defeat the retry.
+        $error = $this->applyOpening($account->refresh(), $opening, $request->user());
+
+        if ($error !== null) {
+            return redirect()
+                ->route('banking.accounts.show', ['company' => $companyModel->slug, 'bankAccount' => $account->id])
+                ->with('error', 'Bank account updated, but the opening balance was not set: '.$error);
+        }
 
         return redirect()
             ->route('banking.accounts.show', ['company' => $companyModel->slug, 'bankAccount' => $account->id])

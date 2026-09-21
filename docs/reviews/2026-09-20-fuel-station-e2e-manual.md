@@ -3,9 +3,9 @@
 ## Current status
 
 The browser-only run is in progress against the manually created company `Mehran Manual E2E`.
-Setup completed so far includes the company, petrol and diesel products, two tanks, four pump/nozzle opening readings, two lubricant products, three bank accounts, cash, opening balances, and four of the six buyers.
+Setup completed so far includes the company, petrol and diesel products, two tanks, four pump/nozzle opening readings, two lubricant products, three bank accounts, cash, opening balances, all six buyers with Rs 200,000 credit limits, and all three suppliers.
 
-Day 1 daily close has not yet been posted.
+Day 1 daily close is entered through all four sections, but final posting is paused because the review totals expose a lubricant calculation issue.
 
 ## Issues found before Day 1
 
@@ -25,4 +25,8 @@ The bank account form accepted an opening balance and showed it on the account d
 
 ## Remaining browser work
 
-Create the remaining three buyers, three suppliers, three employees, and then execute the fixed Day 1–14 transactions from `docs/fuel-station-e2e.md`.
+Employees are complete. Continue with the fixed Day 1–14 transactions from `docs/fuel-station-e2e.md` after resolving the Day 1 review issue below.
+
+### Lubricant quantity is not reflected in daily-close amounts — confirmed
+
+In Day 1 daily close, entering Mobil Super 4L quantity 4 at Rs 2,400 and Open Engine Oil quantity 3 L at Rs 1,100 left the line amounts at Rs 2,400 and Rs 1,100. The review total was Rs 3,500, while the fixed E2E case expects Rs 12,900 (4 × 2,400 + 3 × 1,100). The app therefore calculates expected closing cash as Rs 226,500 instead of the test's Rs 235,900. Entering the prescribed count displays a Rs 9,400 cash-over warning before posting.

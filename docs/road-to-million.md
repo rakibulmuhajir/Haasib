@@ -112,100 +112,86 @@ back cleanly, which is genuinely good work, but users see maintenance mode on ev
 
 ---
 
-## The core was meant to be an engine, and the modules have drifted
+## The core features are being rebuilt inside the modules
 
-This was the original design and it is worth saying plainly what has happened to it, because
-the drift is not obvious from any one file - it only shows when you count.
+Invoicing, billing, customers, vendors, accounts, the general ledger - these are core. They
+are the same operations whatever the business is. A fuel station, an umrah operator and a
+hotel all invoice somebody, owe somebody, hold somebody's money and close a period. Only the
+vocabulary and the screens should differ.
 
-The intent was a WordPress-shaped one: a core that does everything it can, exposing the
-accounting primitives through named extension points, with modules registering against them
-rather than reimplementing them. A fuel station, an umrah operator and a hotel all post a
-sale, take a payment, hold a deposit and close a period. Those are the same operations. Only
-the vocabulary and the screens differ.
+The design was for modules to route that work through the core. What has happened instead is
+that each module has grown its own version of whatever it needed, and the versions have
+drifted. This is not a security or a boundaries problem. It is repetition, and the cost shows
+up in two places: the same bug has to be fixed several times, and the app stops feeling like
+one app.
 
-### What already exists, and is the right shape
+### Where it has already happened
 
-Two extension points are already built, and they are genuinely good:
+Each of these was verified in the codebase, not inferred.
 
-- **`CommandBus` + the `PaletteAction` contract** (`config/command-bus.php`). A named action
-  carries its own `rules()` and `permission()`, and `dispatch()` enforces both before calling
-  `handle()`. Any caller - controller, another module, the command palette - gets validation
-  and authorisation for free. This is the action registry.
-- **`WidgetRegistry` + `DashboardWidget`** (`app/Dashboard/`). A module registers a widget from
-  its service provider and the core composes the dashboard. This is the filter.
+| Core feature | Core implementation | The module's own | |
+|---|---|---|---|
+| Vendor statement | `Accounting\VendorStatementService` | `UmrahCoreService::vendorStatement()` | Umrah calls the core service nowhere |
+| Cash position | `DashboardService::getCashPosition()` | `Umrah\Dashboard\Widgets\CashPositionWidget` | one of them reported 0.00 against a ledger holding 3,527,862 |
+| Investor / partner | `auth.partners` + `PartnerTransaction` | `fuel.investors` | the fuel copy carries its own `total_invested` and `total_commission_earned` running totals |
+| Dashboard composition | `WidgetRegistry` + `DashboardWidget` | `FuelDashboardService::getHomeCards()` | one module of four uses the registry |
+| Opening balance | `OpeningBalance\SaveAction` | the bank account form's own column write | fixed 21 September; they had disagreed by the entire balance |
+| Account validation | one `Rule::exists` idiom | 32 copies across 21 files | all 32 were wrong in the same way |
 
-So the mechanism is not missing. It is unadopted.
+### What is being done right, for contrast
 
-### The count
+The data layer often does link back, and that is worth saying because it shows the intent
+survived in places:
 
-| | |
-|---|---|
-| Actions registered by Accounting | 80 |
-| Actions registered by FuelStation | 6 |
-| Actions registered by Payroll | 1 |
-| Modules using `WidgetRegistry` | 1 (Umrah) |
-| Laravel events dispatched anywhere | **0** |
+- `umrah.expenses` carries `transaction_id` and `expense_account_id`, so an umrah expense is a
+  real posting in the general ledger, not an off-books record.
+- `umrah.visa_vendors` carries `vendor_id`, so a visa vendor *is* an `acct.vendors` row with
+  extra columns.
 
-FuelStation is the largest module by surface - daily close, sales, amanat, tanks, nozzles,
-rates, handovers - and it exposes six actions. The rest of its behaviour lives in services it
-calls directly. Umrah is the only module that registers a dashboard widget; FuelStation grew
-its own `FuelDashboardService::getHomeCards()` instead, which the core cannot see, compose or
-reorder.
+So the pattern is not that modules refuse to use the core. It is that they link to the core's
+**tables** and then rebuild the core's **services and screens** on top. That is exactly the
+layer where the repetition hurts most, because that is the layer the user sees.
 
-And there are no domain events at all. Nothing in the system can say "a sale was posted" and
-let another module respond. Every cross-module interaction is therefore a direct call, which
-is why the modules know about each other.
+### Why this is a product problem, not only an engineering one
 
-### What the drift actually costs
+A vendor in Haasib currently has more than one page, more than one statement, and more than
+one balance depending on which module you came in through. Somebody who learns the vendor
+screen in Accounting has not learned the vendor screen in Umrah. The word is the same, the
+behaviour is not, and the application reads as several applications sharing a login.
 
-Not theory - all of these were found in a single week:
+Cohesion is not a coat of paint over that. It is the consequence of there being one
+implementation to present.
 
-- **Two cash positions.** `Accounting\DashboardService::getCashPosition()` and
-  `Umrah\Dashboard\Widgets\CashPositionWidget` both answer "how much money is there". One of
-  them was reading the bank-feed column and reported 0.00 against a ledger holding 3,527,862.
-- **Two opening-balance writers.** The bank account form wrote a column; `OpeningBalance\SaveAction`
-  posted the journal. Neither knew about the other, so the screen and the books disagreed by
-  the entire balance.
-- **Posting rules living in the module.** `DailyCloseService` composes its own journal lines
-  before handing them to the core posting service. The mechanics are shared; the *rules* for
-  how a fuel sale becomes debits and credits are not. The next module that sells something
-  will write them again.
-- **One idiom, thirty-two copies.** The `Rule::exists('acct.accounts', ...)` connection-splitting
-  defect appeared in 32 rules across 21 files, because every module wrote its own validation
-  instead of calling a shared one.
+### The rule this needs
 
-The pattern is the same each time: a module solved a problem the core had already solved,
-slightly differently, and the two drifted until they disagreed about money.
+A module may add **vocabulary**, **workflow** and **screens**. It may not add a second
+implementation of a core noun or a core calculation.
 
-### What closing the gap looks like
+Concretely: a module that needs a vendor statement calls the vendor statement service and
+presents the result its own way. It does not compute one. A module that needs a customer
+extends the customer with its own profile table - the way `fuel.customer_profiles` already
+does - rather than growing a parallel party.
 
-In rough order of value:
+### How to close it without a rewrite
 
-1. **Make the core's primitives callable, and make calling them the only way.** "Record a sale",
-   "take a payment", "post an expense", "hold a deposit", "close a period" should each be one
-   named action on the bus, owned by Accounting, with the module supplying the vocabulary and
-   the accounts. A module's service composes those calls; it does not compose journal lines.
-2. **Add domain events.** `SalePosted`, `PaymentReceived`, `PeriodClosed`. This is the hook half
-   of the WordPress analogy and it is entirely missing. It is what lets the fuel module react
-   to an accounting event without Accounting knowing FuelStation exists - and it is how the
-   daily close should learn about a bank transfer rather than querying for one.
-3. **Move the remaining dashboards onto `WidgetRegistry`.** FuelStation's home cards first. The
-   core then owns composition, ordering and permissions in one place.
-4. **Enforce it.** The repo already has the pattern twice - `ValidationRuleConnectionRoutingTest`
-   and `InlineEditRouteVerbsTest` scan the codebase for a forbidden idiom. A third scan should
-   fail the build when a module composes a journal line, writes a financial column directly, or
-   queries another module's tables.
+1. **Name the core surface explicitly.** Customers, vendors, accounts, invoices, bills,
+   payments, credit notes, journals, statements, aging. Write the list down; it does not
+   exist anywhere today, which is most of why the boundary keeps being crossed by accident.
+2. **Give each one address on the `CommandBus`.** The mechanism already exists and already
+   carries validation and permission: `dispatch()` runs the action's own `rules()` and
+   `permission()` before `handle()`. Accounting registers 80 actions this way, FuelStation 6,
+   Payroll 1. The gap is adoption, not machinery.
+3. **Collapse the duplicates opportunistically, not as a project.** Every time a bug is fixed
+   in one of the pairs above, that is the moment its duplicate folds into the core. The
+   opening balance fix is the worked example: two screens, one command, and the second copy of
+   the figure demoted from a rival truth to a derived one.
+4. **Enforce it with a scan.** The repo already does this twice -
+   `ValidationRuleConnectionRoutingTest` and `InlineEditRouteVerbsTest` fail the build on a
+   forbidden idiom. A third should fail when a module composes a journal line, writes a
+   financial column directly, or reimplements a named core calculation.
 
-Point 4 is the one that makes the rest stick. `CLAUDE.md` already says `new Service()` should be
-`Bus::dispatch()`; nothing enforces it, so the rule has been quietly losing for months.
-
-### The honest caveat
-
-This is a refactor with no visible output, on a system that works. It should not be done as a
-project. It should be done as a rule: **every new module capability goes on the bus, and every
-time a bug is fixed in a duplicated implementation, that duplicate collapses into the core.**
-The opening balance fix in this session is the shape - two screens, one command, and the
-statement column reduced from a second truth to a derived one.
+Point 4 is what makes the rest hold. `CLAUDE.md` already says `new Service()` should be
+`Bus::dispatch()`. Nothing enforces it, so the rule has been quietly losing for months.
 
 ---
 
@@ -257,9 +243,9 @@ not defended at all.
 3. `tests/Feature` in CI.
 4. Route helpers at the call sites.
 5. Dual-write audit and the enforcing scan.
-6. Domain events, and the first core primitive moved onto the bus.
+6. The core surface written down, and the first duplicate collapsed into it.
 7. Palette baseline, accessibility, empty states.
 8. Zero-downtime deploys, custom error pages.
 
 Items 5 and 6 are the same work seen from two sides: the audit finds the duplicates, the
-engine is where they go.
+core is where they go.

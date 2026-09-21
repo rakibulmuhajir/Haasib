@@ -27,6 +27,10 @@ The bank account form accepted an opening balance and showed it on the account d
 
 Employees are complete. Continue with the fixed Day 1–14 transactions from `docs/fuel-station-e2e.md` after resolving the Day 1 review issue below.
 
+### Day 1 retry: buyer search returns no customers
+
+After restarting the local server and logging back in, the corrected Day 1 form calculates lubricant sales correctly (Rs 12,900; total sales Rs 377,900). However, the Cash Out credit-sale customer search returns “No customers found” for both `Al-Habib` and `CUST-00001`, despite the buyer having been created during setup. The close remains unposted rather than creating a duplicate through Quick Add.
+
 ### Lubricant quantity is not reflected in daily-close amounts — confirmed
 
 In Day 1 daily close, entering Mobil Super 4L quantity 4 at Rs 2,400 and Open Engine Oil quantity 3 L at Rs 1,100 left the line amounts at Rs 2,400 and Rs 1,100. The review total was Rs 3,500, while the fixed E2E case expects Rs 12,900 (4 × 2,400 + 3 × 1,100). The app therefore calculates expected closing cash as Rs 226,500 instead of the test's Rs 235,900. Entering the prescribed count displays a Rs 9,400 cash-over warning before posting.

@@ -61,6 +61,12 @@ export interface EntitySearchProps {
   id?: string
   /** Forwarded to the trigger button as its accessible name, for a Label that can't use `for` (e.g. one wrapping a description, or one that isn't a native label target). */
   ariaLabelledby?: string
+  /**
+   * The company to search within. Optional, and normally unnecessary - it falls back to the
+   * shared auth prop. Pass it on any page that already has the company in its own props, so
+   * the search does not depend on a second, shared source being present.
+   */
+  companySlug?: string
 }
 
 // Props
@@ -84,10 +90,24 @@ const page = usePage()
 // Company context
 const company = computed(() => (page.props.auth as any)?.currentCompany)
 
+/**
+ * Prefer the slug the parent passed; fall back to the shared auth prop.
+ *
+ * Every request below used to come only from the shared prop, and every one of them bailed
+ * silently when it was missing - no request, no error, and a dropdown reading "No customers
+ * found", which is indistinguishable from a company that genuinely has none. A page that
+ * already knows its own company should not be able to fail that way.
+ */
+const companySlug = computed<string | null>(
+  () => props.companySlug || company.value?.slug || null,
+)
+
 // State
 const open = ref(false)
 const searchQuery = ref('')
 const searchResults = ref<Entity[]>([])
+/** Set when a search could not be performed, so the empty state can say so. */
+const searchFailed = ref(false)
 const recentItems = ref<Entity[]>([])
 const selectedEntity = ref<Entity | null>(null)
 const isSearching = ref(false)
@@ -131,16 +151,27 @@ const formatVendorType = (type?: string | null) => {
 
 // Debounced search function
 const debouncedSearch = useDebounceFn(async (query: string) => {
-  if (!query || query.length < 2 || !company.value) {
+  if (!query || query.length < 2) {
     searchResults.value = []
+    searchFailed.value = false
+    isSearching.value = false
+    return
+  }
+
+  if (!companySlug.value) {
+    // Nothing to search within. Say so rather than reporting no matches.
+    console.error('[EntitySearch] No company in scope; pass company-slug or check auth.currentCompany')
+    searchResults.value = []
+    searchFailed.value = true
     isSearching.value = false
     return
   }
 
   isSearching.value = true
+  searchFailed.value = false
 
   try {
-    const endpoint = `/${company.value.slug}/${props.entityType}s/search`
+    const endpoint = `/${companySlug.value}/${props.entityType}s/search`
     const response = await fetch(`${endpoint}?q=${encodeURIComponent(query)}&limit=10`, {
       headers: {
         'Accept': 'application/json',
@@ -153,11 +184,14 @@ const debouncedSearch = useDebounceFn(async (query: string) => {
       const data = await response.json()
       searchResults.value = data.results || data.data || []
     } else {
+      console.error(`[EntitySearch] Search returned ${response.status} for ${endpoint}`)
       searchResults.value = []
+      searchFailed.value = true
     }
   } catch (error) {
     console.error(`[EntitySearch] Search failed:`, error)
     searchResults.value = []
+    searchFailed.value = true
   } finally {
     isSearching.value = false
   }
@@ -165,12 +199,12 @@ const debouncedSearch = useDebounceFn(async (query: string) => {
 
 // Load recent items
 const loadRecentItems = async () => {
-  if (!company.value) return
+  if (!companySlug.value) return
 
   isLoadingRecent.value = true
 
   try {
-    const endpoint = `/${company.value.slug}/${props.entityType}s/recent`
+    const endpoint = `/${companySlug.value}/${props.entityType}s/recent`
     const response = await fetch(`${endpoint}?limit=${props.recentLimit}`, {
       headers: {
         'Accept': 'application/json',
@@ -202,7 +236,7 @@ const loadSelectedEntity = async () => {
     return
   }
 
-  if (!company.value) {
+  if (!companySlug.value) {
     selectedEntity.value = null
     return
   }
@@ -217,7 +251,7 @@ const loadSelectedEntity = async () => {
   }
 
   try {
-    const endpoint = `/${company.value.slug}/${props.entityType}s/${props.modelValue}`
+    const endpoint = `/${companySlug.value}/${props.entityType}s/${props.modelValue}`
     const response = await fetch(endpoint, {
       headers: {
         'Accept': 'application/json',
@@ -424,6 +458,16 @@ onMounted(() => {
                 class="h-4 w-4 text-primary"
               />
             </button>
+          </div>
+
+          <!-- Search could not be performed. Deliberately distinct from "no matches": the
+               two used to render the same sentence, which is how a broken search read as an
+               empty company. -->
+          <div
+            v-else-if="searchQuery && searchQuery.length >= 2 && !isSearching && searchFailed"
+            class="py-6 text-center text-sm text-destructive"
+          >
+            Search is unavailable right now. Check the console for details.
           </div>
 
           <!-- No Results -->

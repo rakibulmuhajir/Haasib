@@ -86,6 +86,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
       <div class="space-y-1">
         <Label :id="`credit-customer-${index}`">Customer</Label>
         <EntitySearch v-if="!row.pending_fuel_invoice" v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
+          :company-slug="companySlug"
           :aria-labelledby="`credit-customer-${index}`"
           :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
           @entity-selected="(entity) => onCustomerSelected(row, entity)"

@@ -1572,12 +1572,31 @@ class DailyCloseService
     /**
      * Get recent daily closes for history view.
      */
-    public function getRecentCloses(string $companyId, int $days = 30): array
+    /**
+     * Every close on record, ignoring any date window.
+     *
+     * The history page needs this to tell "this company has never closed a day" apart from
+     * "it has, just not inside the window you are looking at". Those rendered identically -
+     * as "No daily close records found", under a button offering to create the first one -
+     * while five closes sat in the table, back-dated beyond the default thirty days.
+     */
+    public function countCloses(string $companyId): int
+    {
+        return Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')
+            ->count();
+    }
+
+    /**
+     * @param  int|null  $days  Days back from today, or null for every close on record.
+     */
+    public function getRecentCloses(string $companyId, ?int $days = 30): array
     {
         $closes = Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')
             ->whereNull('deleted_at')
-            ->where('transaction_date', '>=', now()->subDays($days)->toDateString())
+            ->when($days !== null, fn ($q) => $q->where('transaction_date', '>=', now()->subDays($days)->toDateString()))
             ->orderByDesc('transaction_date')
             ->get(['id', 'company_id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked', 'reversed_by_id', 'reversal_of_id', 'corrects_transaction_id']);
 

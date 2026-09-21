@@ -57,12 +57,45 @@ interface DailyClose {
 const props = defineProps<{
   company: { id: string; name: string; slug: string }
   closes: DailyClose[]
+  /** The window currently applied. Mirrors the `range` query parameter. */
+  range?: '30' | '90' | '365' | 'all'
+  /** Every close on record, ignoring the window, so the empty state can tell the difference. */
+  totalCloses?: number
   parkedCloses?: Array<{ business_date: string; updated_at: string }>
   permissions: {
     canLock: boolean
     canUnlock: boolean
   }
 }>()
+
+const RANGES = [
+  { value: '30', label: 'Last 30 days' },
+  { value: '90', label: 'Last 90 days' },
+  { value: '365', label: 'Last year' },
+  { value: 'all', label: 'All time' },
+] as const
+
+const activeRange = computed(() => props.range ?? '30')
+const activeRangeLabel = computed(
+  () => RANGES.find((r) => r.value === activeRange.value)?.label ?? 'Last 30 days',
+)
+
+/**
+ * True when closes exist but none fall inside the window. This is the case that used to
+ * render as "No daily close records found" under a "Create First Daily Close" button, which
+ * was simply false - and gave no hint that a window was being applied at all.
+ */
+const hiddenByRange = computed(
+  () => props.closes.length === 0 && (props.totalCloses ?? 0) > 0,
+)
+
+const setRange = (value: string) => {
+  router.get(
+    `/${props.company.slug}/fuel/daily-close/history`,
+    { range: value },
+    { preserveScroll: true, preserveState: true, replace: true },
+  )
+}
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -200,11 +233,41 @@ const confirmUnlock = () => {
 
     <Card>
       <CardHeader>
-        <CardTitle>Recent Daily Closes</CardTitle>
-        <CardDescription>Last 30 days of daily close records</CardDescription>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Daily Closes</CardTitle>
+            <CardDescription>{{ activeRangeLabel }}</CardDescription>
+          </div>
+          <div class="flex flex-wrap gap-1" role="group" aria-label="Date range">
+            <Button
+              v-for="option in RANGES"
+              :key="option.value"
+              type="button"
+              size="sm"
+              :variant="activeRange === option.value ? 'default' : 'outline'"
+              :aria-pressed="activeRange === option.value"
+              @click="setRange(option.value)"
+            >
+              {{ option.label }}
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <div v-if="closes.length === 0" class="text-center py-12 text-muted-foreground">
+        <!-- Closes exist, just not in this window. Saying "none found" here was a lie. -->
+        <div v-if="hiddenByRange" class="text-center py-12 text-muted-foreground">
+          <Calculator class="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>
+            No daily closes in this range.
+            <span class="text-foreground">{{ totalCloses }}</span>
+            on record in total.
+          </p>
+          <Button type="button" variant="outline" class="mt-4" @click="setRange('all')">
+            Show all time
+          </Button>
+        </div>
+
+        <div v-else-if="closes.length === 0" class="text-center py-12 text-muted-foreground">
           <Calculator class="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>No daily close records found.</p>
           <Button as-child class="mt-4">

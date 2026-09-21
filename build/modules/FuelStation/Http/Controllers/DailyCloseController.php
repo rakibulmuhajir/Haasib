@@ -801,7 +801,18 @@ class DailyCloseController extends Controller
         abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW), 403);
         $company = app(CurrentCompany::class)->get();
 
-        $closes = $this->dailyCloseService->getRecentCloses($company->id, 30);
+        // The window is the user's to choose, and it has to be reachable. Thirty days was
+        // hardcoded, so a back-dated close - or simply last quarter's - was unreachable from
+        // this page, which then reported that no closes existed at all.
+        $range = (string) $request->query('range', '30');
+        if (! in_array($range, ['30', '90', '365', 'all'], true)) {
+            $range = '30';
+        }
+
+        $closes = $this->dailyCloseService->getRecentCloses(
+            $company->id,
+            $range === 'all' ? null : (int) $range,
+        );
 
         // Get user permissions for UI
         $user = $request->user();
@@ -815,6 +826,10 @@ class DailyCloseController extends Controller
                 'slug' => $company->slug,
             ],
             'closes' => $closes,
+            'range' => $range,
+            // Counted without the window, so the page can say "none in this range" rather
+            // than "none at all" when the two are not the same thing.
+            'totalCloses' => $this->dailyCloseService->countCloses($company->id),
             'parkedCloses' => DB::table('fuel.daily_close_drafts')->where('company_id', $company->id)->orderByDesc('business_date')->get(['business_date', 'updated_at']),
             'permissions' => [
                 'canLock' => $canLock,

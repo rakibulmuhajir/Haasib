@@ -77,6 +77,46 @@ php artisan test tests/Feature/Accounting --filter="the worst debt is listed fir
 php artisan test tests/Feature/FuelStation --filter="discount"
 ```
 
+The opening-balance fixtures are the exception: they were moved out to
+`tests/Feature/Accounting/OpeningBalanceFixtures.php`, which both files `require_once`, so
+those two **do** run on their own.
+
+---
+
+## Bank account opening balances (2026-09-21)
+
+The bank account form used to write `acct.company_bank_accounts.opening_balance` and post
+nothing to the ledger. It now dispatches `opening_balance.set_account`, which merges one
+account into the current opening set and delegates to `SaveAction` — the single write path.
+
+Run both files: the second one's fixtures were moved, so it is part of the change.
+
+```powershell
+php artisan test tests/Feature/Accounting/BankAccountOpeningBalanceTest.php tests/Feature/Accounting/OpeningBalancesTest.php
+```
+
+Or the whole module, which also covers banking and reconciliation:
+
+```powershell
+php artisan test tests/Feature/Accounting        # ~90 s
+```
+
+Route verbs for the inline editor (`useInlineEdit` PATCHes; customers and vendors were
+registered `PUT` only, so every inline field returned 405):
+
+```powershell
+php artisan test tests/Feature/Routing/InlineEditRouteVerbsTest.php
+```
+
+Frontend, for the two bank account pages:
+
+```powershell
+npx vue-tsc --noEmit -p tsconfig.json
+```
+
+> Pre-existing `vue-tsc` errors in `partners/*`, `company/Show.vue` and
+> `onboarding/BankAccounts.vue` are not from this change. The `bank-accounts` pages are clean.
+
 ---
 
 ## Other checks

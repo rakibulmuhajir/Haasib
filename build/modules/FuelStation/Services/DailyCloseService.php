@@ -1573,6 +1573,34 @@ class DailyCloseService
      * Get recent daily closes for history view.
      */
     /**
+     * Whether a rate changed during this close, and whether any litres had to be priced
+     * without knowing which side of the change they fell on.
+     *
+     * fallback_liters is the honest part. When the reading at the moment of the change was
+     * never taken, the close prices the whole day at one rate and records how many litres
+     * were valued that way. That approximation was being kept and shown nowhere, so a day
+     * priced on a guess looked identical to one priced on a reading.
+     *
+     * @return array{changed: bool, fallback_liters: float}|null
+     */
+    private function rateChangeSummary(array $metadata): ?array
+    {
+        $segments = $metadata['rate_change_segments'] ?? [];
+
+        if (empty($segments)) {
+            return null;
+        }
+
+        return [
+            'changed' => true,
+            'fallback_liters' => round(array_sum(array_map(
+                fn ($s) => (float) ($s['fallback_liters'] ?? 0),
+                $segments
+            )), 2),
+        ];
+    }
+
+    /**
      * Every close on record, ignoring any date window.
      *
      * The history page needs this to tell "this company has never closed a day" apart from
@@ -1637,6 +1665,12 @@ class DailyCloseService
                 'is_amendable' => $t->isAmendable(),
                 'has_amendments' => $t->reversed_by_id !== null,
                 'has_post_close_activity' => $activeCloseIds->has($t->id),
+
+                // A rate change is the most common reason a day's revenue or margin looks
+                // unlike its neighbours, and it is the first thing someone reading the
+                // history wants to know. The detail is already in the close; this only
+                // surfaces that it happened.
+                'rate_change' => $this->rateChangeSummary($metadata),
             ];
         })->toArray();
     }

@@ -171,16 +171,28 @@ class CompanyContextService
             return false;
         }
 
-        if (! str_starts_with($user->id, '00000000-0000-0000-0000-')) {
-            $isActiveMember = DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', $user->id)
-                ->where('is_active', true)
-                ->exists();
+        // God mode holds every permission in every company, which is what the rest of the
+        // application already assumes: HandleInertiaRequests hands these users the
+        // 'super_admin' role, and CompanyController::show lets them past the membership
+        // check. Only this method disagreed - it waived membership and then asked Spatie for
+        // a role assignment the user does not have in that company, so every permission came
+        // back false.
+        //
+        // The effect was silent absence rather than a refusal: a platform admin opening a
+        // company saw the page render with the gated parts simply missing, and nothing
+        // saying why.
+        if (str_starts_with($user->id, '00000000-0000-0000-0000-')) {
+            return true;
+        }
 
-            if (! $isActiveMember) {
-                return false;
-            }
+        $isActiveMember = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $isActiveMember) {
+            return false;
         }
 
         $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();

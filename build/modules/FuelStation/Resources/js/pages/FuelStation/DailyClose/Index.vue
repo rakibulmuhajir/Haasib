@@ -52,6 +52,8 @@ interface DailyClose {
   status: 'posted' | 'locked' | 'reversed' | 'reversal' | 'correction'
   is_locked?: boolean
   has_post_close_activity?: boolean
+  /** Present only when a rate changed during this close. */
+  rate_change?: { changed: boolean; fallback_liters: number } | null
 }
 
 const props = defineProps<{
@@ -301,6 +303,16 @@ const confirmUnlock = () => {
                 </div>
                 <div class="text-sm text-muted-foreground font-mono">
                   {{ close.transaction_number }} <Badge v-if="close.has_post_close_activity" variant="destructive">Post-close activity</Badge>
+                  <!-- A rate change is the usual reason a day's revenue or margin looks
+                       unlike its neighbours; saying so here saves the hunt. -->
+                  <Badge v-if="close.rate_change" variant="secondary" title="A fuel rate changed during this day">Rate change</Badge>
+                  <!-- Litres priced without a reading at the moment of the change, so the
+                       whole day went on one rate. An approximation, and it should say so. -->
+                  <Badge
+                    v-if="close.rate_change && close.rate_change.fallback_liters > 0"
+                    variant="destructive"
+                    :title="`${close.rate_change.fallback_liters} L priced at a single rate because no reading was taken when the rate changed`"
+                  >Rate not split</Badge>
                 </div>
               </div>
             </div>

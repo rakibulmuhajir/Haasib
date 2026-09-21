@@ -1791,6 +1791,22 @@ watch(
     { deep: true },
 );
 
+/**
+ * A stable identity per repeat row, so `v-for` keys track the row rather than its position.
+ *
+ * These lists were keyed by index. Index keys tell Vue that the third row is the third row,
+ * whatever it now contains, so when a row is added or removed the child components stay put
+ * and are handed different data. That matters here because Input is not a plain element: it
+ * holds the value in a local ref (useVModel, passive), so a reused instance can keep showing
+ * what it held before the list changed - a figure from another row, or another section
+ * entirely, sitting in a field the user never typed it into.
+ *
+ * The uid rides along on the row object, so it survives a draft save and restore. The server
+ * reads named keys and ignores it.
+ */
+let rowUidCounter = 0
+const nextRowUid = () => `row-${++rowUidCounter}`
+
 // Add/remove helpers
 const addOtherSale = () => {
     form.other_sales.push({
@@ -1900,6 +1916,7 @@ const fillDummyDailyCloseData = () => {
     form.bank_deposits = [];
     if (props.bankAccounts.length > 0 && expectedClosingCash.value > 50000) {
         form.bank_deposits.push({
+            uid: nextRowUid(),
             bank_account_id: props.bankAccounts[0].id,
             amount: Math.round(expectedClosingCash.value * 0.35),
             reference: `TEST-DEP-${form.date}`,
@@ -2032,6 +2049,7 @@ const removeBankWithdrawal = (index: number) => form.bank_withdrawals.splice(ind
 
 const addBankDeposit = () => {
     form.bank_deposits.push({
+        uid: nextRowUid(),
         bank_account_id: '',
         amount: 0,
         reference: '',
@@ -2084,6 +2102,7 @@ const removeAmanat = (index: number) => {
 
 const addExpense = () => {
     form.expenses.push({
+        uid: nextRowUid(),
         account_id: '',
         account_name: '',
         description: '',
@@ -4888,7 +4907,7 @@ const completedWorkflowSteps = computed(() => {
 
                             <div
                                 v-for="(deposit, index) in form.bank_deposits"
-                                :key="index"
+                                :key="deposit.uid ?? `deposit-${index}`"
                                 class="grid grid-cols-5 items-end gap-4"
                             >
                                 <div>
@@ -5638,7 +5657,7 @@ const completedWorkflowSteps = computed(() => {
 
                             <div
                                 v-for="(expense, index) in form.expenses"
-                                :key="index"
+                                :key="expense.uid ?? `expense-${index}`"
                                 class="grid grid-cols-4 items-end gap-4"
                             >
                                 <div>

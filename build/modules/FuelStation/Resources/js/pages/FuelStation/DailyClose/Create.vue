@@ -940,6 +940,25 @@ const nozzleError = (index: number, field: string) =>
         `nozzle_readings.${index}.${field}`
     ];
 
+/**
+ * A pump totaliser only counts up, so a closing reading below its opening one is a mistake -
+ * a skipped nozzle, a transposed digit, a reading typed into the wrong row.
+ *
+ * The litres calculation clamps at zero, which meant an impossible reading quietly became a
+ * sale of zero litres and the only symptom was a cash surplus. Day 13 of the fourteen-day
+ * scenario lost 375 litres of diesel that way. The server refuses it now; this says so while
+ * the number is still under the cursor.
+ */
+const nozzleMeterWentBackwards = (index: number): boolean => {
+    const reading = form.nozzle_readings[index];
+    if (!reading) return false;
+
+    const opening = Number(reading.opening_electronic);
+    const closing = Number(reading.closing_electronic);
+
+    return Number.isFinite(opening) && Number.isFinite(closing) && closing < opening;
+};
+
 const otherSaleError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`other_sales.${index}.${field}`];
 
@@ -2896,7 +2915,14 @@ const completedWorkflowSteps = computed(() => {
                                                     @focus="selectZeroValue"
                                                     step="1"
                                                     class="h-9 text-right"
+                                                    :aria-invalid="nozzleMeterWentBackwards(idx) || undefined"
                                                 />
+                                                <p
+                                                    v-if="nozzleMeterWentBackwards(idx)"
+                                                    class="mt-1 text-xs text-destructive"
+                                                >
+                                                    Below the opening reading — a pump meter cannot go backwards.
+                                                </p>
                                                 <InputError
                                                     :message="
                                                         nozzleError(

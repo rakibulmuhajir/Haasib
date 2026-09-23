@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate'
+import EntryDateNote from '@/components/EntryDateNote.vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { EntitySearch, QuickAddModal } from '@/components/forms'
@@ -104,7 +106,7 @@ const form = useForm({
   vendor_id: props.selectedVendorId ?? '',
   bill_number: '',
   vendor_invoice_number: '',
-  bill_date: new Date().toISOString().slice(0, 10),
+  bill_date: entryDateDefault(props.company.slug),
   due_date: '',
   status: 'draft',
   currency: props.company.base_currency,
@@ -203,6 +205,9 @@ const handleSubmit = () => {
     preserveScroll: true,
   })
 }
+
+// Start on the last date used in this tab, and remember changes - see useEntryDate.
+rememberEntryDate(props.company.slug, () => form.bill_date)
 </script>
 
 <template>
@@ -283,6 +288,7 @@ const handleSubmit = () => {
           <div>
             <Label for="bill_date">Bill Date *</Label>
             <Input id="bill_date" v-model="form.bill_date" type="date" required />
+            <EntryDateNote :date="form.bill_date" />
             <InputError :message="form.errors.bill_date" />
           </div>
 

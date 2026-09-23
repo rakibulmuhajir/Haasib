@@ -33,6 +33,8 @@ import {
     Save,
 } from 'lucide-vue-next';
 import { computed, reactive, watch } from 'vue';
+import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate';
+import EntryDateNote from '@/components/EntryDateNote.vue';
 
 interface CompanyRef {
     id: string;
@@ -102,7 +104,7 @@ const form = useForm({
     currency: preselectedInvoice?.currency || props.company.base_currency,
     payment_method: 'bank_transfer',
     reference_number: '',
-    payment_date: new Date().toISOString().split('T')[0],
+    payment_date: entryDateDefault(props.company.slug),
     notes: '',
     deposit_account_id: '',
     ar_account_id: 'company_default',
@@ -239,6 +241,9 @@ const setDepositAccount = (value: string) => {
     form.deposit_account_id = value;
     form.clearErrors('deposit_account_id');
 };
+
+// Start on the last date used in this tab, and remember changes - see useEntryDate.
+rememberEntryDate(props.company.slug, () => form.payment_date);
 </script>
 
 <template>
@@ -354,6 +359,7 @@ const setDepositAccount = (value: string) => {
                             type="date"
                             required
                         />
+                        <EntryDateNote :date="form.payment_date" />
                         <InputError :message="form.errors.payment_date" />
                     </div>
                     <div>

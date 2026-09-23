@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate'
+import EntryDateNote from '@/components/EntryDateNote.vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
@@ -29,7 +31,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const form = useForm({
-  date: new Date().toISOString().slice(0, 10),
+  date: entryDateDefault(companySlug.value),
   account_id: '',
   amount: 0,
   paid_from_account_id: '',
@@ -46,6 +48,9 @@ const onFile = (event: Event) => {
   const input = event.target as HTMLInputElement
   form.attachment = input.files?.[0] ?? null
 }
+
+// Start on the last date used in this tab, and remember changes - see useEntryDate.
+rememberEntryDate(companySlug.value, () => form.date)
 </script>
 
 <template>
@@ -61,6 +66,7 @@ const onFile = (event: Event) => {
           <div class="space-y-1">
             <Label>Date</Label>
             <Input v-model="form.date" type="date" />
+            <EntryDateNote :date="form.date" />
             <InputError :message="form.errors.date" />
           </div>
           <div class="space-y-1">

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate'
+import EntryDateNote from '@/components/EntryDateNote.vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
@@ -78,7 +80,7 @@ const selectedFuelItem = ref<FuelItem | null>(null)
 const quantity = ref<number | null>(null)
 // The business date this fuel left the pump. A credit sale is imported into the Daily
 // Close for its own date, so backdating yesterday's sale has to be possible.
-const saleDate = ref<string>(new Date().toISOString().slice(0, 10))
+const saleDate = ref<string>(entryDateDefault(companySlug.value))
 const saleType = ref<'retail' | 'bulk' | 'amanat' | 'investor' | 'credit' | 'parco_card'>('retail')
 const selectedCustomer = ref<Customer | null>(null)
 const selectedInvestor = ref(null)
@@ -272,6 +274,9 @@ const setPaymentTotal = () => {
   cardSwipeAmount.value = 0
   parcoCardAmount.value = 0
 }
+
+// Start on the last date used in this tab, and remember changes - see useEntryDate.
+rememberEntryDate(companySlug.value, saleDate)
 </script>
 
 <template>
@@ -333,6 +338,7 @@ const setPaymentTotal = () => {
             <div class="space-y-2">
               <Label for="sale-date">Sale date *</Label>
               <Input id="sale-date" v-model="saleDate" type="date" />
+              <EntryDateNote :date="saleDate" />
               <p class="text-xs text-muted-foreground">
                 A credit sale is picked up by the Daily Close for this date.
               </p>

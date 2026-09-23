@@ -4,6 +4,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
@@ -126,4 +127,16 @@ function ledgerBalance(Account $account): float
     $rows = DB::table('acct.journal_entries')->where('account_id', $account->id)
         ->selectRaw('COALESCE(SUM(debit_amount),0) as d, COALESCE(SUM(credit_amount),0) as c')->first();
     return round((float) $rows->d - (float) $rows->c, 2);
+}
+
+function openingCustomer(array $f, string $name): Customer
+{
+    return Customer::create([
+        'company_id' => $f['company']->id,
+        'customer_number' => 'CUST-'.str()->upper(str()->random(5)),
+        'name' => $name,
+        'customer_type' => 'business',
+        'base_currency' => 'PKR',
+        'ar_account_id' => $f['accounts']['ar']->id,
+    ]);
 }

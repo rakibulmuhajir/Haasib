@@ -2,8 +2,8 @@
 
 use App\Modules\Accounting\Services\DashboardService;
 use App\Services\CompanyContextService;
+use App\Services\CommandBus;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 require_once __DIR__.'/OpeningBalanceFixtures.php';
 
@@ -123,22 +123,22 @@ test('every figure can be opened, and the parts add up to the whole', function (
 test('a ledger entry with no document behind it still shows, as a remainder', function () {
     $f = openingBalanceHttpFixture();
 
-    // Post straight to the receivables control account, with no invoice. The breakdown is
-    // built from documents, so without a remainder row this money would simply vanish from
-    // the drill-down while still counting in the headline.
+    // A manual journal straight to the receivables control account, with no invoice behind
+    // it. The breakdown is built from documents, so without a remainder row this money would
+    // vanish from the drill-down while still counting in the headline. Posted through the
+    // core journal action rather than inserted by hand, so the entry is shaped the way a real
+    // one is.
     dispatchOpeningBalance($f, ['as_of_date' => '2026-08-01', 'cash' => ['amount' => 1000]]);
 
-    app(CompanyContextService::class)->withContext($f['company'], function () use ($f) {
-        DB::table('acct.journal_entries')->insert([
-            'id' => (string) Str::uuid(),
-            'company_id' => $f['company']->id,
-            'account_id' => $f['accounts']['ar']->id,
-            'debit_amount' => 5000,
-            'credit_amount' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    });
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('journal.create', [
+        'transaction_date' => '2026-08-15',
+        'description' => 'Receivable with no invoice',
+        'post' => true,
+        'entries' => [
+            ['account_id' => $f['accounts']['ar']->id, 'type' => 'debit', 'amount' => 5000],
+            ['account_id' => $f['accounts']['cash']->id, 'type' => 'credit', 'amount' => 5000],
+        ],
+    ], $f['user'], true));
 
     $position = positionOf($f);
     $labels = collect($position['breakdown']['receivable'])->pluck('label');

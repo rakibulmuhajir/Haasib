@@ -61,17 +61,6 @@ test('saving cash and bank opening balances posts one balanced journal against o
         ->and($settings['opening_balances']['locked_at'])->toBeNull();
 });
 
-function openingCustomer(array $f, string $name): Customer
-{
-    return Customer::create([
-        'company_id' => $f['company']->id,
-        'customer_number' => 'CUST-'.str()->upper(str()->random(5)),
-        'name' => $name,
-        'customer_type' => 'business',
-        'base_currency' => 'PKR',
-        'ar_account_id' => $f['accounts']['ar']->id,
-    ]);
-}
 
 test('amanat, employee advance and partner capital openings create sub-records linked to the journal', function () {
     $f = openingBalanceFixture();

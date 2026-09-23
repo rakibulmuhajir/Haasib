@@ -3,7 +3,6 @@
 use App\Models\Company;
 use App\Models\User;
 use App\Services\CompanyContextService;
-use Illuminate\Support\Facades\DB;
 
 /**
  * God mode holds every permission in every company.
@@ -19,13 +18,12 @@ use Illuminate\Support\Facades\DB;
  */
 function godModeUser(): User
 {
-    $user = User::factory()->withoutTwoFactor()->create();
-
     // God mode is identified by the id prefix, which is how the rest of the app tests for it.
-    $godId = '00000000-0000-0000-0000-'.substr(str()->lower(str()->random(12)), 0, 12);
-    DB::table('auth.users')->where('id', $user->id)->update(['id' => $godId]);
-
-    return User::findOrFail($godId);
+    // Created with that id rather than renamed afterwards, the way CompanyHttpAuthorizationTest
+    // does it; the suffix is hex because the column is a uuid.
+    return User::factory()->withoutTwoFactor()->create([
+        'id' => '00000000-0000-0000-0000-'.bin2hex(random_bytes(6)),
+    ]);
 }
 
 function plainCompany(string $name): Company

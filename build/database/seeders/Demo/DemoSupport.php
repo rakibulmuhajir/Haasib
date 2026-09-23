@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Demo;
 
+use Database\Seeders\Support\CompanyPurger;
 use App\Facades\CompanyContext;
 use App\Models\Company;
 use App\Models\User;
@@ -23,105 +24,6 @@ use Illuminate\Support\Str;
  */
 trait DemoSupport
 {
-    /** Tables the demo seeders write to, in FK-safe delete order. */
-    protected array $demoTables = [
-        'umrah.payment_allocations',
-        'umrah.group_payments',
-        'umrah.voucher_passengers',
-        'umrah.vouchers',
-        'umrah.passengers',
-        'umrah.group_transport_items',
-        'umrah.visa_groups',
-        'umrah.transport_services',
-        'umrah.transport_package_sectors',
-        'umrah.transport_packages',
-        'umrah.transport_fares',
-        'umrah.transport_sectors',
-        'umrah.hotel_room_rates',
-        'umrah.hotels',
-        'umrah.hotel_vendors',
-        'umrah.visa_services',
-        'umrah.visa_vendors',
-        'umrah.expenses',
-        'umrah.drivers',
-        'umrah.agents',
-        'umrah.change_logs',
-        'fuel.nozzle_readings',
-        'fuel.pump_readings',
-        'fuel.tank_readings',
-        'fuel.attendant_handovers',
-        'fuel.amanat_transactions',
-        'fuel.sale_metadata',
-        'fuel.rate_changes',
-        'fuel.nozzles',
-        'fuel.pumps',
-        'fuel.dip_chart_entries',
-        'fuel.dip_sticks',
-        'fuel.investor_lots',
-        'fuel.investors',
-        'fuel.customer_profiles',
-        'fuel.station_settings',
-        'pay.payslip_lines',
-        'pay.payslips',
-        'pay.salary_advance_recoveries',
-        'pay.salary_advances',
-        'pay.employee_benefits',
-        'pay.leave_requests',
-        'pay.payroll_periods',
-        'pay.employees',
-        'pay.benefit_plans',
-        'pay.deduction_types',
-        'pay.earning_types',
-        'pay.leave_types',
-        'inv.cogs_entries',
-        'inv.cost_layers',
-        'inv.item_costs',
-        'inv.stock_movements',
-        'inv.stock_levels',
-        'inv.stock_receipt_lines',
-        'inv.stock_receipts',
-        'inv.items',
-        'inv.item_categories',
-        'inv.warehouses',
-        'inv.cost_policies',
-        'acct.payment_allocations',
-        'acct.payments',
-        'acct.bill_payment_allocations',
-        'acct.bill_payments',
-        'acct.credit_note_applications',
-        'acct.credit_note_items',
-        'acct.credit_notes',
-        'acct.vendor_credit_applications',
-        'acct.vendor_credit_items',
-        'acct.vendor_credits',
-        'acct.invoice_line_items',
-        'acct.invoices',
-        'acct.bill_line_items',
-        'acct.bills',
-        'acct.journal_entries',
-        'acct.transactions',
-        'acct.bank_transactions',
-        'acct.bank_reconciliations',
-        'acct.bank_rules',
-        'acct.company_bank_accounts',
-        'acct.customers',
-        'acct.vendors',
-        'acct.posting_template_lines',
-        'acct.posting_templates',
-        'acct.accounting_periods',
-        'acct.fiscal_years',
-        'acct.company_tax_registrations',
-        'acct.company_tax_settings',
-        'acct.accounts',
-        'auth.company_onboarding',
-        'auth.company_user',
-        // RBAC is per-company: roles are rows scoped by company_id, so a re-seed
-        // must clear them or the unique (company_id, name, guard_name) survives
-        // the company it belonged to. model_has_* first — roles cascades the rest.
-        'model_has_permissions',
-        'model_has_roles',
-        'roles',
-    ];
 
     /**
      * Remove a previously-seeded demo company so the seeder is re-runnable.
@@ -129,34 +31,7 @@ trait DemoSupport
      */
     protected function purgeDemoCompany(string $slug): void
     {
-        $company = Company::where('slug', $slug)->first();
-        if (! $company) {
-            return;
-        }
-
-        // Break self-referencing FKs from companies -> accounts before deleting accounts.
-        DB::connection('pgsql')->table('auth.companies')->where('id', $company->id)->update([
-            'ar_account_id' => null,
-            'ap_account_id' => null,
-            'income_account_id' => null,
-            'expense_account_id' => null,
-            'bank_account_id' => null,
-            'retained_earnings_account_id' => null,
-            'sales_tax_payable_account_id' => null,
-            'purchase_tax_receivable_account_id' => null,
-            'transit_loss_account_id' => null,
-            'transit_gain_account_id' => null,
-        ]);
-
-        foreach ($this->demoTables as $table) {
-            try {
-                DB::connection('pgsql')->table($table)->where('company_id', $company->id)->delete();
-            } catch (\Throwable $e) {
-                // Table may not carry company_id in every build; skip quietly.
-            }
-        }
-
-        DB::connection('pgsql')->table('auth.companies')->where('id', $company->id)->delete();
+        app(CompanyPurger::class)->purge($slug);
     }
 
     /** The demo login. One user owns every demo company. */

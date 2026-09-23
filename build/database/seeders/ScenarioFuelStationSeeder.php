@@ -21,6 +21,7 @@ use App\Modules\FuelStation\Services\StationAccountMapper;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use App\Services\CurrentCompany;
+use Database\Seeders\Support\CompanyPurger;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -317,66 +318,9 @@ class ScenarioFuelStationSeeder extends Seeder
         return Account::where('company_id', $company->id)->where('code', $code)->firstOrFail();
     }
 
-    /**
-     * Mirrors DemoSupport::purgeDemoCompany — the FK order is load-bearing: companies
-     * points at accounts, and posting templates and bank accounts do too, so the
-     * self-references are broken first and accounts go almost last.
-     */
+    /** Remove the previous run's company, so the scenario always starts from the same morning. */
     private function purge(): void
     {
-        $company = Company::where('slug', self::SLUG)->first();
-        if (! $company) {
-            return;
-        }
-
-        DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
-        DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
-
-        DB::table('auth.companies')->where('id', $company->id)->update([
-            'ar_account_id' => null, 'ap_account_id' => null, 'income_account_id' => null,
-            'expense_account_id' => null, 'bank_account_id' => null,
-            'retained_earnings_account_id' => null, 'sales_tax_payable_account_id' => null,
-            'purchase_tax_receivable_account_id' => null, 'transit_loss_account_id' => null,
-            'transit_gain_account_id' => null,
-        ]);
-
-        $tables = [
-            'fuel.daily_close_unlocks', 'fuel.daily_close_activity',
-            'fuel.daily_close_reading_corrections', 'fuel.daily_close_drafts',
-            'fuel.nozzle_readings', 'fuel.pump_readings', 'fuel.tank_readings',
-            'fuel.attendant_handovers', 'fuel.amanat_transactions', 'fuel.sale_metadata',
-            'fuel.rate_changes', 'fuel.nozzles', 'fuel.pumps', 'fuel.dip_chart_entries',
-            'fuel.dip_sticks', 'fuel.investor_lots', 'fuel.investors',
-            'fuel.customer_profiles', 'fuel.station_settings',
-            'pay.payslip_lines', 'pay.payslips', 'pay.salary_advance_recoveries',
-            'pay.salary_advances', 'pay.employee_benefits', 'pay.leave_requests',
-            'pay.payroll_periods', 'pay.employees', 'pay.benefit_plans',
-            'pay.deduction_types', 'pay.earning_types', 'pay.leave_types',
-            'inv.cogs_entries', 'inv.cost_layers', 'inv.item_costs', 'inv.stock_movements',
-            'inv.stock_levels', 'inv.stock_receipt_lines', 'inv.stock_receipts',
-            'inv.items', 'inv.item_categories', 'inv.warehouses', 'inv.cost_policies',
-            'acct.transaction_attachments',
-            'acct.payment_allocations', 'acct.payments', 'acct.bill_payment_allocations',
-            'acct.bill_payments', 'acct.credit_note_applications', 'acct.credit_note_items',
-            'acct.credit_notes', 'acct.vendor_credit_applications', 'acct.vendor_credit_items',
-            'acct.vendor_credits', 'acct.invoice_line_items', 'acct.invoices',
-            'acct.bill_line_items', 'acct.bills', 'acct.journal_entries', 'acct.transactions',
-            'acct.bank_transactions', 'acct.bank_reconciliations', 'acct.bank_rules',
-            'acct.company_bank_accounts', 'acct.customers', 'acct.vendors',
-            'acct.posting_template_lines', 'acct.posting_templates',
-            'acct.accounting_periods', 'acct.fiscal_years',
-            'acct.company_tax_registrations', 'acct.company_tax_settings', 'acct.accounts',
-            'auth.company_onboarding', 'auth.company_user',
-        ];
-
-        foreach ($tables as $table) {
-            try {
-                DB::table($table)->where('company_id', $company->id)->delete();
-            } catch (\Throwable) {
-                // Not every build carries every table, or a company_id on it.
-            }
-        }
-
-        DB::table('auth.companies')->where('id', $company->id)->delete();
+        app(CompanyPurger::class)->purge(self::SLUG);
     }
 }

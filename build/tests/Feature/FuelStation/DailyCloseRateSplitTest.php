@@ -36,6 +36,8 @@ function rateChangeWithSnapshot(array $f, float $oldRate, float $newRate, float 
         'item_id' => $itemId,
         'effective_date' => '2026-09-14',
         'sale_rate' => $oldRate,
+        // Required by the table; what the station paid is irrelevant to how revenue splits.
+        'purchase_rate' => 250,
     ]);
 
     return RateChange::create([
@@ -43,6 +45,8 @@ function rateChangeWithSnapshot(array $f, float $oldRate, float $newRate, float 
         'item_id' => $itemId,
         'effective_date' => '2026-09-15',
         'sale_rate' => $newRate,
+        // Required by the table; what the station paid is irrelevant to how revenue splits.
+        'purchase_rate' => 250,
         'snapshot_nozzle_readings' => [
             ['nozzle_id' => $nozzleId, 'electronic_reading' => $snapshotMeter],
         ],
@@ -129,6 +133,8 @@ test('without a snapshot the whole day goes at one rate, and says how much did',
         'item_id' => $itemId,
         'effective_date' => '2026-09-15',
         'sale_rate' => 320,
+        // Required by the table; what the station paid is irrelevant to how revenue splits.
+        'purchase_rate' => 250,
     ]);
 
     $posted = postSplitClose($f, 320, 32000);

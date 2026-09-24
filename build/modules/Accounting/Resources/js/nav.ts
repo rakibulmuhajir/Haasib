@@ -41,6 +41,7 @@ export const accountingNav: ModuleNavConfig = {
             title: 'Setup',
             icon: Settings,
             children: [
+              { title: 'Opening Balances', href: `/${slug}/accounting/opening-balances`, icon: Scale },
               { title: 'Default Accounts', href: `/${slug}/accounting/default-accounts`, icon: Settings },
               { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: Calendar },
               { title: 'Posting Templates', href: `/${slug}/posting-templates`, icon: Settings },

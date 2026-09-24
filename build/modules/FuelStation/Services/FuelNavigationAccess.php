@@ -40,6 +40,7 @@ class FuelNavigationAccess
             'journals' => Permissions::JOURNAL_VIEW,
             'accounts' => Permissions::ACCOUNT_VIEW,
             'accountSettings' => Permissions::ACCOUNT_UPDATE,
+            'openingBalances' => Permissions::OPENING_BALANCE_VIEW,
         ];
 
         return [

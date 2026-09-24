@@ -67,3 +67,13 @@ test('a user without the mapped permissions does not see bank feed, bank reconci
         ->not->toContain('bankReconciliation')
         ->not->toContain('creditNotes');
 });
+
+test('a fuel-station owner can reach Opening Balances from the menu', function () {
+    ['user' => $user, 'company' => $company] = fuelNavCompanyWithRole('owner');
+
+    // The page existed but no menu listed it, and the fuel menu replaces every other one, so a
+    // station could only reach it by typing the address.
+    $allowed = app(CompanyContextService::class)->withContext($company, fn () => app(FuelNavigationAccess::class)->forUser($company, $user)['allowed']);
+
+    expect($allowed)->toContain('openingBalances');
+});

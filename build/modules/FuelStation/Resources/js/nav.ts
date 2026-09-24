@@ -75,6 +75,9 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('journals', 'Advanced Accounting · Journal Entries', '/journals', BookOpen),
         ...item('accounts', t('chartOfAccounts'), '/accounts', BookOpen),
         ...item('accountSettings', 'Default Accounts', '/accounting/default-accounts', Settings),
+        // Where cash, banks, what buyers owed, what was owed to suppliers and amanat held on the
+        // start date are entered. It was reachable only by typing its address.
+        ...item('openingBalances', 'Opening Balances', '/accounting/opening-balances', Scale),
       ] },
     ]
     return groups.filter(group => group.items.length > 0)

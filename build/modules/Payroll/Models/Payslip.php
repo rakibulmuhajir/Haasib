@@ -85,6 +85,23 @@ class Payslip extends Model
         return $this->belongsTo(Company::class);
     }
 
+    /**
+     * Wages a daily close for this business date may pay from the drawer: approved, not yet
+     * paid, and belonging to a payroll period whose pay day is that date.
+     *
+     * This used to be two copies of the same where-clause - one listing the wages on the close
+     * form, one checking them when the close posted - and both keyed on approved_at, which is
+     * stamped whenever someone clicks Approve. A month's wages could therefore only be paid in
+     * the close for the day they happened to be approved, never in a past close. The period's
+     * payment date is the business fact; approval is only a click.
+     */
+    public function scopePayableOn($query, string $date)
+    {
+        return $query->where('status', 'approved')
+            ->whereNull('payment_gl_transaction_id')
+            ->whereHas('payrollPeriod', fn ($q) => $q->whereDate('payment_date', $date));
+    }
+
     public function payrollPeriod(): BelongsTo
     {
         return $this->belongsTo(PayrollPeriod::class);

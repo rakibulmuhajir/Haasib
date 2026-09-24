@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { localToday } from '@/composables/useEntryDate'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -116,8 +119,33 @@ const accountRows = computed(() => [
   { label: 'Default payment', account: props.accounts.payment, hint: 'Salary payments reduce this cash or bank account.' },
 ])
 
+/**
+ * Which month to run and the day its wages are paid. The pay day decides which daily close
+ * offers the wages, so a past month can be run and paid in the close for the day it was paid.
+ */
+const payrollMonth = ref(localToday().slice(0, 7))
+
+const monthEnd = (month: string): string => {
+  const [y, m] = month.split('-').map(Number)
+  if (!y || !m) return ''
+  const last = new Date(y, m, 0).getDate()
+  return `${month}-${String(last).padStart(2, '0')}`
+}
+
+const payrollPaymentDate = ref(monthEnd(payrollMonth.value))
+
+// Picking another month moves the pay day to that month's end; change it afterwards if wages
+// were paid on a different day.
+watch(payrollMonth, (month) => {
+  payrollPaymentDate.value = monthEnd(month)
+})
+
 const runMonthlyPayroll = () => {
-  router.post(`/${props.company.slug}/payroll/run-monthly`, {}, { preserveScroll: true })
+  router.post(
+    `/${props.company.slug}/payroll/run-monthly`,
+    { month: payrollMonth.value, payment_date: payrollPaymentDate.value },
+    { preserveScroll: true },
+  )
 }
 </script>
 
@@ -130,10 +158,20 @@ const runMonthlyPayroll = () => {
         <UserCog class="mr-2 h-4 w-4" />
         Employees
       </Button>
-      <Button @click="runMonthlyPayroll">
-        <Calendar class="mr-2 h-4 w-4" />
-        Run Monthly Payroll
-      </Button>
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="space-y-1">
+          <Label for="payroll-month" class="text-xs">Month</Label>
+          <Input id="payroll-month" v-model="payrollMonth" type="month" class="h-9 w-40" />
+        </div>
+        <div class="space-y-1">
+          <Label for="payroll-payment-date" class="text-xs">Paid on</Label>
+          <Input id="payroll-payment-date" v-model="payrollPaymentDate" type="date" class="h-9 w-40" />
+        </div>
+        <Button @click="runMonthlyPayroll">
+          <Calendar class="mr-2 h-4 w-4" />
+          Run Payroll
+        </Button>
+      </div>
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

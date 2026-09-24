@@ -95,9 +95,8 @@ class DailyCloseController extends Controller
             DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
 
             return Payslip::where('company_id', $companyId)
-                ->where('status', 'approved')
-                ->whereNull('payment_gl_transaction_id')
-                ->whereDate('approved_at', $date)
+                // Wages belong to the close for the day they are paid - see Payslip::payableOn.
+                ->payableOn($date)
                 ->where('net_pay', '>', 0)
                 ->with('employee:id,first_name,last_name,employee_number')
                 ->orderBy('approved_at')

@@ -897,9 +897,8 @@ class DailyCloseService
                     }
 
                     $payslip = Payslip::where('company_id', $companyId)
-                        ->where('status', 'approved')
-                        ->whereNull('payment_gl_transaction_id')
-                        ->whereDate('approved_at', $date)
+                        // By the period's pay day, not the day of approval - see Payslip::payableOn.
+                        ->payableOn($date)
                         ->with('employee:id,first_name,last_name,employee_number')
                         ->lockForUpdate()
                         ->find($payout['payslip_id'] ?? null);
@@ -1545,7 +1544,8 @@ class DailyCloseService
                     ->whereIn('id', $payrollPayoutIds)
                     ->update([
                         'status' => 'paid',
-                        'paid_at' => now(),
+                        // The business date the drawer paid them, not the moment of posting.
+                        'paid_at' => \Illuminate\Support\Carbon::parse($date),
                         'payment_method' => 'cash',
                         'payment_reference' => $transactionNumber,
                         'payment_gl_transaction_id' => $transaction->id,

@@ -111,8 +111,12 @@ class PayrollDashboardController extends Controller
         $company = app(CurrentCompany::class)->get();
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
-        $monthStart = now()->startOfMonth()->toDateString();
-        $monthEnd = now()->endOfMonth()->toDateString();
+        // The month and the pay day come from the request when given; otherwise the current
+        // month, paid on its last day, as before.
+        $month = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', ($request->input('month') ?: now()->format('Y-m')).'-01');
+        $monthStart = $month->copy()->startOfMonth()->toDateString();
+        $monthEnd = $month->copy()->endOfMonth()->toDateString();
+        $paymentDate = $request->input('payment_date') ?: $monthEnd;
 
         try {
             $period = PayrollPeriod::firstOrCreate(
@@ -122,10 +126,17 @@ class PayrollDashboardController extends Controller
                     'period_end' => $monthEnd,
                 ],
                 [
-                    'payment_date' => $monthEnd,
+                    'payment_date' => $paymentDate,
                     'status' => 'open',
                 ]
             );
+
+            // The pay day decides which daily close offers these wages, so an open period takes
+            // a newly chosen one.
+            if ($request->filled('payment_date') && in_array($period->status, ['open', 'processing'], true)
+                && optional($period->payment_date)->toDateString() !== $paymentDate) {
+                $period->update(['payment_date' => $paymentDate]);
+            }
 
             if (! in_array($period->status, ['open', 'processing'], true)) {
                 return back()->with('error', 'This month payroll is already closed.');
@@ -138,9 +149,10 @@ class PayrollDashboardController extends Controller
             return back()->with('error', 'Monthly payroll could not be prepared. Check employee salaries and payroll accounts.');
         }
 
+        $label = $month->format('F Y');
         $message = $created > 0
-            ? "{$created} payslips prepared for this month."
-            : 'This month payroll is already prepared.';
+            ? "{$created} payslips prepared for {$label}, to be paid ".\Illuminate\Support\Carbon::parse($paymentDate)->format('j M').'.'
+            : "{$label} payroll is already prepared.";
 
         return back()->with('success', $message);
     }

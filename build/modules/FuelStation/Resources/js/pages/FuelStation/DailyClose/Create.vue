@@ -636,6 +636,60 @@ const saveDraft = () => {
     localStorage.setItem(DRAFT_KEY.value, JSON.stringify(draftData));
 };
 
+/**
+ * A tank row built from what the server says now: opening dip, deliveries since it, pending
+ * deliveries. Only stick_reading and liters are typed by hand.
+ */
+const tankRowFromProps = (tank: (typeof props.tanks)[number]) => {
+    const prevReading = props.previousTankReadings?.find(
+        (r) => r.tank_id === tank.id,
+    );
+    return {
+        tank_id: tank.id,
+        item_id: tank.linked_item_id,
+        tank_name: tank.name,
+        tank_code: tank.code,
+        capacity: tank.capacity,
+        fuel_name: tank.linked_item?.name || '',
+        fuel_category: tank.linked_item?.fuel_category || '',
+        dip_stick_code: tank.dip_stick?.code || '',
+        previous_liters: prevReading?.liters ?? 0,
+        previous_stick: prevReading?.stick_reading ?? 0,
+        previous_source: prevReading?.source ?? '',
+        previous_source_label: prevReading?.source_label ?? '',
+        previous_as_of: prevReading?.as_of ?? '',
+        current_stock_liters: tank.current_stock_liters ?? null,
+        current_stock_source_label: tank.current_stock_source_label ?? '',
+        current_stock_as_of: tank.current_stock_as_of ?? '',
+        current_stock_after_close_date:
+            tank.current_stock_after_close_date ?? false,
+        stock_movements_since_baseline_liters:
+            tank.stock_movements_since_baseline_liters ?? 0,
+        pending_delivery_liters: tank.pending_delivery_liters ?? 0,
+        pending_deliveries: tank.pending_deliveries ?? [],
+        stick_reading: 0,
+        liters: 0,
+    };
+};
+
+/**
+ * After restoring a draft, bring every tank's server figures up to date and keep only what
+ * was typed. A draft saved before a delivery was received still said 0 L delivered, and the
+ * dip then showed that delivery as a gain.
+ */
+const refreshTankFacts = () => {
+    const typed = new Map(
+        (form.tank_readings || []).map((row: any) => [row.tank_id, row]),
+    );
+    form.tank_readings = props.tanks.map((tank) => {
+        const row = tankRowFromProps(tank);
+        const saved: any = typed.get(tank.id);
+        return saved
+            ? { ...row, stick_reading: saved.stick_reading, liters: saved.liters }
+            : row;
+    });
+};
+
 const restoreDraft = () => {
     const savedDraft = localStorage.getItem(DRAFT_KEY.value);
     if (savedDraft) {
@@ -649,6 +703,7 @@ const restoreDraft = () => {
                     (form as any)[key] = savedData[key];
                 }
             });
+            refreshTankFacts();
 
             toast.success('Draft restored', {
                 description: 'Your previous work has been loaded',
@@ -1093,37 +1148,7 @@ const resetFormToInitial = () => {
     form.other_sales = [];
 
     // Reset tank readings - keep structure but clear entered values
-    form.tank_readings = props.tanks.map((tank) => {
-        const prevReading = props.previousTankReadings?.find(
-            (r) => r.tank_id === tank.id,
-        );
-        return {
-            tank_id: tank.id,
-            item_id: tank.linked_item_id,
-            tank_name: tank.name,
-            tank_code: tank.code,
-            capacity: tank.capacity,
-            fuel_name: tank.linked_item?.name || '',
-            fuel_category: tank.linked_item?.fuel_category || '',
-            dip_stick_code: tank.dip_stick?.code || '',
-            previous_liters: prevReading?.liters ?? 0,
-            previous_stick: prevReading?.stick_reading ?? 0,
-            previous_source: prevReading?.source ?? '',
-            previous_source_label: prevReading?.source_label ?? '',
-            previous_as_of: prevReading?.as_of ?? '',
-            current_stock_liters: tank.current_stock_liters ?? null,
-            current_stock_source_label: tank.current_stock_source_label ?? '',
-            current_stock_as_of: tank.current_stock_as_of ?? '',
-            current_stock_after_close_date:
-                tank.current_stock_after_close_date ?? false,
-            stock_movements_since_baseline_liters:
-                tank.stock_movements_since_baseline_liters ?? 0,
-            pending_delivery_liters: tank.pending_delivery_liters ?? 0,
-            pending_deliveries: tank.pending_deliveries ?? [],
-            stick_reading: 0,
-            liters: 0,
-        };
-    });
+    form.tank_readings = props.tanks.map((tank) => tankRowFromProps(tank));
 
     form.bank_withdrawals = [];
     // Reset money in
@@ -2440,6 +2465,7 @@ onMounted(() => {
         for (const [key, value] of Object.entries(props.parkedDraft)) {
             if (key in form.data()) (form as any)[key] = value;
         }
+        refreshTankFacts();
         showDraftRestoreDialog.value = false;
     }
 });

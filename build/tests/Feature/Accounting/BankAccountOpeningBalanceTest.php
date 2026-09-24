@@ -218,3 +218,56 @@ test('the bank account form no longer writes the column directly', function () {
     expect(ledgerBalance($f['accounts']['bank']))->toBe(350000.0)
         ->and((float) $created->opening_balance)->toBe(350000.0);
 });
+
+/**
+ * The bank account edit form, submitted the way the page submits it.
+ */
+function editBankAccount(array $f, BankAccount $bank, array $changes): \Illuminate\Testing\TestResponse
+{
+    return test()->actingAs($f['user'])->put("/{$f['company']->slug}/banking/accounts/{$bank->id}", array_replace([
+        'account_name' => $bank->account_name,
+        'account_number' => $bank->account_number,
+        'account_type' => $bank->account_type,
+        'currency' => $bank->currency,
+        'gl_account_id' => $bank->gl_account_id,
+        'is_primary' => false,
+        'is_active' => true,
+    ], $changes));
+}
+
+test('a date with no amount says so instead of vanishing', function () {
+    $f = openingBalanceHttpFixture();
+    $bank = bankAccountFor($f, $f['accounts']['bank']);
+
+    // The report from live use: the date was set, the amount left at 0, and the page came back
+    // showing "As of -" with nothing to say why.
+    editBankAccount($f, $bank, ['opening_balance' => 0, 'opening_balance_date' => '2026-08-31'])
+        ->assertSessionHas('error', fn ($message) => str_contains($message, 'only kept together with an amount'));
+
+    expect((float) $bank->refresh()->opening_balance)->toBe(0.0);
+});
+
+test('an amount and a date from the edit form are both kept', function () {
+    $f = openingBalanceHttpFixture();
+    $bank = bankAccountFor($f, $f['accounts']['bank']);
+
+    editBankAccount($f, $bank, ['opening_balance' => 500000, 'opening_balance_date' => '2026-08-31'])
+        ->assertSessionMissing('error');
+
+    $bank->refresh();
+
+    expect((float) $bank->opening_balance)->toBe(500000.0)
+        ->and($bank->opening_balance_date->toDateString())->toBe('2026-08-31')
+        ->and(ledgerBalance($f['accounts']['bank']))->toBe(500000.0);
+});
+
+test('an ordinary edit with no opening balance says nothing about one', function () {
+    $f = openingBalanceHttpFixture();
+    $bank = bankAccountFor($f, $f['accounts']['bank']);
+
+    // Toggling Active, say. No amount, no date: nothing to warn about.
+    editBankAccount($f, $bank, ['is_active' => false, 'opening_balance' => 0, 'opening_balance_date' => ''])
+        ->assertSessionMissing('error');
+
+    expect($bank->refresh()->is_active)->toBeFalse();
+});

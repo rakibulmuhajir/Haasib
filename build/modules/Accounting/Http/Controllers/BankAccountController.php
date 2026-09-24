@@ -184,7 +184,7 @@ class BankAccountController extends Controller
      * already been saved by the time this runs, so a refusal here — locked balances, a date
      * after the first posted transaction — must not read as though the whole save failed.
      */
-    private function applyOpening(BankAccount $account, ?array $opening, $user): ?string
+    private function applyOpening(BankAccount $account, ?array $opening, $user, bool $sayWhenDateStandsAlone = false): ?string
     {
         if ($opening === null || $account->gl_account_id === null) {
             return null;
@@ -193,7 +193,13 @@ class BankAccountController extends Controller
         // Nothing to post and nothing to clear: an account created at zero should not
         // reverse and repost the company's whole opening generation for no change.
         if ($opening['amount'] === 0.0 && (float) $account->opening_balance === 0.0) {
-            return null;
+            // The date belongs to an opening balance; with no amount there is nothing for it to
+            // date, so it is not kept. That used to happen without a word - someone set the
+            // date, saved, and found it blank - so on an edit it now says so. Not on create,
+            // where the form fills in today's date for every new account.
+            return ($sayWhenDateStandsAlone && $opening['as_of_date'] !== null)
+                ? 'the as-of date is only kept together with an amount. Enter the opening balance amount as well.'
+                : null;
         }
 
         try {
@@ -360,7 +366,7 @@ class BankAccountController extends Controller
         // exclusive advisory lock as its first statement and retries on deadlock. Nesting it
         // inside another write transaction would hold that lock for the outer transaction's
         // lifetime and defeat the retry.
-        $error = $this->applyOpening($account->refresh(), $opening, $request->user());
+        $error = $this->applyOpening($account->refresh(), $opening, $request->user(), sayWhenDateStandsAlone: true);
 
         if ($error !== null) {
             return redirect()

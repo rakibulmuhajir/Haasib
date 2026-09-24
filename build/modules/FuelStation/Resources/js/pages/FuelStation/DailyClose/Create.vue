@@ -1844,6 +1844,30 @@ watch(
 let rowUidCounter = 0
 const nextRowUid = () => `row-${++rowUidCounter}`
 
+/**
+ * A stable key for any repeat row, without adding a field to the row.
+ *
+ * The expense and deposit rows carry a uid for this; the other ten lists in this form were
+ * still keyed by index, which binds each row's input components to its position rather than to
+ * the row. Add or remove a row and a component can keep showing a value that belonged to
+ * whatever used to sit there - which is how an expense row came to display the bank-deposit
+ * amount.
+ *
+ * A WeakMap keyed on the row object gives each row an identity on first render and never
+ * touches the data posted to the server. Vue hands back the same reactive proxy for the same
+ * row every time, so the key is stable; a row rebuilt from a restored draft is a new object and
+ * correctly gets a new key.
+ */
+const rowKeys = new WeakMap<object, string>()
+const rowKey = (row: object): string => {
+    let key = rowKeys.get(row)
+    if (!key) {
+        key = nextRowUid()
+        rowKeys.set(row, key)
+    }
+    return key
+}
+
 // Add/remove helpers
 const addOtherSale = () => {
     form.other_sales.push({
@@ -3292,7 +3316,7 @@ const completedWorkflowSteps = computed(() => {
 
                                 <div
                                     v-for="(sale, index) in form.other_sales"
-                                    :key="index"
+                                    :key="rowKey(sale)"
                                     class="grid grid-cols-12 items-center gap-3"
                                 >
                                     <!-- Product Select -->
@@ -4100,7 +4124,7 @@ const completedWorkflowSteps = computed(() => {
                                     v-for="(
                                         deposit, index
                                     ) in form.partner_deposits"
-                                    :key="index"
+                                    :key="rowKey(deposit)"
                                     class="flex items-end gap-4"
                                 >
                                     <div class="flex-1">
@@ -4244,7 +4268,7 @@ const completedWorkflowSteps = computed(() => {
                                     v-for="(
                                         deposit, index
                                     ) in form.amanat_deposits"
-                                    :key="index"
+                                    :key="rowKey(deposit)"
                                     class="grid grid-cols-12 items-end gap-3"
                                 >
                                     <div class="col-span-5">
@@ -4366,7 +4390,7 @@ const completedWorkflowSteps = computed(() => {
 
                             <div
                                 v-for="(deposit, index) in form.other_deposits"
-                                :key="index"
+                                :key="rowKey(deposit)"
                                 class="grid grid-cols-12 items-end gap-3"
                             >
                                 <div class="col-span-3">
@@ -4563,7 +4587,7 @@ const completedWorkflowSteps = computed(() => {
 
                             <div
                                 v-for="(deposit, index) in form.bank_withdrawals"
-                                :key="index"
+                                :key="rowKey(deposit)"
                                 class="grid grid-cols-5 items-end gap-4"
                             >
                                 <div>
@@ -4836,7 +4860,7 @@ const completedWorkflowSteps = computed(() => {
                                         v-for="(entry, index) in form
                                             .payment_receipts[channel.code]
                                             ?.entries || []"
-                                        :key="index"
+                                        :key="rowKey(entry)"
                                         class="flex items-end gap-4"
                                     >
                                         <!-- Reference field varies by type -->
@@ -5078,7 +5102,7 @@ const completedWorkflowSteps = computed(() => {
                                     v-for="(
                                         withdrawal, index
                                     ) in form.partner_withdrawals"
-                                    :key="index"
+                                    :key="rowKey(withdrawal)"
                                     class="flex items-end gap-4"
                                 >
                                     <div class="flex-1">
@@ -5259,7 +5283,7 @@ const completedWorkflowSteps = computed(() => {
                                 v-for="(
                                     advance, index
                                 ) in form.employee_advances"
-                                :key="index"
+                                :key="rowKey(advance)"
                                 class="grid grid-cols-4 items-end gap-4"
                             >
                                 <div>
@@ -5598,7 +5622,7 @@ const completedWorkflowSteps = computed(() => {
                                     v-for="(
                                         amanat, index
                                     ) in form.amanat_disbursements"
-                                    :key="index"
+                                    :key="rowKey(amanat)"
                                     class="flex items-end gap-4"
                                 >
                                     <div class="flex-1">
@@ -5795,7 +5819,7 @@ const completedWorkflowSteps = computed(() => {
 
                             <div
                                 v-for="(purchase, index) in form.purchases"
-                                :key="index"
+                                :key="rowKey(purchase)"
                                 class="space-y-2 rounded-lg border p-3"
                             >
                                 <div class="grid grid-cols-2 gap-4 md:grid-cols-4">

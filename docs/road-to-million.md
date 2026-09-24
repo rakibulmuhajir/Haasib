@@ -2,7 +2,8 @@
 
 What stands between Haasib as it is now and Haasib as something you would hand to a paying
 customer without flinching. Written 21 September 2026, after a session spent inside the
-production box rather than guessing from the repo.
+production box rather than guessing from the repo; updated 24 September, as live station data
+started going in.
 
 Everything below was checked on the live server. Where something is an assumption rather
 than a reading, it says so.
@@ -13,7 +14,9 @@ than a reading, it says so.
 
 ### 1. Production has no automated backups
 
-**Status: unresolved. Fix this before anything else on this page.**
+**Status: unresolved. Fix this before anything else on this page.** One manual off-box copy
+exists: `haasib-pre-eak-delete-20260923-062844.dump`, taken 23 September before a company was
+removed and stored on the development PC. Nothing produces another.
 
 Every database backup on the production server is a manual dump someone took before a risky
 change. The filenames say it plainly:
@@ -41,9 +44,31 @@ afternoon from the same outcome, except it is the real one.
 
 The database is **24 MB**. This is not an engineering problem, it is an unattended one.
 
-**What to do:** nightly `pg_dump`, 14 days of retention, and an off-host copy to versioned
-object storage. Roughly twenty minutes of work for a one-day RPO. Turn on WAL archiving
-afterwards if you want minutes instead of a day.
+**The server is a Lightsail instance, not EC2** - its role is `AmazonLightsailInstanceRole`,
+region `ap-southeast-1`, zone `ap-southeast-1a`. That decides the tooling: Lightsail cannot take
+a custom IAM role, and EBS lifecycle policies do not apply. The whole database compresses to
+**1.0 MB**. The plan, in three layers:
+
+1. **Lightsail automatic snapshots.** One switch in the console (Instance → Snapshots →
+   Automatic snapshots): a daily whole-instance snapshot, seven kept. Covers the database, `.env`,
+   uploaded files, nginx, the systemd units and `deploy.sh`. Postgres restores from it the way it
+   recovers from a crash, by replaying its log. Five minutes, and **it is not on yet** - it is the
+   first thing to do.
+2. **A nightly `pg_dump` to S3,** under a dated name, versioning on, 90-day lifecycle. The key on
+   the server is an IAM user allowed `s3:PutObject` and nothing else, so neither a mistake nor a
+   compromise on the box can delete its own backups. A second disk would not give that: it
+   shares the instance's failures, and anything that can write to it can delete from it.
+3. **An alert when a backup does not arrive.** The job pings healthchecks.io on success; 25 hours
+   of silence sends an email. Otherwise this becomes the next Redis worker - a nightly job that
+   stopped months ago, found on the day it is needed.
+
+Plus: keep `APP_KEY` in a password manager. Fortify encrypts two-factor secrets with it, so a
+dump restored without it cannot read those columns.
+
+Waiting on the console side - the bucket, the IAM user and the healthchecks check. The server
+side (CLI, script, systemd timer, first run, and a restore drill into a scratch database) is an
+hour once those exist. Later, with paying customers, a managed database removes the scripts
+altogether.
 
 ### 2. Nothing watches production
 
@@ -59,6 +84,12 @@ retention), which makes errors findable. It does not make anyone look at them.
 
 **What to do:** an error tracker, an uptime ping, and a disk-space alert. This is the
 difference between finding out in an hour and finding out in September.
+
+Related, found 23 September: Ubuntu's unattended upgrades run at **06:13 UTC - 11:13 in
+Pakistan**, the middle of the trading day - and restart Postgres when a library it uses is
+patched. It was down for about five seconds and the queue worker logged the only error of the
+day. Nothing was lost, but anyone saving in that window gets an error. Move
+`apt-daily-upgrade.timer` to 22:00 UTC (3am local).
 
 ### 3. The test suite gates nothing
 
@@ -132,11 +163,12 @@ Each of these was verified in the codebase, not inferred.
 | Core feature | Core implementation | The module's own | |
 |---|---|---|---|
 | Vendor statement | `Accounting\VendorStatementService` | `UmrahCoreService::vendorStatement()` | Umrah calls the core service nowhere |
-| Cash position | `DashboardService::getCashPosition()` | `Umrah\Dashboard\Widgets\CashPositionWidget` | one of them reported 0.00 against a ledger holding 3,527,862 |
+| Cash position | `DashboardService::getCashPosition()` | `Umrah\Dashboard\Widgets\CashPositionWidget` | the core one reported 0.00 against a ledger holding 3,527,862 because it read the bank-feed column; fixed 21 September to read the ledger. The Umrah copy is still separate |
 | Investor / partner | `auth.partners` + `PartnerTransaction` | `fuel.investors` | the fuel copy carries its own `total_invested` and `total_commission_earned` running totals |
 | Dashboard composition | `WidgetRegistry` + `DashboardWidget` | `FuelDashboardService::getHomeCards()` | one module of four uses the registry |
 | Opening balance | `OpeningBalance\SaveAction` | the bank account form's own column write | fixed 21 September; they had disagreed by the entire balance |
 | Account validation | one `Rule::exists` idiom | 32 copies across 21 files | all 32 were wrong in the same way |
+| Company purge (seeding) | - | `DemoSupport::purgeDemoCompany` and `ScenarioFuelStationSeeder::purge` | both deleted fuel items before tanks and swallowed the error; collapsed into `CompanyPurger` on 23 September |
 
 ### What is being done right, for contrast
 
@@ -162,10 +194,14 @@ behaviour is not, and the application reads as several applications sharing a lo
 Cohesion is not a coat of paint over that. It is the consequence of there being one
 implementation to present.
 
-### The rule this needs
+### The rule this needs: the Core Contract
 
 A module may add **vocabulary**, **workflow** and **screens**. It may not add a second
 implementation of a core noun or a core calculation.
+
+The name follows the repo's own vocabulary - `docs/contracts/` for schemas,
+`frontend-experience-contract.md` for interaction - so "that breaks the Core Contract" is a
+sentence people can say in review. The enforcing scan is `CoreContractTest`.
 
 Concretely: a module that needs a vendor statement calls the vendor statement service and
 presents the result its own way. It does not compute one. A module that needs a customer
@@ -192,6 +228,61 @@ does - rather than growing a parallel party.
 
 Point 4 is what makes the rest hold. `CLAUDE.md` already says `new Service()` should be
 `Bus::dispatch()`. Nothing enforces it, so the rule has been quietly losing for months.
+
+---
+
+## Fuel module: known limits going into live data
+
+Collected while preparing the first real station's September backfill. None blocks it; each is
+a thing somebody will hit.
+
+### A rate-change day is never marked in the history
+
+The "Rate change" marker on the close history appears only when a day was *split* at a
+midnight reading. Pakistani stations close the register at midnight on a rate-change night,
+so each register day is already all old rate or all new rate and nothing is ever split - the
+marker will never show. Fix: mark any close with a `fuel.rate_changes` row effective on its
+business date. Display only; no pricing logic changes.
+
+The same condition hides `fallback_liters`: when no reading was taken at the change, the day is
+priced at one rate, and the count of litres valued that way is recorded but shown nowhere.
+
+### Ten row lists in the daily close form are keyed by position
+
+Adding a second expense row put the bank-deposit amount into the first row's field. Rows keyed
+by index let a reused input keep another row's value. Fixed 22 September for expenses and bank
+deposits; **ten** other lists in `DailyClose/Create.vue` still use `:key="index"`. Less exposed
+now that most entries go through their own pages, but the fix is mechanical.
+
+### 31 files still start forms on the UTC date
+
+`new Date().toISOString().slice(0, 10)` is the UTC date, and Pakistan is UTC+5, so between
+midnight and 5am local time a form starts on yesterday. The five main entry forms were moved to
+local time on 23 September, and now also remember the last date used in the tab; **31 files**
+elsewhere still use the UTC pattern.
+
+### A totaliser that rolls over blocks the close
+
+Since 22 September a closing meter below its opening one is refused - it had silently booked
+zero litres, which lost 375 L of diesel on day 13 of the scenario run. A meter that genuinely
+rolls past its last digit also reads low and is refused too. Rare on these meters, and loud
+rather than silent, but it will stop a station's close until rollover is handled.
+
+**The refusal itself has no test.** Everything else deployed that week does.
+
+### Payroll cannot be back-dated
+
+`PayrollDashboardController::runMonthly()` builds the period from `now()`, and the close picks
+payslips up by `approved_at`, which is stamped at approval. A station closing yesterday's
+register cannot post yesterday's wages, and a backfill cannot run September payroll at all -
+salaries go in as dated expenses instead.
+
+### A close records its business date, not when its readings were taken
+
+Normally that is enough. When a station moves its sign-off - midnight on a rate-change night,
+leaving one day at 16 hours and the next at 32 - nothing in the data says the period was short
+or long, and per-day figures quietly compare unequal periods. Record the reading time on the
+close so an odd-length day is visible; the arithmetic, which is meter-based, is already right.
 
 ---
 
@@ -238,14 +329,18 @@ not defended at all.
 
 ## Order of work
 
-1. Backups. The only item where waiting has an unrecoverable downside.
-2. Error tracking and alerting.
+1. Backups: Lightsail snapshots today, then the S3 dump and its alert. The only item where
+   waiting has an unrecoverable downside - and live data is now going in.
+2. Error tracking and alerting, and moving unattended upgrades to 3am.
 3. `tests/Feature` in CI.
-4. Route helpers at the call sites.
-5. Dual-write audit and the enforcing scan.
-6. The core surface written down, and the first duplicate collapsed into it.
-7. Palette baseline, accessibility, empty states.
-8. Zero-downtime deploys, custom error pages.
+4. Fuel limits live data will reach first: the rate-change marker, the ten position-keyed
+   lists, the UTC date defaults, and a test for the meter refusal.
+5. Route helpers at the call sites.
+6. Dual-write audit and `CoreContractTest`.
+7. The core surface written down, and the next duplicate collapsed into it.
+8. Palette baseline, accessibility, empty states.
+9. Zero-downtime deploys, custom error pages, reading times on the close, payroll back-dating,
+   meter rollover.
 
-Items 5 and 6 are the same work seen from two sides: the audit finds the duplicates, the
+Items 6 and 7 are the same work seen from two sides: the audit finds the duplicates, the
 core is where they go.

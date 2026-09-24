@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreCustomerRequest;
@@ -16,6 +17,7 @@ use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -503,32 +505,101 @@ class CustomerController extends Controller
     public function quickStore(Request $request): RedirectResponse
     {
         $company = CompanyContext::getCompany();
+        $user = $request->user();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
+            'opening_owed' => 'nullable|numeric|min:0',
+            'opening_advance' => 'nullable|numeric|min:0',
+            'opening_date' => 'nullable|date',
         ]);
+
+        $owed = (float) ($validated['opening_owed'] ?? 0);
+        $advance = (float) ($validated['opening_advance'] ?? 0);
+        $openingDate = $validated['opening_date'] ?? null;
+
+        if (($owed > 0 || $advance > 0) && ! ($user?->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE) ?? false)) {
+            throw ValidationException::withMessages([
+                'opening_owed' => 'You are not allowed to set opening balances.',
+            ]);
+        }
 
         $commandBus = app(CommandBus::class);
 
-        $result = $commandBus->dispatch('customer.create', [
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'company_id' => $company->id,
-            'base_currency' => $company->base_currency,
-            'is_active' => true,
-        ], $request->user());
+        $customer = DB::transaction(function () use ($commandBus, $validated, $company, $user, $owed, $advance, $openingDate) {
+            $result = $commandBus->dispatch('customer.create', [
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? null,
+                'company_id' => $company->id,
+                'base_currency' => $company->base_currency,
+                'is_active' => true,
+            ], $user);
 
-        $customer = Customer::find($result['data']['id']);
+            $customer = Customer::find($result['data']['id']);
+
+            if ($owed > 0) {
+                try {
+                    $commandBus->dispatch('opening_balance.set_party', [
+                        'section' => 'credit_customers',
+                        'party_id' => $customer->id,
+                        'amount' => $owed,
+                        'as_of_date' => $openingDate,
+                    ], $user);
+                } catch (ValidationException $e) {
+                    throw $this->remapOpeningError($e, 'opening_owed');
+                }
+            }
+
+            if ($advance > 0) {
+                try {
+                    $commandBus->dispatch('opening_balance.set_party', [
+                        'section' => 'amanat',
+                        'party_id' => $customer->id,
+                        'amount' => $advance,
+                        'as_of_date' => $openingDate,
+                    ], $user);
+                } catch (ValidationException $e) {
+                    throw $this->remapOpeningError($e, 'opening_advance');
+                }
+            }
+
+            return $customer;
+        });
+
+        $message = ($owed > 0 || $advance > 0) ? 'Customer created with opening balance' : 'Customer created';
 
         return back()->with([
-            'success' => 'Customer created',
+            'success' => $message,
             'entity' => [
                 'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
             ],
         ]);
+    }
+
+    /**
+     * opening_balance.set_party's errors are keyed for its own params (amount, as_of_date,
+     * party_id, or whatever SaveAction itself threw against, e.g. 'amanat' when account 2200
+     * is missing). Quick Add's form has none of those fields — it has opening_owed,
+     * opening_advance and opening_date — so a validation failure has to be re-keyed onto the
+     * field the user actually sees, or the message lands nowhere on screen.
+     */
+    private function remapOpeningError(ValidationException $e, string $amountField): ValidationException
+    {
+        $remapped = [];
+        foreach ($e->errors() as $key => $messages) {
+            $target = match ($key) {
+                'amount' => $amountField,
+                'as_of_date' => 'opening_date',
+                'amanat' => 'opening_advance',
+                default => 'opening_owed',
+            };
+            $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);
+        }
+
+        return ValidationException::withMessages($remapped);
     }
 
     /**

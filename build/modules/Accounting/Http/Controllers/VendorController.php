@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
 use App\Modules\Accounting\Http\Requests\UpdateVendorRequest;
@@ -12,6 +13,8 @@ use App\Services\CompanyContextService;
 use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -267,26 +270,59 @@ class VendorController extends Controller
     public function quickStore(Request $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        $user = $request->user();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'vendor_type' => 'nullable|in:'.implode(',', array_keys(Vendor::TYPES)),
+            'opening_owed' => 'nullable|numeric|min:0',
+            'opening_date' => 'nullable|date',
         ]);
 
-        $result = app(CommandBus::class)->dispatch('vendor.create', [
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'vendor_type' => $validated['vendor_type'] ?? Vendor::TYPE_GENERAL,
-            'company_id' => $company->id,
-            'base_currency' => $company->base_currency,
-            'is_active' => true,
-        ], $request->user());
+        $owed = (float) ($validated['opening_owed'] ?? 0);
+        $openingDate = $validated['opening_date'] ?? null;
 
-        $vendor = \App\Modules\Accounting\Models\Vendor::find($result['data']['id']);
+        if ($owed > 0 && ! ($user?->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE) ?? false)) {
+            throw ValidationException::withMessages([
+                'opening_owed' => 'You are not allowed to set opening balances.',
+            ]);
+        }
+
+        $commandBus = app(CommandBus::class);
+
+        $vendor = DB::transaction(function () use ($commandBus, $validated, $company, $user, $owed, $openingDate) {
+            $result = $commandBus->dispatch('vendor.create', [
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? null,
+                'vendor_type' => $validated['vendor_type'] ?? Vendor::TYPE_GENERAL,
+                'company_id' => $company->id,
+                'base_currency' => $company->base_currency,
+                'is_active' => true,
+            ], $user);
+
+            $vendor = Vendor::find($result['data']['id']);
+
+            if ($owed > 0) {
+                try {
+                    $commandBus->dispatch('opening_balance.set_party', [
+                        'section' => 'suppliers',
+                        'party_id' => $vendor->id,
+                        'amount' => $owed,
+                        'as_of_date' => $openingDate,
+                    ], $user);
+                } catch (ValidationException $e) {
+                    throw $this->remapOpeningError($e, 'opening_owed');
+                }
+            }
+
+            return $vendor;
+        });
+
+        $message = $owed > 0 ? 'Vendor created with opening balance' : 'Vendor created';
 
         return back()->with([
-            'success' => 'Vendor created',
+            'success' => $message,
             'entity' => [
                 'id' => $vendor->id,
                 'name' => $vendor->name,
@@ -294,6 +330,28 @@ class VendorController extends Controller
                 'vendor_type' => $vendor->vendor_type,
             ],
         ]);
+    }
+
+    /**
+     * opening_balance.set_party's errors are keyed for its own params (amount, as_of_date,
+     * party_id). Quick Add's form has none of those fields — it has opening_owed and
+     * opening_date — so a validation failure has to be re-keyed onto the field the user
+     * actually sees, or the message lands nowhere on screen.
+     */
+    private function remapOpeningError(ValidationException $e, string $amountField): ValidationException
+    {
+        $remapped = [];
+        foreach ($e->errors() as $key => $messages) {
+            $target = match ($key) {
+                'amount' => $amountField,
+                'as_of_date' => 'opening_date',
+                'amanat' => 'opening_advance',
+                default => 'opening_owed',
+            };
+            $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);
+        }
+
+        return ValidationException::withMessages($remapped);
     }
 
     /**

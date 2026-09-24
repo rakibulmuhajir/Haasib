@@ -120,5 +120,6 @@ return [
     'opening_balance.view' => \App\Modules\Accounting\Actions\OpeningBalance\ViewAction::class,
     'opening_balance.save' => \App\Modules\Accounting\Actions\OpeningBalance\SaveAction::class,
     'opening_balance.set_account' => \App\Modules\Accounting\Actions\OpeningBalance\SetAccountAction::class,
+    'opening_balance.set_party' => \App\Modules\Accounting\Actions\OpeningBalance\SetPartyAction::class,
     'opening_balance.lock' => \App\Modules\Accounting\Actions\OpeningBalance\LockAction::class,
 ];

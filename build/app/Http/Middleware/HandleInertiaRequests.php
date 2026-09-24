@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\FuelStation\Services\FuelNavigationAccess;
 use App\Services\CurrentCompany;
 use Illuminate\Database\Eloquent\Model;
@@ -172,6 +174,27 @@ class HandleInertiaRequests extends Middleware
                 },
                 'companies' => fn () => $resolve()['companies']->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
+                'openingBalance' => function () use ($request) {
+                    // Resolve after IdentifyCompany has run — see fuelNavigation above for why.
+                    $company = app(CurrentCompany::class)->get();
+                    $user = $request->user();
+                    if (! $company || ! $user) {
+                        return null;
+                    }
+
+                    $opening = ($company->settings ?? [])['opening_balances'] ?? [];
+
+                    return [
+                        'canManage' => $user->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE),
+                        'asOfDate' => $opening['as_of_date'] ?? null,
+                        'locked' => ! empty($opening['locked_at']),
+                        'hasAmanat' => Account::where('company_id', $company->id)
+                            ->whereNull('deleted_at')
+                            ->where('is_active', true)
+                            ->where('code', '2200')
+                            ->exists(),
+                    ];
+                },
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [

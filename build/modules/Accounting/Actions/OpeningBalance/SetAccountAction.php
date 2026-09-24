@@ -77,26 +77,15 @@ class SetAccountAction implements PaletteAction
 
         $amount = round((float) $params['amount'], 2);
 
-        $payload = [
-            // An existing set keeps its own date unless the caller names one. Changing one
-            // account's figure must not silently re-date the entire opening position.
-            'as_of_date' => $params['as_of_date']
-                ?? $view['as_of_date']
-                ?? now()->toDateString(),
-            'cash' => ['amount' => (float) ($rows['cash']['amount'] ?? 0)],
-            'banks' => collect($rows['banks'] ?? [])
-                ->reject(fn ($b) => $b['account_id'] === $account->id)
-                ->map(fn ($b) => ['account_id' => $b['account_id'], 'amount' => (float) $b['amount']])
-                ->values()
-                ->all(),
-            // Carried through untouched, mapped down to the keys SaveAction accepts: the
-            // view returns display names and derived figures alongside them.
-            'credit_customers' => self::carry($rows['credit_customers'] ?? [], 'customer_id'),
-            'employees' => self::carry($rows['employees'] ?? [], 'employee_id'),
-            'amanat' => self::carry($rows['amanat'] ?? [], 'customer_id'),
-            'suppliers' => self::carry($rows['suppliers'] ?? [], 'vendor_id'),
-            'partners' => self::carry($rows['partners'] ?? [], 'partner_id'),
-        ];
+        $payload = OpeningSet::payloadFromView($view);
+        // An existing set keeps its own date unless the caller names one. Changing one
+        // account's figure must not silently re-date the entire opening position.
+        $payload['as_of_date'] = $params['as_of_date'] ?? $payload['as_of_date'];
+        $payload['banks'] = collect($rows['banks'] ?? [])
+            ->reject(fn ($b) => $b['account_id'] === $account->id)
+            ->map(fn ($b) => ['account_id' => $b['account_id'], 'amount' => (float) $b['amount']])
+            ->values()
+            ->all();
 
         if ($account->subtype === 'cash') {
             $payload['cash'] = ['amount' => $amount];
@@ -110,17 +99,5 @@ class SetAccountAction implements PaletteAction
             'message' => 'Opening balance set for '.$account->name,
             'data' => $result['data'] ?? [],
         ];
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array<string, mixed>>
-     */
-    private static function carry(array $rows, string $key): array
-    {
-        return collect($rows)
-            ->map(fn ($r) => [$key => $r[$key], 'amount' => (float) $r['amount']])
-            ->values()
-            ->all();
     }
 }

@@ -169,8 +169,10 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
   if (itemId && props.items) {
     const item = props.items.find(i => i.id === itemId)
     if (item) {
-      line.description = item.name
-      line.unit_price = Number(item.cost_price) || 0
+      // Fill only what the line doesn't already say: the price on the supplier's bill is the
+      // real one, and replacing it with the item's stored cost silently changed the total.
+      if (!line.description?.trim()) line.description = item.name
+      if (!(Number(line.unit_price) > 0)) line.unit_price = Number(item.cost_price) || 0
       line.warehouse_id = item.preferred_warehouse_id ?? defaultWarehouseId.value
       line.expense_account_id = item.preferred_line_account_id ?? '__none'
     }

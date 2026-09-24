@@ -41,7 +41,7 @@ class Payment extends Model
     protected $casts = [
         'company_id' => 'string',
         'customer_id' => 'string',
-        'payment_date' => 'date',
+        'payment_date' => 'date:Y-m-d',
         'amount' => 'decimal:6',
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',

@@ -46,7 +46,7 @@ class VendorCredit extends Model
         'company_id' => 'string',
         'vendor_id' => 'string',
         'bill_id' => 'string',
-        'credit_date' => 'date',
+        'credit_date' => 'date:Y-m-d',
         'amount' => 'decimal:6',
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',

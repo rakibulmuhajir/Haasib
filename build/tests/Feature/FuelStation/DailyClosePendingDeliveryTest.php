@@ -238,3 +238,23 @@ test('an unpaid bill\'s goods can be received', function () {
     expect($bill->status)->not->toBe('paid');
     expect((float) $bill->lineItems()->sole()->quantity_received)->toBe(1000.0);
 });
+
+test('receiving a delivery averages its cost with the stock already there, counted once', function () {
+    $f = pendingDeliveryFixture();
+    // As a fuel item leaves setup: the purchase rate sits in avg_cost, cost_price is still 0.
+    $f['item']->update(['avg_cost' => 250, 'cost_price' => 0]);
+    $bill = pendingDeliveryBill($f, '2026-09-10', 1000, 0, $f['tank']->id); // 1,000 L at 240
+
+    app(CurrentCompany::class)->set($f['company']);
+    app(CompanyContextService::class)->withContext(
+        $f['company'],
+        fn () => app(\App\Services\CommandBus::class)->dispatch('bill.receive_goods', [
+            'id' => $bill->id,
+            'receipt_date' => '2026-09-10',
+        ], $f['user'])
+    );
+
+    // 5,000 L at 250 already in the tank, plus 1,000 L at 240: (1,250,000 + 240,000) / 6,000.
+    // It used to read 240,000 / 7,000 = 34.29 - the old stock at a cost of 0, the new litres twice.
+    expect(round((float) $f['item']->fresh()->cost_price, 4))->toBe(248.3333);
+});

@@ -179,9 +179,13 @@ class InventoryService
      */
     protected function updateItemCost(Item $item, float $newQty, float $newUnitCost): void
     {
-        // Get current total stock and value
-        $currentQty = $item->stockLevels()->sum('quantity') ?? 0;
-        $currentCost = (float) $item->cost_price;
+        // The stock level already includes this receipt, so take it back out to get what was
+        // there before; and start from the real current cost - avg_cost carries a fuel item's
+        // opening and rate costs, cost_price can still be 0. Counting the new litres twice
+        // against a zero cost turned a 338 delivery into a cost of 104. Same as
+        // StockAdjustmentService::updateItemCost.
+        $currentQty = max(0.0, (float) $item->stockLevels()->sum('quantity') - $newQty);
+        $currentCost = (float) ($item->avg_cost ?: $item->cost_price ?: $newUnitCost);
 
         // Calculate weighted average
         $totalQty = $currentQty + $newQty;

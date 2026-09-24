@@ -1575,26 +1575,31 @@ class DailyCloseService
      * Get recent daily closes for history view.
      */
     /**
-     * Whether a rate changed during this close, and whether any litres had to be priced
-     * without knowing which side of the change they fell on.
+     * Whether a new rate took effect on this close's business date, whether the day was split
+     * between two rates at a meter reading, and how many litres had to be priced without
+     * knowing which side of a change they fell on.
      *
-     * fallback_liters is the honest part. When the reading at the moment of the change was
-     * never taken, the close prices the whole day at one rate and records how many litres
-     * were valued that way. That approximation was being kept and shown nowhere, so a day
-     * priced on a guess looked identical to one priced on a reading.
+     * The first version only reported split days. A station that closes its register at
+     * midnight on a rate-change night never splits one - each register day is already all one
+     * rate - so the marker never appeared. It now reports any day a rate took effect.
      *
-     * @return array{changed: bool, fallback_liters: float}|null
+     * fallback_liters is the honest part of a split. When the reading at the moment of the
+     * change was never taken, the day is priced at one rate and the litres valued that way are
+     * counted; that approximation was being kept and shown nowhere.
+     *
+     * @return array{changed: bool, split: bool, fallback_liters: float}|null
      */
-    private function rateChangeSummary(array $metadata): ?array
+    private function rateChangeSummary(array $metadata, bool $rateTookEffect): ?array
     {
         $segments = $metadata['rate_change_segments'] ?? [];
 
-        if (empty($segments)) {
+        if (! $rateTookEffect && empty($segments)) {
             return null;
         }
 
         return [
             'changed' => true,
+            'split' => ! empty($segments),
             'fallback_liters' => round(array_sum(array_map(
                 fn ($s) => (float) ($s['fallback_liters'] ?? 0),
                 $segments
@@ -1648,7 +1653,23 @@ class DailyCloseService
             )
             ->flip();
 
-        return $closes->map(function ($t) use ($activeCloseIds) {
+        // Days on which a new rate took effect, for all listed closes in one query. The marker
+        // keys off this rather than off a split: a station that ends its day at midnight on a
+        // rate-change night never splits a day, so a split-only marker never showed at all.
+        // Only a rate that replaced an earlier one counts: an item's first rate is setup, not
+        // a change.
+        $rateChangeDates = DB::table('fuel.rate_changes as rc')
+            ->where('rc.company_id', $companyId)
+            ->whereIn('rc.effective_date', $closes->map(fn ($t) => $t->transaction_date->toDateString())->unique()->values())
+            ->whereExists(fn ($q) => $q->from('fuel.rate_changes as prior')
+                ->whereColumn('prior.company_id', 'rc.company_id')
+                ->whereColumn('prior.item_id', 'rc.item_id')
+                ->whereColumn('prior.effective_date', '<', 'rc.effective_date'))
+            ->pluck('rc.effective_date')
+            ->map(fn ($d) => substr((string) $d, 0, 10))
+            ->flip();
+
+        return $closes->map(function ($t) use ($activeCloseIds, $rateChangeDates) {
             $metadata = $t->metadata ?? [];
             if (!is_array($metadata)) {
                 $metadata = [];
@@ -1672,7 +1693,7 @@ class DailyCloseService
                 // unlike its neighbours, and it is the first thing someone reading the
                 // history wants to know. The detail is already in the close; this only
                 // surfaces that it happened.
-                'rate_change' => $this->rateChangeSummary($metadata),
+                'rate_change' => $this->rateChangeSummary($metadata, $rateChangeDates->has($t->transaction_date->toDateString())),
             ];
         })->toArray();
     }

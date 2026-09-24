@@ -168,3 +168,37 @@ test('the history row says a rate changed, and whether anything was guessed', fu
         ->and($row['rate_change']['changed'])->toBeTrue()
         ->and($row['rate_change']['fallback_liters'])->toBe(0.0);
 });
+
+test('a day a new rate took effect is marked even when nothing was split', function () {
+    $f = creditCloseFixture();
+    $itemId = $f['payload']['nozzle_readings'][0]['item_id'];
+
+    // The Pakistani register practice: on a rate-change night the day ends at midnight, so
+    // the day is all one rate and no reading is taken mid-day. The first marker only knew
+    // split days, and so never showed for a station working this way.
+    foreach ([['2026-09-14', 300], ['2026-09-15', 320]] as [$date, $rate]) {
+        RateChange::create([
+            'company_id' => $f['company']->id, 'item_id' => $itemId,
+            'effective_date' => $date, 'sale_rate' => $rate, 'purchase_rate' => 250,
+        ]);
+    }
+
+    postSplitClose($f, 320, 32000);
+    $row = app(DailyCloseService::class)->getRecentCloses($f['company']->id, null)[0];
+
+    expect($row['rate_change'])->not->toBeNull()
+        ->and($row['rate_change']['split'])->toBeFalse();
+});
+
+test('an item\'s first rate is setup, not a change', function () {
+    $f = creditCloseFixture();
+
+    RateChange::create([
+        'company_id' => $f['company']->id, 'item_id' => $f['payload']['nozzle_readings'][0]['item_id'],
+        'effective_date' => '2026-09-15', 'sale_rate' => 320, 'purchase_rate' => 250,
+    ]);
+
+    postSplitClose($f, 320, 32000);
+
+    expect(app(DailyCloseService::class)->getRecentCloses($f['company']->id, null)[0]['rate_change'])->toBeNull();
+});

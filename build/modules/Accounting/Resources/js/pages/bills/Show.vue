@@ -335,7 +335,7 @@ const hasReceivableItems = computed(() => receivableLineItems.value.length > 0)
 const canReceiveGoods = computed(() => {
   if (!props.inventoryEnabled) return false
   if (!hasReceivableItems.value) return false
-  if (props.bill.status !== 'paid') return false
+  if (['void', 'cancelled', 'draft'].includes(props.bill.status)) return false
   if (props.bill.goods_received_at) return false
   return true
 })
@@ -350,7 +350,6 @@ const stockStatusLabel = computed(() => {
   if (!props.inventoryEnabled || !hasLinkedItems.value) return t('stockNotTracked')
   if (!hasReceivableItems.value) return t('stockReceived')
   if (goodsFullyReceived.value) return t('stockReceived')
-  if (props.bill.status !== 'paid') return t('stockAwaitingPayment')
   return t('stockPending')
 })
 
@@ -358,7 +357,6 @@ const stockStatusVariant = computed((): 'default' | 'secondary' | 'destructive' 
   if (!props.inventoryEnabled || !hasLinkedItems.value) return 'secondary'
   if (!hasReceivableItems.value) return 'default'
   if (goodsFullyReceived.value) return 'default'
-  if (props.bill.status !== 'paid') return 'outline'
   return 'destructive'
 })
 

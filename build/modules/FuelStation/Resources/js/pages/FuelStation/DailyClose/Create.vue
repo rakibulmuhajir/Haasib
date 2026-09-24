@@ -83,6 +83,13 @@ interface Tank {
     current_stock_as_of?: string | null;
     current_stock_after_close_date?: boolean;
     stock_movements_since_baseline_liters?: number | null;
+    pending_delivery_liters?: number | null;
+    pending_deliveries?: Array<{
+        bill_id: string;
+        bill_number: string;
+        bill_date: string;
+        litres: number;
+    }>;
 }
 
 interface Pump {
@@ -810,6 +817,8 @@ const form = useForm({
                 tank.current_stock_after_close_date ?? false,
             stock_movements_since_baseline_liters:
                 tank.stock_movements_since_baseline_liters ?? 0,
+            pending_delivery_liters: tank.pending_delivery_liters ?? 0,
+            pending_deliveries: tank.pending_deliveries ?? [],
             stick_reading: 0,
             liters: 0,
         };
@@ -1109,6 +1118,8 @@ const resetFormToInitial = () => {
                 tank.current_stock_after_close_date ?? false,
             stock_movements_since_baseline_liters:
                 tank.stock_movements_since_baseline_liters ?? 0,
+            pending_delivery_liters: tank.pending_delivery_liters ?? 0,
+            pending_deliveries: tank.pending_deliveries ?? [],
             stick_reading: 0,
             liters: 0,
         };
@@ -1492,19 +1503,25 @@ const stockMovementLabel = (liters: number) => {
 const expectedTankClosingLiters = (tank: {
     previous_liters: number;
     stock_movements_since_baseline_liters?: number | null;
+    pending_delivery_liters?: number | null;
     tank_id: string;
 }) => {
     const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0;
     return (
         Number(tank.previous_liters || 0) +
-        Number(tank.stock_movements_since_baseline_liters || 0) -
+        Number(tank.stock_movements_since_baseline_liters || 0) +
+        Number(tank.pending_delivery_liters || 0) -
         soldFromTank
     );
 };
 
 // Calculate tank variance (shrinkage/gain)
-// Formula: Opening baseline + stock movements - sales = expected closing.
-// Difference between physical dip and expected closing is the variance.
+// Formula: Opening baseline + received stock + pending (unreceived) deliveries
+// - sales = expected closing. Pending deliveries are bills whose litres already
+// belong to this tank but haven't been received yet — the close receives them
+// on posting, so they must count here or an unreceived delivery reads as a
+// physical "gain" in the dip. Difference between physical dip and expected
+// closing, after deliveries, is the real variance.
 const tankVariances = computed(() => {
     return form.tank_readings.map((tank) => {
         const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0;
@@ -1512,7 +1529,8 @@ const tankVariances = computed(() => {
         const variance = expectedClosing - tank.liters; // Positive = loss, Negative = gain
         const usageFromDip =
             tank.previous_liters +
-            Number(tank.stock_movements_since_baseline_liters || 0) -
+            Number(tank.stock_movements_since_baseline_liters || 0) +
+            Number(tank.pending_delivery_liters || 0) -
             tank.liters;
 
         return {
@@ -3732,6 +3750,60 @@ const completedWorkflowSteps = computed(() => {
                                                     the selected close date, so
                                                     it is not used as the
                                                     opening baseline.
+                                                </div>
+                                                <div
+                                                    v-if="
+                                                        (tank.pending_deliveries ||
+                                                            []
+                                                        ).length > 0
+                                                    "
+                                                    class="mt-1.5 border-t border-border/60 pt-1.5 text-status-attention"
+                                                >
+                                                    <div class="font-medium">
+                                                        +
+                                                        {{
+                                                            formatLiters(
+                                                                tank.pending_delivery_liters ||
+                                                                    0,
+                                                            )
+                                                        }}
+                                                        L delivered, not yet
+                                                        received
+                                                    </div>
+                                                    <div
+                                                        v-for="delivery in tank.pending_deliveries"
+                                                        :key="delivery.bill_id"
+                                                    >
+                                                        <a
+                                                            :href="`/${props.company.slug}/bills/${delivery.bill_id}`"
+                                                            target="_blank"
+                                                            class="underline hover:no-underline"
+                                                        >
+                                                            {{
+                                                                delivery.bill_number
+                                                            }}
+                                                        </a>
+                                                        ·
+                                                        {{
+                                                            formatBaselineDate(
+                                                                delivery.bill_date,
+                                                            )
+                                                        }}
+                                                        ·
+                                                        {{
+                                                            formatLiters(
+                                                                delivery.litres,
+                                                            )
+                                                        }}
+                                                        L
+                                                    </div>
+                                                    <div
+                                                        class="mt-1 text-muted-foreground"
+                                                    >
+                                                        Received into the tank
+                                                        when this close is
+                                                        posted.
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

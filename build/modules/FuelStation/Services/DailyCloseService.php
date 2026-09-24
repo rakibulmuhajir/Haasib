@@ -6,6 +6,8 @@ use App\Models\Partner;
 use App\Models\PartnerTransaction;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -19,10 +21,13 @@ use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Modules\Payroll\Services\PayrollPostingService;
+use App\Services\CommandBus;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DailyCloseService
@@ -79,6 +84,72 @@ class DailyCloseService
             'created_at' => $stockMovement->created_at,
             'has_baseline' => true,
         ];
+    }
+
+    /**
+     * The tank a bill line with no warehouse belongs to, for an item with several
+     * tanks. Mirrors Bill\UpdateAction::preferredWarehouseId - tank warehouses only,
+     * primary first, then name - so a null-warehouse delivery line is never counted
+     * against every tank that shares the item.
+     */
+    public function primaryTankIdForItem(string $companyId, string $itemId): ?string
+    {
+        return Warehouse::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where('linked_item_id', $itemId)
+            ->orderByRaw("case when warehouse_type = 'tank' then 0 else 1 end")
+            ->orderByDesc('is_primary')
+            ->orderBy('name')
+            ->value('id');
+    }
+
+    /**
+     * Fuel deliveries that landed on a bill for this tank's item but have not yet
+     * been received into stock. A delivery only becomes real litres in the tank
+     * once someone (or the close itself, on posting) receives it - until then the
+     * dip sees nothing, so these rows are what the close's preview must add back
+     * to explain a dip that looks like a gain but is really an unreceived bill.
+     *
+     * afterDate/upToDate are exclusive/inclusive on bill_date, matching how the
+     * tank's opening baseline and "today's receipts" window are read elsewhere
+     * in this service.
+     */
+    public function pendingDeliveries(string $companyId, string $tankId, string $itemId, ?string $afterDate, string $upToDate): Collection
+    {
+        $primaryTankId = $this->primaryTankIdForItem($companyId, $itemId);
+
+        return BillLineItem::query()
+            ->join('acct.bills', 'acct.bills.id', '=', 'acct.bill_line_items.bill_id')
+            ->where('acct.bill_line_items.company_id', $companyId)
+            ->where('acct.bill_line_items.item_id', $itemId)
+            ->whereNotIn('acct.bills.status', ['void', 'cancelled', 'draft'])
+            ->when($afterDate, fn ($q) => $q->whereDate('acct.bills.bill_date', '>', $afterDate))
+            ->whereDate('acct.bills.bill_date', '<=', $upToDate)
+            ->whereColumn('acct.bill_line_items.quantity', '>', 'acct.bill_line_items.quantity_received')
+            ->where(function ($q) use ($tankId, $primaryTankId) {
+                $q->where('acct.bill_line_items.warehouse_id', $tankId);
+                if ($primaryTankId !== null && $primaryTankId === $tankId) {
+                    $q->orWhereNull('acct.bill_line_items.warehouse_id');
+                }
+            })
+            ->orderBy('acct.bills.bill_date')
+            ->get([
+                'acct.bill_line_items.id as line_id',
+                'acct.bill_line_items.bill_id',
+                'acct.bills.bill_number',
+                'acct.bills.bill_date',
+                'acct.bill_line_items.quantity',
+                'acct.bill_line_items.quantity_received',
+            ])
+            ->map(fn ($row) => [
+                'bill_id' => $row->bill_id,
+                'bill_number' => $row->bill_number,
+                'bill_date' => $row->bill_date instanceof \Carbon\Carbon ? $row->bill_date->toDateString() : (string) $row->bill_date,
+                'line_id' => $row->line_id,
+                'remaining' => round((float) $row->quantity - (float) $row->quantity_received, 3),
+            ])
+            ->filter(fn ($row) => $row['remaining'] > 0)
+            ->values();
     }
 
     /**
@@ -389,6 +460,59 @@ class DailyCloseService
             $metadata['other_sales'] = $otherSalesTotal;
             $metadata['other_sales_details'] = $otherSalesDetails;
             $totalRevenue += $otherSalesTotal;
+
+            // ─────────────────────────────────────────────────────────────────
+            // 2b. Receive pending fuel deliveries before computing tank variance.
+            // A fuel bill's litres are invisible to the dip until someone receives
+            // them (delivery_mode 'requires_receiving' - see Product\SetupAction),
+            // and a bill entered from Accounting -> Bills only gets received when
+            // someone presses "Receive stock" on it. The close is the backstop:
+            // on posting, it receives whatever belongs to the date being dipped so
+            // a real delivery is never counted as a physical gain in the tank.
+            // The stock movement is dated on the bill's own bill_date (not $date),
+            // exactly like DailyCloseEntryService::purchase's inline receipt, so the
+            // "today's receipts" query below (and the reconciliation service) picks
+            // it up the same way it would any other receipt.
+            // ─────────────────────────────────────────────────────────────────
+            $deliveriesReceived = [];
+            if (!empty($data['tank_readings'])) {
+                foreach ($data['tank_readings'] as $tankData) {
+                    $tank = Warehouse::where('company_id', $companyId)->find($tankData['tank_id']);
+                    $itemId = $tank?->linked_item_id;
+                    if (!$itemId) {
+                        continue;
+                    }
+
+                    $baseline = $this->openingBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+                    $afterDate = $baseline['has_baseline'] ? $baseline['date'] : null;
+                    $pending = $this->pendingDeliveries($companyId, $tankData['tank_id'], $itemId, $afterDate, $date);
+
+                    foreach ($pending as $delivery) {
+                        app(CommandBus::class)->dispatch('bill.receive_goods', [
+                            'id' => $delivery['bill_id'],
+                            'receipt_date' => $delivery['bill_date'],
+                            'lines' => [[
+                                'line_id' => $delivery['line_id'],
+                                'quantity' => $delivery['remaining'],
+                                'warehouse_id' => $tankData['tank_id'],
+                            ]],
+                        // Part of posting the close, which already checked its own permission:
+                        // a cashier who may close the day need not also be allowed to edit bills.
+                        ], $user, true);
+
+                        $deliveriesReceived[] = [
+                            'bill_id' => $delivery['bill_id'],
+                            'bill_number' => $delivery['bill_number'],
+                            'bill_date' => $delivery['bill_date'],
+                            'line_id' => $delivery['line_id'],
+                            'tank' => $tank->name,
+                            'tank_id' => $tankData['tank_id'],
+                            'litres' => $delivery['remaining'],
+                        ];
+                    }
+                }
+            }
+            $metadata['deliveries_received'] = $deliveriesReceived;
 
             // ─────────────────────────────────────────────────────────────────
             // 3. Process Tank Readings (calculate variance and save)

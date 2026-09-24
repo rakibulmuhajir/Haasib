@@ -624,6 +624,44 @@ const unlockTransaction = () => {
       </Card>
     </div>
 
+    <!-- Fuel Deliveries Received on Posting -->
+    <Card v-if="(metadata.deliveries_received || []).length > 0" class="mt-6">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <Fuel class="h-5 w-5" />
+          Fuel Deliveries Received
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p class="text-sm text-muted-foreground mb-3">
+          These bills were entered before their goods were received. Posting this close received them,
+          dated on each bill's own date, so the litres are real stock rather than a dip "gain".
+        </p>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b">
+              <th class="text-left py-1">Bill</th>
+              <th class="text-left py-1">Date</th>
+              <th class="text-left py-1">Tank</th>
+              <th class="text-right py-1">Litres</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="delivery in metadata.deliveries_received" :key="delivery.bill_id + delivery.line_id" class="border-b last:border-0">
+              <td class="py-1">
+                <Link :href="`/${company.slug}/bills/${delivery.bill_id}`" class="underline hover:no-underline">
+                  {{ delivery.bill_number }}
+                </Link>
+              </td>
+              <td class="py-1">{{ formatDate(delivery.bill_date) }}</td>
+              <td class="py-1">{{ delivery.tank }}</td>
+              <td class="py-1 text-right">{{ Number(delivery.litres).toFixed(0) }} L</td>
+            </tr>
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+
     <!-- Transaction Details -->
     <Card class="mt-6">
       <CardHeader>

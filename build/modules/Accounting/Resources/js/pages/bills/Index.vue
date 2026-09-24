@@ -135,7 +135,6 @@ const stockStatusLabel = (bill: BillRow) => {
   if (linkedCount === 0) return t('stockNotTracked')
   if (bill.goods_received_at) return t('stockReceived')
   if (receivableCount === 0) return t('stockReceived')
-  if (bill.status !== 'paid') return t('stockAwaitingPayment')
   return t('stockPending')
 }
 

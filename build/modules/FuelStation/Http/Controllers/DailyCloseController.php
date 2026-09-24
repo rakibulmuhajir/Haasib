@@ -451,6 +451,31 @@ class DailyCloseController extends Controller
             $tank->setAttribute('current_stock_as_of', $movementDate);
             $tank->setAttribute('current_stock_after_close_date', $movementDate !== null && $movementDate > $date);
             $tank->setAttribute('stock_movements_since_baseline_liters', $movementsSinceBaseline);
+
+            // A fuel bill's litres are invisible to the dip until someone receives
+            // them, so the preview must surface what the close will receive on
+            // posting - otherwise a delivery entered from Accounting -> Bills but
+            // not yet received reads here as a false gain. See
+            // DailyCloseService::pendingDeliveries.
+            $pendingDeliveries = [];
+            $pendingDeliveryLiters = 0.0;
+            if ($tank->linked_item_id) {
+                $baseline = $baselines?->get($tank->id);
+                $afterDate = $baseline?->as_of ?? $baseline?->reading_date?->toDateString();
+                $pendingDeliveries = $this->dailyCloseService
+                    ->pendingDeliveries($companyId, $tank->id, $tank->linked_item_id, $afterDate, $date)
+                    ->map(fn ($row) => [
+                        'bill_id' => $row['bill_id'],
+                        'bill_number' => $row['bill_number'],
+                        'bill_date' => $row['bill_date'],
+                        'litres' => $row['remaining'],
+                    ])
+                    ->values()
+                    ->all();
+                $pendingDeliveryLiters = array_sum(array_column($pendingDeliveries, 'litres'));
+            }
+            $tank->setAttribute('pending_deliveries', $pendingDeliveries);
+            $tank->setAttribute('pending_delivery_liters', $pendingDeliveryLiters);
         }
     }
 

@@ -9,6 +9,8 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\DB;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 // Reuses creditCloseFixture() from DailyCloseCreditSalesTest.php (company, cash/bank/AR
 // accounts, one customer with an AR account). Only loaded when the whole FuelStation
 // directory is run together (module scope), per project convention.

@@ -7,6 +7,8 @@ use App\Modules\Inventory\Models\Item;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * A standalone fuel credit sale is the entry point the Daily Close imports from:
  * DailyCloseController::getPendingFuelInvoicesForDailyClose() looks for invoices on the

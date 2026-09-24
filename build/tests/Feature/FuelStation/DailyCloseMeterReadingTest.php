@@ -3,6 +3,8 @@
 use App\Modules\FuelStation\Services\DailyCloseService;
 use Illuminate\Validation\ValidationException;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * What a close does with meter readings: where its litres come from, what it refuses, and the
  * one legitimate case of a meter reading lower than it did yesterday.

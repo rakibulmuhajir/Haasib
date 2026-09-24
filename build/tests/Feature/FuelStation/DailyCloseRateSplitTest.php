@@ -4,6 +4,8 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Services\DailyCloseService;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * A rate change that lands inside a business day, which is the Pakistani reality.
  *

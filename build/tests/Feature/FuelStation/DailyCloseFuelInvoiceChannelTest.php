@@ -10,6 +10,8 @@ use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\FuelStation\Services\FuelSaleService;
 use Illuminate\Support\Facades\DB;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 // Reuses creditCloseFixture() from DailyCloseCreditSalesTest.php (company, customer with
 // an AR account, a fuel item/tank/nozzle, and the base chart of accounts). Only loaded
 // when the whole FuelStation directory is run together (module scope), per project convention.

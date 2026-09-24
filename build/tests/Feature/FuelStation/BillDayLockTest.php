@@ -8,6 +8,8 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\ValidationException;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * Paying a bill doesn't freeze it -- only its day being locked does. A daily
  * close is one of the things that can lock a date, via the DocumentDateLock

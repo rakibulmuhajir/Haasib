@@ -3,6 +3,8 @@
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Support\Str;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * StoreFuelSaleRequest used bare 'inv.items,id' / 'fuel.pumps,id' / 'acct.customers,id'
  * strings in exists() rules -- the same connection-splitting bug fixed across the rest of

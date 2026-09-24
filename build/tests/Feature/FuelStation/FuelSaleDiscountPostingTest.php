@@ -11,6 +11,8 @@ use App\Modules\Inventory\Models\Item;
 use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\DB;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * The close posts revenue from the meters at the posted pump rate -- gross. A discounted
  * bulk sale only ever recorded the net figure on the invoice, so the discount went nowhere:

@@ -7,6 +7,8 @@ use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * Locking a close is only worth anything if reopening it leaves a mark. Transaction::unlock()
  * used to null locked_at, locked_by_user_id and lock_reason, so an unlocked day became

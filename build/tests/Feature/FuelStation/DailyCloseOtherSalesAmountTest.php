@@ -5,6 +5,8 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\Inventory\Models\Item;
 
+require_once __DIR__.'/CreditCloseFixtures.php';
+
 /**
  * The lubricant amount is derived on the server, never taken from the request.
  *

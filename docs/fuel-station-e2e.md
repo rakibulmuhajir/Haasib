@@ -585,16 +585,12 @@ closing **2851650**
 
 ### Day 13 - Friday 13 March
 
-> **Payroll cannot be exercised on a back-dated day, and this is a real limitation, not a
-> gap in the script.**
->
-> `PayrollDashboardController::runMonthly()` builds the period from `now()->startOfMonth()`,
-> so it always runs the *current* month regardless of the business date. The close then picks
-> payslips up with `whereDate('approved_at', $date)`, and `approved_at` is stamped when you
-> press Approve. A payslip can therefore never carry `approved_at = 2026-03-13`.
->
-> Payroll is tested separately below, against today's date. **Report this** — a station
-> closing yesterday's register cannot post yesterday's wages.
+> **Payroll can be back-dated since 24 September, but this day still leaves it out.** The
+> figures below were written without wages, so do not run payroll here - paying 100,000 from
+> the drawer would put this day and every day after it out by exactly that. Payroll is checked
+> on its own at the end of the script, and can now be run there for a past month: set the month
+> and the *Paid on* date on `/payroll`, and the close for that date offers the wages. The close
+> picks wages by the period's pay day; before, it picked them by the day they were approved.
 
 | Nozzle | Opening | Closing |
 |---|---|---|

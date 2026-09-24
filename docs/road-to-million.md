@@ -231,58 +231,25 @@ Point 4 is what makes the rest hold. `CLAUDE.md` already says `new Service()` sh
 
 ---
 
-## Fuel module: known limits going into live data
+## Fuel module: limits found going into live data
 
-Collected while preparing the first real station's September backfill. None blocks it; each is
-a thing somebody will hit.
+Collected on 23 September while preparing the first real station's September backfill, and
+all fixed on 24 September. Kept here because each one is a shape that can come back.
 
-### A rate-change day is never marked in the history
+| Limit | What was wrong | What changed |
+|---|---|---|
+| Fuel litres | The close posted revenue from `liters_sold` as the browser sent it, never checked against the meters - the lubricant fault again, on the largest number in any close | Litres are derived from the readings in the close service, for every caller (`3dcb26dd`) |
+| Meter rollover | A totaliser passing its last digit reads lower than yesterday and was refused, so that day could not be closed | A declared "Meter rolled over" tick closes it as distance-to-rollover plus the new reading; refused when the meter is nowhere near its top, or the reading went up (`3dcb26dd`) |
+| Meter refusal untested | The rule that stopped day 13 losing 375 L had no test | Tested, together with the rollover cases (`3dcb26dd`) |
+| Rate-change marker | Shown only on split days; a station closing at midnight on a rate-change night never splits one | Any close whose business date is the effective date of a rate that replaced an earlier one; an item's first rate is setup, not a change (`188195a2`) |
+| Position-keyed rows | Ten close-form lists keyed by index, the fault that put a deposit amount in an expense row | Every row keyed by identity through a WeakMap; nothing added to the posted data (`140fc34a`) |
+| UTC dates | 30 more files started date fields on the UTC date - yesterday, between midnight and 5am in Pakistan | All 45 occurrences use the local date (`518f93d7`) |
+| Reading time | A close recorded its business date but not when it was read, so a 16-hour and a 32-hour close compared as two ordinary days | The close records when its readings were taken (08:00 next morning unless changed); the history labels every close that is not 24 hours, both sides of a rate-change night (`b5a5a3c8`) |
+| Payroll back-dating | Payroll ran only for the current month, and the close offered wages by the day they were approved | Payroll takes a month and a pay day; the close offers wages whose period is paid on its business date, through one scope, `Payslip::payableOn` (`de3418a2`) |
 
-The "Rate change" marker on the close history appears only when a day was *split* at a
-midnight reading. Pakistani stations close the register at midnight on a rate-change night,
-so each register day is already all old rate or all new rate and nothing is ever split - the
-marker will never show. Fix: mark any close with a `fuel.rate_changes` row effective on its
-business date. Display only; no pricing logic changes.
-
-The same condition hides `fallback_liters`: when no reading was taken at the change, the day is
-priced at one rate, and the count of litres valued that way is recorded but shown nowhere.
-
-### Ten row lists in the daily close form are keyed by position
-
-Adding a second expense row put the bank-deposit amount into the first row's field. Rows keyed
-by index let a reused input keep another row's value. Fixed 22 September for expenses and bank
-deposits; **ten** other lists in `DailyClose/Create.vue` still use `:key="index"`. Less exposed
-now that most entries go through their own pages, but the fix is mechanical.
-
-### 31 files still start forms on the UTC date
-
-`new Date().toISOString().slice(0, 10)` is the UTC date, and Pakistan is UTC+5, so between
-midnight and 5am local time a form starts on yesterday. The five main entry forms were moved to
-local time on 23 September, and now also remember the last date used in the tab; **31 files**
-elsewhere still use the UTC pattern.
-
-### A totaliser that rolls over blocks the close
-
-Since 22 September a closing meter below its opening one is refused - it had silently booked
-zero litres, which lost 375 L of diesel on day 13 of the scenario run. A meter that genuinely
-rolls past its last digit also reads low and is refused too. Rare on these meters, and loud
-rather than silent, but it will stop a station's close until rollover is handled.
-
-**The refusal itself has no test.** Everything else deployed that week does.
-
-### Payroll cannot be back-dated
-
-`PayrollDashboardController::runMonthly()` builds the period from `now()`, and the close picks
-payslips up by `approved_at`, which is stamped at approval. A station closing yesterday's
-register cannot post yesterday's wages, and a backfill cannot run September payroll at all -
-salaries go in as dated expenses instead.
-
-### A close records its business date, not when its readings were taken
-
-Normally that is enough. When a station moves its sign-off - midnight on a rate-change night,
-leaving one day at 16 hours and the next at 32 - nothing in the data says the period was short
-or long, and per-day figures quietly compare unequal periods. Record the reading time on the
-close so an odd-length day is visible; the arithmetic, which is meter-based, is already right.
+Two of these are the Core Contract in miniature. The meter rule and the payable-wages rule
+each lived in two places - a form request and a service, a form and a close - and now live
+in one.
 
 ---
 
@@ -333,14 +300,11 @@ not defended at all.
    waiting has an unrecoverable downside - and live data is now going in.
 2. Error tracking and alerting, and moving unattended upgrades to 3am.
 3. `tests/Feature` in CI.
-4. Fuel limits live data will reach first: the rate-change marker, the ten position-keyed
-   lists, the UTC date defaults, and a test for the meter refusal.
-5. Route helpers at the call sites.
-6. Dual-write audit and `CoreContractTest`.
-7. The core surface written down, and the next duplicate collapsed into it.
-8. Palette baseline, accessibility, empty states.
-9. Zero-downtime deploys, custom error pages, reading times on the close, payroll back-dating,
-   meter rollover.
+4. Route helpers at the call sites.
+5. Dual-write audit and `CoreContractTest`.
+6. The core surface written down, and the next duplicate collapsed into it.
+7. Palette baseline, accessibility, empty states.
+8. Zero-downtime deploys, custom error pages.
 
-Items 6 and 7 are the same work seen from two sides: the audit finds the duplicates, the
+Items 5 and 6 are the same work seen from two sides: the audit finds the duplicates, the
 core is where they go.

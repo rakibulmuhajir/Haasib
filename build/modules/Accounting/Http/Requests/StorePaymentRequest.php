@@ -51,11 +51,18 @@ class StorePaymentRequest extends BaseFormRequest
             'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
-            'currency' => ['required', 'string', 'size:3', 'uppercase'],
+            // Amanat is held in the company's base currency only (see
+            // AmanatService::deposit, which always posts in $company->base_currency), so
+            // the form hides the currency picker for that path and nothing is required.
+            'currency' => [
+                Rule::requiredIf(fn () => ($this->input('received_as') ?? 'invoices') !== 'amanat'),
+                'nullable', 'string', 'size:3', 'uppercase',
+            ],
             'payment_method' => ['required', 'string', 'in:cash,bank_transfer,card,cheque,other'],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'payment_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
+            'received_as' => ['nullable', 'in:invoices,amanat'],
             'deposit_account_id' => [
                 'required',
                 'uuid',

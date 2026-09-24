@@ -75,6 +75,7 @@ const props = defineProps<{
         customer_id?: string | null;
         invoice_id?: string | null;
     };
+    amanat?: { enabled: boolean } | null;
 }>();
 
 // API decimal values may arrive as six-place strings (the database keeps
@@ -108,7 +109,20 @@ const form = useForm({
     notes: '',
     deposit_account_id: '',
     ar_account_id: 'company_default',
+    received_as: 'invoices' as 'invoices' | 'amanat',
 });
+
+// Amanat is base-currency only (see AmanatService::deposit) - force the currency field
+// back to base whenever the user switches into that path, since the field is hidden and
+// nothing else would keep it in sync.
+watch(
+    () => form.received_as,
+    (value) => {
+        if (value === 'amanat') {
+            form.currency = props.company.base_currency;
+        }
+    },
+);
 
 // Per-invoice amount the buyer's payment settles, keyed by invoice id. Any invoice not
 // present here (or present at 0) contributes nothing and is omitted from the
@@ -309,7 +323,55 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                         </Select>
                         <InputError :message="form.errors.customer_id" />
                     </div>
-                    <div>
+                    <div v-if="amanat?.enabled" class="md:col-span-2">
+                        <Label>Received as</Label>
+                        <div class="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div class="relative">
+                                <input
+                                    id="received_as_invoices"
+                                    v-model="form.received_as"
+                                    value="invoices"
+                                    type="radio"
+                                    class="peer sr-only"
+                                />
+                                <label
+                                    for="received_as_invoices"
+                                    class="flex cursor-pointer flex-col rounded-lg border-2 border-muted bg-popover p-3 peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <span class="text-sm font-medium"
+                                        >Payment against invoices</span
+                                    >
+                                </label>
+                            </div>
+                            <div class="relative">
+                                <input
+                                    id="received_as_amanat"
+                                    v-model="form.received_as"
+                                    value="amanat"
+                                    type="radio"
+                                    class="peer sr-only"
+                                />
+                                <label
+                                    for="received_as_amanat"
+                                    class="flex cursor-pointer flex-col rounded-lg border-2 border-muted bg-popover p-3 peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <span class="text-sm font-medium"
+                                        >Amanat (advance held for the
+                                        customer)</span
+                                    >
+                                </label>
+                            </div>
+                        </div>
+                        <p
+                            v-if="form.received_as === 'amanat'"
+                            class="mt-1 text-sm text-muted-foreground"
+                        >
+                            Held for the customer and used up against fuel.
+                            Shows on their amanat page.
+                        </p>
+                        <InputError :message="form.errors.received_as" />
+                    </div>
+                    <div v-if="form.received_as !== 'amanat'">
                         <Label for="ar_account_id">AR Account</Label>
                         <Select v-model="form.ar_account_id">
                             <SelectTrigger id="ar_account_id">
@@ -362,7 +424,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                         <EntryDateNote :date="form.payment_date" />
                         <InputError :message="form.errors.payment_date" />
                     </div>
-                    <div>
+                    <div v-if="form.received_as !== 'amanat'">
                         <Label for="transaction_charge"
                             >Transaction Charges</Label
                         >
@@ -403,7 +465,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                         </Select>
                         <InputError :message="form.errors.deposit_account_id" />
                     </div>
-                    <div>
+                    <div v-if="form.received_as !== 'amanat'">
                         <Label for="currency">Currency *</Label>
                         <Select v-model="form.currency" required>
                             <SelectTrigger>
@@ -445,7 +507,10 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
             </Card>
 
             <!-- Invoice Allocation -->
-            <Card v-if="form.customer_id" variant="form">
+            <Card
+                v-if="form.customer_id && form.received_as !== 'amanat'"
+                variant="form"
+            >
                 <CardHeader>
                     <CardTitle>Invoice Allocation</CardTitle>
                     <CardDescription>

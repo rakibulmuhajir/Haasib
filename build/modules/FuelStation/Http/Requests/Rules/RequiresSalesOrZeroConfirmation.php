@@ -46,6 +46,6 @@ class RequiresSalesOrZeroConfirmation implements DataAwareRule, ValidationRule
             return;
         }
 
-        $fail('Enter sales greater than zero, or confirm this is a zero-sales day and give a reason.');
+        $fail('No sales entered. Enter the closing meter readings.');
     }
 }

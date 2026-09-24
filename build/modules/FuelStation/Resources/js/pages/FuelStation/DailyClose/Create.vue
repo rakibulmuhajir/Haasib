@@ -2611,32 +2611,7 @@ const completedWorkflowSteps = computed(() => {
                 >Park / Save draft</Button
             >
         </div>
-        <div
-            v-if="
-                !form.nozzle_readings.some(
-                    (row) => Number(row.liters_sold) > 0,
-                ) && !form.other_sales.some((row) => Number(row.amount) > 0)
-            "
-            class="mb-4 rounded border p-4"
-        >
-            <div class="flex items-center gap-2">
-                <Checkbox
-                    id="zero-sales-confirmed"
-                    v-model="form.zero_sales_confirmed"
-                /><Label for="zero-sales-confirmed"
-                    >Confirm a zero-sales day</Label
-                >
-            </div>
-            <Textarea
-                v-if="form.zero_sales_confirmed"
-                v-model="form.zero_sales_reason"
-                class="mt-2"
-                placeholder="Explain why there were no sales"
-            />
-            <InputError :message="nozzleErrorMessage" /><InputError
-                :message="form.errors.zero_sales_reason"
-            />
-        </div>
+        <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
         <Card v-if="canonicalActivity?.length" class="mb-4">
             <CardHeader
                 ><CardTitle>Already recorded for this business date</CardTitle

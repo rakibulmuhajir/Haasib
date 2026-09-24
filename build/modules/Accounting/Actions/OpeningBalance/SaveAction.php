@@ -43,6 +43,9 @@ class SaveAction implements PaletteAction
     {
         return [
             'as_of_date' => 'required|date',
+            // The version the caller's form was built from (ViewAction 'version'). The page
+            // sends it; the one-line setters read fresh and leave it out.
+            'expected_version' => 'nullable|string|max:64',
             'cash' => 'nullable|array',
             'cash.amount' => 'nullable|numeric|min:0',
             'banks' => 'nullable|array',
@@ -97,6 +100,7 @@ class SaveAction implements PaletteAction
             $priorOpening = $company->settings['opening_balances'] ?? [];
 
             $this->guardNotLocked($company);
+            $this->guardVersion($params, $priorOpening);
             $this->guardDate($company->id, $asOf, $priorOpening);
 
             $this->reversePrevious($company, $priorOpening);
@@ -235,6 +239,33 @@ class SaveAction implements PaletteAction
     {
         if (! empty(($company->settings['opening_balances'] ?? [])['locked_at'])) {
             throw ValidationException::withMessages(['as_of_date' => 'Opening balances are locked.']);
+        }
+    }
+
+    /**
+     * Which saved generation of the opening position this is. A save replaces the whole
+     * position, so a page opened before a bank account or Quick Add changed one line would
+     * post its older copy and silently drop that change - four bank openings were lost this
+     * way. The page sends back the version it loaded, and a mismatch is refused.
+     */
+    public static function version(array $opening): string
+    {
+        return md5(json_encode([
+            $opening['as_of_date'] ?? null,
+            $opening['journal_id'] ?? null,
+            $opening['invoice_ids'] ?? [],
+            $opening['bill_ids'] ?? [],
+        ]));
+    }
+
+    private function guardVersion(array $params, array $priorOpening): void
+    {
+        if (! empty($params['expected_version']) && $params['expected_version'] !== self::version($priorOpening)) {
+            throw ValidationException::withMessages([
+                'as_of_date' => 'Opening balances were changed elsewhere since this page was opened '
+                    .'(on a bank account, a new customer or supplier, or another tab). Reload the page, '
+                    .'check the figures, and save again.',
+            ]);
         }
     }
 

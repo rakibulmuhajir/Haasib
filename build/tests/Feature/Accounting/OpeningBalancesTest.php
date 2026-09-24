@@ -797,3 +797,36 @@ test('locked opening receivable can be settled by a canonical payment without re
     expect($invoice->fresh()->transaction->journalEntries->toArray())->toBe($entries);
     expect(ledgerBalance($f['accounts']['ar']))->toBe(0.0);
 });
+
+test('a save from a page opened before another change is refused instead of dropping that change', function () {
+    $f = openingBalanceHttpFixture(); // an owner: set_account checks the save permission
+    $view = fn () => app(\App\Services\CompanyContextService::class)->withContext(
+        $f['company']->fresh(),
+        fn () => app(\App\Services\CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true)
+    );
+
+    // The Opening Balances page is opened while the position holds only cash...
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1000]]);
+    $pageVersion = $view()['version'];
+
+    // ...then a bank account's opening is set elsewhere.
+    app(\App\Services\CompanyContextService::class)->withContext($f['company']->fresh(), fn () => app(\App\Services\CommandBus::class)->dispatch(
+        'opening_balance.set_account', ['gl_account_id' => $f['accounts']['bank']->id, 'amount' => 17000], $f['user'], true
+    ));
+
+    // Saving the stale page would post its older copy, without the bank.
+    expect(fn () => dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31', 'expected_version' => $pageVersion, 'cash' => ['amount' => 2000],
+    ]))->toThrow(\Illuminate\Validation\ValidationException::class, 'changed elsewhere');
+    expect(ledgerBalance($f['accounts']['bank']))->toBe(17000.0)
+        ->and(ledgerBalance($f['accounts']['cash']))->toBe(1000.0);
+
+    // A page reloaded after the change saves normally, bank included.
+    $fresh = $view();
+    dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31', 'expected_version' => $fresh['version'], 'cash' => ['amount' => 2000],
+        'banks' => [['account_id' => $f['accounts']['bank']->id, 'amount' => 17000]],
+    ]);
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(2000.0)
+        ->and(ledgerBalance($f['accounts']['bank']))->toBe(17000.0);
+});

@@ -20,6 +20,7 @@ import type { BreadcrumbItem } from '@/types'
 interface Opt { id: string; name: string; code?: string }
 interface Opening {
   as_of_date: string | null
+  version: string
   locked_at: string | null
   locked_by: string | null
   earliest_transaction_date: string | null
@@ -72,6 +73,7 @@ const entityNames = computed<Record<string, string>>(() => {
 function fieldsFromOpening(o: Opening) {
   return {
     as_of_date: o.as_of_date ?? '',
+    expected_version: o.version,
     cash: { amount: o.rows.cash.amount ?? 0 },
     banks: o.rows.banks.map(r => ({ account_id: r.account_id, amount: r.amount })),
     credit_customers: o.rows.credit_customers.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
@@ -94,6 +96,7 @@ const form = useForm(fieldsFromOpening(props.opening))
 function seedFromOpening(o: Opening) {
   const fields = fieldsFromOpening(o)
   form.as_of_date = fields.as_of_date
+  form.expected_version = fields.expected_version
   form.cash = fields.cash
   form.banks = fields.banks
   form.credit_customers = fields.credit_customers

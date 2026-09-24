@@ -77,7 +77,7 @@ class BankAccountController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $banks = Bank::active()->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
+        $banks = Bank::active()->forCountry($company->country)->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
@@ -308,7 +308,7 @@ class BankAccountController extends Controller
         $account = BankAccount::where('company_id', $companyModel->id)
             ->findOrFail($bankAccount);
 
-        $banks = Bank::active()->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
+        $banks = Bank::active()->forCountry($companyModel->country, $account->bank_id)->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($companyModel);
 

@@ -36,6 +36,15 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - `$connection = 'pgsql'; $table = 'acct.banks'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['name','swift_code','country_code','logo_url','website','is_active'];`
   - `$casts = ['is_active'=>'boolean','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - Scope `forCountry(?string $country, ?string $alsoBankId = null)`: the banks of a company's
+    country, plus the bank an existing account already uses. A country with no banks listed,
+    or no country at all, falls back to every bank. Used by the bank account create and edit
+    forms.
+- Seed data (reference, via migrations so every environment gets it):
+  - Saudi Arabia, 4 banks - `2025_12_10_000001_create_banking_tables`.
+  - Pakistan, 31 banks and microfinance banks - `2026_09_24_000001_seed_pakistani_banks`.
+    Idempotent by name within the country. SWIFT codes only where well established; the rest
+    null rather than guessed.
 - Validation:
   - `name`: required|string|max:255.
   - `swift_code`: nullable|string|max:11|regex:/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.

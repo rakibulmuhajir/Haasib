@@ -43,4 +43,27 @@ class Bank extends Model
     {
         return $query->where('is_active', true);
     }
+
+    /**
+     * The banks to offer a company: those of its own country, plus the bank an existing account
+     * already uses, so editing never drops a choice that was made.
+     *
+     * The list is shared across every country, so a Pakistani station was offered Saudi banks. A
+     * company whose country has no banks listed, or which has no country, still sees them all.
+     */
+    public function scopeForCountry($query, ?string $country, ?string $alsoBankId = null)
+    {
+        $country = strtoupper(trim((string) $country));
+
+        if ($country === '' || ! static::query()->where('country_code', $country)->where('is_active', true)->exists()) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($country, $alsoBankId) {
+            $q->where('country_code', $country);
+            if ($alsoBankId) {
+                $q->orWhere('id', $alsoBankId);
+            }
+        });
+    }
 }

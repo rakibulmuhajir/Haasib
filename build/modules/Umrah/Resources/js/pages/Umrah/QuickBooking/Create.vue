@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
@@ -352,7 +353,7 @@ watch(
     () => form.clearErrors('agent_id'),
 );
 
-const defaultQuoteDate = props.pricing.service_date || new Date().toISOString().slice(0, 10);
+const defaultQuoteDate = props.pricing.service_date || localToday();
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
     [() => form.agent_id, () => form.travel_date],

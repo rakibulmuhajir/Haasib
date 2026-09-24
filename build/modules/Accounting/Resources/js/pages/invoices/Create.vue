@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import { EntitySearch, QuickAddModal } from '@/components/forms';
 import InputError from '@/components/InputError.vue';
 import MoneyText from '@/components/MoneyText.vue';
@@ -91,7 +92,7 @@ const form = useForm({
     line_items: [emptyLine()],
     currency: props.company.base_currency,
     exchange_rate: 1,
-    invoice_date: new Date().toISOString().split('T')[0],
+    invoice_date: localToday(),
     due_date: '',
     internal_notes: '',
     payment_terms: 30,

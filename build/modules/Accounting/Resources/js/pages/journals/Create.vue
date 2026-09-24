@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -39,8 +40,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const form = useForm({
-  transaction_date: new Date().toISOString().slice(0, 10),
-  posting_date: new Date().toISOString().slice(0, 10),
+  transaction_date: localToday(),
+  posting_date: localToday(),
   description: '',
   post: true,
   entries: [

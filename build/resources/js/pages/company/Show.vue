@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -305,7 +306,7 @@ const { t, tpl } = useLexicon()
 const { showError } = useFormFeedback()
 
 const productsDialogOpen = ref(false)
-const productAsOfDate = ref(props.productDashboardDate ?? new Date().toISOString().slice(0, 10))
+const productAsOfDate = ref(props.productDashboardDate ?? localToday())
 const tankDialogOpen = ref(false)
 const activeTankRowIndex = ref<number | null>(null)
 const tankDraft = ref({
@@ -328,7 +329,7 @@ watch(
 watch(
   () => props.productDashboardDate,
   (next) => {
-    productAsOfDate.value = next ?? new Date().toISOString().slice(0, 10)
+    productAsOfDate.value = next ?? localToday()
   }
 )
 

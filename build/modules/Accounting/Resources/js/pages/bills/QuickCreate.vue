@@ -11,6 +11,7 @@
  * @see docs/plans/invoice-bill-creation-ux.md
  * @see docs/plans/invoice-bill-components-spec.md
  */
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { useLexicon } from '@/composables/useLexicon'
@@ -143,7 +144,7 @@ const form = useForm({
   apply_tax: false,
   line_items: [lineItemTemplate()] as LineItem[],
   due_date: null as string | null,
-  bill_date: new Date().toISOString().split('T')[0],
+  bill_date: localToday(),
   bill_number: '',  // Vendor's invoice number
   reference: '',
   notes: '',

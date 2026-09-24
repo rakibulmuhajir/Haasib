@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -254,7 +255,7 @@ const form = useForm<{
   notes: string
 }>({
   tank_id: '',
-  reading_date: new Date().toISOString().slice(0, 10),
+  reading_date: localToday(),
   reading_type: 'spot_check',
   stick_reading: null,
   dip_measurement_liters: null,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -117,7 +118,7 @@ const settlementForm = useForm<{
 }>({
   invoice_ids: [],
   amount_received: null,
-  settlement_date: new Date().toISOString().split('T')[0],
+  settlement_date: localToday(),
   bank_account_id: null,
   reference: '',
   notes: '',
@@ -131,7 +132,7 @@ const clearingSettlementForm = useForm({
   bank_account_id: '',
   amount_received: null as number | null,
   fees: 0,
-  settlement_date: new Date().toISOString().split('T')[0],
+  settlement_date: localToday(),
   reference: '',
   notes: '',
 })
@@ -148,7 +149,7 @@ const openSettlementDialog = () => {
     return sale?.invoice_id || ''
   }).filter(Boolean)
   settlementForm.amount_received = selectedTotal.value
-  settlementForm.reference = `Vendor Card Settlement ${new Date().toISOString().slice(0, 10)}`
+  settlementForm.reference = `Vendor Card Settlement ${localToday()}`
   showSettlementDialog.value = true
 }
 
@@ -171,7 +172,7 @@ const openClearingDialog = (account: ClearingAccountSummary) => {
   clearingSettlementForm.bank_account_id = account.bank_account_id || props.bankAccounts[0]?.id || ''
   clearingSettlementForm.amount_received = account.balance
   clearingSettlementForm.fees = 0
-  clearingSettlementForm.reference = `${account.channel_label} Settlement ${new Date().toISOString().slice(0, 10)}`
+  clearingSettlementForm.reference = `${account.channel_label} Settlement ${localToday()}`
   showClearingDialog.value = true
 }
 

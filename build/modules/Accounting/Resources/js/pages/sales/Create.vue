@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -69,7 +70,7 @@ const lineItemTemplate = (): LineItem => ({
 })
 
 const form = useForm({
-  sale_date: new Date().toISOString().split('T')[0],
+  sale_date: localToday(),
   deposit_account_id: defaultDeposit.value,
   line_items: [lineItemTemplate()] as LineItem[],
 })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -99,7 +100,7 @@ const rolesByDocType: Record<string, { role: string; label: string }[]> = {
 	  description: '',
 	  is_active: true,
 	  is_default: false,
-	  effective_from: new Date().toISOString().slice(0, 10),
+	  effective_from: localToday(),
 	  effective_to: '',
 	  lines: [] as { role: string; account_id: string }[],
 	})

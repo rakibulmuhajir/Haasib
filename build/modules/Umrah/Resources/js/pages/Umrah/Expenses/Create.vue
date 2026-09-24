@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,7 +39,7 @@ const props = defineProps<{
 }>();
 
 const form = useForm({
-    expense_date: new Date().toISOString().slice(0, 10),
+    expense_date: localToday(),
     expense_account_id: '',
     payment_account_id: props.paymentAccounts[0]?.id || '',
     payee: '',

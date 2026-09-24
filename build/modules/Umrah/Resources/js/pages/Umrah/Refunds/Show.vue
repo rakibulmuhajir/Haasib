@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import DateTimeText from '@/components/DateTimeText.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -123,7 +124,7 @@ const settleOpen = ref(false);
 const settleForm = useForm({
     settlement_method: 'cash',
     account_id: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: localToday(),
 });
 const settleError = computed(() =>
     unclaimedError(settleForm.errors, ['settlement_method', 'account_id', 'date']),

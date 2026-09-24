@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -162,7 +163,7 @@ const form = useForm<{
   closing_meter: number | null
 }>({
   pump_id: '',
-  reading_date: new Date().toISOString().slice(0, 10),
+  reading_date: localToday(),
   shift: 'day',
   opening_meter: null,
   closing_meter: null,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -91,13 +92,13 @@ const lotForm = useForm<{
   deposit_date: string
 }>({
   investment_amount: null,
-  deposit_date: new Date().toISOString().split('T')[0],
+  deposit_date: localToday(),
 })
 
 const openAddLot = () => {
   lotForm.reset()
   lotForm.clearErrors()
-  lotForm.deposit_date = new Date().toISOString().split('T')[0]
+  lotForm.deposit_date = localToday()
   lotDialogOpen.value = true
 }
 
@@ -121,14 +122,14 @@ const commissionForm = useForm<{
   payment_date: string
 }>({
   amount: null,
-  payment_date: new Date().toISOString().split('T')[0],
+  payment_date: localToday(),
 })
 
 const openPayCommission = () => {
   commissionForm.reset()
   commissionForm.clearErrors()
   commissionForm.amount = props.investor.outstanding_commission
-  commissionForm.payment_date = new Date().toISOString().split('T')[0]
+  commissionForm.payment_date = localToday()
   commissionDialogOpen.value = true
 }
 

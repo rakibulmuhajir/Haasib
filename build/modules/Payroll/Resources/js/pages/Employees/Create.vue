@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import InputError from '@/components/InputError.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -63,7 +64,7 @@ const form = useForm({
     last_name: '',
     email: '',
     phone: '',
-    hire_date: new Date().toISOString().split('T')[0],
+    hire_date: localToday(),
     employment_type: 'full_time',
     employment_status: 'active',
     department: '',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -51,7 +52,7 @@ const form = useForm({
   payment_method: 'cash',
   reference: '',
   notes: '',
-  collection_date: new Date().toISOString().split('T')[0],
+  collection_date: localToday(),
 })
 
 const selectedCustomer = computed(() => {

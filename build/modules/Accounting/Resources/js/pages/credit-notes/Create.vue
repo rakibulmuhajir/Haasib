@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -61,7 +62,7 @@ const form = useForm({
   base_currency: props.company.base_currency,
   reason: '',
   status: 'draft',
-  credit_date: new Date().toISOString().split('T')[0],
+  credit_date: localToday(),
   notes: '',
   terms: '',
 })

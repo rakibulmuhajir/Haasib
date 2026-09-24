@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import PageShell from '@/components/PageShell.vue'
@@ -84,7 +85,7 @@ const form = useForm({
   branch_name: '',
   branch_address: '',
   opening_balance: 0,
-  opening_balance_date: new Date().toISOString().split('T')[0],
+  opening_balance_date: localToday(),
   is_primary: false,
   is_active: true,
   notes: '',

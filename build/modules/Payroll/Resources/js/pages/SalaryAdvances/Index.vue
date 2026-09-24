@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import InputError from '@/components/InputError.vue';
@@ -110,7 +111,7 @@ const employeeFilter = ref('all');
 
 const advanceForm = useForm({
     employee_id: '',
-    advance_date: new Date().toISOString().slice(0, 10),
+    advance_date: localToday(),
     amount: null as number | null,
     payment_method: 'cash',
     bank_account_id: props.paymentAccounts[0]?.id || '',

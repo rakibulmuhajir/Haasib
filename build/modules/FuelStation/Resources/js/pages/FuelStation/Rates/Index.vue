@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref, watch } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -211,7 +212,7 @@ const form = useForm<{
   notes: string
 }>({
   item_id: '',
-  effective_date: new Date().toISOString().slice(0, 10),
+  effective_date: localToday(),
   purchase_rate: null,
   sale_rate: null,
   stock_quantity_at_change: null,

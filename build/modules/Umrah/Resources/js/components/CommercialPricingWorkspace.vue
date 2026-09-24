@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import InputError from '@/components/InputError.vue';
 import { useFormFeedback } from '@/composables/useFormFeedback';
 import { Badge } from '@/components/ui/badge';
@@ -51,7 +52,7 @@ const { showError } = useFormFeedback();
 const editingId = ref<string | null>(null);
 const formOpen = ref(false);
 const processingRateId = ref<string | null>(null);
-const today = new Date().toISOString().slice(0, 10);
+const today = localToday();
 
 const initialService = Object.keys(props.serviceTypes).find((service) =>
     (props.targets[service] || []).some((target) => target.id === props.initialTargetId),

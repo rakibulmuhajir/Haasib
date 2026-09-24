@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, watch } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -46,7 +47,7 @@ const noneValue = '__none'
 
 const form = useForm({
   bank_account_id: noneValue,
-  statement_date: new Date().toISOString().split('T')[0],
+  statement_date: localToday(),
   statement_ending_balance: 0,
 })
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import MoneyText from '@/components/MoneyText.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +34,7 @@ const nextIdempotencyKey = () =>
         : `cancel-${Math.random().toString(36).slice(2)}`;
 
 const form = useForm({
-    cancellation_date: new Date().toISOString().slice(0, 10),
+    cancellation_date: localToday(),
     buyer_returns_amount: null as number | null,
     supplier_returns_amount: null as number | null,
     reason: '',
@@ -48,7 +49,7 @@ watch(
         if (isOpen) {
             form.reset();
             form.idempotency_key = nextIdempotencyKey();
-            form.cancellation_date = new Date().toISOString().slice(0, 10);
+            form.cancellation_date = localToday();
         }
     },
 );

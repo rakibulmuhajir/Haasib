@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -71,7 +72,7 @@ const lineItemTemplate = () => ({
 const form = useForm({
   vendor_id: props.preselect?.vendor_id ?? '',
   bill_id: '',
-  credit_date: new Date().toISOString().slice(0, 10),
+  credit_date: localToday(),
   amount: 0,
   currency: props.company.base_currency,
   base_currency: props.company.base_currency,

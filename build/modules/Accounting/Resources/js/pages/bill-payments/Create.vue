@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import InputError from '@/components/InputError.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -95,7 +96,7 @@ const moneyNumber = (value: number | string | null | undefined): number => {
 
 const form = useForm({
     vendor_id: props.selectedBill?.vendor_id ?? props.filters?.vendor_id ?? '',
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: localToday(),
     amount: moneyNumber(props.selectedBill?.balance),
     transaction_charge: 0,
     currency: props.selectedBill?.currency ?? props.company.base_currency,

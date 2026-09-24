@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -140,14 +141,14 @@ const showClaimReceiptDialog = ref(false)
 const selectedClaim = ref<SupplierClaim | null>(null)
 
 const receiptForm = useForm({
-  receipt_date: new Date().toISOString().slice(0, 10),
+  receipt_date: localToday(),
   notes: '',
   lines: [] as ReceiptLineInput[],
 })
 
 const claimReceiptForm = useForm({
   receipt_line_id: '',
-  received_date: new Date().toISOString().slice(0, 10),
+  received_date: localToday(),
   received_amount: 0,
   received_account_id: '',
   notes: '',
@@ -230,7 +231,7 @@ const buildReceiptLines = (): ReceiptLineInput[] => {
 const openReceiptDialog = () => {
   receiptForm.clearErrors()
   receiptForm.reset()
-  receiptForm.receipt_date = new Date().toISOString().slice(0, 10)
+  receiptForm.receipt_date = localToday()
   receiptForm.notes = ''
   receiptForm.lines = buildReceiptLines()
   showReceiptDialog.value = true
@@ -299,7 +300,7 @@ const openClaimReceiptDialog = (claim: SupplierClaim) => {
   claimReceiptForm.clearErrors()
   claimReceiptForm.reset()
   claimReceiptForm.receipt_line_id = claim.id
-  claimReceiptForm.received_date = new Date().toISOString().slice(0, 10)
+  claimReceiptForm.received_date = localToday()
   claimReceiptForm.received_amount = claim.claim_amount
   claimReceiptForm.received_account_id = props.claimReceiptAccounts[0]?.id ?? ''
   claimReceiptForm.notes = ''

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
@@ -78,7 +79,7 @@ const formatDate = (dateStr: string) => {
 const investDialogOpen = ref(false)
 const investForm = useForm({
   amount: null as number | null,
-  transaction_date: new Date().toISOString().split('T')[0],
+  transaction_date: localToday(),
   description: '',
   reference: '',
   payment_method: 'cash',
@@ -86,7 +87,7 @@ const investForm = useForm({
 
 const openInvestDialog = () => {
   investForm.reset()
-  investForm.transaction_date = new Date().toISOString().split('T')[0]
+  investForm.transaction_date = localToday()
   investDialogOpen.value = true
 }
 
@@ -103,7 +104,7 @@ const submitInvestment = () => {
 const withdrawDialogOpen = ref(false)
 const withdrawForm = useForm({
   amount: null as number | null,
-  transaction_date: new Date().toISOString().split('T')[0],
+  transaction_date: localToday(),
   description: '',
   reference: '',
   payment_method: 'cash',
@@ -111,7 +112,7 @@ const withdrawForm = useForm({
 
 const openWithdrawDialog = () => {
   withdrawForm.reset()
-  withdrawForm.transaction_date = new Date().toISOString().split('T')[0]
+  withdrawForm.transaction_date = localToday()
   withdrawDialogOpen.value = true
 }
 

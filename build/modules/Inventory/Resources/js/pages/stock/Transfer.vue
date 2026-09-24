@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate'
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import InputError from '@/components/InputError.vue'
@@ -49,7 +50,7 @@ const form = useForm({
   item_id: '',
   quantity: 0,
   notes: '',
-  movement_date: new Date().toISOString().split('T')[0],
+  movement_date: localToday(),
 })
 
 const selectedItem = computed(() => {

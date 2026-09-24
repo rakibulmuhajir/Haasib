@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +39,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm({
     visa_group_id: 'none',
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: localToday(),
     amount: '',
     currency: props.company.base_currency,
     method: 'cash',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localToday } from '@/composables/useEntryDate';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import AmountInput from '@/components/forms/AmountInput.vue';
@@ -83,7 +84,7 @@ const form = useForm({
     customer_id: '',
     agent_id: '' as string | '',
     supplier_vendor_id: '',
-    booking_date: new Date().toISOString().slice(0, 10),
+    booking_date: localToday(),
     pnr: '',
     idempotency_key: idempotencyKey,
     tickets: [emptyTicket()],

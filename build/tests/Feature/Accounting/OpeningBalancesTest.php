@@ -798,35 +798,54 @@ test('locked opening receivable can be settled by a canonical payment without re
     expect(ledgerBalance($f['accounts']['ar']))->toBe(0.0);
 });
 
-test('a save from a page opened before another change is refused instead of dropping that change', function () {
-    $f = openingBalanceHttpFixture(); // an owner: set_account checks the save permission
-    $view = fn () => app(\App\Services\CompanyContextService::class)->withContext(
+/** The rows a freshly opened Opening Balances page would send back as `loaded`. */
+function openingLoaded(array $f): array
+{
+    $view = app(\App\Services\CompanyContextService::class)->withContext(
         $f['company']->fresh(),
         fn () => app(\App\Services\CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true)
     );
 
-    // The Opening Balances page is opened while the position holds only cash...
-    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1000]]);
-    $pageVersion = $view()['version'];
+    return \App\Modules\Accounting\Actions\OpeningBalance\OpeningSet::payloadFromView($view);
+}
 
-    // ...then a bank account's opening is set elsewhere.
+function openingSetBank(array $f, string $accountId, float $amount): void
+{
     app(\App\Services\CompanyContextService::class)->withContext($f['company']->fresh(), fn () => app(\App\Services\CommandBus::class)->dispatch(
-        'opening_balance.set_account', ['gl_account_id' => $f['accounts']['bank']->id, 'amount' => 17000], $f['user'], true
+        'opening_balance.set_account', ['gl_account_id' => $accountId, 'amount' => $amount], $f['user'], true
     ));
+}
 
-    // Saving the stale page would post its older copy, without the bank.
-    expect(fn () => dispatchOpeningBalance($f, [
-        'as_of_date' => '2026-08-31', 'expected_version' => $pageVersion, 'cash' => ['amount' => 2000],
-    ]))->toThrow(\Illuminate\Validation\ValidationException::class, 'changed elsewhere');
-    expect(ledgerBalance($f['accounts']['bank']))->toBe(17000.0)
-        ->and(ledgerBalance($f['accounts']['cash']))->toBe(1000.0);
+test('a page opened before a bank opening was set elsewhere keeps that bank when it saves', function () {
+    $f = openingBalanceHttpFixture(); // an owner: set_account checks the save permission
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1000]]);
+    $loaded = openingLoaded($f);                                    // the page opens: cash only
 
-    // A page reloaded after the change saves normally, bank included.
-    $fresh = $view();
-    dispatchOpeningBalance($f, [
-        'as_of_date' => '2026-08-31', 'expected_version' => $fresh['version'], 'cash' => ['amount' => 2000],
-        'banks' => [['account_id' => $f['accounts']['bank']->id, 'amount' => 17000]],
-    ]);
-    expect(ledgerBalance($f['accounts']['cash']))->toBe(2000.0)
-        ->and(ledgerBalance($f['accounts']['bank']))->toBe(17000.0);
+    openingSetBank($f, $f['accounts']['bank']->id, 17000);           // a bank account's form, meanwhile
+
+    // The page changes cash and saves the rows it has, which know nothing of the bank.
+    $result = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'loaded' => $loaded, 'cash' => ['amount' => 2000]]);
+
+    expect(ledgerBalance($f['accounts']['cash']))->toBe(2000.0)    // the page's own edit
+        ->and(ledgerBalance($f['accounts']['bank']))->toBe(17000.0) // kept, not wiped
+        ->and($result['message'])->toContain('kept 1 line changed elsewhere');
+});
+
+test('a line the page edited wins over a change made elsewhere, and a line it removed stays removed', function () {
+    $f = openingBalanceHttpFixture();
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'banks' => [
+        ['account_id' => $f['accounts']['bank']->id, 'amount' => 5000],
+        ['account_id' => $f['accounts']['bank2']->id, 'amount' => 3000],
+    ]]);
+    $loaded = openingLoaded($f);
+
+    openingSetBank($f, $f['accounts']['bank']->id, 6000);           // changed elsewhere
+
+    // The page sets that bank to 7000 itself, and deletes the other one.
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'loaded' => $loaded, 'banks' => [
+        ['account_id' => $f['accounts']['bank']->id, 'amount' => 7000],
+    ]]);
+
+    expect(ledgerBalance($f['accounts']['bank']))->toBe(7000.0)
+        ->and(ledgerBalance($f['accounts']['bank2']))->toBe(0.0);
 });

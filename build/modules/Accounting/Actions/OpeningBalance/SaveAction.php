@@ -43,9 +43,9 @@ class SaveAction implements PaletteAction
     {
         return [
             'as_of_date' => 'required|date',
-            // The version the caller's form was built from (ViewAction 'version'). The page
-            // sends it; the one-line setters read fresh and leave it out.
-            'expected_version' => 'nullable|string|max:64',
+            // The rows the caller's form was loaded with. The page sends them so a save can
+            // tell its own edits from lines changed elsewhere since (see mergeWithCurrent).
+            'loaded' => 'nullable|array',
             'cash' => 'nullable|array',
             'cash.amount' => 'nullable|numeric|min:0',
             'banks' => 'nullable|array',
@@ -100,7 +100,7 @@ class SaveAction implements PaletteAction
             $priorOpening = $company->settings['opening_balances'] ?? [];
 
             $this->guardNotLocked($company);
-            $this->guardVersion($params, $priorOpening);
+            $params = $this->mergeWithCurrent($contextCompany, $company, $params);
             $this->guardDate($company->id, $asOf, $priorOpening);
 
             $this->reversePrevious($company, $priorOpening);
@@ -164,7 +164,9 @@ class SaveAction implements PaletteAction
             $this->syncStatementOpenings($company->id, $params, $accounts, $asOf);
 
             return [
-                'message' => 'Opening balances saved as of '.$asOf,
+                'message' => 'Opening balances saved as of '.$asOf.($this->keptFromElsewhere
+                    ? " - kept {$this->keptFromElsewhere} ".($this->keptFromElsewhere === 1 ? 'line' : 'lines').' changed elsewhere since this page was opened'
+                    : ''),
                 'data' => ['journal_id' => $journalId, 'invoice_ids' => $invoiceIds, 'bill_ids' => $billIds],
             ];
         }); // retry on deadlock (40P01): this transaction takes document row locks
@@ -242,31 +244,80 @@ class SaveAction implements PaletteAction
         }
     }
 
-    /**
-     * Which saved generation of the opening position this is. A save replaces the whole
-     * position, so a page opened before a bank account or Quick Add changed one line would
-     * post its older copy and silently drop that change - four bank openings were lost this
-     * way. The page sends back the version it loaded, and a mismatch is refused.
-     */
-    public static function version(array $opening): string
-    {
-        return md5(json_encode([
-            $opening['as_of_date'] ?? null,
-            $opening['journal_id'] ?? null,
-            $opening['invoice_ids'] ?? [],
-            $opening['bill_ids'] ?? [],
-        ]));
-    }
+    private const PARTY_KEYS = [
+        'banks' => 'account_id',
+        'credit_customers' => 'customer_id',
+        'employees' => 'employee_id',
+        'amanat' => 'customer_id',
+        'suppliers' => 'vendor_id',
+        'partners' => 'partner_id',
+    ];
 
-    private function guardVersion(array $params, array $priorOpening): void
+    private int $keptFromElsewhere = 0;
+
+    /**
+     * A save replaces the whole opening position with what the page shows. Opening balances
+     * are also set elsewhere - a bank account's form, Quick Add, Add Holder - so a page opened
+     * before one of those would post its older copy and drop the change: four bank openings
+     * were lost that way. The page sends the rows it was loaded with; each line is then
+     * decided three ways:
+     *  - changed on this page (differs from what it loaded): the page's figure wins;
+     *  - not touched on this page: what is saved now wins, added, changed or removed elsewhere.
+     * Callers that read fresh and send no 'loaded' (the one-line setters) are unaffected.
+     */
+    private function mergeWithCurrent(Company $contextCompany, Company $company, array $params): array
     {
-        if (! empty($params['expected_version']) && $params['expected_version'] !== self::version($priorOpening)) {
-            throw ValidationException::withMessages([
-                'as_of_date' => 'Opening balances were changed elsewhere since this page was opened '
-                    .'(on a bank account, a new customer or supplier, or another tab). Reload the page, '
-                    .'check the figures, and save again.',
-            ]);
+        $loaded = $params['loaded'] ?? null;
+        unset($params['loaded']);
+        $this->keptFromElsewhere = 0;
+        if (! is_array($loaded)) {
+            return $params;
         }
+
+        // What is saved now, read from the freshly locked row rather than a stale context copy.
+        $contextCompany->settings = $company->settings;
+        $current = OpeningSet::payloadFromView(
+            app(CommandBus::class)->dispatch('opening_balance.view', [], Auth::user(), true)
+        );
+
+        $money = fn ($value) => round((float) ($value ?? 0), 2);
+
+        $page = $money($params['cash']['amount'] ?? 0);
+        $now = $money($current['cash']['amount'] ?? 0);
+        if ($page === $money($loaded['cash']['amount'] ?? 0) && $now !== $page) {
+            $params['cash'] = ['amount' => $now];
+            $this->keptFromElsewhere++;
+        }
+
+        foreach (self::PARTY_KEYS as $section => $key) {
+            $index = fn (array $rows) => collect($rows)
+                ->filter(fn ($row) => ! empty($row[$key]))
+                ->mapWithKeys(fn ($row) => [$row[$key] => $money($row['amount'] ?? 0)])
+                ->all();
+            $pageRows = $index($params[$section] ?? []);
+            $loadedRows = $index($loaded[$section] ?? []);
+            $nowRows = $index($current[$section] ?? []);
+
+            $result = [];
+            foreach (array_unique(array_merge(array_keys($pageRows), array_keys($loadedRows), array_keys($nowRows))) as $id) {
+                $pageAmount = $pageRows[$id] ?? 0.0;
+                $nowAmount = $nowRows[$id] ?? 0.0;
+                if ($pageAmount === ($loadedRows[$id] ?? 0.0)) {
+                    $amount = $nowAmount;
+                    if ($nowAmount !== $pageAmount) {
+                        $this->keptFromElsewhere++;
+                    }
+                } else {
+                    $amount = $pageAmount;
+                }
+                if ($amount > 0) {
+                    $result[] = [$key => $id, 'amount' => $amount];
+                }
+            }
+            $params[$section] = $result;
+        }
+
+        return $params;
     }
 
     private function guardDate(string $companyId, string $asOf, array $opening): void

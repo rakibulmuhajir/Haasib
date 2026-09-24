@@ -106,7 +106,6 @@ class ViewAction implements PaletteAction
 
         return [
             'as_of_date' => $opening['as_of_date'] ?? null,
-            'version' => SaveAction::version($opening),
             'locked_at' => $opening['locked_at'] ?? null,
             'locked_by' => $lockedBy,
             'earliest_transaction_date' => $earliest ? substr((string) $earliest, 0, 10) : null,

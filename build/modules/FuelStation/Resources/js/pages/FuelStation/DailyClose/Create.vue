@@ -987,6 +987,11 @@ const nozzleMeterWentBackwards = (index: number): boolean => {
     const opening = Number(reading.opening_electronic);
     const closing = Number(reading.closing_electronic);
 
+    // A closing of 0 is the untouched default, not a reading: a real totaliser never shows
+    // all zeros. Warning on it flagged every pump before anything was typed. The server still
+    // refuses a closing below the opening when the close is posted.
+    if (!(closing > 0)) return false;
+
     return Number.isFinite(opening) && Number.isFinite(closing) && closing < opening;
 };
 

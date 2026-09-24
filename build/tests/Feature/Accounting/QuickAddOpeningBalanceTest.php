@@ -66,7 +66,7 @@ test('customer quick-add with an owed amount and a date creates an opening recei
         'opening_date' => '2026-08-01',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $customer = Customer::where('company_id', $f['company']->id)->where('name', 'Haji Traders')->firstOrFail();
 
     $view = openingView($f);
@@ -85,7 +85,7 @@ test('customer quick-add with an advance goes to amanat, not credit_customers', 
         'opening_date' => '2026-08-01',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $customer = Customer::where('company_id', $f['company']->id)->where('name', 'Amanat Holder')->firstOrFail();
 
     $view = openingView($f);
@@ -104,7 +104,7 @@ test('vendor quick-add with an owed amount lands in suppliers', function () {
         'opening_date' => '2026-08-01',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $vendor = Vendor::where('company_id', $f['company']->id)->where('name', 'Fuel Supplier Co')->firstOrFail();
 
     $view = openingView($f);
@@ -127,7 +127,7 @@ test('an existing opening line for another customer is preserved', function () {
         'opening_owed' => 30000,
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $newCustomer = Customer::where('company_id', $f['company']->id)->where('name', 'New Customer')->firstOrFail();
 
     $view = openingView($f);
@@ -187,6 +187,6 @@ test('a customer with no opening amounts is created as plain as before', functio
         'name' => 'Plain Customer',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     expect(Customer::where('company_id', $f['company']->id)->where('name', 'Plain Customer')->exists())->toBeTrue();
 });

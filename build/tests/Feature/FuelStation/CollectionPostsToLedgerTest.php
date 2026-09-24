@@ -167,7 +167,7 @@ test('collections index and show list the recorded payment, not the retired cred
     $index->assertInertia(fn ($page) => $page
         ->component('FuelStation/Collections/Index')
         ->where('collections.0.id', $payment->id)
-        ->where('collections.0.amount', 2000.0)
+        ->where('collections.0.amount', 2000)
         ->where('collections.0.customer_name', $f['customer']->name));
 
     $show = test()->actingAs($f['user'])->get("/{$f['company']->slug}/fuel/collections/{$payment->id}");

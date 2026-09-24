@@ -45,7 +45,7 @@ test('a holder created with "station holds for them" gets an opening amanat row'
         'opening_date' => '2026-08-01',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $customer = Customer::where('company_id', $f['company']->id)->where('name', 'Amanat Depositor')->firstOrFail();
     expect(CustomerProfile::where('company_id', $f['company']->id)->where('customer_id', $customer->id)->value('is_amanat_holder'))->toBeTrue();
 
@@ -66,7 +66,7 @@ test('a holder created with "they owe the station" gets an opening credit_custom
         'opening_date' => '2026-08-01',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $customer = Customer::where('company_id', $f['company']->id)->where('name', 'Credit Holder')->firstOrFail();
     expect(CustomerProfile::where('company_id', $f['company']->id)->where('customer_id', $customer->id)->value('is_credit_customer'))->toBeTrue();
 
@@ -97,7 +97,7 @@ test('a holder with no opening amount is created as plain as before', function (
         'name' => 'Plain Holder',
     ]);
 
-    $response->assertSessionHasNoErrors();
+    $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     $customer = Customer::where('company_id', $f['company']->id)->where('name', 'Plain Holder')->firstOrFail();
     expect(CustomerProfile::where('company_id', $f['company']->id)->where('customer_id', $customer->id)->value('is_amanat_holder'))->toBeTrue();
 

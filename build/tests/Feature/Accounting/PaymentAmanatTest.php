@@ -65,7 +65,7 @@ function paymentAmanatHttpFixture(bool $fuelStation = true): array
         'is_active' => true,
     ]);
 
-    Account::create([
+    $ar = Account::create([
         'company_id' => $company->id,
         'code' => '1100',
         'name' => 'Accounts Receivable',
@@ -120,13 +120,16 @@ function paymentAmanatHttpFixture(bool $fuelStation = true): array
         'name' => 'Haji Saab',
         'customer_type' => 'business',
         'base_currency' => 'PKR',
+        // An ordinary payment posts against the customer's receivable; without an AR account
+        // (and no posting templates in this fixture) the core refuses to post it.
+        'ar_account_id' => $ar->id,
     ]);
 
     return compact('company', 'user', 'cash', 'customer');
 }
 
 test('a fuel company can receive a payment as amanat instead of applying it to invoices', function () {
-    travelTo('2026-09-15');
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = paymentAmanatHttpFixture(fuelStation: true);
 
     $response = test()->actingAs($f['user'])->post("/{$f['company']->slug}/payments", [
@@ -157,7 +160,7 @@ test('a fuel company can receive a payment as amanat instead of applying it to i
 });
 
 test('a non-fuel company cannot receive a payment as amanat', function () {
-    travelTo('2026-09-15');
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = paymentAmanatHttpFixture(fuelStation: false);
 
     $response = test()->actingAs($f['user'])->post("/{$f['company']->slug}/payments", [
@@ -176,7 +179,7 @@ test('a non-fuel company cannot receive a payment as amanat', function () {
 });
 
 test('a payment with no received_as still applies to the customer account as before', function () {
-    travelTo('2026-09-15');
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = paymentAmanatHttpFixture(fuelStation: true);
 
     $response = test()->actingAs($f['user'])->post("/{$f['company']->slug}/payments", [
@@ -189,6 +192,8 @@ test('a payment with no received_as still applies to the customer account as bef
     ]);
 
     $response->assertSessionHasNoErrors();
+    // The controller turns a posting failure into a flash message; show it if there is one.
+    expect(session('error'))->toBeNull();
 
     expect(Payment::where('company_id', $f['company']->id)->where('customer_id', $f['customer']->id)->exists())->toBeTrue();
 });

@@ -6,6 +6,8 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Models\PostingTemplate;
+use App\Modules\Accounting\Models\PostingTemplateLine;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
@@ -106,6 +108,17 @@ function openingBalanceHttpFixture(): array
         $company,
         fn () => app(CompanyContextService::class)->assignRole($user, 'owner'),
     );
+
+    // A customer or supplier created through the app (Quick Add, Add Holder) carries no AR/AP
+    // account of its own; posting falls back to the company's templates, as it does on a real
+    // company. Without these, only the hand-built openingCustomer() rows could be invoiced.
+    foreach (['AR_INVOICE' => ['AR', $f['accounts']['ar']], 'AP_BILL' => ['AP', $f['accounts']['ap']]] as $docType => [$role, $account]) {
+        $template = PostingTemplate::create([
+            'company_id' => $company->id, 'doc_type' => $docType, 'name' => $docType,
+            'is_active' => true, 'is_default' => true, 'effective_from' => '2026-01-01', 'version' => 1,
+        ]);
+        PostingTemplateLine::create(['template_id' => $template->id, 'role' => $role, 'account_id' => $account->id]);
+    }
 
     DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
     DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);

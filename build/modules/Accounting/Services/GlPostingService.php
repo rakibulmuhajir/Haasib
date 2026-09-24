@@ -107,9 +107,9 @@ class GlPostingService
     /**
      * Post a bill payment: DR AP, CR payment account.
      */
-    public function postBillPayment(BillPayment $payment, string $paymentAccountId, string $apAccountId): Transaction
+    public function postBillPayment(BillPayment $payment, string $paymentAccountId, string $apAccountId, ?string $transactionNumber = null): Transaction
     {
-        return app(PostingService::class)->postBillPayment($payment, $paymentAccountId, $apAccountId);
+        return app(PostingService::class)->postBillPayment($payment, $paymentAccountId, $apAccountId, $transactionNumber);
     }
 
     /**

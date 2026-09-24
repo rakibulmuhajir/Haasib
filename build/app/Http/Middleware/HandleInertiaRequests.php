@@ -175,7 +175,13 @@ class HandleInertiaRequests extends Middleware
                 'companies' => fn () => $resolve()['companies']->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
                 'openingBalance' => function () use ($request) {
-                    // Resolve after IdentifyCompany has run — see fuelNavigation above for why.
+                    // Only on company pages, where IdentifyCompany has set the company context.
+                    // Elsewhere (home, the companies list) CurrentCompany can still return a
+                    // display fallback, and the account lookup below would read company data
+                    // with no context set. Quick Add only appears on company pages anyway.
+                    if (! $request->route('company')) {
+                        return null;
+                    }
                     $company = app(CurrentCompany::class)->get();
                     $user = $request->user();
                     if (! $company || ! $user) {

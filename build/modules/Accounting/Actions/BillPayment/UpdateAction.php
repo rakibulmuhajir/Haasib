@@ -52,12 +52,14 @@ class UpdateAction implements PaletteAction
     {
         $company = CompanyContext::requireCompany();
 
-        $payment = BillPayment::where('company_id', $company->id)
+        $payment = BillPayment::withTrashed()
+            ->where('company_id', $company->id)
             ->with(['allocations.bill', 'vendor'])
             ->findOrFail($params['id']);
-        // findOrFail() above already excludes a voided (soft-deleted) payment --
-        // it 404s the same as any other missing record, which is the refusal
-        // this action needs.
+        // Voiding soft-deletes the payment; say so rather than "not found".
+        if ($payment->trashed()) {
+            throw new \InvalidArgumentException('This payment has been voided and can\'t be edited.');
+        }
 
         $dateLock = app(DocumentDateLock::class);
         $oldDate = $payment->payment_date->toDateString();
@@ -162,7 +164,7 @@ class UpdateAction implements PaletteAction
                     throw new \RuntimeException('AP account is required to post the bill payment.');
                 }
 
-                app(CreateAction::class)->postPaymentTransaction($payment, $newAccountId, $apAccountId);
+                app(CreateAction::class)->postPaymentTransaction($payment, $newAccountId, $apAccountId, Transaction::generateJournalNumber($company->id));
             }
 
             return [

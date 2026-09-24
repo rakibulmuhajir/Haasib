@@ -144,7 +144,10 @@ test('a void payment cannot be edited', function () {
         'notes' => 'Should not be allowed',
     ]);
 
-    $response->assertNotFound();
+    // Refused with a plain reason, and the voided payment is left as it was.
+    $response->assertRedirect();
+    expect(session('error'))->toContain('voided');
+    expect(\App\Modules\Accounting\Models\BillPayment::withTrashed()->find($payment->id)->notes)->not->toBe('Should not be allowed');
 });
 
 test('a payment dated in a closed accounting period cannot be edited', function () {

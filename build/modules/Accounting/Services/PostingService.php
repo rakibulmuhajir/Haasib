@@ -189,7 +189,7 @@ class PostingService
         return $this->buildBillEntries($template, $bill, $company);
     }
 
-    public function postBillPayment(BillPayment $payment, string $paymentAccountId, string $apAccountId): Transaction
+    public function postBillPayment(BillPayment $payment, string $paymentAccountId, string $apAccountId, ?string $transactionNumber = null): Transaction
     {
         $payment->loadMissing(['allocations', 'company']);
 
@@ -219,7 +219,7 @@ class PostingService
 
         return $this->createTransaction([
             'company_id' => $company->id,
-            'transaction_number' => $payment->payment_number,
+            'transaction_number' => $transactionNumber ?? $payment->payment_number,
             'transaction_type' => 'bill_payment',
             'transaction_date' => $transactionDate,
             'posting_date' => $transactionDate,

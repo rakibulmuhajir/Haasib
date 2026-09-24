@@ -195,12 +195,17 @@ class CreateAction implements PaletteAction
      * that reverses and reposts a payment uses exactly the posting call a
      * fresh payment would.
      */
-    public function postPaymentTransaction(BillPayment $payment, string $paymentAccountId, string $apAccountId): Transaction
+    /**
+     * A re-post (an edited payment) passes a fresh journal number: the first posting took
+     * the payment number, and that journal stays on record, reversed, so the number is taken.
+     */
+    public function postPaymentTransaction(BillPayment $payment, string $paymentAccountId, string $apAccountId, ?string $transactionNumber = null): Transaction
     {
         $transaction = app(GlPostingService::class)->postBillPayment(
             $payment->fresh(['allocations', 'company']),
             $paymentAccountId,
-            $apAccountId
+            $apAccountId,
+            $transactionNumber
         );
         $payment->transaction_id = $transaction->id;
         $payment->save();

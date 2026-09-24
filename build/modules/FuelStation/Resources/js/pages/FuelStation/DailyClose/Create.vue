@@ -768,6 +768,7 @@ const form = useForm({
         has_electronic_meter: nozzle.has_electronic_meter,
         opening_electronic: nozzle.opening_reading,
         closing_electronic: 0,
+        meter_rolled_over: false,
         opening_manual: nozzle.opening_manual ?? null,
         closing_manual: null as number | null,
         liters_sold: 0,
@@ -959,6 +960,21 @@ const nozzleMeterWentBackwards = (index: number): boolean => {
     return Number.isFinite(opening) && Number.isFinite(closing) && closing < opening;
 };
 
+/**
+ * Litres from a pair of meter readings, the same rule the server applies in
+ * DailyCloseService::litresFromMeters - the server works its own figure out and posts that, so
+ * this is only the preview. A totaliser that passed its last digit restarted from zero: the
+ * litres are the distance to the rollover point plus the new reading. It has to be declared
+ * with the tick box; guessing would let a mistyped reading through as a rollover.
+ */
+const meterRolloverPoint = (opening: number): number =>
+    10 ** String(Math.floor(Math.max(opening, 1))).length;
+
+const litresFromMeters = (opening: number, closing: number, rolledOver: boolean): number =>
+    rolledOver
+        ? Math.round((meterRolloverPoint(opening) - opening + closing) * 1000) / 1000
+        : Math.max(0, closing - opening);
+
 const otherSaleError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`other_sales.${index}.${field}`];
 
@@ -1051,6 +1067,7 @@ const resetFormToInitial = () => {
         has_electronic_meter: nozzle.has_electronic_meter,
         opening_electronic: nozzle.opening_reading,
         closing_electronic: 0,
+        meter_rolled_over: false,
         opening_manual: nozzle.opening_manual ?? null,
         closing_manual: null,
         liters_sold: 0,
@@ -1801,10 +1818,11 @@ watch(
         form.nozzle_readings.map((r) => ({
             o: r.opening_electronic,
             c: r.closing_electronic,
+            rolled: Boolean(r.meter_rolled_over),
         })),
     (readings) => {
         readings.forEach((r, i) => {
-            form.nozzle_readings[i].liters_sold = Math.max(0, r.c - r.o);
+            form.nozzle_readings[i].liters_sold = litresFromMeters(Number(r.o), Number(r.c), r.rolled);
         });
     },
     { deep: true },
@@ -2915,14 +2933,28 @@ const completedWorkflowSteps = computed(() => {
                                                     @focus="selectZeroValue"
                                                     step="1"
                                                     class="h-9 text-right"
-                                                    :aria-invalid="nozzleMeterWentBackwards(idx) || undefined"
+                                                    :aria-invalid="(nozzleMeterWentBackwards(idx) && !form.nozzle_readings[idx].meter_rolled_over) || undefined"
                                                 />
                                                 <p
-                                                    v-if="nozzleMeterWentBackwards(idx)"
+                                                    v-if="nozzleMeterWentBackwards(idx) && !form.nozzle_readings[idx].meter_rolled_over"
                                                     class="mt-1 text-xs text-destructive"
                                                 >
                                                     Below the opening reading — a pump meter cannot go backwards.
                                                 </p>
+                                                <!-- Only offered when the reading went down, which is the one
+                                                     case a rollover can explain. -->
+                                                <div
+                                                    v-if="nozzleMeterWentBackwards(idx) || form.nozzle_readings[idx].meter_rolled_over"
+                                                    class="mt-1 flex items-center gap-2"
+                                                >
+                                                    <Checkbox
+                                                        :id="'nozzle-' + idx + '-rolled-over'"
+                                                        v-model="form.nozzle_readings[idx].meter_rolled_over"
+                                                    />
+                                                    <Label :for="'nozzle-' + idx + '-rolled-over'" class="text-xs">
+                                                        Meter rolled over — it passed its last digit and restarted from zero
+                                                    </Label>
+                                                </div>
                                                 <InputError
                                                     :message="
                                                         nozzleError(

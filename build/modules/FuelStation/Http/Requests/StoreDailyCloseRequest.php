@@ -49,6 +49,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'nozzle_readings.*.item_id' => 'required|uuid',
             'nozzle_readings.*.opening_electronic' => 'required|numeric|min:0',
             'nozzle_readings.*.closing_electronic' => 'required|numeric|min:0',
+            'nozzle_readings.*.meter_rolled_over' => 'nullable|boolean',
             'nozzle_readings.*.opening_manual' => 'nullable|numeric|min:0',
             'nozzle_readings.*.closing_manual' => 'nullable|numeric|min:0',
             'nozzle_readings.*.liters_sold' => 'required|numeric|min:0',
@@ -201,21 +202,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
     }
 
     /**
-     * A pump totaliser only counts up, so a closing reading below its opening one is a
-     * mistake - a skipped nozzle, a transposed digit, a reading typed into the wrong row.
-     *
-     * Nothing rejected it. The rule was `numeric|min:0`, and the form computed litres as
-     * max(0, closing - opening), so an impossible reading silently became a sale of zero
-     * litres. Day 13 of the fourteen-day scenario closed with nozzle D2A left at 0 against
-     * an opening of 303,625: 375 litres of diesel were never recorded, and the only trace
-     * was a cash surplus of exactly 117,750. A surplus reads like good news, which is the
-     * worst possible disguise for unrecorded revenue.
-     *
-     * Known limitation: a totaliser that has genuinely rolled over past its last digit also
-     * reads lower than its opening, and this refuses that too. Rollover is not handled
-     * anywhere today - before this it silently booked zero litres - so refusing is strictly
-     * better than accepting, but it does mean a rolled-over pump blocks the close until
-     * rollover is handled properly.
+     * Refuse impossible meter readings before anything is posted, with the message beside the
+     * field. The rule itself lives in DailyCloseService::meterReadingProblem(), which the close
+     * also enforces for every caller - this only makes sure a web user hears it early.
      */
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
@@ -228,13 +217,14 @@ class StoreDailyCloseRequest extends BaseFormRequest
                     continue; // the field rules already report this
                 }
 
-                if ((float) $closing < (float) $opening) {
-                    $validator->errors()->add(
-                        "nozzle_readings.{$i}.closing_electronic",
-                        'Closing reading ('.rtrim(rtrim(number_format((float) $closing, 2), '0'), '.').
-                        ') is below the opening reading ('.rtrim(rtrim(number_format((float) $opening, 2), '0'), '.').
-                        '). A pump meter cannot go backwards.'
-                    );
+                $problem = \App\Modules\FuelStation\Services\DailyCloseService::meterReadingProblem(
+                    (float) $opening,
+                    (float) $closing,
+                    filter_var($reading['meter_rolled_over'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                );
+
+                if ($problem !== null) {
+                    $validator->errors()->add("nozzle_readings.{$i}.closing_electronic", $problem);
                 }
             }
         });

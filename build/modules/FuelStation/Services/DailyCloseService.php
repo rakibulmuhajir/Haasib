@@ -164,6 +164,8 @@ class DailyCloseService
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($companyId, $data, $user, $isCorrection) {
             $date = $data['date'];
+            // Litres are worked out here, from the meters. See litresFromReadings().
+            $data['nozzle_readings'] = $this->litresFromReadings($data['nozzle_readings'] ?? []);
             // Reserve the date before reading sources. Row triggers use nonblocking shared
             // locks and signal a whole-transaction retry instead of waiting while holding rows.
             DB::selectOne('select pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$companyId, $date]);
@@ -1938,6 +1940,106 @@ class DailyCloseService
                 ];
             })
             ->all();
+    }
+
+    /**
+     * Litres sold at each nozzle, derived from its meter readings - never taken from the request.
+     *
+     * The close used to post fuel revenue from (float) $reading['liters_sold'], a figure the
+     * browser computed and the server never checked against the meters. Fuel is the largest
+     * number in any close, and a request could name any litres it liked beside readings that
+     * said otherwise. The same fault was fixed for lubricants on 22 September; this closes it for
+     * fuel.
+     *
+     * This is also where the meter rule is enforced for every caller - the web form, the
+     * CommandBus action, anything else - rather than only in one form request.
+     *
+     * @throws \Illuminate\Validation\ValidationException when a pair of readings is impossible
+     */
+    private function litresFromReadings(array $readings): array
+    {
+        $errors = [];
+
+        foreach ($readings as $i => $reading) {
+            $opening = (float) ($reading['opening_electronic'] ?? 0);
+            $closing = (float) ($reading['closing_electronic'] ?? 0);
+            $rolledOver = filter_var($reading['meter_rolled_over'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            $problem = self::meterReadingProblem($opening, $closing, $rolledOver);
+            if ($problem !== null) {
+                $errors["nozzle_readings.{$i}.closing_electronic"] = $problem;
+
+                continue;
+            }
+
+            $readings[$i]['liters_sold'] = self::litresFromMeters($opening, $closing, $rolledOver);
+        }
+
+        if ($errors) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
+
+        return $readings;
+    }
+
+    /**
+     * What a pair of readings sold. A totaliser that passes its last digit restarts from zero, so
+     * on that day the litres are the distance to the rollover point plus the new reading.
+     *
+     * The rollover point is the next power of ten above the opening reading: a meter can only
+     * roll over when it is at the top of its range, and at the top of its range the opening
+     * reading has as many digits as the meter does. meterReadingProblem() refuses a rollover
+     * whose opening is not near that top, so this is only ever reached when that holds.
+     */
+    public static function litresFromMeters(float $opening, float $closing, bool $rolledOver): float
+    {
+        if ($rolledOver) {
+            return round((self::rolloverPoint($opening) - $opening) + $closing, 3);
+        }
+
+        return round(max(0, $closing - $opening), 3);
+    }
+
+    /**
+     * Why a pair of readings is impossible, or null when it is fine.
+     *
+     * A closing reading below the opening one is almost always a mistake - a skipped nozzle, a
+     * transposed digit, a reading in the wrong row. Day 13 of the scenario run lost 375 litres of
+     * diesel that way, booked as zero with only a cash surplus to show for it. The one honest
+     * exception is a totaliser rolling past its last digit, which must be declared, never
+     * guessed: guessing would bring the silent typo straight back.
+     */
+    public static function meterReadingProblem(float $opening, float $closing, bool $rolledOver): ?string
+    {
+        $fmt = fn (float $v) => rtrim(rtrim(number_format($v, 2), '0'), '.');
+
+        if (! $rolledOver) {
+            return $closing < $opening
+                ? "Closing reading ({$fmt($closing)}) is below the opening reading ({$fmt($opening)}). "
+                    .'A pump meter cannot go backwards. If this meter passed its last digit and started '
+                    .'again from zero, tick "Meter rolled over".'
+                : null;
+        }
+
+        if ($closing >= $opening) {
+            return 'Marked as rolled over, but the closing reading is not below the opening one. '
+                .'Untick "Meter rolled over" unless the meter really restarted from zero.';
+        }
+
+        $top = self::rolloverPoint($opening);
+        if ($opening < 0.9 * $top) {
+            $digits = strlen((string) (int) $top) - 1;
+
+            return "Marked as rolled over, but the opening reading ({$fmt($opening)}) is nowhere near "
+                ."the top of a {$digits}-digit meter ({$fmt($top - 1)}). Check the readings.";
+        }
+
+        return null;
+    }
+
+    private static function rolloverPoint(float $opening): float
+    {
+        return 10 ** strlen((string) (int) floor(max($opening, 1)));
     }
 
     public function calculateRateChangeSplit(array $reading, ?array $snapshot, float $fallbackRate): array

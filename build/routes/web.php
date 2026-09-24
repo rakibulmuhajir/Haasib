@@ -239,6 +239,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/bill-payments/create', [BillPaymentController::class, 'create'])->name('bill-payments.create');
         Route::post('/{company}/bill-payments', [BillPaymentController::class, 'store'])->name('bill-payments.store');
         Route::get('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'show'])->name('bill-payments.show');
+        Route::get('/{company}/bill-payments/{payment}/edit', [BillPaymentController::class, 'edit'])->name('bill-payments.edit');
+        Route::put('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'update'])->name('bill-payments.update');
         Route::delete('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'destroy'])->name('bill-payments.destroy');
 
         // Vendor Credits

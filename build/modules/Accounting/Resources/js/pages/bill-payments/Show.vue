@@ -53,6 +53,7 @@ const props = defineProps<{
     payment: PaymentRef;
     groupPayments?: PaymentRef[];
     journalTransactionId?: string | null;
+    editLock?: string | null;
 }>();
 
 const paymentTitle = computed(
@@ -146,6 +147,23 @@ const groupedCashMovement = computed(
         :icon="CreditCard"
     >
         <template #actions>
+            <span
+                v-if="editLock"
+                class="text-sm text-muted-foreground"
+            >
+                {{ editLock }}
+            </span>
+            <Button
+                v-else
+                variant="outline"
+                @click="
+                    router.get(
+                        `/${company.slug}/bill-payments/${payment.id}/edit`,
+                    )
+                "
+            >
+                Edit
+            </Button>
             <Button
                 v-if="journalTransactionId"
                 variant="outline"

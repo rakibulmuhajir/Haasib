@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\BillPaymentAllocation;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
@@ -91,7 +92,6 @@ class CreateAction implements PaletteAction
             if (! $apAccountId) {
                 throw new \RuntimeException('AP account is required to post the bill payment.');
             }
-            $postingService = app(GlPostingService::class);
 
             foreach ($splits as $index => $split) {
                 $amount = round((float) $split['amount'], 6);
@@ -133,29 +133,14 @@ class CreateAction implements PaletteAction
                         'applied_at' => now(),
                     ]);
 
-                    $bill = $allocation['bill'];
-                    $bill->paid_amount += $allocation['amount_allocated'];
-                    $bill->balance = $bill->total_amount - $bill->paid_amount;
-                    if ($bill->balance <= 0) {
-                        $bill->status = 'paid';
-                        $bill->paid_at = now();
-                    } else {
-                        $bill->status = 'partial';
-                    }
-                    $bill->save();
+                    $this->applyAllocationToBill($allocation['bill'], (float) $allocation['amount_allocated']);
                 }
 
                 // Each split is its own payment against its own account, so
                 // each one posts its own DR AP / CR bank. Inside the same
                 // transaction as the rows above: a payment that cannot be
                 // posted must not leave the bill looking settled.
-                $transaction = $postingService->postBillPayment(
-                    $payment->fresh(['allocations', 'company']),
-                    $split['payment_account_id'],
-                    $apAccountId
-                );
-                $payment->transaction_id = $transaction->id;
-                $payment->save();
+                $this->postPaymentTransaction($payment, $split['payment_account_id'], $apAccountId);
 
                 $createdPayments[] = $payment;
             }
@@ -169,6 +154,58 @@ class CreateAction implements PaletteAction
         }); // retry on deadlock (40P01): nextNumber()/paymentNumbers() above take a
         // lockForUpdate() row lock ahead of this insert into an audited table; see the
         // lock-order comment in the audit_post_close_activity migration.
+    }
+
+    /**
+     * Shared with BillPayment\UpdateAction: derive a bill's paid_amount/
+     * balance/status/paid_at purely from the amount now paid against it.
+     * Handles both directions -- paying more (here) and paying less after an
+     * edit shrinks an allocation (Update) -- and mirrors VoidAction's
+     * floor-at-zero / received-or-draft fallback so a bill never reports a
+     * negative balance or an inconsistent status across the three actions.
+     */
+    public static function recomputeBillStatus(Bill $bill, float $newPaidAmount): void
+    {
+        $newPaidAmount = max(0, round($newPaidAmount, 6));
+        $newBalance = max(0, round((float) $bill->total_amount - $newPaidAmount, 6));
+
+        if ($newBalance <= 0.000001) {
+            $newStatus = 'paid';
+        } elseif ($newPaidAmount > 0.000001) {
+            $newStatus = 'partial';
+        } else {
+            $newStatus = $bill->received_at ? 'received' : 'draft';
+        }
+
+        $bill->paid_amount = $newPaidAmount;
+        $bill->balance = $newBalance;
+        $bill->status = $newStatus;
+        $bill->paid_at = $newStatus === 'paid' ? ($bill->paid_at ?? now()) : null;
+    }
+
+    private function applyAllocationToBill(Bill $bill, float $amountAllocated): void
+    {
+        self::recomputeBillStatus($bill, (float) $bill->paid_amount + $amountAllocated);
+        $bill->save();
+    }
+
+    /**
+     * Post the AP-debit / cash-credit journal for one payment row and stamp
+     * its transaction_id. Shared with BillPayment\UpdateAction so an edit
+     * that reverses and reposts a payment uses exactly the posting call a
+     * fresh payment would.
+     */
+    public function postPaymentTransaction(BillPayment $payment, string $paymentAccountId, string $apAccountId): Transaction
+    {
+        $transaction = app(GlPostingService::class)->postBillPayment(
+            $payment->fresh(['allocations', 'company']),
+            $paymentAccountId,
+            $apAccountId
+        );
+        $payment->transaction_id = $transaction->id;
+        $payment->save();
+
+        return $transaction;
     }
 
     private function normalizeSplits(array $params): array

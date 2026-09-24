@@ -93,6 +93,7 @@ return [
     // Bill Payment
     'bill_payment.list' => \App\Modules\Accounting\Actions\BillPayment\IndexAction::class,
     'bill_payment.create' => \App\Modules\Accounting\Actions\BillPayment\CreateAction::class,
+    'bill_payment.update' => \App\Modules\Accounting\Actions\BillPayment\UpdateAction::class,
     'bill_payment.void' => \App\Modules\Accounting\Actions\BillPayment\VoidAction::class,
 
     // Vendor Credit

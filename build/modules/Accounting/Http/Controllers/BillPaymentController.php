@@ -4,9 +4,11 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillPaymentRequest;
+use App\Modules\Accounting\Http\Requests\UpdateBillPaymentRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -241,6 +243,8 @@ class BillPaymentController extends Controller
             ->orderByDesc('posting_date')
             ->value('id');
 
+        $editLock = app(DocumentDateLock::class)->reason($company->id, $record->payment_date->toDateString(), 'This payment');
+
         return Inertia::render('accounting/bill-payments/Show', [
             'company' => [
                 'id' => $company->id,
@@ -251,7 +255,63 @@ class BillPaymentController extends Controller
             'payment' => $record,
             'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,
+            'editLock' => $editLock,
         ]);
+    }
+
+    public function edit(string $company, string $payment): RedirectResponse|Response
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+        $record = \App\Modules\Accounting\Models\BillPayment::with(['vendor', 'allocations.bill', 'paymentAccount:id,code,name'])
+            ->where('company_id', $company->id)
+            ->findOrFail($payment);
+
+        $editLock = app(DocumentDateLock::class)->reason($company->id, $record->payment_date->toDateString(), 'This payment');
+        if ($editLock !== null) {
+            return redirect()->route('bill-payments.show', [$company->slug, $record->id])
+                ->with('error', $editLock);
+        }
+
+        $bankAccounts = Account::where('company_id', $company->id)
+            ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'subtype', 'normal_balance']);
+
+        return Inertia::render('accounting/bill-payments/Edit', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+            ],
+            'payment' => $record,
+            'bankAccounts' => $bankAccounts,
+        ]);
+    }
+
+    public function update(UpdateBillPaymentRequest $request, string $company, string $payment): RedirectResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+
+        try {
+            app(CommandBus::class)->dispatch('bill_payment.update', [
+                ...$request->validated(),
+                'id' => $payment,
+                'company_id' => $company->id,
+            ], $request->user());
+
+            return redirect()->route('bill-payments.show', ['company' => $company->slug, 'payment' => $payment])
+                ->with('success', 'Bill payment updated');
+        } catch (ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function destroy(Request $request, string $company, string $payment): RedirectResponse

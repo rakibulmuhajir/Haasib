@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDateTime } from '@/lib/datetime'
 import type { BreadcrumbItem } from '@/types'
-import { CreditCard, Eye, Plus } from 'lucide-vue-next'
+import { CreditCard, Eye, Pencil, Plus } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
@@ -119,6 +119,10 @@ const openPayment = (id: string) => {
   router.get(`/${props.company.slug}/bill-payments/${id}`)
 }
 
+const editPayment = (id: string) => {
+  router.get(`/${props.company.slug}/bill-payments/${id}/edit`)
+}
+
 const handleSearch = () => {
   router.get(
     `/${props.company.slug}/bill-payments`,
@@ -198,6 +202,16 @@ const handleSearch = () => {
               @click.stop="openPayment(row.id)"
             >
               <Eye class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="row.source_count <= 1"
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              title="Edit payment"
+              @click.stop="editPayment(row.id)"
+            >
+              <Pencil class="h-4 w-4" />
             </Button>
           </div>
         </template>

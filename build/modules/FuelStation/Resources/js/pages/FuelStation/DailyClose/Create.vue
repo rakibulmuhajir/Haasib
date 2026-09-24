@@ -755,7 +755,6 @@ const getPumpTotalAmount = (nozzleIndices: number[]) => {
 const form = useForm({
     date: props.date,
     // Empty means the usual - 08:00 the morning after - and the server fills that in.
-    readings_taken_at: '' as string,
 
     // Tab 1: Nozzle readings (each nozzle has electronic + optional manual readings)
     nozzle_readings: configuredNozzles.value.map((nozzle) => ({
@@ -952,34 +951,6 @@ const nozzleError = (index: number, field: string) =>
  * scenario lost 375 litres of diesel that way. The server refuses it now; this says so while
  * the number is still under the cursor.
  */
-/**
- * When the readings for this close were taken. A close is labelled with its business date but
- * read the morning after, normally at 08:00; on a rate-change night a station reads at midnight
- * instead, which makes that day 16 hours long and the next 32. Recording it lets the history say
- * so instead of showing one weak day and one strong one.
- *
- * The field shows the usual time until someone changes it, and only a changed value is sent.
- */
-const usualReadingsAt = computed(() => {
-    const d = new Date(`${form.date}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() + 1);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T08:00`;
-});
-
-const readingsAtIsUnusual = computed(
-    () => Boolean(form.readings_taken_at) && form.readings_taken_at !== usualReadingsAt.value,
-);
-
-// A time chosen for one business date means nothing for another.
-watch(
-    () => form.date,
-    () => {
-        form.readings_taken_at = '';
-    },
-);
-
 const nozzleMeterWentBackwards = (index: number): boolean => {
     const reading = form.nozzle_readings[index];
     if (!reading) return false;
@@ -2733,23 +2704,6 @@ const completedWorkflowSteps = computed(() => {
                                 dip.
                             </p>
                             <InputError :message="form.errors.date" />
-                        </div>
-                        <div class="space-y-1.5">
-                            <Label for="readings-taken-at">Readings taken at</Label>
-                            <Input
-                                id="readings-taken-at"
-                                type="datetime-local"
-                                :model-value="form.readings_taken_at || usualReadingsAt"
-                                @update:model-value="(v) => (form.readings_taken_at = String(v ?? ''))"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Usually 08:00 the next morning. On a rate-change
-                                night, the time the readings were actually taken.
-                            </p>
-                            <p v-if="readingsAtIsUnusual" class="text-xs text-status-attention">
-                                Not the usual 08:00 — this day will show as shorter or longer than 24 hours.
-                            </p>
-                            <InputError :message="form.errors.readings_taken_at" />
                         </div>
                         <div
                             class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"

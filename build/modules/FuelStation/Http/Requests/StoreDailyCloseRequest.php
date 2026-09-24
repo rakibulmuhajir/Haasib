@@ -36,7 +36,6 @@ class StoreDailyCloseRequest extends BaseFormRequest
         $rules = [
             'intent' => 'nullable|in:park,post',
             'date' => 'required|date',
-            'readings_taken_at' => 'nullable|date',
 
             // Tab 1: Sales (nozzle readings - each nozzle has electronic + optional manual readings)
             // 'present|array' allows a genuine zero-sales day; the
@@ -210,16 +209,6 @@ class StoreDailyCloseRequest extends BaseFormRequest
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
         $validator->after(function ($validator) {
-            if (is_string($this->input('date')) && $this->filled('readings_taken_at')) {
-                $problem = \App\Modules\FuelStation\Services\DailyCloseService::readingsTakenAtProblem(
-                    $this->input('date'),
-                    (string) $this->input('readings_taken_at'),
-                );
-
-                if ($problem !== null) {
-                    $validator->errors()->add('readings_taken_at', $problem);
-                }
-            }
 
             foreach ((array) $this->input('nozzle_readings', []) as $i => $reading) {
                 $opening = $reading['opening_electronic'] ?? null;

@@ -218,16 +218,11 @@ class DailyCloseService
             $amanatWithdrawalByAccount = [];
             $amanatDepositsCashTotal = 0.0;
             $amanatWithdrawalsCashTotal = 0.0;
-            $readingsProblem = self::readingsTakenAtProblem($date, $data['readings_taken_at'] ?? null);
-            if ($readingsProblem !== null) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['readings_taken_at' => $readingsProblem]);
-            }
-
             $metadata = [
                 'date' => $date,
                 'opening_cash' => $data['opening_cash'],
                 'closing_cash' => $data['closing_cash'],
-                'readings_taken_at' => self::readingsTakenAt($date, $data['readings_taken_at'] ?? null),
+                'readings_taken_at' => self::readingsTakenAt($companyId, $date),
             ];
 
             // ─────────────────────────────────────────────────────────────────
@@ -1987,51 +1982,25 @@ class DailyCloseService
     }
 
     /**
-     * When this close's meter readings and dip were taken, as 'Y-m-d H:i'.
-     *
-     * A close is labelled with its business date, but its readings are taken the morning after -
-     * "close each day the next morning, after the tank dip" - normally at 08:00. On a
-     * rate-change night a station reads at midnight instead, so that day covers 16 hours and the
-     * next covers 32. The totals are right either way, because litres come from the meters; what
-     * goes wrong is every figure that compares days, which saw one weak day and one strong one
-     * with nothing to say why. Recording the time lets the history show how long each close ran.
-     *
-     * Absent means the usual: 08:00 the morning after.
+     * When a close's readings were taken. Nobody types it: a station reads at 08:00 the
+     * morning after, except on the night before a rate change, when it reads at the first
+     * minute of the new rate - 00:00 on the change date. Only a rate that replaced an earlier
+     * one counts; an item's first rate is setup, not a change.
      */
-    public static function readingsTakenAt(string $businessDate, ?string $value): string
+    public static function readingsTakenAt(string $companyId, string $businessDate): string
     {
-        if ($value === null || trim($value) === '') {
-            return \Illuminate\Support\Carbon::parse($businessDate)->addDay()->setTime(8, 0)->format('Y-m-d H:i');
-        }
+        $next = \Illuminate\Support\Carbon::parse($businessDate)->addDay();
 
-        return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d H:i');
-    }
+        $rateChangesAtMidnight = DB::table('fuel.rate_changes as rc')
+            ->where('rc.company_id', $companyId)
+            ->whereDate('rc.effective_date', $next->toDateString())
+            ->whereExists(fn ($q) => $q->from('fuel.rate_changes as prior')
+                ->whereColumn('prior.company_id', 'rc.company_id')
+                ->whereColumn('prior.item_id', 'rc.item_id')
+                ->whereColumn('prior.effective_date', '<', 'rc.effective_date'))
+            ->exists();
 
-    /**
-     * Why a readings time cannot belong to this business date, or null when it can. The window
-     * is the business date itself through the end of the morning after - wide enough for a
-     * midnight reading, narrow enough to catch a time typed against the wrong day.
-     */
-    public static function readingsTakenAtProblem(string $businessDate, ?string $value): ?string
-    {
-        if ($value === null || trim($value) === '') {
-            return null;
-        }
-
-        try {
-            $at = \Illuminate\Support\Carbon::parse($value);
-        } catch (\Throwable) {
-            return 'Enter the date and time the readings were taken.';
-        }
-
-        $start = \Illuminate\Support\Carbon::parse($businessDate)->startOfDay();
-
-        if ($at->lt($start) || $at->gte($start->copy()->addDays(2))) {
-            return 'Readings for '.$start->format('j M').' are taken that day or the morning after '
-                .'- usually 08:00 on '.$start->copy()->addDay()->format('j M').'. Check the date.';
-        }
-
-        return null;
+        return $next->setTime($rateChangesAtMidnight ? 0 : 8, 0)->format('Y-m-d H:i');
     }
 
     /**

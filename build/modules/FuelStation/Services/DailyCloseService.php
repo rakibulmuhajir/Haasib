@@ -218,10 +218,16 @@ class DailyCloseService
             $amanatWithdrawalByAccount = [];
             $amanatDepositsCashTotal = 0.0;
             $amanatWithdrawalsCashTotal = 0.0;
+            $readingsProblem = self::readingsTakenAtProblem($date, $data['readings_taken_at'] ?? null);
+            if ($readingsProblem !== null) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['readings_taken_at' => $readingsProblem]);
+            }
+
             $metadata = [
                 'date' => $date,
                 'opening_cash' => $data['opening_cash'],
                 'closing_cash' => $data['closing_cash'],
+                'readings_taken_at' => self::readingsTakenAt($date, $data['readings_taken_at'] ?? null),
             ];
 
             // ─────────────────────────────────────────────────────────────────
@@ -1688,6 +1694,7 @@ class DailyCloseService
                 'is_amendable' => $t->isAmendable(),
                 'has_amendments' => $t->reversed_by_id !== null,
                 'has_post_close_activity' => $activeCloseIds->has($t->id),
+                'readings_taken_at' => $metadata['readings_taken_at'] ?? null,
 
                 // A rate change is the most common reason a day's revenue or margin looks
                 // unlike its neighbours, and it is the first thing someone reading the
@@ -1695,6 +1702,22 @@ class DailyCloseService
                 // surfaces that it happened.
                 'rate_change' => $this->rateChangeSummary($metadata, $rateChangeDates->has($t->transaction_date->toDateString())),
             ];
+        })->pipe(function ($rows) {
+            // Hours from the previous day's readings to this close's. Only between consecutive
+            // business dates, and only when both closes recorded a time; closes posted before
+            // times were recorded show nothing rather than a guess.
+            $takenAt = $rows->pluck('readings_taken_at', 'date');
+
+            return $rows->map(function ($row) use ($takenAt) {
+                $previousDate = \Illuminate\Support\Carbon::parse($row['date'])->subDay()->toDateString();
+                $previous = $takenAt[$previousDate] ?? null;
+
+                $row['hours_covered'] = ($row['readings_taken_at'] && $previous)
+                    ? round(\Illuminate\Support\Carbon::parse($previous)->diffInMinutes(\Illuminate\Support\Carbon::parse($row['readings_taken_at'])) / 60, 1)
+                    : null;
+
+                return $row;
+            });
         })->toArray();
     }
 
@@ -1961,6 +1984,54 @@ class DailyCloseService
                 ];
             })
             ->all();
+    }
+
+    /**
+     * When this close's meter readings and dip were taken, as 'Y-m-d H:i'.
+     *
+     * A close is labelled with its business date, but its readings are taken the morning after -
+     * "close each day the next morning, after the tank dip" - normally at 08:00. On a
+     * rate-change night a station reads at midnight instead, so that day covers 16 hours and the
+     * next covers 32. The totals are right either way, because litres come from the meters; what
+     * goes wrong is every figure that compares days, which saw one weak day and one strong one
+     * with nothing to say why. Recording the time lets the history show how long each close ran.
+     *
+     * Absent means the usual: 08:00 the morning after.
+     */
+    public static function readingsTakenAt(string $businessDate, ?string $value): string
+    {
+        if ($value === null || trim($value) === '') {
+            return \Illuminate\Support\Carbon::parse($businessDate)->addDay()->setTime(8, 0)->format('Y-m-d H:i');
+        }
+
+        return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d H:i');
+    }
+
+    /**
+     * Why a readings time cannot belong to this business date, or null when it can. The window
+     * is the business date itself through the end of the morning after - wide enough for a
+     * midnight reading, narrow enough to catch a time typed against the wrong day.
+     */
+    public static function readingsTakenAtProblem(string $businessDate, ?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            $at = \Illuminate\Support\Carbon::parse($value);
+        } catch (\Throwable) {
+            return 'Enter the date and time the readings were taken.';
+        }
+
+        $start = \Illuminate\Support\Carbon::parse($businessDate)->startOfDay();
+
+        if ($at->lt($start) || $at->gte($start->copy()->addDays(2))) {
+            return 'Readings for '.$start->format('j M').' are taken that day or the morning after '
+                .'- usually 08:00 on '.$start->copy()->addDay()->format('j M').'. Check the date.';
+        }
+
+        return null;
     }
 
     /**

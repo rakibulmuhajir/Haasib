@@ -54,6 +54,9 @@ interface DailyClose {
   has_post_close_activity?: boolean
   /** Present only when a rate changed during this close. */
   rate_change?: { changed: boolean; split?: boolean; fallback_liters: number } | null
+  readings_taken_at?: string | null
+  /** Hours since the previous day's readings; null when either close has no recorded time. */
+  hours_covered?: number | null
 }
 
 const props = defineProps<{
@@ -319,6 +322,13 @@ const confirmUnlock = () => {
                     variant="destructive"
                     :title="`${close.rate_change.fallback_liters} L priced at a single rate because no reading was taken when the rate changed`"
                   >Rate not split</Badge>
+                  <!-- A day that ran longer or shorter than 24 hours - a midnight reading on a
+                       rate-change night, usually - so its totals are not compared blind. -->
+                  <Badge
+                    v-if="close.hours_covered != null && Math.abs(close.hours_covered - 24) >= 1"
+                    variant="outline"
+                    :title="`Readings ${close.hours_covered} hours after the previous day's, not the usual 24`"
+                  >{{ close.hours_covered }} h</Badge>
                 </div>
               </div>
             </div>

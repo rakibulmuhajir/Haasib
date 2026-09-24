@@ -30,8 +30,16 @@ interface Customer {
   current_balance: number
 }
 
+interface DepositAccount {
+  id: string
+  code: string
+  name: string
+  subtype: string
+}
+
 const props = defineProps<{
   customers: Customer[]
+  depositAccounts: DepositAccount[]
   selectedCustomerId: string | null
   currency: string
 }>()
@@ -50,13 +58,22 @@ const form = useForm({
   customer_id: props.selectedCustomerId || '',
   amount: '',
   payment_method: 'cash',
+  deposit_account_id: '',
   reference: '',
   notes: '',
   collection_date: localToday(),
 })
 
+const requiresDepositAccount = computed(() => form.payment_method !== 'cash')
+
 const selectedCustomer = computed(() => {
   return props.customers.find(c => c.id === form.customer_id)
+})
+
+watch(() => form.payment_method, (method) => {
+  if (method === 'cash') {
+    form.deposit_account_id = ''
+  }
 })
 
 const submit = () => {
@@ -215,6 +232,22 @@ const collectFull = () => {
                 </div>
               </RadioGroup>
               <InputError :message="form.errors.payment_method" />
+            </div>
+
+            <!-- Deposit Account (bank/transfer/cheque only; cash goes to the station's cash drawer) -->
+            <div v-if="requiresDepositAccount" class="space-y-2">
+              <Label for="deposit_account">Deposit Into *</Label>
+              <Select v-model="form.deposit_account_id">
+                <SelectTrigger :class="{ 'border-destructive': form.errors.deposit_account_id }">
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="a in depositAccounts" :key="a.id" :value="a.id">
+                    {{ a.code }} - {{ a.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <InputError :message="form.errors.deposit_account_id" />
             </div>
 
             <!-- Reference -->

@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Dialog,
   DialogContent,
@@ -63,24 +64,53 @@ const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.
 const search = ref('')
 const addDialogOpen = ref(false)
 
+// Opening balance — set only when the caller can manage opening balances and the
+// company's position is not locked; mirrors QuickAddModal.vue exactly.
+const openingBalance = computed(() => (page.props.auth as any)?.openingBalance ?? null)
+const showOpeningSection = computed(() => !!openingBalance.value?.canManage && !openingBalance.value?.locked)
+const asOfDateFixed = computed(() => !!openingBalance.value?.asOfDate)
+
 const holderForm = useForm({
   name: '',
   phone: '',
   cnic: '',
   relationship: 'external',
+  opening_kind: 'holds' as 'holds' | 'owes',
+  opening_amount: null as number | null,
+  opening_date: null as string | null,
+})
+
+const hasOpeningAmount = computed(() => (Number(holderForm.opening_amount) || 0) > 0)
+
+const isHolderFormValid = computed(() => {
+  if (holderForm.name.trim().length === 0) return false
+  if (showOpeningSection.value && !asOfDateFixed.value && hasOpeningAmount.value && !holderForm.opening_date) {
+    return false
+  }
+  return true
 })
 
 const openAddHolder = () => {
   holderForm.reset()
   holderForm.clearErrors()
+  holderForm.relationship = 'external'
+  holderForm.opening_kind = 'holds'
+  holderForm.opening_amount = null
+  // A company that already has an opening position keeps its own date; the field shows it
+  // disabled rather than editable. One with none starts blank.
+  holderForm.opening_date = openingBalance.value?.asOfDate ?? null
   addDialogOpen.value = true
 }
 
 const submitHolder = () => {
   const slug = companySlug.value
-  if (!slug) return
+  if (!slug || !isHolderFormValid.value) return
 
-  holderForm.post(`/${slug}/fuel/amanat`, {
+  holderForm.transform((data) => ({
+    ...data,
+    opening_amount: data.opening_amount ? Number(data.opening_amount) : null,
+    opening_date: data.opening_date || null,
+  })).post(`/${slug}/fuel/amanat`, {
     preserveScroll: true,
     onSuccess: () => {
       addDialogOpen.value = false
@@ -292,13 +322,76 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
             </div>
 
           </div>
+
+          <template v-if="showOpeningSection">
+            <div class="border-t pt-4 space-y-3">
+              <h4 class="text-sm font-medium">Opening balance <span class="text-muted-foreground font-normal">(optional)</span></h4>
+
+              <div class="space-y-2">
+                <Label>As of the opening date</Label>
+                <RadioGroup v-model="holderForm.opening_kind" class="grid grid-cols-2 gap-3">
+                  <div>
+                    <RadioGroupItem value="holds" id="opening-kind-holds" class="peer sr-only" />
+                    <Label
+                      for="opening-kind-holds"
+                      class="flex cursor-pointer flex-col rounded-md border-2 border-muted bg-popover p-3 text-sm hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    >
+                      Station holds for them
+                    </Label>
+                  </div>
+                  <div>
+                    <RadioGroupItem value="owes" id="opening-kind-owes" class="peer sr-only" />
+                    <Label
+                      for="opening-kind-owes"
+                      class="flex cursor-pointer flex-col rounded-md border-2 border-muted bg-popover p-3 text-sm hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    >
+                      They owe the station
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="opening-amount">Amount</Label>
+                <Input
+                  id="opening-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  v-model.number="holderForm.opening_amount"
+                  placeholder="0.00"
+                  :disabled="holderForm.processing"
+                  :class="{ 'border-destructive': holderForm.errors.opening_amount }"
+                  autocomplete="off"
+                />
+                <InputError :message="holderForm.errors.opening_amount" />
+              </div>
+
+              <div class="space-y-2">
+                <Label for="opening-date">As of</Label>
+                <Input
+                  id="opening-date"
+                  type="date"
+                  v-model="holderForm.opening_date"
+                  :disabled="holderForm.processing || asOfDateFixed"
+                  :class="{ 'border-destructive': holderForm.errors.opening_date }"
+                />
+                <p class="text-sm text-muted-foreground">
+                  {{ asOfDateFixed
+                    ? "Set for all opening balances. Change it on the Opening Balances page."
+                    : "Usually the day before your first entry, e.g. 31 Aug." }}
+                </p>
+                <InputError :message="holderForm.errors.opening_date" />
+              </div>
+            </div>
+          </template>
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" @click="addDialogOpen = false">
             Cancel
           </Button>
-          <Button type="button" :disabled="holderForm.processing" @click="submitHolder">
+          <Button type="button" :disabled="holderForm.processing || !isHolderFormValid" @click="submitHolder">
             Add Holder
           </Button>
         </DialogFooter>

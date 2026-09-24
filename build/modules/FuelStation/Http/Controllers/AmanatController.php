@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
@@ -9,11 +10,13 @@ use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Services\AmanatService;
+use App\Services\CommandBus;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -60,9 +63,25 @@ class AmanatController extends Controller
     public function store(StoreAmanatHolderRequest $request): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
+        $user = $request->user();
         $data = $request->validated();
 
-        $customer = DB::transaction(function () use ($company, $data) {
+        $openingAmount = (float) ($data['opening_amount'] ?? 0);
+        $openingKind = $data['opening_kind'] ?? 'holds';
+        $openingDate = $data['opening_date'] ?? null;
+
+        if ($openingAmount > 0 && ! ($user?->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE) ?? false)) {
+            throw ValidationException::withMessages([
+                'opening_amount' => 'You are not allowed to set opening balances.',
+            ]);
+        }
+
+        $commandBus = app(CommandBus::class);
+
+        // Everything - the holder's own creation included - lives in one transaction: if
+        // the opening balance is refused (locked position, missing account, ...), the
+        // holder is never created either, so there's no orphaned profile to clean up.
+        $customer = DB::transaction(function () use ($company, $data, $user, $openingAmount, $openingKind, $openingDate, $commandBus) {
             $customer = Customer::create([
                 'company_id' => $company->id,
                 'customer_number' => $this->nextCustomerNumber($company->id),
@@ -86,12 +105,55 @@ class AmanatController extends Controller
                 ]
             );
 
+            if ($openingAmount > 0) {
+                $section = $openingKind === 'owes' ? 'credit_customers' : 'amanat';
+
+                try {
+                    $commandBus->dispatch('opening_balance.set_party', [
+                        'section' => $section,
+                        'party_id' => $customer->id,
+                        'amount' => $openingAmount,
+                        'as_of_date' => $openingDate,
+                    ], $user);
+                } catch (ValidationException $e) {
+                    throw $this->remapOpeningError($e);
+                }
+
+                if ($openingKind === 'owes') {
+                    CustomerProfile::where('company_id', $company->id)
+                        ->where('customer_id', $customer->id)
+                        ->update(['is_credit_customer' => true]);
+                }
+            }
+
             return $customer;
         });
 
         return redirect()
             ->route('fuel.amanat.show', ['company' => $company->slug, 'customer' => $customer->id])
             ->with('success', 'Amanat holder added successfully. Record deposits from Daily Close.');
+    }
+
+    /**
+     * opening_balance.set_party's errors are keyed for its own params (amount, as_of_date,
+     * party_id, or the section name itself when e.g. the amanat liability account is
+     * missing). The dialog's fields are opening_amount/opening_date, so a validation
+     * failure has to be re-keyed onto the field the user actually sees. Mirrors
+     * CustomerController::remapOpeningError.
+     */
+    private function remapOpeningError(ValidationException $e): ValidationException
+    {
+        $remapped = [];
+        foreach ($e->errors() as $key => $messages) {
+            $target = match ($key) {
+                'as_of_date' => 'opening_date',
+                'amount', 'amanat', 'credit_customers' => 'opening_amount',
+                default => 'opening_amount',
+            };
+            $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);
+        }
+
+        return ValidationException::withMessages($remapped);
     }
 
     public function show(Request $request): Response|RedirectResponse

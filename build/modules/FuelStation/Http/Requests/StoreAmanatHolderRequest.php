@@ -20,6 +20,9 @@ class StoreAmanatHolderRequest extends BaseFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'cnic' => ['nullable', 'string', 'max:50'],
             'relationship' => ['nullable', 'in:owner,employee,external'],
+            'opening_kind' => ['nullable', 'in:holds,owes'],
+            'opening_amount' => ['nullable', 'numeric', 'min:0'],
+            'opening_date' => ['nullable', 'date'],
         ];
     }
 }

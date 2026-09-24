@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Actions\Bill;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -14,6 +15,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 class CreateAction implements PaletteAction
@@ -81,6 +83,8 @@ class CreateAction implements PaletteAction
             $normalizedLines = collect($params['line_items'])
                 ->map(fn ($item) => $this->withPurchaseDefaults($company->id, $item))
                 ->all();
+
+            $this->assertLineAccountsValid($normalizedLines);
 
             $lineTotals = collect($normalizedLines)->map(function ($item) {
                 $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
@@ -182,11 +186,39 @@ class CreateAction implements PaletteAction
             $line['warehouse_id'] = $this->preferredWarehouseId($companyId, $item->id);
         }
 
-        if (empty($line['expense_account_id'])) {
+        if ($item->track_inventory && $item->asset_account_id) {
+            // A tracked item's purchase has to land in inventory -- whatever
+            // account the request sent for this line is overridden.
+            $line['expense_account_id'] = $item->asset_account_id;
+        } elseif (empty($line['expense_account_id'])) {
             $line['expense_account_id'] = $item->asset_account_id ?: $item->expense_account_id;
         }
 
         return $line;
+    }
+
+    /**
+     * A bill line has to post to inventory (via the item) or an expense
+     * account -- never straight to cash/bank, which would double-count the
+     * money movement the bill payment itself already posts.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertLineAccountsValid(array $lines): void
+    {
+        foreach ($lines as $index => $line) {
+            $accountId = $line['expense_account_id'] ?? null;
+            if (!$accountId) {
+                continue;
+            }
+
+            $account = Account::find($accountId);
+            if ($account && in_array($account->subtype, ['cash', 'bank'], true)) {
+                throw ValidationException::withMessages([
+                    "line_items.{$index}.expense_account_id" => "A bill line can't post to a cash or bank account. Pick the item or an expense account.",
+                ]);
+            }
+        }
     }
 
     private function preferredWarehouseId(string $companyId, string $itemId): ?string

@@ -10,6 +10,7 @@ use App\Modules\Accounting\Http\Requests\VoidBillRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Inventory\Models\StockReceiptLine;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
@@ -138,6 +139,7 @@ class BillController extends Controller
 
         $expenseAccounts = Account::where('company_id', $company->id)
             ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->whereNotIn('subtype', ['cash', 'bank'])
             ->where('is_active', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'type']);
@@ -404,6 +406,8 @@ class BillController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        $editLock = app(DocumentDateLock::class)->reason($companyModel->id, $record->bill_date->toDateString(), "Bill {$record->bill_number}");
+
         return Inertia::render('accounting/bills/Show', [
             'company' => [
                 'id' => $companyModel->id,
@@ -421,21 +425,34 @@ class BillController extends Controller
             'inventoryEnabled' => $companyModel->isModuleEnabled('inventory'),
             'supplierClaims' => $supplierClaims,
             'claimReceiptAccounts' => $claimReceiptAccounts,
+            'editLock' => $editLock,
         ]);
     }
 
-    public function edit(string $company, string $bill): Response
+    public function edit(string $company, string $bill): RedirectResponse|Response
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
         $record = \App\Modules\Accounting\Models\Bill::with('lineItems')
             ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
+
+        if (in_array($record->status, ['void', 'cancelled'], true)) {
+            return redirect()->route('bills.show', [$companyModel->slug, $record->id])
+                ->with('error', 'Bill cannot be updated in current status');
+        }
+
+        $editLock = app(DocumentDateLock::class)->reason($companyModel->id, $record->bill_date->toDateString(), "Bill {$record->bill_number}");
+        if ($editLock !== null) {
+            return redirect()->route('bills.show', [$companyModel->slug, $record->id])
+                ->with('error', $editLock);
+        }
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $companyModel->id)
             ->orderBy('name')
             ->get(['id', 'name', 'payment_terms', 'base_currency', 'vendor_type']);
 
         $expenseAccounts = Account::where('company_id', $companyModel->id)
             ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->whereNotIn('subtype', ['cash', 'bank'])
             ->where('is_active', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'type']);

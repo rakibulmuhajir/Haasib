@@ -51,6 +51,7 @@ interface BillRef {
   internal_notes: string | null
   line_items: LineItem[]
   status: string
+  paid_amount: number
   ap_account_id?: string | null
 }
 
@@ -205,6 +206,13 @@ const handleSubmit = () => {
     :icon="FileText"
   >
     <form novalidate class="space-y-6" @submit.prevent="handleSubmit">
+      <div
+        v-if="bill.status === 'paid'"
+        class="rounded-md border border-status-attention/30 bg-status-attention/10 px-3 py-2 text-xs text-status-attention"
+      >
+        This bill is paid ({{ bill.currency }} {{ Number(bill.paid_amount).toFixed(2) }}). The total can't go below that.
+      </div>
+
       <div class="grid gap-4 md:grid-cols-2">
         <div>
           <Label for="vendor_id">{{ t('vendor') }}</Label>

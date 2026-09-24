@@ -5,13 +5,16 @@ namespace App\Modules\Accounting\Actions\Bill;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UpdateAction implements PaletteAction
 {
@@ -52,12 +55,17 @@ class UpdateAction implements PaletteAction
         $bill = Bill::where('company_id', $company->id)->findOrFail($params['id']);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'bill', $bill->id);
 
-        if (in_array($bill->status, ['paid', 'void', 'cancelled'], true)) {
+        if (in_array($bill->status, ['void', 'cancelled'], true)) {
             throw new \InvalidArgumentException('Bill cannot be updated in current status');
         }
 
-        if (!empty($params['line_items']) && ($bill->paid_amount > 0 || $bill->lineItems()->where('quantity_received', '>', 0)->exists())) {
-            throw new \InvalidArgumentException('Paid or received bill lines cannot be replaced. Use a credit note or stock adjustment to preserve the original payment and receipt history.');
+        // Paying a bill doesn't freeze it -- only its day being locked (by an
+        // accounting period close or a module's own day lock, e.g. FuelStation's
+        // daily close) does.
+        app(DocumentDateLock::class)->assertOpen($company->id, $bill->bill_date->toDateString(), "Bill {$bill->bill_number}");
+
+        if (!empty($params['line_items']) && $bill->lineItems()->where('quantity_received', '>', 0)->exists()) {
+            throw new \InvalidArgumentException('Stock on this bill has already been received. Record a stock adjustment instead.');
         }
 
         return \App\Services\AccountingWriteTransaction::run(function () use ($bill, $params) {
@@ -75,6 +83,8 @@ class UpdateAction implements PaletteAction
                     ->map(fn ($item) => $this->withPurchaseDefaults($bill->company_id, $item))
                     ->all();
 
+                $this->assertLineAccountsValid($normalizedLines);
+
                 $journalRelevantChanged = $this->lineItemsChanged($bill, $normalizedLines);
 
                 $totals = collect($normalizedLines)->map(function ($item) {
@@ -84,6 +94,12 @@ class UpdateAction implements PaletteAction
                     $total = $lineTotal + $taxAmount - $discountAmount;
                     return ['line_total' => $lineTotal, 'tax_amount' => $taxAmount, 'discount_amount' => $discountAmount, 'total' => $total, 'source' => $item];
                 });
+
+                if ((float) $bill->paid_amount > 0.000001 && $totals->sum('total') < (float) $bill->paid_amount - 0.000001) {
+                    throw ValidationException::withMessages([
+                        'line_items' => "The bill total can't go below the " . number_format((float) $bill->paid_amount, 2) . ' already paid. Record a vendor credit for the difference.',
+                    ]);
+                }
 
                 $bill->lineItems()->forceDelete();
 
@@ -112,8 +128,23 @@ class UpdateAction implements PaletteAction
                 $bill->tax_amount = $totals->sum('tax_amount');
                 $bill->discount_amount = $totals->sum('discount_amount');
                 $bill->total_amount = $totals->sum('total');
-                $bill->balance = $bill->total_amount - $bill->paid_amount;
                 $bill->base_amount = round($bill->total_amount * ($bill->exchange_rate ?? 1), 2);
+
+                // Same paid/partial bookkeeping BillPayment\CreateAction and
+                // VoidAction use when money is applied against a bill -- a
+                // total edited after payment must re-derive the same status,
+                // not just the balance.
+                $newBalance = max(0, round((float) $bill->total_amount - (float) $bill->paid_amount, 6));
+                $bill->balance = $newBalance;
+                if ((float) $bill->paid_amount > 0.000001) {
+                    if ($newBalance <= 0.000001) {
+                        $bill->status = 'paid';
+                        $bill->paid_at = $bill->paid_at ?? now();
+                    } else {
+                        $bill->status = 'partial';
+                        $bill->paid_at = null;
+                    }
+                }
             }
 
             $bill->fill($update);
@@ -193,11 +224,39 @@ class UpdateAction implements PaletteAction
             $line['warehouse_id'] = $this->preferredWarehouseId($companyId, $item->id);
         }
 
-        if (empty($line['expense_account_id'])) {
+        if ($item->track_inventory && $item->asset_account_id) {
+            // A tracked item's purchase has to land in inventory -- whatever
+            // account the request sent for this line is overridden.
+            $line['expense_account_id'] = $item->asset_account_id;
+        } elseif (empty($line['expense_account_id'])) {
             $line['expense_account_id'] = $item->asset_account_id ?: $item->expense_account_id;
         }
 
         return $line;
+    }
+
+    /**
+     * A bill line has to post to inventory (via the item) or an expense
+     * account -- never straight to cash/bank, which would double-count the
+     * money movement the bill payment itself already posts.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertLineAccountsValid(array $lines): void
+    {
+        foreach ($lines as $index => $line) {
+            $accountId = $line['expense_account_id'] ?? null;
+            if (!$accountId) {
+                continue;
+            }
+
+            $account = Account::find($accountId);
+            if ($account && in_array($account->subtype, ['cash', 'bank'], true)) {
+                throw ValidationException::withMessages([
+                    "line_items.{$index}.expense_account_id" => "A bill line can't post to a cash or bank account. Pick the item or an expense account.",
+                ]);
+            }
+        }
     }
 
     private function preferredWarehouseId(string $companyId, string $itemId): ?string

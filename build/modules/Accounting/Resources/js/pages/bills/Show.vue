@@ -128,6 +128,7 @@ const props = defineProps<{
   journalTransactionId?: string | null
   supplierClaims: SupplierClaim[]
   claimReceiptAccounts: ClaimReceiptAccount[]
+  editLock?: string | null
 }>()
 
 const { t } = useLexicon()
@@ -318,7 +319,7 @@ const submitClaimReceipt = () => {
 }
 
 // Determine which actions to show based on bill status
-const canEdit = computed(() => !['paid', 'void', 'cancelled'].includes(props.bill.status))
+const canEdit = computed(() => !['void', 'cancelled'].includes(props.bill.status) && !props.editLock)
 const canVoid = computed(() => ['received', 'partial', 'paid'].includes(props.bill.status))
 const canDelete = computed(() => props.bill.status === 'draft')
 
@@ -466,6 +467,12 @@ const navigateToVendor = () => {
           <Pencil class="mr-2 h-4 w-4" />
           {{ t('edit') }}
         </Button>
+        <span
+          v-else-if="editLock && !['void', 'cancelled'].includes(bill.status)"
+          class="self-center text-xs text-muted-foreground"
+        >
+          {{ editLock }}
+        </span>
         <Button v-if="canVoid" variant="outline" @click="openVoidDialog">
           <Ban class="mr-2 h-4 w-4" />
           {{ t('void') }}
@@ -623,11 +630,21 @@ const navigateToVendor = () => {
                 class="flex items-start gap-2 p-3 rounded-md bg-status-attention/10 border border-status-attention/30 text-status-attention text-xs"
               >
                 <Package class="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <div>
+                <div class="flex-1">
                   <p class="font-medium mb-1">No inventory items</p>
                   <p class="text-status-attention">
                     This bill has no linked inventory items. To track goods receipt, edit the bill and select inventory items for each line.
                   </p>
+                  <Button
+                    v-if="canEdit"
+                    size="sm"
+                    variant="outline"
+                    class="mt-2"
+                    @click="router.get(`/${company.slug}/bills/${bill.id}/edit`)"
+                  >
+                    <Pencil class="mr-2 h-4 w-4" />
+                    Edit bill
+                  </Button>
                 </div>
               </div>
             </div>

@@ -22,7 +22,7 @@ require_once __DIR__.'/OpeningBalanceFixtures.php';
 function openingView(array $f): array
 {
     return app(CompanyContextService::class)->withContext(
-        $f['company'],
+        $f['company']->fresh(),  // the request saved new settings; the fixture's copy predates them
         fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true)
     );
 }

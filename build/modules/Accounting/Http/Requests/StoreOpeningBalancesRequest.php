@@ -23,6 +23,7 @@ class StoreOpeningBalancesRequest extends BaseFormRequest
             'banks.*.account_id',
             'credit_customers.*.customer_id',
             'employees.*.employee_id',
+            'salaries_owed.*.employee_id',
             'amanat.*.customer_id',
             'suppliers.*.vendor_id',
             'partners.*.partner_id',

@@ -528,6 +528,64 @@ class PayrollPostingService
         });
     }
 
+    /**
+     * Remove a payslip from the table entirely. Not the same operation as void(): void keeps
+     * the record and marks it cancelled; this deletes the payslip and its lines outright, and
+     * is refused once the payslip has been paid (undo the payment first, then delete).
+     *
+     *  - draft: no accounting exists yet - delete the payslip and its lines.
+     *  - approved and unpaid: reverse its accrual journal (the same reversal path void() uses),
+     *    drop any salary-advance recoveries it created, then delete the payslip and its lines.
+     *  - paid: refused.
+     *
+     * Deliberately one transaction per payslip, called once per row from a bulk delete, so one
+     * payslip's refusal (e.g. paid) does not roll back the ones already deleted.
+     */
+    public function delete(Payslip $payslip, string $userId): void
+    {
+        DB::transaction(function () use ($payslip, $userId) {
+            $payslip->refresh()->load('payrollPeriod');
+
+            if ($payslip->status === 'paid') {
+                throw ValidationException::withMessages([
+                    'payslip' => 'Undo the payment first.',
+                ]);
+            }
+
+            if ($payslip->status === 'draft') {
+                $payslip->lines()->delete();
+                $payslip->delete();
+
+                return;
+            }
+
+            // Approved (or already cancelled) and unpaid: reverse the accrual if it has not
+            // already been reversed, exactly as void() does, then remove the payslip.
+            if ($payslip->gl_transaction_id) {
+                $transaction = Transaction::where('company_id', $payslip->company_id)
+                    ->find($payslip->gl_transaction_id);
+
+                if ($transaction && ! $transaction->reversed_by_id) {
+                    $accrualDate = optional($transaction->transaction_date)->toDateString()
+                        ?? optional($payslip->payrollPeriod?->period_end)->toDateString()
+                        ?? now()->toDateString();
+
+                    app(DocumentDateLock::class)->assertOpen($payslip->company_id, $accrualDate, 'This payslip');
+
+                    $this->reversalService->reverseTransaction($transaction, 'Payslip deleted');
+                }
+            }
+
+            SalaryAdvanceRecovery::where('company_id', $payslip->company_id)
+                ->where('payslip_id', $payslip->id)
+                ->where('recovery_type', 'payroll_deduction')
+                ->delete();
+
+            $payslip->lines()->delete();
+            $payslip->delete();
+        });
+    }
+
     public function void(Payslip $payslip, string $reason, string $userId): Payslip
     {
         return DB::transaction(function () use ($payslip, $reason, $userId) {

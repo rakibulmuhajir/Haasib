@@ -479,6 +479,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{company}/payslips', [PayslipController::class, 'index'])->name('payslips.index');
             Route::get('/{company}/payslips/create', [PayslipController::class, 'create'])->name('payslips.create');
             Route::post('/{company}/payslips', [PayslipController::class, 'store'])->name('payslips.store');
+            Route::post('/{company}/payslips/bulk-delete', [PayslipController::class, 'bulkDestroy'])->name('payslips.bulk-destroy');
             Route::get('/{company}/payslips/{payslip}', [PayslipController::class, 'show'])->whereUuid('payslip')->name('payslips.show');
             Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
             Route::put('/{company}/payslips/{payslip}', [PayslipController::class, 'update'])->whereUuid('payslip')->name('payslips.update');

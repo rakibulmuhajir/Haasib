@@ -31,6 +31,7 @@ final class OpeningSet
                 ->all(),
             'credit_customers' => self::carry($rows['credit_customers'] ?? [], 'customer_id'),
             'employees' => self::carry($rows['employees'] ?? [], 'employee_id'),
+            'salaries_owed' => self::carry($rows['salaries_owed'] ?? [], 'employee_id'),
             'amanat' => self::carry($rows['amanat'] ?? [], 'customer_id'),
             'suppliers' => self::carry($rows['suppliers'] ?? [], 'vendor_id'),
             'partners' => self::carry($rows['partners'] ?? [], 'partner_id'),

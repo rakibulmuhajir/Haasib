@@ -20,10 +20,14 @@ use App\Modules\Accounting\Services\PostingService;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
+use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -57,6 +61,9 @@ class SaveAction implements PaletteAction
             'employees' => 'nullable|array',
             'employees.*.employee_id' => ['required', 'uuid', Rule::exists(Employee::class, 'id')],
             'employees.*.amount' => 'required|numeric|gt:0',
+            'salaries_owed' => 'nullable|array',
+            'salaries_owed.*.employee_id' => ['required', 'uuid', Rule::exists(Employee::class, 'id')],
+            'salaries_owed.*.amount' => 'required|numeric|gt:0',
             'amanat' => 'nullable|array',
             'amanat.*.customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
             'amanat.*.amount' => 'required|numeric|gt:0',
@@ -114,11 +121,12 @@ class SaveAction implements PaletteAction
             $pending = [];   // closures run after the journal exists, receiving its per-line entry ids
             $this->addAmanatLines($company->id, $params, $accounts, $lines, $pending);
             $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            $this->addSalariesOwedLines($company->id, $params, $currency, $asOf, $lines, $pending);
             $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
 
             [$journalId, $entryIdsByLine] = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
             foreach ($pending as $create) {
-                $create($entryIdsByLine);
+                $create($entryIdsByLine, $journalId);
             }
 
             $invoiceIds = $this->createOpeningInvoices($company, $params, $accounts, $asOf, $currency);
@@ -248,6 +256,7 @@ class SaveAction implements PaletteAction
         'banks' => 'account_id',
         'credit_customers' => 'customer_id',
         'employees' => 'employee_id',
+        'salaries_owed' => 'employee_id',
         'amanat' => 'customer_id',
         'suppliers' => 'vendor_id',
         'partners' => 'partner_id',
@@ -414,6 +423,7 @@ class SaveAction implements PaletteAction
 
         $amanatByJournal = [];
         $advancesByJournal = [];
+        $salariesOwedByJournal = [];
 
         // ---- Pass 1: validate only, mutate nothing ----
         foreach ($invoices as $invoice) {
@@ -447,6 +457,17 @@ class SaveAction implements PaletteAction
                 }
             }
             $advancesByJournal[$journal->id] = $advances;
+
+            $salariesOwed = Payslip::where('company_id', $companyId)
+                ->where('gl_transaction_id', $journal->id)
+                ->where('notes', self::MARK)
+                ->get();
+            foreach ($salariesOwed as $salaryPayslip) {
+                if ($salaryPayslip->status === 'paid' || $salaryPayslip->payment_gl_transaction_id) {
+                    throw ValidationException::withMessages(['salaries_owed' => 'An opening salary has already been paid; cannot re-enter opening balances.']);
+                }
+            }
+            $salariesOwedByJournal[$journal->id] = $salariesOwed;
         }
 
         // ---- Pass 2: mutate ----
@@ -467,6 +488,11 @@ class SaveAction implements PaletteAction
                 // SalaryAdvance uses SoftDeletes; a soft-deleted row would still be found by a
                 // later scoped query, so it must be force-deleted on re-entry.
                 $advance->forceDelete();
+            }
+
+            foreach ($salariesOwedByJournal[$journal->id] as $salaryPayslip) {
+                $salaryPayslip->lines()->delete();
+                $salaryPayslip->delete();
             }
 
             PartnerTransaction::whereIn('journal_entry_id', $journal->journalEntries->pluck('id')->all())->delete();
@@ -603,6 +629,66 @@ class SaveAction implements PaletteAction
                     'journal_entry_id' => $entryIdsByLine[$lineIndex],
                     'advance_account_id' => $accounts['employee_advances'],
                     'recorded_by_user_id' => Auth::id(),
+                ]);
+            };
+        }
+    }
+
+    /**
+     * A salary earned before the opening date and not yet paid: posted Cr against the same
+     * salaries-payable account a payroll payment later debits (PayrollPostingService's account
+     * resolution, e.g. 2211 "Payroll Salaries Payable") so paying it off nets that account back
+     * to zero. Unlike the other sections this creates a real, approved payslip the payroll
+     * module can pay normally - the opening journal line IS its accrual, so no second accrual is
+     * ever posted for it (Payslip::gl_transaction_id points straight at this journal).
+     */
+    private function addSalariesOwedLines(string $companyId, array $params, string $currency, string $asOf, array &$lines, array &$pending): void
+    {
+        $rows = array_filter($params['salaries_owed'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+
+        $payrollService = app(PayrollPostingService::class);
+        $payrollPayableAccountId = $payrollService->ensureDefaultPayrollAccounts($companyId)['payroll_payable']['id'];
+        $earningType = $payrollService->ensureBaseSalaryEarningType($companyId);
+
+        foreach ($rows as $row) {
+            $employee = Employee::where('company_id', $companyId)->findOrFail($row['employee_id']);
+            $amount = round((float) $row['amount'], 2);
+            $employeeId = $employee->id;
+            $employeeName = trim(($employee->first_name ?? '').' '.($employee->last_name ?? ''));
+            $lines[] = ['account_id' => $payrollPayableAccountId, 'type' => 'credit', 'amount' => $amount, 'description' => "Salary owed at opening — {$employeeName}"];
+            $pending[] = function (array $entryIdsByLine, ?string $journalId) use ($companyId, $employeeId, $amount, $currency, $asOf, $earningType, $payrollService) {
+                $periodStart = Carbon::parse($asOf)->startOfMonth()->toDateString();
+                $period = PayrollPeriod::firstOrCreate(
+                    ['company_id' => $companyId, 'period_start' => $periodStart, 'period_end' => $asOf],
+                    ['payment_date' => $asOf, 'status' => 'open'],
+                );
+
+                $payslip = Payslip::create([
+                    'company_id' => $companyId,
+                    'payroll_period_id' => $period->id,
+                    'employee_id' => $employeeId,
+                    'payslip_number' => $payrollService->nextPayslipNumber($companyId),
+                    'currency' => $currency,
+                    'exchange_rate' => null,
+                    'base_currency' => $currency,
+                    'status' => 'approved',
+                    'approved_at' => now(),
+                    'approved_by_user_id' => Auth::id(),
+                    'gl_transaction_id' => $journalId,
+                    'notes' => self::MARK,
+                ]);
+
+                $payslip->lines()->create([
+                    'line_type' => 'earning',
+                    'earning_type_id' => $earningType->id,
+                    'description' => 'Salary owed at opening',
+                    'quantity' => 1,
+                    'rate' => $amount,
+                    'amount' => $amount,
+                    'sort_order' => 1,
                 ]);
             };
         }

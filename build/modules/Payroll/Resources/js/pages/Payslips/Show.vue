@@ -195,7 +195,7 @@ const submitUndoPayment = () => {
 };
 
 const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this draft payslip?')) {
+    if (confirm('Are you sure you want to delete this payslip?')) {
         router.delete(
             `/${props.company.slug}/payslips/${props.payslip.id}`,
         );
@@ -249,7 +249,7 @@ const handleVoid = () => {
                 Undo Payment
             </Button>
             <Button
-                v-if="canDeletePayslips && payslip.status === 'draft'"
+                v-if="canDeletePayslips && ['draft', 'approved'].includes(payslip.status)"
                 variant="destructive"
                 @click="handleDelete"
             >

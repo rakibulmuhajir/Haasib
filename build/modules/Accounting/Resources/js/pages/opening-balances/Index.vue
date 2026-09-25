@@ -28,6 +28,7 @@ interface Opening {
     banks: { account_id: string; account_name: string; amount: number }[]
     credit_customers: { customer_id: string; customer_name: string; amount: number }[]
     employees: { employee_id: string; employee_name: string; amount: number }[]
+    salaries_owed: { employee_id: string; employee_name: string; amount: number; payslip_id?: string; paid?: boolean }[]
     amanat: { customer_id: string; customer_name: string; amount: number }[]
     suppliers: { vendor_id: string; vendor_name: string; amount: number }[]
     partners: { partner_id: string; partner_name: string; amount: number }[]
@@ -76,6 +77,7 @@ function fieldsFromOpening(o: Opening) {
     banks: o.rows.banks.map(r => ({ account_id: r.account_id, amount: r.amount })),
     credit_customers: o.rows.credit_customers.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
     employees: o.rows.employees.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
+    salaries_owed: o.rows.salaries_owed.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
     amanat: o.rows.amanat.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
     suppliers: o.rows.suppliers.map(r => ({ vendor_id: r.vendor_id, amount: r.amount })),
     partners: o.rows.partners.map(r => ({ partner_id: r.partner_id, amount: r.amount })),
@@ -102,6 +104,7 @@ function seedFromOpening(o: Opening) {
   form.banks = fields.banks
   form.credit_customers = fields.credit_customers
   form.employees = fields.employees
+  form.salaries_owed = fields.salaries_owed
   form.amanat = fields.amanat
   form.suppliers = fields.suppliers
   form.partners = fields.partners
@@ -123,9 +126,9 @@ watch(
 
 const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + Number(r.amount || 0), 0)
 const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees))
-const liabilities = computed(() => sum(form.amanat) + sum(form.suppliers) + sum(form.partners))
+const liabilities = computed(() => sum(form.amanat) + sum(form.suppliers) + sum(form.partners) + sum(form.salaries_owed))
 const equity = computed(() => assets.value - liabilities.value)
-const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.amanat.length + form.suppliers.length + form.partners.length)
+const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.salaries_owed.length + form.amanat.length + form.suppliers.length + form.partners.length)
 
 const dateGuardMessage = computed(() => {
   const earliest = props.opening.earliest_transaction_date
@@ -135,7 +138,7 @@ const dateGuardMessage = computed(() => {
 const canSave = computed(() => editable.value && rowCount.value > 0 && !!form.as_of_date && !dateGuardMessage.value && !form.processing)
 const canLock = computed(() => props.canManage && !locked.value && !!props.opening.as_of_date)
 
-const open = reactive({ cash: true, credit: true, employees: true, amanat: true, suppliers: true, partners: false })
+const open = reactive({ cash: true, credit: true, employees: true, salariesOwed: true, amanat: true, suppliers: true, partners: false })
 
 const err = (key: string) => (form.errors as Record<string, string>)[key]
 
@@ -322,6 +325,48 @@ function lock() {
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.employees.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
               <Button v-if="editable" variant="outline" size="sm" @click="form.employees.push({ employee_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add employee</Button>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      <!-- Salaries owed -->
+      <Card>
+        <Collapsible v-model:open="open.salariesOwed">
+          <CardHeader>
+            <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
+              <div>
+                <CardTitle>Salaries owed</CardTitle>
+                <CardDescription>
+                  Salaries earned before the opening date and not yet paid. Each becomes a payslip due on the opening date.
+                </CardDescription>
+              </div>
+              <span class="flex items-center gap-3 text-sm">
+                <MoneyText :amount="sum(form.salaries_owed)" :currency="currency" :fraction-digits="0" />
+                <ChevronDown class="h-4 w-4" />
+              </span>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-3">
+              <InputError :message="err('salaries_owed')" />
+              <div v-for="(row, i) in form.salaries_owed" :key="'sal-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
+                <div class="grid gap-1">
+                  <Label :for="`salaries_owed-${i}-employee_id`" :class="i === 0 ? undefined : 'sr-only'">Employee</Label>
+                  <Select v-model="row.employee_id" :disabled="!editable">
+                    <SelectTrigger :id="`salaries_owed-${i}-employee_id`"><SelectValue placeholder="Choose employee" /></SelectTrigger>
+                    <SelectContent><SelectItem v-for="e in opening.options.employees" :key="e.id" :value="e.id">{{ e.name }}</SelectItem></SelectContent>
+                  </Select>
+                  <InputError :message="err(`salaries_owed.${i}.employee_id`)" />
+                </div>
+                <div class="grid gap-1">
+                  <Label :for="`salaries_owed-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Owed</Label>
+                  <Input :id="`salaries_owed-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <InputError :message="err(`salaries_owed.${i}.amount`)" />
+                </div>
+                <Button v-if="editable" variant="ghost" size="icon" @click="form.salaries_owed.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
+              </div>
+              <Button v-if="editable" variant="outline" size="sm" @click="form.salaries_owed.push({ employee_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add employee</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>

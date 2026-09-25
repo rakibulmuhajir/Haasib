@@ -17,6 +17,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 
 class ViewAction implements PaletteAction
@@ -80,6 +81,18 @@ class ViewAction implements PaletteAction
             ->map(fn ($a) => ['employee_id' => $a->employee_id, 'employee_name' => trim(($a->employee?->first_name ?? '').' '.($a->employee?->last_name ?? '')), 'amount' => (float) $a->amount, 'recovered' => (float) $a->amount_recovered])->values()->all() : [];
         $partners = $journal ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
             ->map(fn ($p) => ['partner_id' => $p->partner_id, 'partner_name' => $p->partner?->name, 'amount' => (float) $p->amount])->values()->all() : [];
+        $salariesOwed = $journal ? Payslip::where('company_id', $companyId)
+            ->where('gl_transaction_id', $journal->id)
+            ->where('notes', SaveAction::MARK)
+            ->with('employee:id,first_name,last_name')
+            ->get()
+            ->map(fn ($p) => [
+                'employee_id' => $p->employee_id,
+                'employee_name' => trim(($p->employee?->first_name ?? '').' '.($p->employee?->last_name ?? '')),
+                'amount' => (float) $p->net_pay,
+                'payslip_id' => $p->id,
+                'paid' => $p->status === 'paid',
+            ])->values()->all() : [];
 
         // Opening invoices/bills are identified by the ids stored in settings — never by the
         // internal_notes marker, which a void action can overwrite (Bill\VoidAction appends
@@ -96,7 +109,7 @@ class ViewAction implements PaletteAction
             ->map(fn ($b) => ['vendor_id' => $b->vendor_id, 'vendor_name' => $b->vendor?->name, 'amount' => (float) $b->total_amount, 'bill_id' => $b->id, 'paid_amount' => (float) $b->paid_amount])->values()->all();
 
         $assets = $cash + array_sum(array_column($banks, 'amount')) + array_sum(array_column($creditCustomers, 'amount')) + array_sum(array_column($employees, 'amount'));
-        $liabilities = array_sum(array_column($amanat, 'amount')) + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount'));
+        $liabilities = array_sum(array_column($amanat, 'amount')) + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount')) + array_sum(array_column($salariesOwed, 'amount'));
 
         $earliest = SaveAction::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
@@ -114,6 +127,7 @@ class ViewAction implements PaletteAction
                 'banks' => $banks,
                 'credit_customers' => $creditCustomers,
                 'employees' => $employees,
+                'salaries_owed' => $salariesOwed,
                 'amanat' => $amanat,
                 'suppliers' => $suppliers,
                 'partners' => $partners,

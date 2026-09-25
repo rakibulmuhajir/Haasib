@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -109,6 +110,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
+  { key: '_select', label: '', sortable: false },
   { key: 'payslip_number', label: 'Number', kind: 'ref' as const },
   { key: 'employee', label: 'Employee', kind: 'text' as const },
   { key: 'period', label: 'Period', kind: 'date' as const },
@@ -208,6 +210,50 @@ const handleDelete = (id: string) => {
   }
 }
 
+// Row selection for bulk delete: which rows on the page currently showing are
+// checked. Paid payslips can be selected too - the server skips them and
+// reports the skip count rather than the page trying to predict that itself.
+const selectedIds = ref<Set<string>>(new Set())
+
+const allSelected = computed(
+  () => props.payslips.data.length > 0 && props.payslips.data.every((p) => selectedIds.value.has(p.id)),
+)
+const someSelected = computed(() => props.payslips.data.some((p) => selectedIds.value.has(p.id)))
+const headerCheckboxState = computed<boolean | 'indeterminate'>(() => {
+  if (allSelected.value) return true
+  if (someSelected.value) return 'indeterminate'
+  return false
+})
+
+const toggleSelectAll = (value: boolean | 'indeterminate') => {
+  selectedIds.value = value === true ? new Set(props.payslips.data.map((p) => p.id)) : new Set()
+}
+
+const toggleRowSelected = (id: string, value: boolean | 'indeterminate') => {
+  const next = new Set(selectedIds.value)
+  if (value === true) next.add(id)
+  else next.delete(id)
+  selectedIds.value = next
+}
+
+const showBulkDeleteDialog = ref(false)
+const bulkDeleteForm = useForm<{ ids: string[] }>({ ids: [] })
+
+const openBulkDeleteDialog = () => {
+  bulkDeleteForm.ids = Array.from(selectedIds.value)
+  showBulkDeleteDialog.value = true
+}
+
+const submitBulkDelete = () => {
+  bulkDeleteForm.post(`/${props.company.slug}/payslips/bulk-delete`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showBulkDeleteDialog.value = false
+      selectedIds.value = new Set()
+    },
+  })
+}
+
 const handleVoid = (id: string) => {
   const reason = window.prompt('Why is this payslip being voided?')?.trim()
   if (reason) {
@@ -225,6 +271,14 @@ const handleVoid = (id: string) => {
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <Button
+        v-if="canDeletePayslips && selectedIds.size > 0"
+        variant="destructive"
+        @click="openBulkDeleteDialog"
+      >
+        <Trash2 class="mr-2 h-4 w-4" />
+        Delete selected ({{ selectedIds.size }})
+      </Button>
       <Button @click="router.get(`/${company.slug}/payslips/create`)">
         <Plus class="mr-2 h-4 w-4" />
         Create Payslip
@@ -257,6 +311,25 @@ const handleVoid = (id: string) => {
       }"
       @row-click="handleRowClick"
     >
+      <template v-if="canDeletePayslips" #header-_select>
+        <Checkbox
+          :model-value="headerCheckboxState"
+          aria-label="Select all payslips shown"
+          @click.stop
+          @update:model-value="toggleSelectAll"
+        />
+      </template>
+
+      <template #cell-_select="{ row }">
+        <Checkbox
+          v-if="canDeletePayslips"
+          :model-value="selectedIds.has(row.id)"
+          :aria-label="`Select payslip ${row.payslip_number}`"
+          @click.stop
+          @update:model-value="(value) => toggleRowSelected(row.id, value)"
+        />
+      </template>
+
       <template #cell-status="{ row }">
         <StatusBadge :status="row._raw.status" />
       </template>
@@ -295,7 +368,7 @@ const handleVoid = (id: string) => {
               Undo Payment
             </DropdownMenuItem>
             <DropdownMenuItem
-              v-if="canDeletePayslips && row._raw.status === 'draft'"
+              v-if="canDeletePayslips && ['draft', 'approved'].includes(row._raw.status)"
               class="text-destructive"
               @click="handleDelete(row.id)"
             >
@@ -413,6 +486,30 @@ const handleVoid = (id: string) => {
           @click="submitUndoPayment"
         >
           {{ undoPaymentForm.processing ? 'Undoing...' : 'Undo Payment' }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog v-model:open="showBulkDeleteDialog">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Delete {{ bulkDeleteForm.ids.length }} payslips?</DialogTitle>
+        <DialogDescription>
+          Paid ones are skipped.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button type="button" variant="outline" @click="showBulkDeleteDialog = false">
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          :disabled="bulkDeleteForm.processing"
+          @click="submitBulkDelete"
+        >
+          {{ bulkDeleteForm.processing ? 'Deleting...' : 'Delete selected' }}
         </Button>
       </DialogFooter>
     </DialogContent>

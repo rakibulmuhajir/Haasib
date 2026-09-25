@@ -5,6 +5,7 @@ namespace App\Modules\Payroll\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Payroll\Http\Requests\ApprovePayslipRequest;
+use App\Modules\Payroll\Http\Requests\BulkDeletePayslipsRequest;
 use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
@@ -448,22 +449,64 @@ class PayslipController extends Controller
         return back()->with('success', "{$paid} payslips marked paid and posted.");
     }
 
-    public function destroy(DeletePayslipRequest $request, string $companySlug, string $payslipId): RedirectResponse
+    public function destroy(DeletePayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
         $this->setPayrollContext($company->id);
 
         $payslip = Payslip::where('company_id', $company->id)->findOrFail($payslipId);
 
-        if ($payslip->status !== 'draft') {
-            return back()->with('error', 'Only draft payslips can be deleted.');
-        }
+        try {
+            $payrollPostingService->delete($payslip, (string) $request->user()->id);
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first() ?? 'Payslip could not be deleted.');
+        } catch (\Throwable $e) {
+            report($e);
 
-        $payslip->delete();
+            return back()->with('error', 'Payslip could not be deleted.');
+        }
 
         return redirect()
             ->route('payslips.index', ['company' => $company->slug])
             ->with('success', 'Payslip deleted successfully.');
+    }
+
+    /**
+     * Delete several payslips at once from the index's select all/some/none checkboxes. Paid
+     * ones are skipped rather than failing the whole batch - each payslip runs in its own
+     * transaction (PayrollPostingService::delete), so one refusal never undoes another row's
+     * deletion.
+     */
+    public function bulkDestroy(BulkDeletePayslipsRequest $request, PayrollPostingService $payrollPostingService, string $companySlug): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $payslips = Payslip::where('company_id', $company->id)
+            ->whereIn('id', $request->validated('ids'))
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+
+        foreach ($payslips as $payslip) {
+            try {
+                $payrollPostingService->delete($payslip, (string) $request->user()->id);
+                $deleted++;
+            } catch (ValidationException) {
+                $skipped++;
+            } catch (\Throwable $e) {
+                report($e);
+                $skipped++;
+            }
+        }
+
+        $message = "{$deleted} deleted";
+        if ($skipped > 0) {
+            $message .= ", {$skipped} skipped (paid)";
+        }
+
+        return back()->with('success', $message);
     }
 
     public function void(VoidPayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse

@@ -484,6 +484,7 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{company}/payslips/{payslip}', [PayslipController::class, 'update'])->whereUuid('payslip')->name('payslips.update');
             Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
             Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
+            Route::post('/{company}/payslips/{payslip}/reverse-payment', [PayslipController::class, 'reversePayment'])->whereUuid('payslip')->name('payslips.reverse-payment');
             Route::post('/{company}/payslips/{payslip}/void', [PayslipController::class, 'void'])->whereUuid('payslip')->name('payslips.void');
             Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
 

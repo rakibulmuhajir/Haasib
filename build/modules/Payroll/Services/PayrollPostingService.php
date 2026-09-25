@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Payroll\Models\DeductionType;
@@ -397,6 +398,13 @@ class PayrollPostingService
         });
     }
 
+    /**
+     * $data['paid_on'] is the business date the payment actually happened on - the date the
+     * caller chose, not the payroll period's payment_date (which is only ever a plan). Every
+     * caller (the payslip form, the bulk pay-period action) must supply it; the daily close
+     * pays payslips through its own posting instead of this method, and stamps its own
+     * business date directly.
+     */
     public function markPaid(Payslip $payslip, array $data, string $userId): ?Transaction
     {
         return DB::transaction(function () use ($payslip, $data, $userId) {
@@ -419,6 +427,11 @@ class PayrollPostingService
                     ->find($payslip->payment_gl_transaction_id);
             }
 
+            $paidOn = $data['paid_on'] ?? now()->toDateString();
+
+            app(DocumentDateLock::class)
+                ->assertOpen($payslip->company_id, $paidOn, 'This payment');
+
             $netPay = round((float) $payslip->net_pay, 2);
             $transaction = null;
 
@@ -428,7 +441,7 @@ class PayrollPostingService
                 $transaction = $this->postingService->postBalancedTransaction([
                     'company_id' => $payslip->company_id,
                     'transaction_type' => 'payroll_payment',
-                    'date' => $payslip->payrollPeriod->payment_date,
+                    'date' => $paidOn,
                     'currency' => $payslip->currency,
                     'base_currency' => $payslip->base_currency,
                     'exchange_rate' => $payslip->exchange_rate,
@@ -458,13 +471,60 @@ class PayrollPostingService
 
             $payslip->update([
                 'status' => 'paid',
-                'paid_at' => now(),
+                'paid_at' => $paidOn,
                 'payment_method' => $data['payment_method'] ?? 'bank_transfer',
                 'payment_reference' => $data['payment_reference'] ?? null,
                 'payment_gl_transaction_id' => $transaction?->id,
             ]);
 
             return $transaction;
+        });
+    }
+
+    /**
+     * Undo a payment recorded on the wrong date (or any other mistaken payment) without
+     * touching the underlying payroll accrual: reverse the payment journal, dated the same day
+     * as the payment itself (as every other reversal is), and put the payslip back to approved
+     * so it can be paid again with the right date.
+     */
+    public function reversePayment(Payslip $payslip, string $userId, ?string $reason = null): Payslip
+    {
+        return DB::transaction(function () use ($payslip, $userId, $reason) {
+            $payslip->refresh();
+
+            if ($payslip->status !== 'paid') {
+                throw ValidationException::withMessages([
+                    'payslip' => 'Only a paid payslip has a payment to undo.',
+                ]);
+            }
+
+            if (! $payslip->payment_gl_transaction_id) {
+                throw ValidationException::withMessages([
+                    'payslip' => 'This payslip has no payment posting to reverse.',
+                ]);
+            }
+
+            $transaction = Transaction::where('company_id', $payslip->company_id)
+                ->findOrFail($payslip->payment_gl_transaction_id);
+
+            $paymentDate = optional($payslip->paid_at)->toDateString()
+                ?? $transaction->date?->toDateString()
+                ?? now()->toDateString();
+
+            app(DocumentDateLock::class)
+                ->assertOpen($payslip->company_id, $paymentDate, 'This payment');
+
+            $this->reversalService->reverseTransaction($transaction, $reason ?? 'Payment undone', $paymentDate);
+
+            $payslip->update([
+                'status' => 'approved',
+                'paid_at' => null,
+                'payment_method' => null,
+                'payment_reference' => null,
+                'payment_gl_transaction_id' => null,
+            ]);
+
+            return $payslip->refresh();
         });
     }
 

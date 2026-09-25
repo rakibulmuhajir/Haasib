@@ -150,6 +150,8 @@ interface PayrollPayout {
     employee_number: string | null;
     amount: number;
     approved_at: string | null;
+    payment_date?: string | null;
+    due_label?: string | null;
 }
 
 interface AmanatHolder {
@@ -5745,6 +5747,12 @@ const completedWorkflowSteps = computed(() => {
                                                         )
                                                     }}</span
                                                 >
+                                            </p>
+                                            <p
+                                                v-if="payout.due_label"
+                                                class="text-xs font-medium text-status-attention"
+                                            >
+                                                {{ payout.due_label }}
                                             </p>
                                         </div>
                                         <span

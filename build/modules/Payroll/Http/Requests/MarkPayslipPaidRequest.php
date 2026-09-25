@@ -23,6 +23,7 @@ class MarkPayslipPaidRequest extends BaseFormRequest
         $company = app(CurrentCompany::class)->get();
 
         return [
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
             'payment_method' => ['nullable', 'string', Rule::in(['bank_transfer', 'check', 'cheque', 'cash'])],
             'payment_reference' => ['nullable', 'string', 'max:100'],
             'payment_account_id' => [

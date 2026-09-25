@@ -98,18 +98,27 @@ class DailyCloseController extends Controller
                 // Wages belong to the close for the day they are paid - see Payslip::payableOn.
                 ->payableOn($date)
                 ->where('net_pay', '>', 0)
-                ->with('employee:id,first_name,last_name,employee_number')
+                ->with(['employee:id,first_name,last_name,employee_number', 'payrollPeriod:id,payment_date'])
                 ->orderBy('approved_at')
-                ->get(['id', 'company_id', 'employee_id', 'payslip_number', 'net_pay', 'approved_at'])
-                ->map(fn (Payslip $payslip) => [
-                    'payslip_id' => $payslip->id,
-                    'payslip_number' => $payslip->payslip_number,
-                    'employee_id' => $payslip->employee_id,
-                    'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
-                    'employee_number' => $payslip->employee?->employee_number,
-                    'amount' => (float) $payslip->net_pay,
-                    'approved_at' => $payslip->approved_at?->toISOString(),
-                ]);
+                ->get(['id', 'company_id', 'employee_id', 'payroll_period_id', 'payslip_number', 'net_pay', 'approved_at'])
+                ->map(function (Payslip $payslip) use ($date) {
+                    $paymentDate = $payslip->payrollPeriod?->payment_date?->toDateString();
+                    $isOverdue = $paymentDate && $paymentDate < $date;
+
+                    return [
+                        'payslip_id' => $payslip->id,
+                        'payslip_number' => $payslip->payslip_number,
+                        'employee_id' => $payslip->employee_id,
+                        'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
+                        'employee_number' => $payslip->employee?->employee_number,
+                        'amount' => (float) $payslip->net_pay,
+                        'approved_at' => $payslip->approved_at?->toISOString(),
+                        'payment_date' => $paymentDate,
+                        // "Due since {date}" when the pay day was earlier than this close's
+                        // business date; otherwise the wage is due exactly on this close.
+                        'due_label' => $isOverdue ? "Due since {$paymentDate}" : null,
+                    ];
+                });
         } catch (\Throwable $e) {
             return collect();
         }

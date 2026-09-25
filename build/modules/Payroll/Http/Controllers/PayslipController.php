@@ -3,10 +3,12 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Payroll\Http\Requests\ApprovePayslipRequest;
 use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
+use App\Modules\Payroll\Http\Requests\ReversePayslipPaymentRequest;
 use App\Modules\Payroll\Http\Requests\VoidPayslipRequest;
 use App\Modules\Payroll\Http\Requests\StorePayslipRequest;
 use App\Modules\Payroll\Http\Requests\UpdatePayslipRequest;
@@ -30,6 +32,21 @@ class PayslipController extends Controller
     private function setPayrollContext(string $companyId): void
     {
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
+    }
+
+    /**
+     * Cash and bank accounts a "Mark as paid" dialog may post the payment from - the same
+     * subtypes MarkPayslipPaidRequest's payment_account_id rule accepts.
+     */
+    private function paymentAccountOptions(string $companyId): array
+    {
+        return Account::where('company_id', $companyId)
+            ->whereIn('subtype', ['bank', 'cash'])
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'subtype'])
+            ->toArray();
     }
 
     public function index(Request $request): Response
@@ -76,6 +93,7 @@ class PayslipController extends Controller
             'payslips' => $payslips,
             'filters' => $request->only(['search', 'status', 'period_id', 'employee_id', 'start_date', 'end_date']),
             'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
+            'paymentAccounts' => $this->paymentAccountOptions($company->id),
         ]);
     }
 
@@ -181,8 +199,16 @@ class PayslipController extends Controller
                 'lines.deductionType:id,code,name',
                 'lines.salaryAdvance:id,advance_date',
                 'approvedBy:id,name',
+                'paymentGlTransaction.journalEntries.account:id,code,name',
             ])
             ->findOrFail($payslipId);
+
+        $paidFromAccount = $payslip->paymentGlTransaction?->journalEntries
+            ->first(fn ($entry) => (float) $entry->credit_amount > 0)
+            ?->account;
+
+        $payslipData = $payslip->toArray();
+        $payslipData['paid_from_account_name'] = $paidFromAccount?->name;
 
         return Inertia::render('Payroll/Payslips/Show', [
             'company' => [
@@ -191,8 +217,9 @@ class PayslipController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
-            'payslip' => $payslip,
+            'payslip' => $payslipData,
             'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
+            'paymentAccounts' => $this->paymentAccountOptions($company->id),
         ]);
     }
 
@@ -323,6 +350,26 @@ class PayslipController extends Controller
         }
 
         return back()->with('success', 'Payslip marked paid and posted to accounting.');
+    }
+
+    public function reversePayment(ReversePayslipPaymentRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $payslip = Payslip::where('company_id', $company->id)->findOrFail($payslipId);
+
+        try {
+            $payrollPostingService->reversePayment($payslip, (string) $request->user()->id, $request->validated('reason'));
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first() ?? 'Payment could not be undone.');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Payment could not be undone because the reversal failed.');
+        }
+
+        return back()->with('success', 'Payment undone. The payslip is approved and unpaid again.');
     }
 
     public function generateForPeriod(GeneratePeriodPayslipsRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $periodId): RedirectResponse

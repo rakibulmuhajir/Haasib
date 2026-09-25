@@ -2,14 +2,34 @@
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import InputError from '@/components/InputError.vue';
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { localToday } from '@/composables/useEntryDate';
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, Ban, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, Ban, CheckCircle, DollarSign, Printer, RotateCcw, Trash2 } from 'lucide-vue-next';
 import { formatMoneyText } from '@/lib/money';
 import MoneyText from '@/components/MoneyText.vue';
+import { ref } from 'vue';
 
 interface CompanyRef {
     id: string;
@@ -64,14 +84,26 @@ interface Payslip {
     created_at: string;
     gl_transaction_id?: string | null;
     payment_gl_transaction_id?: string | null;
+    paid_at?: string | null;
+    payment_method?: string | null;
+    payment_reference?: string | null;
+    paid_from_account_name?: string | null;
     voided_at?: string | null;
     void_reason?: string | null;
+}
+
+interface PaymentAccount {
+    id: string;
+    code: string;
+    name: string;
+    subtype: string;
 }
 
 const props = defineProps<{
     company: CompanyRef;
     payslip: Payslip;
     canDeletePayslips: boolean;
+    paymentAccounts: PaymentAccount[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -111,9 +143,54 @@ const handleApprove = () => {
     router.post(`/${props.company.slug}/payslips/${props.payslip.id}/approve`);
 };
 
-const handleMarkPaid = () => {
-    router.post(
+const paymentMethods = [
+    { value: 'bank_transfer', label: 'Bank Transfer' },
+    { value: 'cash', label: 'Cash' },
+    { value: 'check', label: 'Check' },
+    { value: 'cheque', label: 'Cheque' },
+];
+
+const showMarkPaidDialog = ref(false);
+const markPaidForm = useForm({
+    paid_on: localToday(),
+    payment_method: 'bank_transfer',
+    payment_account_id: '',
+    payment_reference: '',
+});
+
+const openMarkPaidDialog = () => {
+    markPaidForm.reset();
+    markPaidForm.paid_on = localToday();
+    showMarkPaidDialog.value = true;
+};
+
+const submitMarkPaid = () => {
+    markPaidForm.post(
         `/${props.company.slug}/payslips/${props.payslip.id}/mark-paid`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                showMarkPaidDialog.value = false;
+            },
+        },
+    );
+};
+
+const showUndoPaymentDialog = ref(false);
+const undoPaymentForm = useForm({
+    reason: '',
+});
+
+const submitUndoPayment = () => {
+    undoPaymentForm.post(
+        `/${props.company.slug}/payslips/${props.payslip.id}/reverse-payment`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                showUndoPaymentDialog.value = false;
+                undoPaymentForm.reset();
+            },
+        },
     );
 };
 
@@ -158,10 +235,18 @@ const handleVoid = () => {
             </Button>
             <Button
                 v-if="payslip.status === 'approved'"
-                @click="handleMarkPaid"
+                @click="openMarkPaidDialog"
             >
                 <DollarSign class="mr-2 h-4 w-4" />
                 Mark Paid
+            </Button>
+            <Button
+                v-if="payslip.status === 'paid'"
+                variant="outline"
+                @click="showUndoPaymentDialog = true"
+            >
+                <RotateCcw class="mr-2 h-4 w-4" />
+                Undo Payment
             </Button>
             <Button
                 v-if="canDeletePayslips && payslip.status === 'draft'"
@@ -415,6 +500,18 @@ const handleVoid = () => {
                             }}</span>
                         </div>
                         <div
+                            v-if="payslip.status === 'paid' && payslip.paid_at"
+                            class="flex justify-between"
+                        >
+                            <span class="text-muted-foreground">Paid on</span>
+                            <span class="font-medium">
+                                {{ formatDate(payslip.paid_at) }}
+                                <template v-if="payslip.paid_from_account_name">
+                                    from {{ payslip.paid_from_account_name }}
+                                </template>
+                            </span>
+                        </div>
+                        <div
                             v-if="payslip.currency !== payslip.base_currency"
                             class="flex justify-between"
                         >
@@ -458,4 +555,122 @@ const handleVoid = () => {
             </div>
         </div>
     </PageShell>
+
+    <Dialog v-model:open="showMarkPaidDialog">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Mark Payslip Paid</DialogTitle>
+                <DialogDescription>
+                    Record the payment for {{ payslip.payslip_number }} and post it to accounting.
+                </DialogDescription>
+            </DialogHeader>
+            <div class="space-y-4">
+                <div>
+                    <Label for="paid_on">Paid on</Label>
+                    <Input
+                        id="paid_on"
+                        v-model="markPaidForm.paid_on"
+                        type="date"
+                        :max="localToday()"
+                        required
+                    />
+                    <InputError :message="markPaidForm.errors.paid_on" />
+                </div>
+                <div>
+                    <Label for="payment_account_id">Account</Label>
+                    <Select v-model="markPaidForm.payment_account_id">
+                        <SelectTrigger id="payment_account_id">
+                            <SelectValue placeholder="Select cash or bank account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                v-for="account in paymentAccounts"
+                                :key="account.id"
+                                :value="account.id"
+                            >
+                                {{ account.code }} — {{ account.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError :message="markPaidForm.errors.payment_account_id" />
+                </div>
+                <div>
+                    <Label for="payment_method">Payment method</Label>
+                    <Select v-model="markPaidForm.payment_method">
+                        <SelectTrigger id="payment_method">
+                            <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                v-for="method in paymentMethods"
+                                :key="method.value"
+                                :value="method.value"
+                            >
+                                {{ method.label }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError :message="markPaidForm.errors.payment_method" />
+                </div>
+                <div>
+                    <Label for="payment_reference">Reference (optional)</Label>
+                    <Input
+                        id="payment_reference"
+                        v-model="markPaidForm.payment_reference"
+                    />
+                    <InputError :message="markPaidForm.errors.payment_reference" />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="showMarkPaidDialog = false"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    type="button"
+                    :disabled="markPaidForm.processing"
+                    @click="submitMarkPaid"
+                >
+                    {{ markPaidForm.processing ? 'Saving...' : 'Mark Paid' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showUndoPaymentDialog">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Undo Payment</DialogTitle>
+                <DialogDescription>
+                    Reverses the payment journal and puts this payslip back to approved and
+                    unpaid so it can be paid again, on the right date.
+                </DialogDescription>
+            </DialogHeader>
+            <div>
+                <Label for="undo_reason">Reason (optional)</Label>
+                <Input id="undo_reason" v-model="undoPaymentForm.reason" />
+                <InputError :message="undoPaymentForm.errors.reason" />
+            </div>
+            <DialogFooter>
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="showUndoPaymentDialog = false"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    type="button"
+                    variant="destructive"
+                    :disabled="undoPaymentForm.processing"
+                    @click="submitUndoPayment"
+                >
+                    {{ undoPaymentForm.processing ? 'Undoing...' : 'Undo Payment' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

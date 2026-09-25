@@ -83,8 +83,25 @@ test('wages are payable on their pay day, not the day they were approved', funct
     // August wages, approved on 24 September while back-filling, paid on 3 September.
     $payslip = payslipFor($company, '2026-09-03');
 
-    expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->toContain($payslip->id)
-        ->and(Payslip::payableOn('2026-09-24')->pluck('id')->all())->not->toContain($payslip->id);
+    expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->toContain($payslip->id);
+});
+
+test('wages due on an earlier date stay listed as due on every later date until paid', function () {
+    $company = payableCompany();
+
+    // Due 3 September, still unpaid three weeks later: still due, not dropped from the list.
+    $payslip = payslipFor($company, '2026-09-03');
+
+    expect(Payslip::payableOn('2026-09-24')->pluck('id')->all())->toContain($payslip->id);
+});
+
+test('wages are not payable before their pay day', function () {
+    $company = payableCompany();
+
+    // Due 24 September: not payable from an earlier close.
+    $payslip = payslipFor($company, '2026-09-24');
+
+    expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->not->toContain($payslip->id);
 });
 
 test('wages already paid are not offered again', function () {

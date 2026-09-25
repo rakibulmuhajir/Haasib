@@ -93,11 +93,18 @@ const lineItemTemplate = () => ({
   warehouse_id: null as string | null,
   description: '',
   quantity: 1,
+  direct_quantity: 0,
   unit_price: 0,
   tax_rate: 0,
   discount_rate: 0,
   expense_account_id: 'company_default',
 })
+
+// Only a tracked item's litres can go straight to a customer instead of the tank.
+const isTrackedItem = (itemId: string | null) => {
+  if (!itemId || !props.items) return false
+  return props.items.find(i => i.id === itemId)?.track_inventory === true
+}
 
 const showQuickAdd = ref(false)
 const quickAddQuery = ref('')
@@ -187,6 +194,9 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
   } else {
     line.warehouse_id = null
     line.expense_account_id = 'company_default'
+  }
+  if (!isTrackedItem(itemId)) {
+    line.direct_quantity = 0
   }
 }
 
@@ -428,6 +438,19 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
                 <Label>Quantity *</Label>
                 <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
                 <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
+              </div>
+              <div v-if="isTrackedItem(line.item_id)">
+                <Label>Sold directly (L)</Label>
+                <Input
+                  v-model.number="line.direct_quantity"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="0"
+                  title="Litres that went straight to a customer, not into the tank."
+                />
+                <p class="text-xs text-muted-foreground mt-1">Litres that went straight to a customer, not into the tank.</p>
+                <InputError :message="form.errors[`line_items.${idx}.direct_quantity`]" />
               </div>
               <div>
                 <Label>Unit Price *</Label>

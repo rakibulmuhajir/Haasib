@@ -495,7 +495,12 @@ test('ordinary posted invoice and bill amendments preserve old journals and reco
         $kind.'_number' => 'DOC-ONE', $kind.'_date' => '2026-09-15', 'due_date' => '2026-09-30', 'status' => $receivable ? 'sent' : 'received',
         'currency' => 'PKR', 'base_currency' => 'PKR', 'subtotal' => 100, 'total_amount' => 100, 'balance' => 100, 'base_amount' => 100]);
     $accountKey = $receivable ? 'income_account_id' : 'expense_account_id';
-    $account = $f['accounts'][$receivable ? '4100' : '6180'];
+    // Not the fuel sales account: an invoice on 4100 dated the close day is a pump sale the
+    // close must take in as credit. This test is about amending an ordinary document.
+    $account = $receivable
+        ? Account::create(['company_id' => $f['company']->id, 'code' => '4900', 'name' => 'Other income',
+            'type' => 'revenue', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'is_active' => true])
+        : $f['accounts']['6180'];
     $document->lineItems()->create(['company_id' => $f['company']->id, 'line_number' => 1, 'description' => 'Original',
         'quantity' => 1, 'unit_price' => 100, 'line_total' => 100, 'total' => 100, $accountKey => $account->id]);
     $posting = app(PostingService::class);

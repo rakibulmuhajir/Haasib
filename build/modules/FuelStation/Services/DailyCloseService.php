@@ -125,7 +125,8 @@ class DailyCloseService
             ->whereNotIn('acct.bills.status', ['void', 'cancelled', 'draft'])
             ->when($afterDate, fn ($q) => $q->whereDate('acct.bills.bill_date', '>', $afterDate))
             ->whereDate('acct.bills.bill_date', '<=', $upToDate)
-            ->whereColumn('acct.bill_line_items.quantity', '>', 'acct.bill_line_items.quantity_received')
+            // Litres sold directly never go into a tank, so only the rest is still to arrive.
+            ->whereRaw('acct.bill_line_items.quantity > acct.bill_line_items.direct_quantity + acct.bill_line_items.quantity_received')
             ->where(function ($q) use ($tankId, $primaryTankId) {
                 $q->where('acct.bill_line_items.warehouse_id', $tankId);
                 if ($primaryTankId !== null && $primaryTankId === $tankId) {
@@ -140,13 +141,14 @@ class DailyCloseService
                 'acct.bills.bill_date',
                 'acct.bill_line_items.quantity',
                 'acct.bill_line_items.quantity_received',
+                'acct.bill_line_items.direct_quantity',
             ])
             ->map(fn ($row) => [
                 'bill_id' => $row->bill_id,
                 'bill_number' => $row->bill_number,
                 'bill_date' => $row->bill_date instanceof \Carbon\Carbon ? $row->bill_date->toDateString() : (string) $row->bill_date,
                 'line_id' => $row->line_id,
-                'remaining' => round((float) $row->quantity - (float) $row->quantity_received, 3),
+                'remaining' => round((float) $row->quantity - (float) $row->direct_quantity - (float) $row->quantity_received, 3),
             ])
             ->filter(fn ($row) => $row['remaining'] > 0)
             ->values();
@@ -221,6 +223,27 @@ class DailyCloseService
         return $stationSettings?->cash_account_id
             ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('code', '1050')->value('id')
             ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('subtype', 'cash')->orderBy('code')->value('id');
+    }
+
+    /**
+     * The account(s) a fuel-station company's meter revenue can land on: every active fuel
+     * item's own income_account_id, plus the station's fallback fuel_sales account. A plain
+     * Accounting invoice needs at least one line on one of these to be recognised by the
+     * close as fuel that went through a meter (see DailyCloseCreditSaleService::
+     * pendingAccountingInvoiceDetails); used by the Create page's preview, before any nozzle
+     * reading exists for the date being closed.
+     */
+    public function fuelRevenueAccountIds(string $companyId): array
+    {
+        $accounts = $this->resolveAccounts($companyId);
+        $itemAccountIds = Item::where('company_id', $companyId)
+            ->whereNotNull('fuel_category')
+            ->whereNull('deleted_at')
+            ->whereNotNull('income_account_id')
+            ->pluck('income_account_id')
+            ->all();
+
+        return array_values(array_unique(array_filter(array_merge($itemAccountIds, [$accounts['fuel_sales']]))));
     }
 
     /**
@@ -1207,9 +1230,17 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
 
             // Cash from sales (total revenue goes to cash initially)
+            // Fuel revenue accounts: whichever account(s) this close itself just credited for
+            // meter fuel revenue above (per item income_account_id, falling back to the
+            // station's fuel_sales account) -- the same accounts a plain Accounting invoice
+            // must land on to be recognised as fuel that went through a meter today.
+            $fuelRevenueAccountIds = array_values(array_unique(array_filter(array_merge(
+                array_column($nozzleReadingsData, 'income_account_id'),
+                [$accounts['fuel_sales']]
+            ))));
             $creditDetails = app(DailyCloseCreditSaleService::class)->prepare(
                 $companyId, $date, $data['credit_sales'] ?? [], $totalRevenue - $otherSalesTotal,
-                $totalRevenue - $totalNonCashReceipts, $user
+                $totalRevenue - $totalNonCashReceipts, $user, $fuelRevenueAccountIds
             );
             $creditTotal = round(array_sum(array_column($creditDetails, 'amount')), 2);
             $metadata['credit_sales_total'] = $creditTotal;
@@ -1297,10 +1328,31 @@ class DailyCloseService
             }
 
             // Cash on hand (net change)
+            $accountingInvoicesIncluded = [];
             foreach ($creditDetails as $credit) {
+                if (($credit['source'] ?? null) === 'accounting_invoice') {
+                    // Already booked its own AR when the invoice posted -- debiting AR again
+                    // here would double it. Instead, take the revenue back out of the invoice's
+                    // own income account(s), so this close's meter revenue stands alone.
+                    foreach (($credit['income_lines'] ?? []) as $incomeAccountId => $amount) {
+                        if ($amount <= 0) {
+                            continue;
+                        }
+                        $entries[] = ['account_id' => $incomeAccountId, 'type' => 'debit',
+                            'amount' => round((float) $amount, 2), 'description' => 'Invoiced in Accounting — '.$credit['invoice_number'].' — '.$credit['customer_name']];
+                    }
+                    $accountingInvoicesIncluded[] = [
+                        'invoice_id' => $credit['invoice_id'],
+                        'invoice_number' => $credit['invoice_number'],
+                        'customer' => $credit['customer_name'],
+                        'amount' => $credit['amount'],
+                    ];
+                    continue;
+                }
                 $entries[] = ['account_id' => $credit['ar_account_id'], 'type' => 'debit',
                     'amount' => $credit['amount'], 'description' => 'Credit sale '.$credit['invoice_number'].' — '.$credit['customer_name']];
             }
+            $metadata['accounting_invoices_included'] = $accountingInvoicesIncluded;
             // Payments received created inline just above already posted their own Dr Cash /
             // Cr AR transaction; that cash is real and already in the drawer, but must not be
             // debited again here or the same dollar is posted twice across two transactions.

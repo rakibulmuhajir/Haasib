@@ -32,6 +32,7 @@ class UpdateAction implements PaletteAction
             // the invoice most likely to need correcting.
             'due' => 'nullable|date',
             'draft' => 'nullable|boolean',
+            'is_direct_delivery' => 'nullable|boolean',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'description' => 'nullable|string|max:500',
@@ -166,6 +167,7 @@ class UpdateAction implements PaletteAction
                 'base_amount' => $baseAmount,
                 'payment_terms' => $paymentTerms,
                 'status' => $status,
+                'is_direct_delivery' => filter_var($params['is_direct_delivery'] ?? $invoice->is_direct_delivery, FILTER_VALIDATE_BOOLEAN),
                 // Same two-audience split as CreateAction; `description` stays
                 // accepted as the palette's older name for the internal note.
                 'notes' => $params['notes'] ?? null,

@@ -38,7 +38,7 @@ class BillController extends Controller
             ->whereNull('items.deleted_at')
             ->where('items.track_inventory', true)
             ->where('items.delivery_mode', 'requires_receiving')
-            ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+            ->whereRaw('COALESCE(li.quantity_received, 0) < (li.quantity - li.direct_quantity)');
 
         $query->addSelect([
             'receivable_items_count' => $receivableLineItems()->selectRaw('COUNT(*)'),
@@ -80,7 +80,7 @@ class BillController extends Controller
                         ->whereNull('items.deleted_at')
                         ->where('items.track_inventory', true)
                         ->where('items.delivery_mode', 'requires_receiving')
-                        ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+                        ->whereRaw('COALESCE(li.quantity_received, 0) < (li.quantity - li.direct_quantity)');
                 });
         }
         if ($request->filled('search')) {

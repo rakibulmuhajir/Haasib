@@ -40,6 +40,7 @@ class CreateAction implements PaletteAction
             'line_items.*.warehouse_id' => 'nullable|uuid',
             'line_items.*.description' => 'required|string|max:500',
             'line_items.*.quantity' => 'required|numeric|min:0.01',
+            'line_items.*.direct_quantity' => 'nullable|numeric|min:0',
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
@@ -85,6 +86,7 @@ class CreateAction implements PaletteAction
                 ->all();
 
             $this->assertLineAccountsValid($normalizedLines);
+            $this->assertDirectQuantityValid($normalizedLines);
 
             $lineTotals = collect($normalizedLines)->map(function ($item) {
                 $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
@@ -135,6 +137,7 @@ class CreateAction implements PaletteAction
                     'warehouse_id' => $source['warehouse_id'] ?? null,
                     'description' => $source['description'],
                     'quantity' => $source['quantity'],
+                    'direct_quantity' => $source['direct_quantity'] ?? 0,
                     'unit_price' => $source['unit_price'],
                     'tax_rate' => $source['tax_rate'] ?? 0,
                     'discount_rate' => $source['discount_rate'] ?? 0,
@@ -242,6 +245,23 @@ class CreateAction implements PaletteAction
                 ->value('id');
     }
 
+    /**
+     * Litres sold straight to a customer can never exceed the line's own quantity.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertDirectQuantityValid(array $lines): void
+    {
+        foreach ($lines as $index => $line) {
+            $direct = (float) ($line['direct_quantity'] ?? 0);
+            if ($direct > (float) ($line['quantity'] ?? 0) + 0.0001) {
+                throw ValidationException::withMessages([
+                    "line_items.{$index}.direct_quantity" => "Can't be more than the line's quantity.",
+                ]);
+            }
+        }
+    }
+
     protected function autoReceiveImmediateItems(Bill $bill): void
     {
         $bill->loadMissing('lineItems.item');
@@ -253,7 +273,7 @@ class CreateAction implements PaletteAction
                 continue;
             }
 
-            $remaining = (float) $line->quantity - (float) $line->quantity_received;
+            $remaining = (float) $line->quantity - (float) $line->direct_quantity - (float) $line->quantity_received;
             if ($remaining <= 0) {
                 continue;
             }

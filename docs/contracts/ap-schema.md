@@ -628,5 +628,36 @@ Draft, void and cancelled documents are excluded. Surfaced on the vendor detail 
 
 ---
 
+## Direct delivery litres on a bill line (2026-09-25)
+
+Fuel sometimes goes straight from the supplier's tanker to a customer and never reaches
+the station's tank -- not in the meters, not in the dip. Part of one delivery can go
+direct while the rest is received normally.
+
+```sql
+ALTER TABLE acct.bill_line_items
+  ADD COLUMN direct_quantity numeric(18,3) NOT NULL DEFAULT 0;
+
+ALTER TABLE acct.bill_line_items ADD CONSTRAINT bill_line_items_direct_quantity_range
+  CHECK (direct_quantity >= 0 AND direct_quantity <= quantity);
+```
+- Purpose: litres of this line sold straight to a customer, never received into a tank.
+  Only meaningful on a tracked item's line; the Bill Create/Edit forms hide the field
+  otherwise.
+- Model `$fillable`: add `'direct_quantity'`. `$casts`: add `'direct_quantity' =>
+  'decimal:3'`.
+- Validation (Bill\CreateAction / UpdateAction): nullable|numeric|min:0, and asserted
+  <= the line's own `quantity` ("Can't be more than the line's quantity.").
+- Receiving (`ReceiveGoodsAction`) and the daily close's `pendingDeliveries()` only ever
+  treat `quantity - direct_quantity - quantity_received` as outstanding; a line that is
+  fully direct has nothing left to receive and does not block the bill's "fully received"
+  state.
+- Posting (`PostingService::buildBillEntries`): for a tracked-item line with
+  `direct_quantity > 0`, the line's debit splits -- `round(line_total *
+  direct_quantity / quantity, 2)` goes to the item's own `expense_account_id`
+  (cost of fuel sold; falls back to the fuel COGS account the daily close resolves for
+  `'fuel_cogs'`), the remainder stays on the line's inventory account. Bill totals are
+  unchanged either way.
+
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.

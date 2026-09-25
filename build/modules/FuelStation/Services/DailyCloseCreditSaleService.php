@@ -18,6 +18,12 @@ class DailyCloseCreditSaleService
 {
     public function assertMutable(Invoice $invoice): void
     {
+        // An Accounting invoice a close counted as credit keeps its own journal but is tied to
+        // that close by included_in_close_id; changing it would leave the close's figures wrong.
+        // The saved value only: the close's own attach() is what sets it, and must get through.
+        if ($invoice->getOriginal('included_in_close_id')) {
+            throw new \RuntimeException('This invoice was counted in a posted Daily Close. Record a separate adjustment; its original sale cannot be changed.');
+        }
         if (\App\Modules\Accounting\Models\Transaction::where('company_id', $invoice->company_id)
             ->whereKey($invoice->getOriginal('transaction_id') ?? $invoice->transaction_id)
             ->where('transaction_type', 'fuel_daily_close')->whereNotNull('metadata->posting_snapshot')->exists()) {
@@ -25,7 +31,7 @@ class DailyCloseCreditSaleService
         }
     }
 
-    public function prepare(string $companyId, string $date, array $rows, float $nozzleRevenue, float $availableSales, User $user): array
+    public function prepare(string $companyId, string $date, array $rows, float $nozzleRevenue, float $availableSales, User $user, array $fuelRevenueAccountIds = []): array
     {
         Validator::make(['credit_sales' => $rows], [
             'credit_sales' => 'array',
@@ -35,7 +41,10 @@ class DailyCloseCreditSaleService
         ])->validate();
 
         $company = Company::whereKey($companyId)->firstOrFail();
-        $pending = $this->pendingFuelInvoiceDetails($company, $date);
+        $pending = array_merge(
+            $this->pendingFuelInvoiceDetails($company, $date),
+            $this->pendingAccountingInvoiceDetails($company, $date, $fuelRevenueAccountIds)
+        );
         $pendingByNumber = collect($pending)->keyBy('invoice_number');
 
         // Every litre already went through a nozzle the close reads: a fuel-sale invoice
@@ -151,11 +160,75 @@ class DailyCloseCreditSaleService
             })->all();
     }
 
+    /**
+     * Plain Accounting -> Invoices invoices for litres that DID go through a meter this
+     * business date: posted already (they book their own AR/revenue journal immediately),
+     * not flagged is_direct_delivery, not yet folded into a close, and not a Fuel -> Sales
+     * invoice (those are pendingFuelInvoiceDetails' own channel). A candidate is included as
+     * a credit row exactly like a pending fuel-sale invoice, except the close never re-debits
+     * AR for it -- the invoice already did that -- it instead debits the invoice's own
+     * income account(s) to take that revenue back out, so the close's meter revenue is what
+     * stands alone in the ledger. Amount is each fuel line's pre-tax total: the close itself
+     * tracks no separate tax on meter revenue (see processDailyClose's nozzle-reading loop),
+     * so this is the closest like-for-like comparison; tax stays where the invoice booked it.
+     *
+     * @param  array<int, string>  $fuelRevenueAccountIds
+     */
+    public function pendingAccountingInvoiceDetails(Company $company, string $date, array $fuelRevenueAccountIds): array
+    {
+        $fuelRevenueAccountIds = array_values(array_unique(array_filter($fuelRevenueAccountIds)));
+        if (!$fuelRevenueAccountIds) {
+            return [];
+        }
+
+        return Invoice::where('company_id', $company->id)
+            ->whereDate('invoice_date', $date)
+            ->whereNotIn('status', ['draft', 'void', 'cancelled', 'reversed'])
+            ->whereNotNull('transaction_id')
+            ->where('is_direct_delivery', false)
+            ->whereNull('included_in_close_id')
+            ->whereDoesntHave('saleMetadata')
+            ->whereHas('lineItems', fn ($q) => $q->whereIn('income_account_id', $fuelRevenueAccountIds))
+            ->with(['customer', 'lineItems'])
+            ->lockForUpdate()
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(function (Invoice $invoice) use ($fuelRevenueAccountIds) {
+                $fuelLines = $invoice->lineItems->filter(fn ($li) => in_array($li->income_account_id, $fuelRevenueAccountIds, true));
+                $incomeLines = [];
+                foreach ($fuelLines as $line) {
+                    $incomeLines[$line->income_account_id] = round(($incomeLines[$line->income_account_id] ?? 0) + (float) $line->line_total, 2);
+                }
+                $amount = round(array_sum($incomeLines), 2);
+                return [
+                    'customer_id' => $invoice->customer_id,
+                    'customer_name' => $invoice->customer->name ?? 'Buyer',
+                    'amount' => $amount,
+                    'reference' => $invoice->invoice_number,
+                    'ar_account_id' => null,
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'source' => 'accounting_invoice',
+                    'income_lines' => $incomeLines,
+                ];
+            })
+            ->filter(fn ($detail) => $detail['amount'] > 0)
+            ->values()
+            ->all();
+    }
+
     public function attach(string $companyId, string $transactionId, array $details): void
     {
         foreach ($details as $detail) {
-            Invoice::where('company_id', $companyId)->findOrFail($detail['invoice_id'])
-                ->update(['transaction_id' => $transactionId, 'status' => 'sent', 'sent_at' => now()]);
+            $invoice = Invoice::where('company_id', $companyId)->findOrFail($detail['invoice_id']);
+            if (($detail['source'] ?? null) === 'accounting_invoice') {
+                // Already posted its own AR/revenue journal -- the close only records which
+                // close's journal absorbed its meter-revenue portion, never touches status or
+                // transaction_id.
+                $invoice->update(['included_in_close_id' => $transactionId]);
+                continue;
+            }
+            $invoice->update(['transaction_id' => $transactionId, 'status' => 'sent', 'sent_at' => now()]);
         }
     }
 }

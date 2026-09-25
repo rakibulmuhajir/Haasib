@@ -26,6 +26,7 @@ class CreateAction implements PaletteAction
             'due' => 'nullable|date',
             'draft' => 'nullable|boolean',
             'send_immediately' => 'nullable|boolean',
+            'is_direct_delivery' => 'nullable|boolean',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'description' => 'nullable|string|max:500',
@@ -149,6 +150,7 @@ class CreateAction implements PaletteAction
                 'base_amount' => $baseAmount,
                 'payment_terms' => $paymentTerms,
                 'status' => $status,
+                'is_direct_delivery' => filter_var($params['is_direct_delivery'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 // Two separate columns, two separate audiences: `notes` prints
                 // on the invoice, `internal_notes` never leaves the company.
                 // `description` is the old single-field name kept working for

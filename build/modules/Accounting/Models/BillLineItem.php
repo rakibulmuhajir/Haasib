@@ -27,6 +27,7 @@ class BillLineItem extends Model
         'line_number',
         'description',
         'quantity',
+        'direct_quantity',
         'quantity_received',
         'unit_price',
         'tax_rate',
@@ -48,6 +49,7 @@ class BillLineItem extends Model
         'account_id' => 'string',
         'line_number' => 'integer',
         'quantity' => 'decimal:2',
+        'direct_quantity' => 'decimal:3',
         'quantity_received' => 'decimal:2',
         'unit_price' => 'decimal:6',
         'tax_rate' => 'decimal:2',
@@ -97,18 +99,19 @@ class BillLineItem extends Model
     }
 
     /**
-     * Get the remaining quantity to be received.
+     * Get the remaining quantity to be received. Litres marked direct_quantity went
+     * straight to a customer and never reach a tank, so they are never receivable.
      */
     public function getRemainingQuantityAttribute(): float
     {
-        return max(0, (float) $this->quantity - (float) $this->quantity_received);
+        return max(0, (float) $this->quantity - (float) $this->direct_quantity - (float) $this->quantity_received);
     }
 
     /**
-     * Check if this line item is fully received.
+     * Check if this line item is fully received (accounting for litres sold direct).
      */
     public function isFullyReceived(): bool
     {
-        return $this->quantity_received >= $this->quantity;
+        return (float) $this->quantity_received >= (float) $this->quantity - (float) $this->direct_quantity;
     }
 }

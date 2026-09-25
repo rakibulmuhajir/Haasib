@@ -245,6 +245,17 @@ interface PendingFuelInvoice {
     reference: string;
 }
 
+/** A plain Accounting -> Invoices invoice on a fuel revenue account, pre-loaded the same way
+ * as PendingFuelInvoice -- see DailyCloseCreditSaleService::pendingAccountingInvoiceDetails. */
+interface PendingAccountingInvoice {
+    invoice_id: string;
+    invoice_number: string;
+    customer_id: string;
+    customer_name: string;
+    amount: number;
+    reference: string;
+}
+
 interface OpenInvoice {
     id: string;
     invoice_number: string;
@@ -299,6 +310,7 @@ const props = defineProps<{
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
     pendingFuelInvoices?: PendingFuelInvoice[];
+    pendingAccountingInvoices?: PendingAccountingInvoice[];
     openInvoices?: OpenInvoice[];
     cashAccountIds?: string[];
     purchaseSuppliers?: PurchaseSupplier[];
@@ -924,16 +936,28 @@ const form = useForm({
 
     // Tab 4: Money Out. Pending fuel-sale invoices (credit sales already made through a nozzle)
     // are pre-checked here exactly like pendingBillPayments below: they are a channel of the
-    // close, never additional sales, and reduce expected cash by their amount.
-    credit_sales: (props.pendingFuelInvoices ?? []).map((invoice) => ({
-        customer_id: invoice.customer_id,
-        customer_name: invoice.customer_name,
-        amount: invoice.amount,
-        reference: invoice.reference,
-        invoice_id: invoice.invoice_id,
-        invoice_number: invoice.invoice_number,
-        pending_fuel_invoice: true,
-    })) as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean }[],
+    // close, never additional sales, and reduce expected cash by their amount. Pending plain
+    // Accounting invoices on a fuel revenue account are pre-checked the same way.
+    credit_sales: [
+        ...(props.pendingFuelInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_fuel_invoice: true,
+        })),
+        ...(props.pendingAccountingInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_accounting_invoice: true,
+        })),
+    ] as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }[],
     bank_withdrawals: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
     bank_deposits: [] as {
         bank_account_id: string;
@@ -1167,15 +1191,26 @@ const resetFormToInitial = () => {
     });
 
     // Reset money out
-    form.credit_sales = (props.pendingFuelInvoices ?? []).map((invoice) => ({
-        customer_id: invoice.customer_id,
-        customer_name: invoice.customer_name,
-        amount: invoice.amount,
-        reference: invoice.reference,
-        invoice_id: invoice.invoice_id,
-        invoice_number: invoice.invoice_number,
-        pending_fuel_invoice: true,
-    }));
+    form.credit_sales = [
+        ...(props.pendingFuelInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_fuel_invoice: true,
+        })),
+        ...(props.pendingAccountingInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_accounting_invoice: true,
+        })),
+    ];
     form.bank_deposits = [];
     form.partner_withdrawals = [];
     form.employee_advances = [];

@@ -583,6 +583,38 @@ A ticket invoice carries **one** line item. Supplier cost and commission must
 never appear on it — they are template-role postings derived from the ticket
 rows at posting time, not invoice lines.
 
+## Direct delivery / accounting-invoice channel (2026-09-25)
+
+Fuel sometimes never reaches the station's own tank at all -- a whole tanker load, or the
+tail of one, is invoiced straight from Accounting -> Invoices to a buyer. Two columns on
+`acct.invoices` say what happened to a fuel invoice relative to the daily close:
+
+```sql
+ALTER TABLE acct.invoices
+  ADD COLUMN is_direct_delivery boolean NOT NULL DEFAULT false,
+  ADD COLUMN included_in_close_id uuid;
+```
+- `is_direct_delivery`: set by the invoice form (fuel-station companies only) when the
+  fuel invoiced never went through a meter or into a tank. A direct-delivery invoice is
+  never picked up by a daily close.
+- `included_in_close_id`: the `acct.transactions.id` of the fuel daily close journal that
+  absorbed this invoice's meter revenue, once. Null until a close includes it.
+- Indexes: (`company_id`, `is_direct_delivery`); (`included_in_close_id`).
+- Model `$fillable`: add `'is_direct_delivery'`, `'included_in_close_id'`.
+- Model `$casts`: add `'is_direct_delivery' => 'boolean'`, `'included_in_close_id' => 'string'`.
+
+A plain Accounting invoice for litres that **did** go through the pumps (not flagged
+direct delivery, posted, dated the close's business date, with a line on a fuel revenue
+account, and not a Fuel -> Sales credit invoice, which has its own channel above) is
+folded into the close exactly like a pending fuel-sale invoice: it reduces expected cash
+as a locked credit row, but the close's own journal never re-debits AR for it (the
+invoice already booked that) -- it debits the invoice's own income account(s) instead, so
+meter revenue is recognised once. See `App\Modules\FuelStation\Services\
+DailyCloseCreditSaleService::pendingAccountingInvoiceDetails` and
+`DailyCloseService::processDailyClose`. The counted amount is each fuel line's pre-tax
+`line_total`; the close itself tracks no separate tax on meter revenue, so tax stays where
+the invoice booked it rather than being reversed too.
+
 ## Extending
 - Fuel Daily Close may create a sent base-currency invoice for the unpaid portion
   of meter sales. Its `transaction_id` references the shared close journal; its

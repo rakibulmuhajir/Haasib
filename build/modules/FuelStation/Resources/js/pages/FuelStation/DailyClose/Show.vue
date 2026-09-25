@@ -72,7 +72,8 @@ interface TransactionData {
     cash_bill_payments?: number
     amanat_disbursements?: number
     credit_sales_total?: number
-    credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number }>
+    credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number; source?: string }>
+    accounting_invoices_included?: Array<{ invoice_id: string; invoice_number: string; customer: string; amount: number }>
     payment_receipt_postings?: Array<{ channel_code: string; channel_label: string; channel_type: string; account_id: string | null; amount: number }>
   }
 }
@@ -547,7 +548,9 @@ const unlockTransaction = () => {
           <!-- Cash Out -->
           <div class="space-y-2">
             <div v-for="credit in metadata.credit_sale_details || []" :key="credit.invoice_id" class="flex justify-between items-center py-2">
-              <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">{{ t('meterCreditSales') }} · {{ credit.customer_name }} · {{ credit.invoice_number }}</Link>
+              <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">
+                {{ credit.source === 'accounting_invoice' ? 'Invoiced in Accounting' : t('meterCreditSales') }} · {{ credit.invoice_number }} · {{ credit.customer_name }}
+              </Link>
               <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
             </div>
             <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">

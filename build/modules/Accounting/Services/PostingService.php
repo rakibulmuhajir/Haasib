@@ -602,7 +602,7 @@ class PostingService
      */
     private function buildBillEntries(PostingTemplate $template, Bill $bill, Company $company): array
     {
-        $bill->loadMissing(['vendor', 'lineItems']);
+        $bill->loadMissing(['vendor', 'lineItems', 'lineItems.item']);
 
         $roleAccounts = $this->roleAccounts($template);
         $apAccountId = $bill->vendor?->ap_account_id ?? $roleAccounts['AP'] ?? null;
@@ -631,6 +631,25 @@ class PostingService
             }
 
             $lineTotal = round((float) $line->line_total, 2);
+            $quantity = (float) $line->quantity;
+            $directQuantity = (float) $line->direct_quantity;
+
+            // Litres sold straight to a customer never reach the tank, so their
+            // share of the line's cost is cost-of-goods-sold, not inventory. The
+            // rest of the line posts to the inventory account exactly as before.
+            if ($directQuantity > 0 && $line->item?->track_inventory && $quantity > 0) {
+                $directShare = round($lineTotal * $directQuantity / $quantity, 2);
+                $inventoryShare = round($lineTotal - $directShare, 2);
+                $cogsAccountId = $line->item->expense_account_id ?: $this->resolveFuelCogsAccountId($company);
+                if (! $cogsAccountId) {
+                    $lineNumber = $line->line_number ?? null;
+                    throw new \RuntimeException('A cost-of-goods-sold account is required for litres sold directly' . ($lineNumber ? " on bill line {$lineNumber}." : '.'));
+                }
+                $expenseDebits[$cogsAccountId] = round(($expenseDebits[$cogsAccountId] ?? 0) + $directShare, 2);
+                $expenseDebits[$accountId] = round(($expenseDebits[$accountId] ?? 0) + $inventoryShare, 2);
+                continue;
+            }
+
             $expenseDebits[$accountId] = round(($expenseDebits[$accountId] ?? 0) + $lineTotal, 2);
         }
 
@@ -672,6 +691,19 @@ class PostingService
 
         $this->assertBalanced($entries);
         return $entries;
+    }
+
+    /**
+     * Fallback cost-of-goods-sold account for litres sold directly, when the item carries
+     * none (a fuel item normally does). Core accounting only: account 5100, else the first
+     * active cogs-type account. No module settings are consulted here.
+     */
+    private function resolveFuelCogsAccountId(Company $company): ?string
+    {
+        return \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+            ->whereNull('deleted_at')->where('is_active', true)->where('code', '5100')->value('id')
+            ?? \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+                ->whereNull('deleted_at')->where('is_active', true)->where('type', 'cogs')->orderBy('code')->value('id');
     }
 
     private function generateReversalNumber(string $companyId, string $originalNumber): string

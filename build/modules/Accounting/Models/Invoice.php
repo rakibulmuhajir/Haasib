@@ -55,6 +55,8 @@ class Invoice extends Model
         'voided_at',
         'recurring_schedule_id',
         'transaction_id',
+        'is_direct_delivery',
+        'included_in_close_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -79,6 +81,8 @@ class Invoice extends Model
         'paid_at' => 'datetime',
         'voided_at' => 'datetime',
         'transaction_id' => 'string',
+        'is_direct_delivery' => 'boolean',
+        'included_in_close_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',

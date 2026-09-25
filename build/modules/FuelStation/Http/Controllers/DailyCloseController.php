@@ -170,6 +170,21 @@ class DailyCloseController extends Controller
      * channel of the close (see DailyCloseCreditSaleService::pendingFuelInvoiceDetails), never
      * additional sales.
      */
+    /**
+     * Plain Accounting -> Invoices invoices already posted for this date, on a fuel revenue
+     * account, not flagged direct-delivery, not yet folded into a close -- see
+     * DailyCloseCreditSaleService::pendingAccountingInvoiceDetails, which is the server's
+     * authoritative recomputation of this same list on post.
+     */
+    private function getPendingAccountingInvoicesForDailyClose(string $companyId, string $date): array
+    {
+        $company = \App\Models\Company::whereKey($companyId)->firstOrFail();
+        $fuelRevenueAccountIds = $this->dailyCloseService->fuelRevenueAccountIds($companyId);
+
+        return app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)
+            ->pendingAccountingInvoiceDetails($company, $date, $fuelRevenueAccountIds);
+    }
+
     private function getPendingFuelInvoicesForDailyClose(string $companyId, string $date)
     {
         return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
@@ -621,6 +636,7 @@ class DailyCloseController extends Controller
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
         $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);
+        $pendingAccountingInvoices = $this->getPendingAccountingInvoicesForDailyClose($companyId, $date);
         $purchaseSuppliers = $this->getPurchaseSuppliersForDailyClose($companyId);
         $purchaseItems = $this->getPurchaseItemsForDailyClose($companyId);
         $canEnterPurchases = auth()->user()?->hasCompanyPermission(Permissions::BILL_CREATE) ?? false;
@@ -739,6 +755,7 @@ class DailyCloseController extends Controller
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
             'pendingFuelInvoices' => $pendingFuelInvoices,
+            'pendingAccountingInvoices' => $pendingAccountingInvoices,
             'purchaseSuppliers' => $purchaseSuppliers,
             'purchaseItems' => $purchaseItems,
             'canEnterPurchases' => $canEnterPurchases,

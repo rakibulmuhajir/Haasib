@@ -39,6 +39,7 @@ class VoidAction implements PaletteAction
         $invoice = $this->resolveInvoice($params['id'], $company->id);
 
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
+        app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
 
         // Validate current status
         if (in_array($invoice->status, ['cancelled', 'void'])) {

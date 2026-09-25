@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowLeft, Plus, Save, Trash2 } from 'lucide-vue-next';
@@ -70,6 +71,7 @@ const props = defineProps<{
     currencies: CurrencyOption[];
     revenueAccounts?: AccountOption[];
     preselect?: Preselect;
+    isFuelStation?: boolean;
 }>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -97,6 +99,7 @@ const form = useForm({
     internal_notes: '',
     payment_terms: 30,
     notes: '',
+    is_direct_delivery: false,
 });
 
 // The controller already loads the customer list for this form. Reuse the
@@ -458,6 +461,19 @@ const submit = () => form.post(`/${props.company.slug}/invoices`);
                             locale="en-PK"
                         />
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card v-if="props.isFuelStation" variant="form">
+                <CardContent class="space-y-2 pt-6">
+                    <div class="flex items-start gap-2">
+                        <Checkbox id="is_direct_delivery" v-model:checked="form.is_direct_delivery" />
+                        <div>
+                            <Label for="is_direct_delivery" class="font-normal">Direct delivery — not from the pumps</Label>
+                            <p class="text-xs text-muted-foreground">Fuel that went straight to the customer. The daily close leaves it alone.</p>
+                        </div>
+                    </div>
+                    <InputError :message="form.errors.is_direct_delivery" />
                 </CardContent>
             </Card>
 

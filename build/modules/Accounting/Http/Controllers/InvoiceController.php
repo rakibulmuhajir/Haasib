@@ -93,6 +93,10 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
+            // Same fuel-station test as HandleInertiaRequests' fuelNavigation prop.
+            'isFuelStation' => $company->isModuleEnabled('fuel_station')
+                || $company->industry_code === 'fuel_station'
+                || $company->industry === 'fuel_station',
             // Arriving from a customer, or from another invoice to the same
             // one: the party is already known, so the form should not ask.
             'preselect' => [
@@ -120,6 +124,7 @@ class InvoiceController extends Controller
             'notes' => $validated['notes'] ?? null,
             'internal_notes' => $validated['internal_notes'] ?? null,
             'send_immediately' => (bool) ($validated['send_immediately'] ?? ($status !== 'draft')),
+            'is_direct_delivery' => (bool) ($validated['is_direct_delivery'] ?? false),
             'line_items' => $validated['line_items'],
         ];
 
@@ -197,6 +202,9 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
+            'isFuelStation' => $company->isModuleEnabled('fuel_station')
+                || $company->industry_code === 'fuel_station'
+                || $company->industry === 'fuel_station',
         ]);
     }
 
@@ -225,6 +233,7 @@ class InvoiceController extends Controller
             'payment_terms' => $validated['payment_terms'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'internal_notes' => $validated['internal_notes'] ?? null,
+            'is_direct_delivery' => array_key_exists('is_direct_delivery', $validated) ? (bool) $validated['is_direct_delivery'] : null,
             'line_items' => $validated['line_items'] ?? [],
         ];
 

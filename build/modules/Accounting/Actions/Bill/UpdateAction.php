@@ -29,6 +29,7 @@ class UpdateAction implements PaletteAction
             'line_items.*.warehouse_id' => 'nullable|uuid',
             'line_items.*.description' => 'required|string|max:500',
             'line_items.*.quantity' => 'required|numeric|min:0.01',
+            'line_items.*.direct_quantity' => 'nullable|numeric|min:0',
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
@@ -84,6 +85,7 @@ class UpdateAction implements PaletteAction
                     ->all();
 
                 $this->assertLineAccountsValid($normalizedLines);
+                $this->assertDirectQuantityValid($normalizedLines);
 
                 $journalRelevantChanged = $this->lineItemsChanged($bill, $normalizedLines);
 
@@ -113,6 +115,7 @@ class UpdateAction implements PaletteAction
                         'warehouse_id' => $src['warehouse_id'] ?? null,
                         'description' => $src['description'],
                         'quantity' => $src['quantity'],
+                        'direct_quantity' => $src['direct_quantity'] ?? 0,
                         'unit_price' => $src['unit_price'],
                         'tax_rate' => $src['tax_rate'] ?? 0,
                         'discount_rate' => $src['discount_rate'] ?? 0,
@@ -179,10 +182,11 @@ class UpdateAction implements PaletteAction
     {
         $oldLines = BillLineItem::where('bill_id', $bill->id)
             ->orderBy('line_number')
-            ->get(['line_number', 'quantity', 'unit_price', 'tax_rate', 'discount_rate', 'expense_account_id'])
+            ->get(['line_number', 'quantity', 'direct_quantity', 'unit_price', 'tax_rate', 'discount_rate', 'expense_account_id'])
             ->map(fn ($li) => [
                 'line_number' => (int) $li->line_number,
                 'quantity' => round((float) $li->quantity, 6),
+                'direct_quantity' => round((float) $li->direct_quantity, 3),
                 'unit_price' => round((float) $li->unit_price, 6),
                 'tax_rate' => round((float) $li->tax_rate, 4),
                 'discount_rate' => round((float) $li->discount_rate, 4),
@@ -193,6 +197,7 @@ class UpdateAction implements PaletteAction
             ->map(fn ($item, $idx) => [
                 'line_number' => (int) ($item['line_number'] ?? ($idx + 1)),
                 'quantity' => round((float) ($item['quantity'] ?? 0), 6),
+                'direct_quantity' => round((float) ($item['direct_quantity'] ?? 0), 3),
                 'unit_price' => round((float) ($item['unit_price'] ?? 0), 6),
                 'tax_rate' => round((float) ($item['tax_rate'] ?? 0), 4),
                 'discount_rate' => round((float) ($item['discount_rate'] ?? 0), 4),
@@ -278,5 +283,22 @@ class UpdateAction implements PaletteAction
                 ->orderByDesc('is_primary')
                 ->orderBy('name')
                 ->value('id');
+    }
+
+    /**
+     * Litres sold straight to a customer can never exceed the line's own quantity.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertDirectQuantityValid(array $lines): void
+    {
+        foreach ($lines as $index => $line) {
+            $direct = (float) ($line['direct_quantity'] ?? 0);
+            if ($direct > (float) ($line['quantity'] ?? 0) + 0.0001) {
+                throw ValidationException::withMessages([
+                    "line_items.{$index}.direct_quantity" => "Can't be more than the line's quantity.",
+                ]);
+            }
+        }
     }
 }

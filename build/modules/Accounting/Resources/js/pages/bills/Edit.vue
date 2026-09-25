@@ -32,6 +32,7 @@ interface LineItem {
   warehouse_id?: string | null
   description: string
   quantity: number
+  direct_quantity?: number
   unit_price: number
   tax_rate: number
   discount_rate: number
@@ -126,9 +127,16 @@ const form = useForm({
     ...li,
     item_id: li.item_id ?? null,
     warehouse_id: li.warehouse_id ?? null,
+    direct_quantity: li.direct_quantity ?? 0,
     expense_account_id: li.expense_account_id ?? '__none'
   })),
 })
+
+// Only a tracked item's litres can go straight to a customer instead of the tank.
+const isTrackedItem = (itemId: string | null | undefined) => {
+  if (!itemId || !props.items) return false
+  return props.items.find(i => i.id === itemId)?.track_inventory === true
+}
 
 const totals = computed(() => {
   const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
@@ -149,6 +157,7 @@ const addLine = () => form.line_items.push({
   warehouse_id: null,
   description: '',
   quantity: 1,
+  direct_quantity: 0,
   unit_price: 0,
   tax_rate: 0,
   discount_rate: 0,
@@ -179,6 +188,9 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
   } else {
     line.warehouse_id = null
     line.expense_account_id = '__none'
+  }
+  if (!isTrackedItem(itemId)) {
+    line.direct_quantity = 0
   }
 }
 
@@ -360,6 +372,19 @@ const handleSubmit = () => {
                 <Label>{{ t('quantity') }}</Label>
                 <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
                 <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
+              </div>
+              <div v-if="isTrackedItem(line.item_id)">
+                <Label>Sold directly (L)</Label>
+                <Input
+                  v-model.number="line.direct_quantity"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="0"
+                  title="Litres that went straight to a customer, not into the tank."
+                />
+                <p class="text-xs text-muted-foreground mt-1">Litres that went straight to a customer, not into the tank.</p>
+                <InputError :message="form.errors[`line_items.${idx}.direct_quantity`]" />
               </div>
               <div>
                 <Label>{{ t('unitPrice') }}</Label>

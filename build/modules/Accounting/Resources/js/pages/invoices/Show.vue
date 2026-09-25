@@ -85,6 +85,7 @@ interface Invoice {
   reference?: string
   payment_terms?: number
   notes?: string
+  is_direct_delivery?: boolean
   line_items: LineItem[]
   sent_at?: string
   viewed_at?: string
@@ -331,6 +332,9 @@ const voidInvoice = () => {
               <StatusBadge :status="displayStatus" explain />
               <MetaChip v-if="isOverdue" tone="late">
                 {{ daysLate }} {{ daysLate === 1 ? 'day' : 'days' }} late
+              </MetaChip>
+              <MetaChip v-if="invoice.is_direct_delivery">
+                Direct delivery
               </MetaChip>
             </div>
 

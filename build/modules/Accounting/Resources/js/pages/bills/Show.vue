@@ -44,6 +44,7 @@ interface LineItem {
   } | null
   description: string
   quantity: number
+  direct_quantity?: number
   quantity_received: number
   unit_price: number
   tax_rate: number
@@ -207,13 +208,13 @@ const receivableLineItems = computed(() => {
     if (!linkedItem) return false
     if (!linkedItem.track_inventory) return false
     if (linkedItem.delivery_mode !== 'requires_receiving') return false
-    return item.quantity_received < item.quantity
+    return item.quantity_received < item.quantity - Number(item.direct_quantity || 0)
   })
 })
 
 const buildReceiptLines = (): ReceiptLineInput[] => {
   return receivableLineItems.value.map((item) => {
-    const remaining = Math.max(0, Number(item.quantity) - Number(item.quantity_received))
+    const remaining = Math.max(0, Number(item.quantity) - Number(item.direct_quantity || 0) - Number(item.quantity_received))
     return {
       line_id: item.id,
       description: item.item?.name || item.description,
@@ -404,14 +405,20 @@ const documentDates = computed(() =>
 )
 
 const documentLines = computed<DocumentLine[]>(() =>
-  props.bill.line_items.map((item) => ({
-    description: item.description,
-    detail: item.item?.name && item.item.name !== item.description ? item.item.name : undefined,
-    quantity: item.quantity,
-    unit: item.item?.unit_of_measure,
-    unitPrice: item.unit_price,
-    amount: item.total,
-  })),
+  props.bill.line_items.map((item) => {
+    const itemDetail = item.item?.name && item.item.name !== item.description ? item.item.name : undefined
+    const directNote = Number(item.direct_quantity || 0) > 0
+      ? `${formatNumber(Number(item.direct_quantity), 3)} L sold directly`
+      : undefined
+    return {
+      description: item.description,
+      detail: [itemDetail, directNote].filter(Boolean).join(' · ') || undefined,
+      quantity: item.quantity,
+      unit: item.item?.unit_of_measure,
+      unitPrice: item.unit_price,
+      amount: item.total,
+    }
+  }),
 )
 
 /* Zero rows are left out: a discount of nothing is not a fact about this bill. */

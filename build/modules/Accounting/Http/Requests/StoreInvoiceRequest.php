@@ -46,6 +46,7 @@ class StoreInvoiceRequest extends BaseFormRequest
             // Owner UI uses "approved" to indicate send/post immediately
             'status' => ['nullable', 'string', 'in:draft,approved,sent'],
             'send_immediately' => ['nullable', 'boolean'],
+            'is_direct_delivery' => ['nullable', 'boolean'],
         ];
     }
 

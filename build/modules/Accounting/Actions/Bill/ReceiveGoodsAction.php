@@ -92,10 +92,12 @@ class ReceiveGoodsAction implements PaletteAction
                 $receivedCount++;
             }
 
-            // Check if all line items are fully received
+            // Check if all line items are fully received. A line whose litres went
+            // straight to a customer (direct_quantity) never has anything to receive
+            // for that portion.
             $bill->refresh();
             $allReceived = $bill->lineItems->every(function ($line) {
-                return $line->quantity_received >= $line->quantity;
+                return (float) $line->quantity_received >= (float) $line->quantity - (float) $line->direct_quantity;
             });
 
             if ($allReceived && ! $bill->goods_received_at) {
@@ -160,7 +162,7 @@ class ReceiveGoodsAction implements PaletteAction
                     continue;
                 }
 
-                $remainingQty = $line->quantity - $line->quantity_received;
+                $remainingQty = (float) $line->quantity - (float) $line->direct_quantity - (float) $line->quantity_received;
                 if ($remainingQty <= 0) {
                     continue;
                 }
@@ -217,7 +219,7 @@ class ReceiveGoodsAction implements PaletteAction
                     continue;
                 }
 
-                $remainingQty = $line->quantity - $line->quantity_received;
+                $remainingQty = (float) $line->quantity - (float) $line->direct_quantity - (float) $line->quantity_received;
 
                 if ($remainingQty <= 0) {
                     continue;

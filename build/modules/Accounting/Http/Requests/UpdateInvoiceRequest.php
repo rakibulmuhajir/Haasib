@@ -41,6 +41,7 @@ class UpdateInvoiceRequest extends BaseFormRequest
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
             'invoice_date' => ['sometimes', 'required', 'date'],
+            'is_direct_delivery' => ['nullable', 'boolean'],
         ];
     }
 

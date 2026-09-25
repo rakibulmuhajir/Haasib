@@ -4921,6 +4921,23 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <div
+                                    v-if="externalCashEffect > 0"
+                                    class="flex justify-between text-sm text-muted-foreground"
+                                >
+                                    <span
+                                        >Received into the drawer on other screens
+                                        <span class="block text-xs"
+                                            >Listed under "Already recorded for this business date". Already in the expected closing cash.</span
+                                        ></span
+                                    >
+                                    <span class="font-medium"
+                                        ><MoneyText
+                                            :amount="externalCashEffect"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
                             </div>
                         </div>
 
@@ -6249,6 +6266,23 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <div
+                                    v-if="externalCashEffect < 0"
+                                    class="flex justify-between text-sm text-muted-foreground"
+                                >
+                                    <span
+                                        >Paid from the drawer on other screens
+                                        <span class="block text-xs"
+                                            >Listed under "Already recorded for this business date". Already in the expected closing cash.</span
+                                        ></span
+                                    >
+                                    <span class="font-medium text-destructive"
+                                        ><MoneyText
+                                            :amount="-externalCashEffect"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
                             </div>
                         </div>
 
@@ -6374,6 +6408,20 @@ const completedWorkflowSteps = computed(() => {
                                                 :fraction-digits="0"
                                         /></span>
                                     </div>
+                                <div
+                                    v-if="Math.abs(externalCashEffect) >= 0.5"
+                                    class="flex justify-between"
+                                >
+                                    <span
+                                        >{{ externalCashEffect < 0 ? '−' : '+' }} Recorded on other screens</span
+                                    >
+                                    <span
+                                        ><MoneyText
+                                            :amount="Math.abs(externalCashEffect)"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
                                     <Separator />
                                     <div
                                         class="flex justify-between text-lg font-semibold"

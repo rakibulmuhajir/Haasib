@@ -83,6 +83,14 @@ class UpdateAction implements PaletteAction
 
         $allocations = $payment->allocations;
 
+        // A payment fully matched to its one allocation (no advance sitting unapplied) still
+        // moves the two together 1:1, same as before this payment ever supported an advance.
+        // A partially-applied payment (some of it unapplied) instead only has a floor: the
+        // amount can never drop below what is already matched to the bill -- that portion
+        // isn't this edit's to touch. See BillPayment::unappliedAmount().
+        $wasFullyApplied = $allocations->count() === 1
+            && abs((float) $allocations->first()->amount_allocated - $oldAmount) <= 0.000001;
+
         if ($amountChanged) {
             if ($allocations->count() > 1) {
                 throw new \InvalidArgumentException('This payment is split across several bills. Change the date, account, reference or notes instead of the amount.');
@@ -90,9 +98,13 @@ class UpdateAction implements PaletteAction
             if ($allocations->count() === 1) {
                 $allocation = $allocations->first();
                 $bill = $allocation->bill;
-                $availableBalance = round((float) $bill->balance + (float) $allocation->amount_allocated, 6);
-                if ($newAmount > $availableBalance + 0.000001) {
-                    throw new \InvalidArgumentException("That's more than is owed on {$bill->bill_number}.");
+                if ($wasFullyApplied) {
+                    $availableBalance = round((float) $bill->balance + (float) $allocation->amount_allocated, 6);
+                    if ($newAmount > $availableBalance + 0.000001) {
+                        throw new \InvalidArgumentException("That's more than is owed on {$bill->bill_number}.");
+                    }
+                } elseif ($newAmount < (float) $allocation->amount_allocated - 0.000001) {
+                    throw new \InvalidArgumentException("That payment already has " . round((float) $allocation->amount_allocated, 2) . " applied to {$bill->bill_number}; the amount can't drop below that.");
                 }
             }
         }
@@ -108,7 +120,8 @@ class UpdateAction implements PaletteAction
             $newMethod,
             $amountChanged,
             $dateChanged,
-            $accountChanged
+            $accountChanged,
+            $wasFullyApplied
         ) {
             $repost = $amountChanged || $dateChanged || $accountChanged;
 
@@ -129,7 +142,10 @@ class UpdateAction implements PaletteAction
                 }
             }
 
-            if ($amountChanged && $allocations->count() === 1) {
+            // Only a fully-applied single allocation moves in lockstep with the amount --
+            // a partially-applied one (some of it an advance) keeps its own matched amount;
+            // the edit only changes how much of the payment is left unapplied.
+            if ($amountChanged && $allocations->count() === 1 && $wasFullyApplied) {
                 $allocation = $allocations->first();
                 $bill = $allocation->bill;
 

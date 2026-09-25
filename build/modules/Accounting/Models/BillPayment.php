@@ -83,4 +83,19 @@ class BillPayment extends Model
     {
         return $this->belongsTo(Transaction::class, 'transaction_id');
     }
+
+    /**
+     * What is left of this payment that is not matched to any bill -- an advance/on-account
+     * balance with the vendor. There is no dedicated column or allocation row for it (unlike
+     * the AR side's null-invoice_id row on `acct.payment_allocations`): it is simply this
+     * payment's amount minus the sum of its own `bill_payment_allocations` rows, which stays
+     * a valid invariant because `PostingService::postBillPayment` always posts the FULL
+     * payment amount Dr AP / Cr cash regardless of how much of it is matched to a bill yet.
+     * See {@see \App\Modules\Accounting\Services\VendorAdvanceService}, which applies this
+     * balance to bills automatically and on demand.
+     */
+    public function unappliedAmount(): float
+    {
+        return max(0.0, round((float) $this->amount - (float) $this->allocations->sum('amount_allocated'), 6));
+    }
 }

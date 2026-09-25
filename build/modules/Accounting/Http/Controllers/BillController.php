@@ -408,6 +408,27 @@ class BillController extends Controller
 
         $editLock = app(DocumentDateLock::class)->reason($companyModel->id, $record->bill_date->toDateString(), "Bill {$record->bill_number}");
 
+        // "Paid from advance {payment_number}": every allocation on this bill that came
+        // from a vendor's pre-existing advance rather than a payment made to settle this
+        // bill directly reads the same either way -- the allocation row itself doesn't say
+        // which, so this just lists every payment that touched this bill.
+        $paidFrom = \App\Modules\Accounting\Models\BillPaymentAllocation::where('company_id', $companyModel->id)
+            ->where('bill_id', $record->id)
+            ->with('billPayment:id,payment_number,payment_date')
+            ->orderBy('applied_at')
+            ->get()
+            ->map(fn ($allocation) => [
+                'payment_id' => $allocation->bill_payment_id,
+                'payment_number' => $allocation->billPayment?->payment_number,
+                'amount' => (float) $allocation->amount_allocated,
+                'applied_at' => optional($allocation->applied_at)->toISOString(),
+            ])
+            ->values();
+
+        $vendorAdvanceAvailable = $record->vendor_id
+            ? app(\App\Modules\Accounting\Services\VendorAdvanceService::class)->totalUnapplied($companyModel->id, $record->vendor_id)
+            : 0.0;
+
         return Inertia::render('accounting/bills/Show', [
             'company' => [
                 'id' => $companyModel->id,
@@ -426,6 +447,8 @@ class BillController extends Controller
             'supplierClaims' => $supplierClaims,
             'claimReceiptAccounts' => $claimReceiptAccounts,
             'editLock' => $editLock,
+            'paidFromAdvances' => $paidFrom,
+            'vendorAdvanceAvailable' => round($vendorAdvanceAvailable, 2),
         ]);
     }
 
@@ -626,6 +649,23 @@ class BillController extends Controller
                 ->back()
                 ->with('error', $e->getMessage())
                 ->withInput();
+        }
+    }
+
+    public function applyAdvance(Request $request, string $company, string $bill): RedirectResponse
+    {
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        try {
+            $result = app(CommandBus::class)->dispatch('bill.apply_advance', [
+                'id' => $bill,
+                'amount' => $request->input('amount'),
+            ], $request->user());
+
+            return back()->with('success', $result['message'] ?? 'Advance applied');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage())->withInput();
         }
     }
 

@@ -75,6 +75,7 @@ interface SummaryRef {
   overdue_balance: number
   bill_count: number
   paid_ytd: number
+  advance_on_account?: number
 }
 
 interface CurrencyOption {
@@ -347,6 +348,9 @@ const cancelAddressEdit = () => {
             <CardContent>
               <CardFigure><MoneyText :amount="summary.open_balance" :currency="vendor.base_currency || company.base_currency" /></CardFigure>
               <CardNote>{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</CardNote>
+              <CardNote v-if="(summary.advance_on_account ?? 0) > 0" class="text-status-success">
+                Advance on account: <MoneyText :amount="summary.advance_on_account ?? 0" :currency="vendor.base_currency || company.base_currency" :show-currency="false" />
+              </CardNote>
             </CardContent>
           </Card>
 

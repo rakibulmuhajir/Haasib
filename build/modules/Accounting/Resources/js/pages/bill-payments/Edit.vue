@@ -60,6 +60,7 @@ interface PaymentRef {
 const props = defineProps<{
     company: CompanyRef;
     payment: PaymentRef;
+    unappliedAmount?: number;
     bankAccounts?: AccountOption[];
 }>();
 
@@ -106,13 +107,33 @@ const singleBill = computed(() =>
     !isSplitAcrossBills.value ? props.payment.allocations?.[0]?.bill : null,
 );
 
+// This payment's own single allocation, when it exactly equals the payment's amount, is
+// "fully applied" -- editing the amount there still moves the two together, so there's an
+// upper bound (the bill's balance plus this allocation). A partial allocation instead
+// leaves some of the payment as an advance on account: there's only a lower bound (the
+// amount can't drop below what's already matched to that bill).
+const singleAllocation = computed(() => props.payment.allocations?.[0] ?? null);
+const wasFullyApplied = computed(
+    () =>
+        !isSplitAcrossBills.value &&
+        Math.abs(
+            Number(singleAllocation.value?.amount_allocated || 0) -
+                Number(props.payment.amount || 0),
+        ) < 0.000001,
+);
+
 const maxAmount = computed(() => {
     const bill = singleBill.value;
-    if (!bill) return null;
-    const allocation = props.payment.allocations?.[0];
+    if (!bill || !wasFullyApplied.value) return null;
+    const allocation = singleAllocation.value;
     return (
         Number(bill.balance || 0) + Number(allocation?.amount_allocated || 0)
     );
+});
+
+const minAmount = computed(() => {
+    if (isSplitAcrossBills.value || wasFullyApplied.value) return null;
+    return Number(singleAllocation.value?.amount_allocated || 0);
 });
 
 const handleSubmit = () => {
@@ -187,6 +208,22 @@ const handleSubmit = () => {
                         <MoneyText :amount="maxAmount" :currency="payment.currency" />
                         (the current balance on {{ singleBill?.bill_number }}
                         plus this payment).
+                    </p>
+                    <p
+                        v-if="minAmount !== null"
+                        class="mt-1 text-xs text-muted-foreground"
+                    >
+                        Can't go below
+                        <MoneyText :amount="minAmount" :currency="payment.currency" />
+                        already applied to {{ singleBill?.bill_number }}.
+                    </p>
+                    <p
+                        v-if="(unappliedAmount ?? 0) > 0.004"
+                        class="mt-1 text-xs text-status-info"
+                    >
+                        <MoneyText :amount="unappliedAmount ?? 0" :currency="payment.currency" />
+                        of this payment is on account as an advance for this
+                        supplier.
                     </p>
                     <InputError :message="form.errors.amount" />
                 </div>

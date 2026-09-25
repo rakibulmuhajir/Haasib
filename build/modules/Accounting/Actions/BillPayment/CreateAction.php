@@ -152,11 +152,20 @@ class CreateAction implements PaletteAction
                 $createdPayments[] = $payment;
             }
 
+            $totalUnapplied = round(collect($createdPayments)->sum(fn ($p) => $p->fresh('allocations')->unappliedAmount()), 6);
+            $advanceNote = $totalUnapplied > 0.000001
+                ? ' (' . \App\Support\PaletteFormatter::money($totalUnapplied, $createdPayments[0]->currency) . ' held on account)'
+                : '';
+
             return [
-                'message' => count($createdPayments) === 1
+                'message' => (count($createdPayments) === 1
                     ? "Payment {$createdPayments[0]->payment_number} recorded for Daily Close"
-                    : count($createdPayments) . ' split payments recorded for Daily Close',
-                'data' => ['id' => $createdPayments[0]->id, 'ids' => collect($createdPayments)->pluck('id')->all()],
+                    : count($createdPayments) . ' split payments recorded for Daily Close') . $advanceNote,
+                'data' => [
+                    'id' => $createdPayments[0]->id,
+                    'ids' => collect($createdPayments)->pluck('id')->all(),
+                    'unapplied_amount' => $totalUnapplied,
+                ],
             ];
         }); // retry on deadlock (40P01): nextNumber()/paymentNumbers() above take a
         // lockForUpdate() row lock ahead of this insert into an audited table; see the
@@ -240,6 +249,11 @@ class CreateAction implements PaletteAction
         }
     }
 
+    /**
+     * Allocations may now fall short of the payment amount -- an advance paid before any
+     * bill exists (or before it covers everything owed) leaves the remainder unapplied
+     * (see BillPayment::unappliedAmount()), not an error. They may never exceed it.
+     */
     private function validateAndBuildAllocationPool(string $companyId, array $params): array
     {
         $allocations = collect($params['allocations'] ?? [])
@@ -247,8 +261,8 @@ class CreateAction implements PaletteAction
             ->values();
 
         $sumAlloc = round((float) $allocations->sum('amount_allocated'), 6);
-        if (abs($sumAlloc - round((float) $params['amount'], 6)) > 0.000001) {
-            throw new \InvalidArgumentException('Allocations must equal payment amount.');
+        if ($sumAlloc > round((float) $params['amount'], 6) + 0.000001) {
+            throw new \InvalidArgumentException('Allocations cannot exceed the payment amount.');
         }
 
         return $allocations->map(function ($allocation) use ($companyId, $params) {
@@ -321,10 +335,9 @@ class CreateAction implements PaletteAction
             $remaining = round($remaining - $take, 6);
         }
 
-        if ($remaining > 0.000001) {
-            throw new \InvalidArgumentException('Payment splits exceed available allocations.');
-        }
-
+        // Whatever this split's amount could not be matched to a bill from the pool is not
+        // an error -- it stays unapplied on this split's own BillPayment row (an advance),
+        // exactly like the shortfall on the payment as a whole.
         return $taken;
     }
 

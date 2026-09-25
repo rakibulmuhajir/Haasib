@@ -122,6 +122,13 @@ interface SupplierClaim {
   claim_received_transaction_number: string | null
 }
 
+interface PaidFromAdvance {
+  payment_id: string
+  payment_number: string | null
+  amount: number
+  applied_at: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   bill: BillRef
@@ -130,7 +137,18 @@ const props = defineProps<{
   supplierClaims: SupplierClaim[]
   claimReceiptAccounts: ClaimReceiptAccount[]
   editLock?: string | null
+  paidFromAdvances?: PaidFromAdvance[]
+  vendorAdvanceAvailable?: number
 }>()
+
+const applyingAdvance = ref(false)
+const applyAdvance = () => {
+  applyingAdvance.value = true
+  router.post(`/${props.company.slug}/bills/${props.bill.id}/apply-advance`, {}, {
+    preserveScroll: true,
+    onFinish: () => { applyingAdvance.value = false },
+  })
+}
 
 const { t } = useLexicon()
 
@@ -590,6 +608,24 @@ const navigateToVendor = () => {
                 </span>
               </div>
             </div>
+
+            <!-- Paid from advance -->
+            <div v-if="paidFromAdvances?.length" class="space-y-1 rounded-md border border-rule-default bg-muted/30 p-2 text-xs text-muted-foreground">
+              <p v-for="row in paidFromAdvances" :key="row.payment_id">
+                Paid <MoneyText :amount="row.amount" :currency="bill.currency" :show-currency="false" /> from advance {{ row.payment_number ?? row.payment_id }}
+              </p>
+            </div>
+
+            <!-- Apply advance -->
+            <Button
+              v-if="bill.balance > 0 && (vendorAdvanceAvailable ?? 0) > 0 && bill.status !== 'draft' && bill.status !== 'void'"
+              class="w-full"
+              variant="outline"
+              :disabled="applyingAdvance"
+              @click="applyAdvance"
+            >
+              Apply advance (<MoneyText :amount="vendorAdvanceAvailable ?? 0" :currency="bill.currency" :show-currency="false" /> available)
+            </Button>
 
             <!-- Action Buttons -->
             <div class="space-y-2">

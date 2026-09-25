@@ -32,6 +32,7 @@ interface PaymentRow {
   vendor: VendorRef | null
   payment_date: string
   amount: number
+  unapplied_amount?: number
   currency: string
   payment_method: string
   reference_number: string | null
@@ -72,6 +73,7 @@ const columns = [
   { key: 'vendor', label: 'Vendor', kind: 'text' as const },
   { key: 'payment_date', label: 'Date', kind: 'date' as const },
   { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'unapplied_amount', label: 'On account', kind: 'text' as const },
   { key: 'payment_method', label: 'Method', kind: 'text' as const },
   { key: 'reference_number', label: 'Reference', kind: 'ref' as const },
   { key: 'actions', label: 'Actions' },
@@ -107,6 +109,7 @@ const tableData = computed(() =>
     vendor: p.vendor?.name ?? '—',
     payment_date: formatDateTime(p.payment_date, { mode: 'date' }),
     amount: formatMoney(p.amount, p.currency),
+    unapplied_amount: (p.unapplied_amount ?? 0) > 0.004 ? formatMoney(p.unapplied_amount ?? 0, p.currency) : '—',
     payment_method: p.source_count && p.source_count > 1
       ? `${formatPaymentMethod(p.payment_method)} (${p.source_count})`
       : formatPaymentMethod(p.payment_method),

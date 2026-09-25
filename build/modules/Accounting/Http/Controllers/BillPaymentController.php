@@ -26,7 +26,7 @@ class BillPaymentController extends Controller
         $company = app(CompanyContextService::class)->requireCompany();
 
         $query = \App\Modules\Accounting\Models\BillPayment::query()
-            ->with('vendor:id,name')
+            ->with(['vendor:id,name', 'allocations'])
             ->where('company_id', $company->id)
             ->orderByDesc('payment_date');
 
@@ -46,6 +46,7 @@ class BillPaymentController extends Controller
             ->map(function ($rows) {
                 $first = $rows->sortBy('payment_number')->first();
                 $amount = round((float) $rows->sum('amount'), 6);
+                $unapplied = round((float) $rows->sum(fn ($row) => $row->unappliedAmount()), 6);
 
                 return [
                     'id' => $first->id,
@@ -55,6 +56,7 @@ class BillPaymentController extends Controller
                     'vendor' => $first->vendor,
                     'payment_date' => $first->payment_date,
                     'amount' => $amount,
+                    'unapplied_amount' => $unapplied,
                     'currency' => $first->currency,
                     'payment_method' => $rows->count() > 1 ? 'split' : $first->payment_method,
                     'reference_number' => $first->reference_number,
@@ -253,6 +255,7 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
+            'unappliedAmount' => round((float) $groupPayments->sum(fn ($p) => $p->unappliedAmount()), 2),
             'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,
             'editLock' => $editLock,
@@ -286,6 +289,7 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
+            'unappliedAmount' => round($record->unappliedAmount(), 2),
             'bankAccounts' => $bankAccounts,
         ]);
     }

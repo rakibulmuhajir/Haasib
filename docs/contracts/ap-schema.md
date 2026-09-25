@@ -241,7 +241,10 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
   - base_transaction_charge = ROUND(transaction_charge * COALESCE(exchange_rate,1), 2).
   - Payment currency must match bill currency or company base currency when allocating (Phase 1 rule).
-  - Payment amount cannot exceed sum of allocations.
+  - Allocations may total LESS than the payment amount (including zero, i.e. no `allocations[]` at all): the remainder is an advance/on-account balance with the vendor, not an error. Allocations may never total MORE than the payment amount.
+  - There is no `unapplied_amount` column and no null-`bill_id` allocation row (unlike `acct.payment_allocations.invoice_id`, which is nullable for this exact purpose on the AR side). The unapplied/advance amount is always computed: `BillPayment::unappliedAmount() = amount - SUM(bill_payment_allocations.amount_allocated for this payment)`. Every `acct.bill_payment_allocations` row always names a real bill.
+  - `PostingService::postBillPayment` always posts Dr AP / Cr cash for the FULL `amount` regardless of how much is allocated — the advance is a real debit balance on the vendor's AP account, which is the right account for it whether or not it is matched to a bill yet.
+  - `App\Modules\Accounting\Services\VendorAdvanceService` applies a vendor's unapplied balance to a bill oldest-payment-first: automatically the instant a bill for that vendor is posted/received (`Bill\CreateAction`, `Bill\ReceiveAction`), and by hand from a bill's page (`Bill\ApplyAdvanceAction`, command `bill.apply_advance`) for a bill that predates the advance. This only inserts `acct.bill_payment_allocations` rows and updates the bill's `paid_amount`/`balance`/`status` — it never posts a new `Transaction`, since the cash already moved when the payment itself was posted.
   - A UI request may submit `payment_splits[]` to record one bill payment from multiple source accounts. Each split is saved as a separate `acct.bill_payments` row and posts its own DR AP / CR source account journal.
   - All rows created from the same split-payment action share `payment_group_id` and `payment_group_number`. Frontend lists should group by these fields and show source rows as details.
   - Cannot delete payment with allocations; void instead if required.
@@ -266,7 +269,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `$casts = ['company_id'=>'string','bill_payment_id'=>'string','bill_id'=>'string','amount_allocated'=>'decimal:6','base_amount_allocated'=>'decimal:2','applied_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo BillPayment; belongsTo Bill.
 - Business rules:
-  - `sum(amount_allocated) per payment` ≤ bill_payment.amount; enforce in service layer and/or DB constraint.
+  - `sum(amount_allocated) per payment` ≤ bill_payment.amount; enforced in `BillPayment\CreateAction::validateAndBuildAllocationPool` and `PostingService::postBillPayment` (service layer only, no DB constraint). The shortfall, if any, is the payment's advance/on-account balance -- see `BillPayment::unappliedAmount()` above.
   - Payment currency must equal bill currency or company base currency (Phase 1 rule).
   - base_amount_allocated = ROUND(amount_allocated * payment.exchange_rate, 2) when currency differs from base.
   - On create/update/delete, recompute bill `paid_amount`/`balance` (transaction currency) and status/paid_at accordingly.

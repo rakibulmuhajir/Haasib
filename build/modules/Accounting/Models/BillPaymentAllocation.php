@@ -9,8 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * One slice of a supplier (AP) `BillPayment` applied to a `Bill` (reducing that bill's
- * balance). Unlike its AR mirror below, `bill_id` here is not nullable — there is no
- * on-account/unapplied-remainder concept on the payables side as of this writing.
+ * balance). `bill_id` is never null here -- unlike its AR mirror below, an AP advance is
+ * not represented by a dedicated allocation row of its own. Instead it is the gap between
+ * a `BillPayment`'s amount and what its own allocation rows already total (see
+ * {@see BillPayment::unappliedAmount()}), applied to a bill later by
+ * {@see \App\Modules\Accounting\Services\VendorAdvanceService} either automatically (the
+ * moment a bill for that vendor becomes payable) or by hand from the bill's page.
  *
  * This class shares its name with two unrelated models — same word, different
  * mechanisms, do not conflate them:

@@ -85,7 +85,8 @@ test('a fuel_card channel that settles to a supplier pays its open bill from cle
     $settlements = $close->metadata['channel_supplier_settlements'] ?? [];
     expect($settlements)->toHaveCount(1);
     expect((float) $settlements[0]['amount_paid'])->toBe(8000.0);
-    expect((float) $settlements[0]['excess_in_clearing'])->toBe(0.0);
+    expect((float) $settlements[0]['applied_to_bills'])->toBe(8000.0);
+    expect((float) $settlements[0]['advance_amount'])->toBe(0.0);
     expect($settlements[0]['vendor_id'])->toBe($f['vendor']->id);
 
     $bill->refresh();
@@ -110,7 +111,7 @@ test('a fuel_card channel that settles to a supplier pays its open bill from cle
     expect((float) $clearingEffect)->toBe(0.0);
 });
 
-test('a fuel_card channel settling to a supplier only pays what the vendor is owed, leaving the rest in clearing', function () {
+test('a fuel_card channel settling to a supplier pays the full card total, holding the excess over open bills as an advance', function () {
     $f = pendingDeliveryFixture();
 
     $clearingAccount = $f['accounts']['1020'];
@@ -143,15 +144,30 @@ test('a fuel_card channel settling to a supplier only pays what the vendor is ow
 
     $settlements = $close->metadata['channel_supplier_settlements'] ?? [];
     expect($settlements)->toHaveCount(1);
-    expect((float) $settlements[0]['amount_paid'])->toBe(3000.0);
-    expect((float) $settlements[0]['excess_in_clearing'])->toBe(5000.0);
+    // The FULL card total (8000) leaves clearing, not just what the vendor was owed:
+    // 3000 pays down the open bill, and the remaining 5000 is held as an advance with the
+    // vendor rather than staying parked in clearing.
+    expect((float) $settlements[0]['amount_paid'])->toBe(8000.0);
+    expect((float) $settlements[0]['applied_to_bills'])->toBe(3000.0);
+    expect((float) $settlements[0]['advance_amount'])->toBe(5000.0);
 
     $bill->refresh();
     expect((float) $bill->balance)->toBe(0.0);
     expect($bill->status)->toBe('paid');
 
     $payment = BillPayment::where('company_id', $f['company']->id)->where('vendor_id', $f['vendor']->id)->sole();
-    expect((float) $payment->amount)->toBe(3000.0);
+    expect((float) $payment->amount)->toBe(8000.0);
+    expect($payment->unappliedAmount())->toBe(5000.0);
+
+    // Clearing nets to zero here too: the close's own debit for the full 8000 in card sales
+    // and this settlement payment's credit for the same full 8000 cancel out, even though
+    // only 3000 of it reached a bill.
+    $clearingEffect = DB::table('acct.journal_entries as je')
+        ->whereIn('je.transaction_id', [$close->id, $payment->transaction_id])
+        ->where('je.account_id', $clearingAccount->id)
+        ->selectRaw('coalesce(sum(je.debit_amount),0) - coalesce(sum(je.credit_amount),0) as net')
+        ->value('net');
+    expect((float) $clearingEffect)->toBe(0.0);
 });
 
 test('settings update rejects settles_to supplier without a vendor', function () {

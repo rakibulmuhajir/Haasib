@@ -213,8 +213,13 @@ class PostingService
         if ($charge > 0 && ! $payment->company?->expense_account_id) {
             throw new \RuntimeException('A default expense account is required to post transaction charges.');
         }
-        if (abs($amount - round($allocated, 2)) >= 0.01) {
-            throw new \RuntimeException('Bill payment allocations must equal payment amount to post to GL.');
+        // Allocations may now fall short of the payment amount -- the shortfall is an
+        // advance/on-account balance with the vendor (see BillPayment::unappliedAmount()).
+        // The GL posting below is unaffected either way: it always debits AP / credits cash
+        // for the FULL payment amount, because the advance is real money the vendor holds
+        // and AP is the right account for it regardless of how much is matched to a bill yet.
+        if (round($allocated, 2) > $amount + 0.01) {
+            throw new \RuntimeException('Bill payment allocations cannot exceed the payment amount.');
         }
 
         return $this->createTransaction([

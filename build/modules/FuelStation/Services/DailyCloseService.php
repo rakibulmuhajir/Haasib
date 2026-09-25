@@ -972,9 +972,51 @@ class DailyCloseService
                     ->orderBy('created_at')
                     ->get(['id', 'bill_number', 'balance']);
                 $openBalance = round((float) $openBills->sum('balance'), 2);
-                $settleAmount = round(min($channelTotal, $openBalance), 2);
+                // The FULL card total always leaves clearing for this vendor now, whether or
+                // not it covers every open bill: whatever exceeds the open balance is not an
+                // error, it's an advance -- money the vendor is holding on account, applied
+                // automatically (VendorAdvanceService::autoApply) the moment its next bill
+                // posts. Clearing therefore always nets to zero for a supplier-settled
+                // channel, never leaves an "excess parked in clearing" balance behind.
+                $appliedAmount = round(min($channelTotal, $openBalance), 2);
+                $advanceAmount = round($channelTotal - $appliedAmount, 2);
 
-                $settlement = [
+                $allocations = [];
+                $remaining = $appliedAmount;
+                foreach ($openBills as $bill) {
+                    if ($remaining <= 0.000001) {
+                        break;
+                    }
+                    $take = round(min((float) $bill->balance, $remaining), 2);
+                    if ($take <= 0) {
+                        continue;
+                    }
+                    $allocations[] = ['bill_id' => $bill->id, 'amount_allocated' => $take];
+                    $remaining = round($remaining - $take, 2);
+                }
+
+                $notes = "{$posting['channel_label']} settlement — Daily Close {$transactionNumber}";
+                if ($advanceAmount > 0.004) {
+                    $notes .= '. ' . number_format($advanceAmount, 2) . " of {$posting['channel_label']} sales are held as an advance with {$vendor->name}.";
+                }
+
+                $paymentResult = app(CommandBus::class)->dispatch('bill_payment.create', [
+                    'vendor_id' => $vendorId,
+                    'payment_date' => $date,
+                    'amount' => $channelTotal,
+                    'currency' => $currency,
+                    'base_currency' => $currency,
+                    'payment_method' => 'other',
+                    'payment_account_id' => $clearingAccountId,
+                    'ap_account_id' => $vendor->ap_account_id,
+                    'allocations' => $allocations,
+                    'notes' => $notes,
+                    'allow_clearing_account' => true,
+                // Part of posting the close, which already checked its own permission —
+                // same reasoning as the bill.receive_goods dispatch above.
+                ], $user, true);
+
+                $channelSupplierSettlements[] = [
                     'channel_code' => $posting['channel_code'],
                     'channel_label' => $posting['channel_label'],
                     'vendor_id' => $vendorId,
@@ -982,48 +1024,11 @@ class DailyCloseService
                     'clearing_account_id' => $clearingAccountId,
                     'clearing_account_name' => $clearingAccount?->name ?? 'clearing',
                     'card_sales' => $channelTotal,
-                    'amount_paid' => 0.0,
-                    'excess_in_clearing' => $channelTotal,
-                    'bill_payment_id' => null,
+                    'amount_paid' => $channelTotal,
+                    'applied_to_bills' => $appliedAmount,
+                    'advance_amount' => $advanceAmount,
+                    'bill_payment_id' => $paymentResult['data']['id'] ?? null,
                 ];
-
-                if ($settleAmount > 0) {
-                    $allocations = [];
-                    $remaining = $settleAmount;
-                    foreach ($openBills as $bill) {
-                        if ($remaining <= 0.000001) {
-                            break;
-                        }
-                        $take = round(min((float) $bill->balance, $remaining), 2);
-                        if ($take <= 0) {
-                            continue;
-                        }
-                        $allocations[] = ['bill_id' => $bill->id, 'amount_allocated' => $take];
-                        $remaining = round($remaining - $take, 2);
-                    }
-
-                    $paymentResult = app(CommandBus::class)->dispatch('bill_payment.create', [
-                        'vendor_id' => $vendorId,
-                        'payment_date' => $date,
-                        'amount' => $settleAmount,
-                        'currency' => $currency,
-                        'base_currency' => $currency,
-                        'payment_method' => 'other',
-                        'payment_account_id' => $clearingAccountId,
-                        'ap_account_id' => $vendor->ap_account_id,
-                        'allocations' => $allocations,
-                        'notes' => "{$posting['channel_label']} settlement — Daily Close {$transactionNumber}",
-                        'allow_clearing_account' => true,
-                    // Part of posting the close, which already checked its own permission —
-                    // same reasoning as the bill.receive_goods dispatch above.
-                    ], $user, true);
-
-                    $settlement['amount_paid'] = $settleAmount;
-                    $settlement['excess_in_clearing'] = round($channelTotal - $settleAmount, 2);
-                    $settlement['bill_payment_id'] = $paymentResult['data']['id'] ?? null;
-                }
-
-                $channelSupplierSettlements[] = $settlement;
             }
             $metadata['channel_supplier_settlements'] = $channelSupplierSettlements;
 

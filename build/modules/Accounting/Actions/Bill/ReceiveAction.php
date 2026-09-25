@@ -59,6 +59,8 @@ class ReceiveAction implements PaletteAction
             }
 
             $this->autoReceiveImmediateItems($bill);
+
+            app(\App\Modules\Accounting\Services\VendorAdvanceService::class)->autoApply($bill->fresh());
         });
 
         return ['message' => "Bill {$bill->bill_number} marked received"];

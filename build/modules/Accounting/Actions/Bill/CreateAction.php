@@ -159,6 +159,10 @@ class CreateAction implements PaletteAction
                 $bill->save();
             }
 
+            if ($status === 'received') {
+                app(\App\Modules\Accounting\Services\VendorAdvanceService::class)->autoApply($bill->fresh());
+            }
+
             return [
                 'message' => $status === 'received'
                     ? "Bill {$bill->bill_number} received"

@@ -235,6 +235,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/bills/{bill}/receive-goods', [BillController::class, 'receiveGoods'])->name('bills.receive-goods');
         Route::post('/{company}/bills/{bill}/supplier-claims/receive', [BillController::class, 'receiveSupplierClaim'])->name('bills.supplier-claims.receive');
         Route::post('/{company}/bills/{bill}/void', [BillController::class, 'void'])->name('bills.void');
+        Route::post('/{company}/bills/{bill}/apply-advance', [BillController::class, 'applyAdvance'])->name('bills.apply-advance');
 
         // Bill Payments
         Route::get('/{company}/bill-payments', [BillPaymentController::class, 'index'])->name('bill-payments.index');

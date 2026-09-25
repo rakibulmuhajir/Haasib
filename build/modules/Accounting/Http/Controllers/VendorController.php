@@ -128,6 +128,9 @@ class VendorController extends Controller
             ->whereYear('payment_date', now()->year)
             ->sum('amount');
 
+        $advanceOnAccount = app(\App\Modules\Accounting\Services\VendorAdvanceService::class)
+            ->totalUnapplied($company->id, $record->id);
+
         $bills = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
             ->orderByDesc('bill_date')
@@ -160,6 +163,7 @@ class VendorController extends Controller
                 'overdue_balance' => $overdue,
                 'bill_count' => $record->bills_count,
                 'paid_ytd' => $paidYtd,
+                'advance_on_account' => round($advanceOnAccount, 2),
             ],
             'bills' => $bills,
             'payments' => $payments,

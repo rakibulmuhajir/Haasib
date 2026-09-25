@@ -235,14 +235,8 @@ const hasAnyAllocation = computed(() =>
     form.allocations.some((a) => (Number(a.amount_allocated) || 0) > 0),
 );
 
-watch(totalAllocated, (total) => {
-    if (!hasAnyAllocation.value) return;
-    form.amount = Number(total.toFixed(2));
-    if (form.payment_splits.length === 1) {
-        form.payment_splits[0].amount = Number(total.toFixed(2));
-    }
-});
-
+// Paying from a specific bill's "Record Payment" button still ties the amount to that one
+// bill's allocation 1:1 -- there's nothing else to pay from an advance in that flow.
 watch(totalSplit, (total) => {
     if (!props.selectedBill) return;
 
@@ -252,6 +246,22 @@ watch(totalSplit, (total) => {
         { bill_id: props.selectedBill.id, amount_allocated: amount },
     ];
 });
+
+// Otherwise the amount is entered directly and allocations are optional: whatever is not
+// matched to a bill is held on account as an advance for this vendor.
+const advanceAmount = computed(() =>
+    Math.max(0, Number((moneyNumber(form.amount) - totalAllocated.value).toFixed(2))),
+);
+
+watch(
+    () => form.amount,
+    (amount) => {
+        if (props.selectedBill) return;
+        if (form.payment_splits.length === 1) {
+            form.payment_splits[0].amount = moneyNumber(amount);
+        }
+    },
+);
 
 const paymentMethods = [
     { value: 'cash', label: 'Cash' },
@@ -330,8 +340,12 @@ const removeSplit = (index: number) => {
 };
 
 const handleSubmit = () => {
-    if (Math.abs(totalSplit.value - totalAllocated.value) > 0.000001) {
-        showError('Payment sources must equal the amount allocated to bills');
+    if (Math.abs(totalSplit.value - moneyNumber(form.amount)) > 0.000001) {
+        showError('Payment sources must equal the payment amount');
+        return;
+    }
+    if (totalAllocated.value > moneyNumber(form.amount) + 0.000001) {
+        showError('Allocations cannot exceed the payment amount');
         return;
     }
 
@@ -348,7 +362,7 @@ const handleSubmit = () => {
     const data = {
         vendor_id: form.vendor_id,
         payment_date: form.payment_date,
-        amount: totalAllocated.value,
+        amount: moneyNumber(form.amount),
         transaction_charge: totalTransactionCharge.value,
         currency: form.currency,
         base_currency: form.base_currency,
@@ -430,10 +444,12 @@ const handleSubmit = () => {
                         type="number"
                         min="0.01"
                         step="0.01"
-                        readonly
+                        :readonly="Boolean(props.selectedBill)"
                     />
                     <p class="mt-1 text-xs text-muted-foreground">
-                        Calculated from the bill allocation below.
+                        Anything not applied to a bill below is held as an
+                        advance and used for this supplier's next bills
+                        automatically.
                     </p>
                     <InputError :message="form.errors.amount" />
                 </div>
@@ -658,7 +674,7 @@ const handleSubmit = () => {
                     <span
                         :class="{
                             'text-destructive':
-                                Math.abs(totalSplit - totalAllocated) >
+                                Math.abs(totalSplit - moneyNumber(form.amount)) >
                                 0.000001,
                         }"
                     >
@@ -683,12 +699,12 @@ const handleSubmit = () => {
                     />
                 </div>
                 <div
-                    v-if="Math.abs(totalSplit - totalAllocated) > 0.000001"
+                    v-if="Math.abs(totalSplit - moneyNumber(form.amount)) > 0.000001"
                     class="rounded-md border border-status-attention/30 bg-status-attention/10 p-3 text-sm text-status-attention"
                 >
                     Sources cover {{ formatNumber(totalSplit) }}
-                    {{ form.currency }}. Allocations are
-                    {{ formatNumber(totalAllocated) }} {{ form.currency }}. The
+                    {{ form.currency }}. The payment amount is
+                    {{ formatNumber(form.amount) }} {{ form.currency }}. The
                     two must match before saving.
                 </div>
             </div>
@@ -740,8 +756,20 @@ const handleSubmit = () => {
             </div>
 
             <div class="flex justify-between text-sm">
-                <span>Total Allocated</span>
+                <span>Applied to bills</span>
                 <MoneyText :amount="totalAllocated" :currency="form.currency" />
+            </div>
+            <div class="flex justify-between text-sm font-medium">
+                <span>Advance on account</span>
+                <MoneyText :amount="advanceAmount" :currency="form.currency" />
+            </div>
+            <div
+                v-if="advanceAmount > 0.004"
+                class="rounded-md border border-status-info/30 bg-status-info/10 p-3 text-sm text-status-info"
+            >
+                {{ formatNumber(advanceAmount) }} {{ form.currency }} is not
+                applied to any bill and will be held on account for this
+                supplier, applied automatically to their next bills.
             </div>
 
             <div
@@ -750,7 +778,7 @@ const handleSubmit = () => {
                 <div>
                     <div class="text-muted-foreground">Payment now</div>
                     <div class="text-lg font-semibold">
-                        {{ formatNumber(totalAllocated) }} {{ form.currency }}
+                        {{ formatNumber(form.amount) }} {{ form.currency }}
                     </div>
                 </div>
                 <div>

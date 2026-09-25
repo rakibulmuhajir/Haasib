@@ -92,8 +92,20 @@ class StoreBillPaymentRequest extends BaseFormRequest
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],
-            // Allocations
-            'allocations' => ['nullable', 'array'],
+            // Allocations may total less than the amount -- the remainder is held as an
+            // advance/on-account balance with the vendor (see BillPayment::unappliedAmount())
+            // -- but never more than it.
+            'allocations' => [
+                'nullable',
+                'array',
+                function ($attribute, $value, $fail) {
+                    $sum = round(collect($value)->sum(fn ($row) => (float) ($row['amount_allocated'] ?? 0)), 6);
+                    $amount = round((float) $this->input('amount', 0), 6);
+                    if ($sum > $amount + 0.000001) {
+                        $fail('Allocations cannot exceed the payment amount.');
+                    }
+                },
+            ],
             'allocations.*.bill_id' => ['required_with:allocations', 'uuid', Rule::exists(Bill::class, 'id')],
             'allocations.*.amount_allocated' => ['required_with:allocations', 'numeric', 'min:0'],
         ];

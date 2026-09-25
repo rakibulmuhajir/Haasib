@@ -14,11 +14,15 @@ class GeneratePeriodPayslipsRequest extends BaseFormRequest
     }
 
     /**
-     * Which month to run, and the day its wages are paid. Both optional: left out, this is the
-     * current month paid on its last day, which is what running payroll always did.
+     * Which month to run. Optional: left out, this is the current month.
      *
      * The month used to be now() and nothing else, so a station entering past months from its
      * register could not run their payroll at all.
+     *
+     * There is no fixed pay day, so the UI no longer sends payment_date - wages are paid
+     * whenever they are paid. The field is kept, nullable, for any other caller that still sends
+     * one; the controller fills it with the month's last day when it is missing, purely to
+     * satisfy the payroll_periods table's not-null column.
      */
     public function rules(): array
     {

@@ -129,7 +129,8 @@ class EmployeeController extends Controller
             ->get()
             ->map(fn (Payslip $payslip) => [
                 'id' => $payslip->id,
-                'date' => $payslip->payrollPeriod?->payment_date,
+                // Earned at the end of its month; payment_date is internal and not a pay date.
+                'date' => $payslip->payrollPeriod?->period_end,
                 'label' => $payslip->payslip_number,
                 'type' => 'payslip',
                 'gross_pay' => (float) $payslip->gross_pay,

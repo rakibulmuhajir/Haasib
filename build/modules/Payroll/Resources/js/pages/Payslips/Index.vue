@@ -75,6 +75,7 @@ interface PayslipRow {
   gross_pay: number
   net_pay: number
   status: string
+  paid_at: string | null
 }
 
 interface PaymentAccount {
@@ -127,12 +128,18 @@ const formatCurrency = (amount: number, currency: string) => {
   return formatMoneyText(amount, currency || 'USD')
 }
 
+// There is no fixed pay day, so payslips are grouped by the month they belong to, not by a
+// payment date - each one is paid whenever it is paid, shown separately below once it is.
+const formatMonth = (date: string) => {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
 const tableData = computed(() => {
   return props.payslips.data.map((payslip) => ({
     id: payslip.id,
     payslip_number: payslip.payslip_number,
     employee: `${payslip.employee.first_name} ${payslip.employee.last_name}`,
-    period: `${formatDate(payslip.payroll_period.period_start)} - ${formatDate(payslip.payroll_period.period_end)}`,
+    period: formatMonth(payslip.payroll_period.period_start),
     net_pay: formatCurrency(payslip.net_pay, payslip.currency),
     status: payslip.status,
     _raw: payslip,
@@ -332,6 +339,9 @@ const handleVoid = (id: string) => {
 
       <template #cell-status="{ row }">
         <StatusBadge :status="row._raw.status" />
+        <p v-if="row._raw.status === 'paid' && row._raw.paid_at" class="mt-1 text-xs text-muted-foreground">
+          Paid on {{ formatDate(row._raw.paid_at) }}
+        </p>
       </template>
 
       <template #cell-_actions="{ row }">

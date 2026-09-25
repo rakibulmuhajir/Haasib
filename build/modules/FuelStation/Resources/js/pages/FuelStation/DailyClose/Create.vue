@@ -150,7 +150,6 @@ interface PayrollPayout {
     employee_number: string | null;
     amount: number;
     approved_at: string | null;
-    payment_date?: string | null;
     due_label?: string | null;
 }
 

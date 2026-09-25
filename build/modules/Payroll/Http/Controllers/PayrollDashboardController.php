@@ -111,8 +111,10 @@ class PayrollDashboardController extends Controller
         $company = app(CurrentCompany::class)->get();
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
-        // The month and the pay day come from the request when given; otherwise the current
-        // month, paid on its last day, as before.
+        // The month comes from the request when given; otherwise the current month. There is no
+        // fixed pay day - employees are paid whenever they ask, or whenever the company pays at
+        // its convenience - so payment_date is only filled to satisfy the not-null column and is
+        // never shown to the user as "the pay date". A caller may still send one; it is kept.
         $month = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', ($request->input('month') ?: now()->format('Y-m')).'-01');
         $monthStart = $month->copy()->startOfMonth()->toDateString();
         $monthEnd = $month->copy()->endOfMonth()->toDateString();
@@ -131,8 +133,6 @@ class PayrollDashboardController extends Controller
                 ]
             );
 
-            // The pay day decides which daily close offers these wages, so an open period takes
-            // a newly chosen one.
             if ($request->filled('payment_date') && in_array($period->status, ['open', 'processing'], true)
                 && optional($period->payment_date)->toDateString() !== $paymentDate) {
                 $period->update(['payment_date' => $paymentDate]);
@@ -151,7 +151,7 @@ class PayrollDashboardController extends Controller
 
         $label = $month->format('F Y');
         $message = $created > 0
-            ? "{$created} payslips prepared for {$label}, to be paid ".\Illuminate\Support\Carbon::parse($paymentDate)->format('j M').'.'
+            ? "{$created} payslips prepared for {$label}."
             : "{$label} payroll is already prepared.";
 
         return back()->with('success', $message);

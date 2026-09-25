@@ -87,23 +87,18 @@ class Payslip extends Model
 
     /**
      * Wages a daily close for this business date may pay from the drawer: approved, not yet
-     * paid, and belonging to a payroll period whose pay day is on or before that date.
+     * paid, and belonging to a payroll period that has already started.
      *
-     * This used to be two copies of the same where-clause - one listing the wages on the close
-     * form, one checking them when the close posted - and both keyed on approved_at, which is
-     * stamped whenever someone clicks Approve. A month's wages could therefore only be paid in
-     * the close for the day they happened to be approved, never in a past close. The period's
-     * payment date is the business fact; approval is only a click.
-     *
-     * The comparison used to be an exact date match, so a salary due on 1 Sep dropped off the
-     * list the moment 2 Sep arrived even though it was still unpaid. Wages now stay listed as
-     * due every day from their pay day until someone actually pays them.
+     * There is no fixed pay day - employees are paid whenever they ask, or whenever the company
+     * pays at its convenience - so this is not keyed on any particular date at all, only on
+     * whether the month the wages belong to has begun. A September payslip is payable from
+     * 1 September onward, on any day, in any close, until someone actually pays it.
      */
     public function scopePayableOn($query, string $date)
     {
         return $query->where('status', 'approved')
             ->whereNull('payment_gl_transaction_id')
-            ->whereHas('payrollPeriod', fn ($q) => $q->whereDate('payment_date', '<=', $date));
+            ->whereHas('payrollPeriod', fn ($q) => $q->whereDate('period_start', '<=', $date));
     }
 
     public function payrollPeriod(): BelongsTo

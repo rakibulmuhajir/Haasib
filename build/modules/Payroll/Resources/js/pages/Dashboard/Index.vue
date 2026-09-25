@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { localToday } from '@/composables/useEntryDate'
@@ -120,30 +120,16 @@ const accountRows = computed(() => [
 ])
 
 /**
- * Which month to run and the day its wages are paid. The pay day decides which daily close
- * offers the wages, so a past month can be run and paid in the close for the day it was paid.
+ * Which month to run. There is no fixed pay day - employees are paid whenever they ask, or
+ * whenever the company pays at its convenience - so running payroll only asks for the month;
+ * each payslip is paid, and its payment date recorded, separately when it actually happens.
  */
 const payrollMonth = ref(localToday().slice(0, 7))
-
-const monthEnd = (month: string): string => {
-  const [y, m] = month.split('-').map(Number)
-  if (!y || !m) return ''
-  const last = new Date(y, m, 0).getDate()
-  return `${month}-${String(last).padStart(2, '0')}`
-}
-
-const payrollPaymentDate = ref(monthEnd(payrollMonth.value))
-
-// Picking another month moves the pay day to that month's end; change it afterwards if wages
-// were paid on a different day.
-watch(payrollMonth, (month) => {
-  payrollPaymentDate.value = monthEnd(month)
-})
 
 const runMonthlyPayroll = () => {
   router.post(
     `/${props.company.slug}/payroll/run-monthly`,
-    { month: payrollMonth.value, payment_date: payrollPaymentDate.value },
+    { month: payrollMonth.value },
     { preserveScroll: true },
   )
 }
@@ -163,16 +149,15 @@ const runMonthlyPayroll = () => {
           <Label for="payroll-month" class="text-xs">Month</Label>
           <Input id="payroll-month" v-model="payrollMonth" type="month" class="h-9 w-40" />
         </div>
-        <div class="space-y-1">
-          <Label for="payroll-payment-date" class="text-xs">Paid on</Label>
-          <Input id="payroll-payment-date" v-model="payrollPaymentDate" type="date" class="h-9 w-40" />
-        </div>
         <Button @click="runMonthlyPayroll">
           <Calendar class="mr-2 h-4 w-4" />
           Run Payroll
         </Button>
       </div>
     </template>
+    <p class="text-sm text-muted-foreground">
+      Creates this month's payslips. Pay each salary whenever it is paid; the payment date is recorded then.
+    </p>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Card>
@@ -181,7 +166,6 @@ const runMonthlyPayroll = () => {
             <div>
               <p class="text-sm text-muted-foreground">Open period</p>
               <p class="mt-1 font-semibold">{{ currentPeriodLabel }}</p>
-              <p class="mt-1 text-xs text-muted-foreground">Payment: {{ formatDate(currentPeriod?.payment_date) }}</p>
             </div>
             <Calendar class="h-5 w-5 text-muted-foreground" />
           </div>

@@ -10,13 +10,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Which wages a daily close may pay: approved, unpaid, and belonging to a period whose pay day is
- * the close's business date.
+ * Which wages a daily close may pay: approved, unpaid, and belonging to a period that has
+ * already started.
  *
- * The close and its form each carried their own copy of this rule, keyed on approved_at - stamped
- * whenever someone clicks Approve. A month's wages could only be paid in the close for the day
- * they happened to be approved, so a station entering past months from its register could never
- * pay them at all. It is now one scope, keyed on the period's payment date.
+ * There is no fixed pay day - employees are paid whenever they ask, or whenever the company
+ * pays at its convenience - so this used to be keyed on the period's payment_date (itself keyed
+ * on approved_at before that). Neither date means anything to when a wage may actually be paid;
+ * only whether its month has begun does. The close and its form each carried their own copy of
+ * this rule; it is now one scope, keyed on the period's start date.
  */
 function payableCompany(): Company
 {
@@ -35,7 +36,7 @@ function payableCompany(): Company
     return $company;
 }
 
-function payslipFor(Company $company, string $paymentDate, string $status = 'approved', ?string $approvedAt = '2026-09-24 10:00'): Payslip
+function payslipFor(Company $company, string $periodStart, string $periodEnd, string $status = 'approved', ?string $approvedAt = '2026-09-24 10:00'): Payslip
 {
     $employee = Employee::create([
         'company_id' => $company->id,
@@ -52,8 +53,9 @@ function payslipFor(Company $company, string $paymentDate, string $status = 'app
     ]);
 
     $period = PayrollPeriod::firstOrCreate(
-        ['company_id' => $company->id, 'period_start' => '2026-08-01', 'period_end' => '2026-08-31'],
-        ['payment_date' => $paymentDate, 'status' => 'open'],
+        ['company_id' => $company->id, 'period_start' => $periodStart, 'period_end' => $periodEnd],
+        // payment_date only fills the not-null column; it plays no part in payability.
+        ['payment_date' => $periodEnd, 'status' => 'open'],
     );
 
     $service = app(PayrollPostingService::class);
@@ -77,43 +79,41 @@ function payslipFor(Company $company, string $paymentDate, string $status = 'app
     ]);
 }
 
-test('wages are payable on their pay day, not the day they were approved', function () {
+test('wages are payable from the day their period starts', function () {
     $company = payableCompany();
 
-    // August wages, approved on 24 September while back-filling, paid on 3 September.
-    $payslip = payslipFor($company, '2026-09-03');
+    $payslip = payslipFor($company, '2026-08-01', '2026-08-31');
 
-    expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->toContain($payslip->id);
+    expect(Payslip::payableOn('2026-08-01')->pluck('id')->all())->toContain($payslip->id);
 });
 
-test('wages due on an earlier date stay listed as due on every later date until paid', function () {
+test('wages stay payable on any later day, not just the day they were approved', function () {
     $company = payableCompany();
 
-    // Due 3 September, still unpaid three weeks later: still due, not dropped from the list.
-    $payslip = payslipFor($company, '2026-09-03');
+    // August wages, approved 24 September while back-filling: still payable on 24 September.
+    $payslip = payslipFor($company, '2026-08-01', '2026-08-31');
 
     expect(Payslip::payableOn('2026-09-24')->pluck('id')->all())->toContain($payslip->id);
 });
 
-test('wages are not payable before their pay day', function () {
+test('wages are not payable before their period starts', function () {
     $company = payableCompany();
 
-    // Due 24 September: not payable from an earlier close.
-    $payslip = payslipFor($company, '2026-09-24');
+    $payslip = payslipFor($company, '2026-09-01', '2026-09-30');
 
-    expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->not->toContain($payslip->id);
+    expect(Payslip::payableOn('2026-08-31')->pluck('id')->all())->not->toContain($payslip->id);
 });
 
 test('wages already paid are not offered again', function () {
     $company = payableCompany();
-    $payslip = payslipFor($company, '2026-09-03', 'paid');
+    $payslip = payslipFor($company, '2026-08-01', '2026-08-31', 'paid');
 
     expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->not->toContain($payslip->id);
 });
 
 test('wages not yet approved are not payable', function () {
     $company = payableCompany();
-    $payslip = payslipFor($company, '2026-09-03', 'draft', null);
+    $payslip = payslipFor($company, '2026-08-01', '2026-08-31', 'draft', null);
 
     expect(Payslip::payableOn('2026-09-03')->pluck('id')->all())->not->toContain($payslip->id);
 });

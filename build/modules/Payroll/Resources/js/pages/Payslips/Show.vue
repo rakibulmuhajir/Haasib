@@ -315,18 +315,6 @@ const handleVoid = () => {
                                     }}
                                 </p>
                             </div>
-                            <div>
-                                <p class="text-muted-foreground">
-                                    Payment Date
-                                </p>
-                                <p class="font-medium">
-                                    {{
-                                        formatDate(
-                                            payslip.payroll_period.payment_date,
-                                        )
-                                    }}
-                                </p>
-                            </div>
                         </div>
                     </CardContent>
                 </Card>

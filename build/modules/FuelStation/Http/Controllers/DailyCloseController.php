@@ -95,15 +95,15 @@ class DailyCloseController extends Controller
             DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
 
             return Payslip::where('company_id', $companyId)
-                // Wages belong to the close for the day they are paid - see Payslip::payableOn.
+                // No fixed pay day - a wage is offered to any close from the day its period
+                // starts until it is paid. See Payslip::scopePayableOn.
                 ->payableOn($date)
                 ->where('net_pay', '>', 0)
-                ->with(['employee:id,first_name,last_name,employee_number', 'payrollPeriod:id,payment_date'])
+                ->with(['employee:id,first_name,last_name,employee_number', 'payrollPeriod:id,period_start'])
                 ->orderBy('approved_at')
                 ->get(['id', 'company_id', 'employee_id', 'payroll_period_id', 'payslip_number', 'net_pay', 'approved_at'])
-                ->map(function (Payslip $payslip) use ($date) {
-                    $paymentDate = $payslip->payrollPeriod?->payment_date?->toDateString();
-                    $isOverdue = $paymentDate && $paymentDate < $date;
+                ->map(function (Payslip $payslip) {
+                    $month = $payslip->payrollPeriod?->period_start?->format('F Y');
 
                     return [
                         'payslip_id' => $payslip->id,
@@ -113,10 +113,9 @@ class DailyCloseController extends Controller
                         'employee_number' => $payslip->employee?->employee_number,
                         'amount' => (float) $payslip->net_pay,
                         'approved_at' => $payslip->approved_at?->toISOString(),
-                        'payment_date' => $paymentDate,
-                        // "Due since {date}" when the pay day was earlier than this close's
-                        // business date; otherwise the wage is due exactly on this close.
-                        'due_label' => $isOverdue ? "Due since {$paymentDate}" : null,
+                        // The wage is simply unpaid for its month - there is no due date to be
+                        // overdue against.
+                        'due_label' => $month ? "Unpaid · {$month}" : null,
                     ];
                 });
         } catch (\Throwable $e) {

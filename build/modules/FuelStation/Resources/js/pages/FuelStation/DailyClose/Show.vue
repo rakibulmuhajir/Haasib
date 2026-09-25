@@ -607,15 +607,16 @@ const unlockTransaction = () => {
                  figure already says which. Blue for one and red for the other
                  said the till being over was merely informational. -->
             <div
-              v-if="metadata.variance !== undefined && metadata.variance !== 0"
+              v-if="metadata.variance !== undefined && Math.round(metadata.variance) !== 0"
               class="flex justify-between items-center py-2 font-semibold text-status-attention"
             >
               <span>{{ metadata.variance > 0 ? 'Cash Over' : 'Cash Short' }}</span>
-              <span><MoneyText :amount="Math.abs(metadata.variance)" :currency="currency" :fraction-digits="0" /></span>
+              <span><MoneyText :amount="Math.abs(Math.round(metadata.variance))" :currency="currency" :fraction-digits="0" /></span>
             </div>
             <!-- A till that balanced is the ordinary outcome, not an achievement.
                  The tick is the indicator; green on top of it is celebration. -->
-            <div v-else-if="metadata.variance === 0" class="flex justify-between items-center py-2 font-semibold">
+            <!-- Whole rupees: a few paisa left over from litres x rate count as balanced. -->
+            <div v-else-if="metadata.variance !== undefined" class="flex justify-between items-center py-2 font-semibold">
               <span>Variance</span>
               <span class="flex items-center gap-1">
                 <CheckCircle class="h-4 w-4" />

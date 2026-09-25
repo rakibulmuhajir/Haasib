@@ -1913,8 +1913,11 @@ const expectedClosingCash = computed(
     () => totalMoneyIn.value - totalMoneyOut.value + externalCashEffect.value,
 );
 
+// In whole rupees. Sales are litres x rate, so the expected figure carries paisa that nobody
+// counts; comparing to the paisa turned a few of them into "Cash over by 1". The server
+// posts any leftover paisa to Cash Over/Short so the books still balance exactly.
 const cashVariance = computed(
-    () => form.closing_cash - expectedClosingCash.value,
+    () => Math.round(Number(form.closing_cash || 0)) - Math.round(expectedClosingCash.value),
 );
 
 // Watch for closing reading changes to auto-calculate liters (from electronic readings)
@@ -2532,6 +2535,40 @@ const externalCashEffect = computed(() =>
         0,
     ),
 );
+
+/**
+ * The "Already recorded" rows as money in and money out, one row per document. A document
+ * edited after posting shows up with its reversal (BILL-00015 and BILL-00015-REV); those are
+ * netted together, and anything that nets to nothing - like a bill re-posted off the cash
+ * account - drops out, leaving only real movements of cash through the drawer.
+ */
+const recordedTypeLabels: Record<string, string> = {
+    bill: 'Bill',
+    bill_payment: 'Supplier payment',
+    payment: 'Customer payment',
+    invoice: 'Invoice',
+    expense: 'Expense',
+};
+const recordedElsewhere = computed(() => {
+    const groups = new Map<string, { key: string; label: string; amount: number }>();
+    for (const row of props.canonicalActivity || []) {
+        const reference = String(row.reference ?? '').replace(/-REV(-\d+)?$/, '');
+        const key = `${row.type}|${reference}`;
+        const label = `${recordedTypeLabels[row.type] ?? String(row.type).replace(/[_:]/g, ' ')} · ${reference}`;
+        const group = groups.get(key) ?? { key, label, amount: 0 };
+        group.amount += Number(row.cash_effect || 0);
+        groups.set(key, group);
+    }
+    return [...groups.values()].filter((g) => Math.abs(g.amount) >= 0.005);
+});
+const recordedMoneyIn = computed(() => recordedElsewhere.value.filter((g) => g.amount > 0));
+const recordedMoneyOut = computed(() => recordedElsewhere.value.filter((g) => g.amount < 0));
+const recordedMoneyInTotal = computed(() => recordedMoneyIn.value.reduce((sum, g) => sum + g.amount, 0));
+const recordedMoneyOutTotal = computed(() => -recordedMoneyOut.value.reduce((sum, g) => sum + g.amount, 0));
+// What the summaries show: this form's own figures plus what was recorded on other screens.
+// Expected closing is unchanged: in - out + (recorded in - recorded out) is the same sum.
+const shownMoneyIn = computed(() => totalMoneyIn.value + recordedMoneyInTotal.value);
+const shownMoneyOut = computed(() => totalMoneyOut.value + recordedMoneyOutTotal.value);
 
 const submitDailyClose = () => {
     // Validate closing cash is entered
@@ -4909,6 +4946,24 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <template v-if="recordedMoneyIn.length">
+                                    <p class="pt-1 text-xs font-medium text-muted-foreground">
+                                        Recorded on other screens this day
+                                    </p>
+                                    <div
+                                        v-for="row in recordedMoneyIn"
+                                        :key="row.key"
+                                        class="flex justify-between text-sm"
+                                    >
+                                        <span>{{ row.label }}</span>
+                                        <span class="font-medium"
+                                            ><MoneyText
+                                                :amount="Math.abs(row.amount)"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                        /></span>
+                                    </div>
+                                </template>
                                 <Separator />
                                 <div
                                     class="flex justify-between text-base font-semibold"
@@ -4916,24 +4971,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Money In</span>
                                     <span
                                         ><MoneyText
-                                            :amount="totalMoneyIn"
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                    /></span>
-                                </div>
-                                <div
-                                    v-if="externalCashEffect > 0"
-                                    class="flex justify-between text-sm text-muted-foreground"
-                                >
-                                    <span
-                                        >Received into the drawer on other screens
-                                        <span class="block text-xs"
-                                            >Listed under "Already recorded for this business date". Already in the expected closing cash.</span
-                                        ></span
-                                    >
-                                    <span class="font-medium"
-                                        ><MoneyText
-                                            :amount="externalCashEffect"
+                                            :amount="shownMoneyIn"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -6248,11 +6286,29 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                                 <!-- Empty state -->
                                 <div
-                                    v-if="totalMoneyOut === 0"
+                                    v-if="shownMoneyOut === 0"
                                     class="py-2 text-center text-sm text-muted-foreground"
                                 >
                                     No outflows recorded
                                 </div>
+                                <template v-if="recordedMoneyOut.length">
+                                    <p class="pt-1 text-xs font-medium text-muted-foreground">
+                                        Recorded on other screens this day
+                                    </p>
+                                    <div
+                                        v-for="row in recordedMoneyOut"
+                                        :key="row.key"
+                                        class="flex justify-between text-sm"
+                                    >
+                                        <span>{{ row.label }}</span>
+                                        <span class="font-medium text-destructive"
+                                            ><MoneyText
+                                                :amount="Math.abs(row.amount)"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                        /></span>
+                                    </div>
+                                </template>
                                 <Separator />
                                 <!-- Total -->
                                 <div
@@ -6261,24 +6317,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Money Out</span>
                                     <span class="text-destructive"
                                         ><MoneyText
-                                            :amount="totalMoneyOut"
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                    /></span>
-                                </div>
-                                <div
-                                    v-if="externalCashEffect < 0"
-                                    class="flex justify-between text-sm text-muted-foreground"
-                                >
-                                    <span
-                                        >Paid from the drawer on other screens
-                                        <span class="block text-xs"
-                                            >Listed under "Already recorded for this business date". Already in the expected closing cash.</span
-                                        ></span
-                                    >
-                                    <span class="font-medium text-destructive"
-                                        ><MoneyText
-                                            :amount="-externalCashEffect"
+                                            :amount="shownMoneyOut"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -6382,6 +6421,19 @@ const completedWorkflowSteps = computed(() => {
                                                 :fraction-digits="0"
                                         /></span>
                                     </div>
+                                    <div
+                                        v-for="row in recordedMoneyIn"
+                                        :key="'cf-in-' + row.key"
+                                        class="flex justify-between"
+                                    >
+                                        <span>+ {{ row.label }}</span>
+                                        <span
+                                            ><MoneyText
+                                                :amount="row.amount"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                        /></span>
+                                    </div>
                                     <Separator />
                                     <div
                                         class="flex justify-between font-medium"
@@ -6389,7 +6441,7 @@ const completedWorkflowSteps = computed(() => {
                                         <span>Total Money In</span>
                                         <span
                                             ><MoneyText
-                                                :amount="totalMoneyIn"
+                                                :amount="shownMoneyIn"
                                                 :currency="currencyCode"
                                                 :fraction-digits="0"
                                         /></span>
@@ -6408,20 +6460,19 @@ const completedWorkflowSteps = computed(() => {
                                                 :fraction-digits="0"
                                         /></span>
                                     </div>
-                                <div
-                                    v-if="Math.abs(externalCashEffect) >= 0.5"
-                                    class="flex justify-between"
-                                >
-                                    <span
-                                        >{{ externalCashEffect < 0 ? '−' : '+' }} Recorded on other screens</span
+                                    <div
+                                        v-for="row in recordedMoneyOut"
+                                        :key="'cf-out-' + row.key"
+                                        class="flex justify-between text-destructive"
                                     >
-                                    <span
-                                        ><MoneyText
-                                            :amount="Math.abs(externalCashEffect)"
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                    /></span>
-                                </div>
+                                        <span>− {{ row.label }}</span>
+                                        <span
+                                            ><MoneyText
+                                                :amount="Math.abs(row.amount)"
+                                                :currency="currencyCode"
+                                                :fraction-digits="0"
+                                        /></span>
+                                    </div>
                                     <Separator />
                                     <div
                                         class="flex justify-between text-lg font-semibold"

@@ -352,10 +352,11 @@ const confirmUnlock = () => {
                 <div
                   :class="[
                     'font-mono font-semibold tabular-nums',
-                    close.variance === 0 ? 'text-text-primary' : 'text-status-attention',
+                    Math.round(close.variance) === 0 ? 'text-text-primary' : 'text-status-attention',
                   ]"
                 >
-                  <template v-if="close.variance >= 0">+</template><MoneyText :amount="close.variance" :currency="currency" :fraction-digits="0" />
+                  <!-- Whole rupees: leftover paisa from litres x rate are not a variance anyone counts. -->
+                  <template v-if="Math.round(close.variance) >= 0">+</template><MoneyText :amount="Math.round(close.variance)" :currency="currency" :fraction-digits="0" />
                 </div>
               </div>
 

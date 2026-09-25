@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import MoneyText from '@/components/MoneyText.vue';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ import {
     Save,
     Trash2,
     Wallet,
+    Info,
 } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -2618,13 +2620,14 @@ const recordedTypeLabels: Record<string, string> = {
     expense: 'Expense',
 };
 const recordedElsewhere = computed(() => {
-    const groups = new Map<string, { key: string; label: string; amount: number }>();
+    const groups = new Map<string, { key: string; label: string; amount: number; sources: any[] }>();
     for (const row of props.canonicalActivity || []) {
         const reference = String(row.reference ?? '').replace(/-REV(-\d+)?$/, '');
         const key = `${row.type}|${reference}`;
         const label = `${recordedTypeLabels[row.type] ?? String(row.type).replace(/[_:]/g, ' ')} · ${reference}`;
-        const group = groups.get(key) ?? { key, label, amount: 0 };
+        const group = groups.get(key) ?? { key, label, amount: 0, sources: [] as any[] };
         group.amount += Number(row.cash_effect || 0);
+        group.sources.push(row);
         groups.set(key, group);
     }
     return [...groups.values()].filter((g) => Math.abs(g.amount) >= 0.005);
@@ -2793,31 +2796,6 @@ const completedWorkflowSteps = computed(() => {
             >
         </div>
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
-        <Card v-if="canonicalActivity?.length" class="mb-4">
-            <CardHeader
-                ><CardTitle>Already recorded for this business date</CardTitle
-                ><CardDescription
-                    >These canonical records are included in cash
-                    reconciliation.</CardDescription
-                ></CardHeader
-            >
-            <CardContent>
-                <div
-                    v-for="row in canonicalActivity"
-                    :key="row.id"
-                    class="flex justify-between border-b py-2 text-sm"
-                >
-                    <span
-                        >{{ row.type }} · {{ row.reference }} ·
-                        {{ row.business_date }}</span
-                    >
-                    <MoneyText
-                        :amount="row.cash_effect"
-                        :currency="company.base_currency"
-                    />
-                </div>
-            </CardContent>
-        </Card>
         <!-- Draft Restore Dialog -->
         <Dialog
             :open="showDraftRestoreDialog"
@@ -5042,7 +5020,25 @@ const completedWorkflowSteps = computed(() => {
                                         :key="row.key"
                                         class="flex justify-between text-sm"
                                     >
-                                        <span>{{ row.label }}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <span class="inline-flex cursor-help items-center gap-1"
+                                                    >{{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
+                                                /></span>
+                                            </TooltipTrigger>
+                                            <TooltipContent class="max-w-sm space-y-1">
+                                                <p class="font-medium">Recorded on another screen this day</p>
+                                                <div
+                                                    v-for="src in row.sources"
+                                                    :key="src.id"
+                                                    class="flex justify-between gap-4 text-xs"
+                                                >
+                                                    <span>{{ src.type }} · {{ src.reference }}</span>
+                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                </div>
+                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                         <span class="font-medium"
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"
@@ -6387,7 +6383,25 @@ const completedWorkflowSteps = computed(() => {
                                         :key="row.key"
                                         class="flex justify-between text-sm"
                                     >
-                                        <span>{{ row.label }}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <span class="inline-flex cursor-help items-center gap-1"
+                                                    >{{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
+                                                /></span>
+                                            </TooltipTrigger>
+                                            <TooltipContent class="max-w-sm space-y-1">
+                                                <p class="font-medium">Recorded on another screen this day</p>
+                                                <div
+                                                    v-for="src in row.sources"
+                                                    :key="src.id"
+                                                    class="flex justify-between gap-4 text-xs"
+                                                >
+                                                    <span>{{ src.type }} · {{ src.reference }}</span>
+                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                </div>
+                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                         <span class="font-medium text-destructive"
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"
@@ -6513,7 +6527,25 @@ const completedWorkflowSteps = computed(() => {
                                         :key="'cf-in-' + row.key"
                                         class="flex justify-between"
                                     >
-                                        <span>+ {{ row.label }}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <span class="inline-flex cursor-help items-center gap-1"
+                                                    >+ {{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
+                                                /></span>
+                                            </TooltipTrigger>
+                                            <TooltipContent class="max-w-sm space-y-1">
+                                                <p class="font-medium">Recorded on another screen this day</p>
+                                                <div
+                                                    v-for="src in row.sources"
+                                                    :key="src.id"
+                                                    class="flex justify-between gap-4 text-xs"
+                                                >
+                                                    <span>{{ src.type }} · {{ src.reference }}</span>
+                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                </div>
+                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                         <span
                                             ><MoneyText
                                                 :amount="row.amount"
@@ -6552,7 +6584,25 @@ const completedWorkflowSteps = computed(() => {
                                         :key="'cf-out-' + row.key"
                                         class="flex justify-between text-destructive"
                                     >
-                                        <span>− {{ row.label }}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <span class="inline-flex cursor-help items-center gap-1"
+                                                    >− {{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
+                                                /></span>
+                                            </TooltipTrigger>
+                                            <TooltipContent class="max-w-sm space-y-1">
+                                                <p class="font-medium">Recorded on another screen this day</p>
+                                                <div
+                                                    v-for="src in row.sources"
+                                                    :key="src.id"
+                                                    class="flex justify-between gap-4 text-xs"
+                                                >
+                                                    <span>{{ src.type }} · {{ src.reference }}</span>
+                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                </div>
+                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                         <span
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"

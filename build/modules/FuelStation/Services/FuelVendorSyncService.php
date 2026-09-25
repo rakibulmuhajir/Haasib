@@ -20,12 +20,19 @@ class FuelVendorSyncService
         $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
 
         return DB::transaction(function () use ($company, $vendorName, $vendorNumber, $baseCurrency) {
+            // The station's own supplier for this brand, however it was named: "Total Parco" is
+            // Parco. Matching only the exact name "PARCO" made a second, empty supplier every
+            // time Station Settings were saved. Exact number/name first, then a name containing
+            // the brand, oldest first.
             $vendor = Vendor::where('company_id', $company->id)
                 ->where(function ($query) use ($vendorNumber, $vendorName) {
                     $query->where('vendor_number', $vendorNumber)
-                        ->orWhere('name', $vendorName);
+                        ->orWhere('name', 'ilike', $vendorName)
+                        ->orWhere('name', 'ilike', '%'.$vendorName.'%');
                 })
                 ->whereNull('deleted_at')
+                ->orderByRaw('case when vendor_number = ? then 0 when name ilike ? then 1 else 2 end', [$vendorNumber, $vendorName])
+                ->orderBy('created_at')
                 ->lockForUpdate()
                 ->first();
 

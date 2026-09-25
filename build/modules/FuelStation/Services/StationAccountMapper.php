@@ -153,17 +153,17 @@ class StationAccountMapper
             $type = $channel['type'] ?? null;
 
             if ($type === 'bank_transfer') {
-                $channel['bank_account_id'] = $channel['bank_account_id'] ?: ($mappingSource['operating_bank_account_id'] ?? null);
+                $channel['bank_account_id'] = ($channel['bank_account_id'] ?? null) ?: ($mappingSource['operating_bank_account_id'] ?? null);
             }
 
             if ($type === 'card_pos') {
-                $channel['bank_account_id'] = $channel['bank_account_id'] ?: ($mappingSource['operating_bank_account_id'] ?? null);
-                $channel['clearing_account_id'] = $channel['clearing_account_id'] ?: ($mappingSource['card_pos_clearing_account_id'] ?? null);
+                $channel['bank_account_id'] = ($channel['bank_account_id'] ?? null) ?: ($mappingSource['operating_bank_account_id'] ?? null);
+                $channel['clearing_account_id'] = ($channel['clearing_account_id'] ?? null) ?: ($mappingSource['card_pos_clearing_account_id'] ?? null);
             }
 
             if ($type === 'fuel_card') {
-                $channel['bank_account_id'] = $channel['bank_account_id'] ?: ($mappingSource['operating_bank_account_id'] ?? null);
-                $channel['clearing_account_id'] = $channel['clearing_account_id'] ?: ($mappingSource['fuel_card_clearing_account_id'] ?? null);
+                $channel['bank_account_id'] = ($channel['bank_account_id'] ?? null) ?: ($mappingSource['operating_bank_account_id'] ?? null);
+                $channel['clearing_account_id'] = ($channel['clearing_account_id'] ?? null) ?: ($mappingSource['fuel_card_clearing_account_id'] ?? null);
             }
 
             if ($type === 'mobile_wallet' && empty($channel['bank_account_id']) && empty($channel['clearing_account_id'])) {

@@ -18,6 +18,7 @@ use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
@@ -932,6 +933,119 @@ class DailyCloseService
             $metadata['bank_transfers_received'] = $bankTransfersTotal;
             $metadata['card_swipes'] = $cardSwipesTotal;
             $metadata['fuel_cards'] = $fuelCardsTotal;
+
+            // ─────────────────────────────────────────────────────────────────
+            // 4c. Channels that settle straight to a supplier (e.g. a fuel-card vendor
+            // like Parco): the sale already landed in the channel's clearing account
+            // above, unchanged. Here the close additionally pays that vendor out of
+            // clearing, oldest bill first, for whatever the vendor is actually owed —
+            // never more than the card sales, never more than the open balance. This
+            // is an ordinary supplier payment (Dr AP / Cr clearing), posted through the
+            // same bill_payment.create command the Bills module uses, so it shows on
+            // the vendor's statement exactly like any other payment. It never touches
+            // the cash drawer, so the close's cash reconciliation is unaffected.
+            // ─────────────────────────────────────────────────────────────────
+            $channelSupplierSettlements = [];
+            foreach ($paymentReceiptPostings as $posting) {
+                $channel = $channelMap[$posting['channel_code']] ?? null;
+                if (!$channel || ($channel['settles_to'] ?? 'clearing') !== 'supplier') {
+                    continue;
+                }
+
+                $vendorId = $channel['settles_to_vendor_id'] ?? null;
+                $clearingAccountId = $posting['account_id'];
+                $channelTotal = round((float) $posting['amount'], 2);
+                if (!$vendorId || !$clearingAccountId || $channelTotal <= 0) {
+                    continue;
+                }
+
+                $vendor = Vendor::where('company_id', $companyId)->find($vendorId);
+                if (!$vendor) {
+                    continue;
+                }
+                $clearingAccount = Account::where('company_id', $companyId)->find($clearingAccountId);
+
+                $openBills = Bill::where('company_id', $companyId)
+                    ->where('vendor_id', $vendorId)
+                    ->where('balance', '>', 0.000001)
+                    ->orderBy('bill_date')
+                    ->orderBy('created_at')
+                    ->get(['id', 'bill_number', 'balance']);
+                $openBalance = round((float) $openBills->sum('balance'), 2);
+                $settleAmount = round(min($channelTotal, $openBalance), 2);
+
+                $settlement = [
+                    'channel_code' => $posting['channel_code'],
+                    'channel_label' => $posting['channel_label'],
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $vendor->name,
+                    'clearing_account_id' => $clearingAccountId,
+                    'clearing_account_name' => $clearingAccount?->name ?? 'clearing',
+                    'card_sales' => $channelTotal,
+                    'amount_paid' => 0.0,
+                    'excess_in_clearing' => $channelTotal,
+                    'bill_payment_id' => null,
+                ];
+
+                if ($settleAmount > 0) {
+                    $allocations = [];
+                    $remaining = $settleAmount;
+                    foreach ($openBills as $bill) {
+                        if ($remaining <= 0.000001) {
+                            break;
+                        }
+                        $take = round(min((float) $bill->balance, $remaining), 2);
+                        if ($take <= 0) {
+                            continue;
+                        }
+                        $allocations[] = ['bill_id' => $bill->id, 'amount_allocated' => $take];
+                        $remaining = round($remaining - $take, 2);
+                    }
+
+                    $paymentResult = app(CommandBus::class)->dispatch('bill_payment.create', [
+                        'vendor_id' => $vendorId,
+                        'payment_date' => $date,
+                        'amount' => $settleAmount,
+                        'currency' => $currency,
+                        'base_currency' => $currency,
+                        'payment_method' => 'other',
+                        'payment_account_id' => $clearingAccountId,
+                        'ap_account_id' => $vendor->ap_account_id,
+                        'allocations' => $allocations,
+                        'notes' => "{$posting['channel_label']} settlement — Daily Close {$transactionNumber}",
+                        'allow_clearing_account' => true,
+                    // Part of posting the close, which already checked its own permission —
+                    // same reasoning as the bill.receive_goods dispatch above.
+                    ], $user, true);
+
+                    $settlement['amount_paid'] = $settleAmount;
+                    $settlement['excess_in_clearing'] = round($channelTotal - $settleAmount, 2);
+                    $settlement['bill_payment_id'] = $paymentResult['data']['id'] ?? null;
+                }
+
+                $channelSupplierSettlements[] = $settlement;
+            }
+            $metadata['channel_supplier_settlements'] = $channelSupplierSettlements;
+
+            // Re-read canonical sources now that this close may have posted its own
+            // supplier settlement (like the close_purchase tagging above, done once
+            // sources() has something to tag) -- otherwise a same-day reconciliation
+            // view would flag the close's own settlement payment as unexplained
+            // "Added to this business date after posting" activity.
+            if (!empty($channelSupplierSettlements)) {
+                $refreshedSources = $reconciliation->sources($companyId, $date);
+                foreach ($channelSupplierSettlements as $settlement) {
+                    if (empty($settlement['bill_payment_id'])) {
+                        continue;
+                    }
+                    $paidTransactionId = BillPayment::where('company_id', $companyId)
+                        ->whereKey($settlement['bill_payment_id'])->value('transaction_id');
+                    if ($paidTransactionId && isset($refreshedSources['journal:'.$paidTransactionId])) {
+                        $canonicalSources['journal:'.$paidTransactionId] = $refreshedSources['journal:'.$paidTransactionId];
+                        $canonicalSources['journal:'.$paidTransactionId]['source'] = 'close_supplier_settlement';
+                    }
+                }
+            }
 
             // ─────────────────────────────────────────────────────────────────
             // 5. Calculate Money Out totals
@@ -1967,6 +2081,20 @@ class DailyCloseService
     {
         $type = $channel['type'] ?? 'bank_transfer';
         $label = $channel['label'] ?? $channel['code'] ?? 'payment channel';
+        $settlesTo = $channel['settles_to'] ?? 'clearing';
+
+        // A card/fuel-card/mobile-wallet channel set to settle straight to the bank debits
+        // that bank account directly at the close instead of parking the sale in clearing —
+        // nothing else about the close changes. 'supplier' still lands in clearing here; the
+        // extra supplier-settlement step happens separately, after this account is resolved.
+        if ($settlesTo === 'bank' && in_array($type, ['card_pos', 'fuel_card', 'mobile_wallet'], true)) {
+            $accountId = $channel['bank_account_id'] ?? null;
+            if (!$accountId) {
+                throw new \RuntimeException("No bank account configured for payment channel: {$label}.");
+            }
+
+            return $accountId;
+        }
 
         $accountId = match ($type) {
             'cash' => $accounts['cash_on_hand'] ?? null,

@@ -43,5 +43,15 @@ class FuelStationServiceProvider extends ServiceProvider
 
             return $locked ? "{$date} is locked by its daily close. Unlock the day to edit." : null;
         });
+
+        // A card channel set to "Settles to: Supplier" pays the supplier from its clearing
+        // account at the daily close; tell the core which clearing accounts those are.
+        \App\Modules\Accounting\Services\ClearingPaymentAccounts::extend(function (string $companyId, string $accountId): bool {
+            $channels = \App\Modules\FuelStation\Models\StationSettings::where('company_id', $companyId)->value('payment_channels');
+            $channels = is_string($channels) ? (json_decode($channels, true) ?: []) : ($channels ?? []);
+
+            return collect($channels)->contains(fn ($channel) => ($channel['settles_to'] ?? null) === 'supplier'
+                && ($channel['clearing_account_id'] ?? null) === $accountId);
+        });
     }
 }

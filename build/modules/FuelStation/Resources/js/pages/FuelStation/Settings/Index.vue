@@ -29,6 +29,13 @@ interface PaymentChannel {
   enabled: boolean
   bank_account_id: string | null
   clearing_account_id: string | null
+  settles_to?: 'clearing' | 'bank' | 'supplier'
+  settles_to_vendor_id?: string | null
+}
+
+interface CompanyVendor {
+  id: string
+  name: string
 }
 
 interface FuelProductAccountMapping {
@@ -79,6 +86,7 @@ const props = defineProps<{
     equity: Account[]
   }
   fuelProducts: FuelProductAccountMapping[]
+  companyVendors: CompanyVendor[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -174,6 +182,40 @@ const updateChannelAccount = (code: string, key: 'bank_account_id' | 'clearing_a
     channels[idx] = { ...channels[idx], [key]: value || null }
     form.payment_channels = channels
   }
+}
+
+const updateChannelSettlesTo = (code: string, value: 'clearing' | 'bank' | 'supplier') => {
+  const channels = [...form.payment_channels]
+  const idx = channels.findIndex(ch => ch.code === code)
+  if (idx !== -1) {
+    channels[idx] = { ...channels[idx], settles_to: value }
+    form.payment_channels = channels
+  }
+}
+
+const updateChannelVendor = (code: string, value: string | null) => {
+  const channels = [...form.payment_channels]
+  const idx = channels.findIndex(ch => ch.code === code)
+  if (idx !== -1) {
+    channels[idx] = { ...channels[idx], settles_to_vendor_id: value || null }
+    form.payment_channels = channels
+  }
+}
+
+const settlesToOptions = [
+  { value: 'clearing', label: 'Clearing account — settle later on the Settlements screen' },
+  { value: 'bank', label: 'Bank — straight to the bank at the daily close' },
+  { value: 'supplier', label: 'Supplier — paid to the supplier at the daily close' },
+]
+
+const settlesToHint = (value: string | undefined) => {
+  if (value === 'bank') {
+    return 'The close debits the bank account below directly for these sales — nothing is parked in clearing.'
+  }
+  if (value === 'supplier') {
+    return 'The close still posts these sales to the clearing account below, then immediately pays the chosen supplier from it, oldest bill first.'
+  }
+  return 'These sales sit in the clearing account below until someone settles them on the Settlements screen.'
 }
 
 const submit = () => {
@@ -441,6 +483,45 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectContent>
                 </Select>
                 <InputError :message="channelError(channelIndex, 'clearing_account_id')" />
+              </div>
+
+              <div v-if="['card_pos', 'fuel_card', 'mobile_wallet'].includes(channel.type)" class="space-y-2 md:col-span-2">
+                <Label class="text-xs">Settles to</Label>
+                <p class="text-xs text-muted-foreground">Where this channel's payment goes when the day is closed — their payment goes straight to that bank or the supplier respectively, instead of always waiting in clearing.</p>
+                <Select
+                  :model-value="channel.settles_to || 'clearing'"
+                  @update:model-value="(val: 'clearing' | 'bank' | 'supplier') => updateChannelSettlesTo(channel.code, val)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select how this settles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in settlesToOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-xs text-muted-foreground">{{ settlesToHint(channel.settles_to) }}</p>
+                <InputError :message="channelError(channelIndex, 'settles_to')" />
+              </div>
+
+              <div v-if="['card_pos', 'fuel_card', 'mobile_wallet'].includes(channel.type) && channel.settles_to === 'supplier'" class="space-y-2 md:col-span-2">
+                <Label class="text-xs">Supplier</Label>
+                <p class="text-xs text-muted-foreground">The vendor this channel's sales pay off at the daily close (e.g. the oil company issuing the fuel card).</p>
+                <Select
+                  :model-value="channel.settles_to_vendor_id || undefined"
+                  @update:model-value="(val: string) => updateChannelVendor(channel.code, val)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="vendor in companyVendors" :key="vendor.id" :value="vendor.id">
+                      {{ vendor.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <InputError :message="channelError(channelIndex, 'settles_to_vendor_id')" />
               </div>
             </div>
           </div>

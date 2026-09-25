@@ -481,6 +481,8 @@ class FuelStationOnboardingController extends Controller
             'payment_channels.*.enabled' => 'boolean',
             'payment_channels.*.bank_account_id' => 'nullable|uuid',
             'payment_channels.*.clearing_account_id' => 'nullable|uuid',
+            'payment_channels.*.settles_to' => 'nullable|string|in:clearing,bank,supplier',
+            'payment_channels.*.settles_to_vendor_id' => 'nullable|uuid',
             'operating_bank_account_id' => 'nullable|uuid',
         ]);
 

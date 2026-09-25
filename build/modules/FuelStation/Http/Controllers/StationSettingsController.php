@@ -4,6 +4,7 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\FuelStation\Services\FuelVendorSyncService;
@@ -61,6 +62,11 @@ class StationSettingsController extends Controller
             'equity' => $accounts->where('type', 'equity')->values(),
         ];
 
+        $vendors = Vendor::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('FuelStation/Settings/Index', [
             'company' => [
                 'id' => $company->id,
@@ -92,6 +98,7 @@ class StationSettingsController extends Controller
             'defaultPaymentChannels' => StationSettings::DEFAULT_PAYMENT_CHANNELS,
             'accountsByType' => $accountsByType,
             'fuelProducts' => $fuelProducts,
+            'companyVendors' => $vendors,
         ]);
     }
 
@@ -117,6 +124,8 @@ class StationSettingsController extends Controller
             'payment_channels.*.enabled' => 'boolean',
             'payment_channels.*.bank_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'payment_channels.*.clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
+            'payment_channels.*.settles_to' => ['nullable', 'string', 'in:clearing,bank,supplier'],
+            'payment_channels.*.settles_to_vendor_id' => ['nullable', 'uuid', Rule::exists(Vendor::class, 'id')],
             'cash_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'fuel_sales_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'fuel_cogs_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
@@ -141,7 +150,7 @@ class StationSettingsController extends Controller
             optional($request->user())->id
         );
 
-        $this->validatePaymentChannelMappings($validated['payment_channels'] ?? []);
+        $this->validatePaymentChannelMappings($validated['payment_channels'] ?? [], $company->id);
 
         $fuelProducts = $validated['fuel_products'] ?? [];
         unset($validated['fuel_products']);
@@ -178,7 +187,7 @@ class StationSettingsController extends Controller
         }
     }
 
-    private function validatePaymentChannelMappings(array $channels): void
+    private function validatePaymentChannelMappings(array $channels, string $companyId): void
     {
         foreach ($channels as $index => $channel) {
             if (!($channel['enabled'] ?? false)) {
@@ -189,6 +198,7 @@ class StationSettingsController extends Controller
             $type = $channel['type'] ?? null;
             $bankAccountId = $channel['bank_account_id'] ?? null;
             $clearingAccountId = $channel['clearing_account_id'] ?? null;
+            $settlesTo = $channel['settles_to'] ?? 'clearing';
 
             if (in_array($type, ['bank_transfer'], true) && !$bankAccountId) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
@@ -206,6 +216,40 @@ class StationSettingsController extends Controller
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     "payment_channels.{$index}.clearing_account_id" => "{$label} requires either a clearing account or a bank account.",
                 ]);
+            }
+
+            if (!in_array($type, ['card_pos', 'fuel_card', 'mobile_wallet'], true) || $settlesTo === 'clearing') {
+                continue;
+            }
+
+            if ($settlesTo === 'bank') {
+                if (!$bankAccountId) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "payment_channels.{$index}.bank_account_id" => "{$label} settles straight to the bank, so it needs a bank account.",
+                    ]);
+                }
+                $bankAccount = Account::where('company_id', $companyId)->whereKey($bankAccountId)->first();
+                if (!$bankAccount || !in_array($bankAccount->subtype, ['cash', 'bank'], true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "payment_channels.{$index}.bank_account_id" => "{$label}'s settlement account must be a cash or bank account.",
+                    ]);
+                }
+
+                continue;
+            }
+
+            if ($settlesTo === 'supplier') {
+                $vendorId = $channel['settles_to_vendor_id'] ?? null;
+                if (!$vendorId || !Vendor::where('company_id', $companyId)->whereKey($vendorId)->exists()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "payment_channels.{$index}.settles_to_vendor_id" => "{$label} settles straight to a supplier, so it needs a vendor from this company.",
+                    ]);
+                }
+                if (!$clearingAccountId) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "payment_channels.{$index}.clearing_account_id" => "{$label} still needs a clearing account — the supplier payment is made from it.",
+                    ]);
+                }
             }
         }
     }

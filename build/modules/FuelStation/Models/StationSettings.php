@@ -66,6 +66,8 @@ class StationSettings extends Model
             'enabled' => true,
             'bank_account_id' => null, // POS settlement bank
             'clearing_account_id' => null, // Card clearing account
+            'settles_to' => 'clearing', // clearing | bank | supplier
+            'settles_to_vendor_id' => null,
         ],
         [
             'code' => 'fuel_card',
@@ -74,6 +76,8 @@ class StationSettings extends Model
             'enabled' => true,
             'bank_account_id' => null,
             'clearing_account_id' => null, // Fuel card clearing
+            'settles_to' => 'clearing',
+            'settles_to_vendor_id' => null,
         ],
         [
             'code' => 'easypaisa',
@@ -82,6 +86,8 @@ class StationSettings extends Model
             'enabled' => false,
             'bank_account_id' => null,
             'clearing_account_id' => null,
+            'settles_to' => 'clearing',
+            'settles_to_vendor_id' => null,
         ],
         [
             'code' => 'jazzcash',
@@ -90,6 +96,8 @@ class StationSettings extends Model
             'enabled' => false,
             'bank_account_id' => null,
             'clearing_account_id' => null,
+            'settles_to' => 'clearing',
+            'settles_to_vendor_id' => null,
         ],
     ];
 

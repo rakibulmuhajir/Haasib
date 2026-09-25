@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Actions\BillPayment;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\BillPaymentAllocation;
@@ -41,6 +42,11 @@ class CreateAction implements PaletteAction
             'allocations' => 'nullable|array',
             'allocations.*.bill_id' => 'required_with:allocations|uuid',
             'allocations.*.amount_allocated' => 'required_with:allocations|numeric|min:0',
+            // Internal-only: lets a trusted server-side caller (never the HTTP FormRequest,
+            // which never passes this key) pay from a payment channel's configured clearing
+            // account instead of a cash/bank account. Still validated below against the
+            // company's actual station settings — the flag alone does not bypass anything.
+            'allow_clearing_account' => 'nullable|boolean',
         ];
     }
 
@@ -60,6 +66,7 @@ class CreateAction implements PaletteAction
 
         $exchangeRate = $params['currency'] === $params['base_currency'] ? null : ($params['exchange_rate'] ?? null);
         $splits = $this->normalizeSplits($params);
+        $this->validatePaymentAccounts($company->id, $splits, (bool) ($params['allow_clearing_account'] ?? false));
         $splitTotal = round(collect($splits)->sum('amount'), 6);
         $paymentAmount = round((float) $params['amount'], 6);
         $transactionCharge = round((float) ($params['transaction_charge'] ?? 0), 6);
@@ -213,33 +220,24 @@ class CreateAction implements PaletteAction
         return $transaction;
     }
 
-    private function normalizeSplits(array $params): array
+    /**
+     * Ordinary payments are unchanged. An internal caller may pass allow_clearing_account to pay
+     * from a clearing account, and only one that a module has registered as settling to a supplier
+     * (ClearingPaymentAccounts) - the flag alone grants nothing, and the HTTP form never sends it.
+     */
+    private function validatePaymentAccounts(string $companyId, array $splits, bool $allowClearingAccount): void
     {
-        $splits = collect($params['payment_splits'] ?? [])
-            ->filter(fn ($split) => (float) ($split['amount'] ?? 0) > 0)
-            ->map(fn ($split) => [
-                'payment_account_id' => $split['payment_account_id'],
-                'amount' => round((float) $split['amount'], 6),
-                'payment_method' => $split['payment_method'] ?? $params['payment_method'],
-                'reference_number' => $split['reference_number'] ?? null,
-            ])
-            ->values()
-            ->all();
-
-        if (! empty($splits)) {
-            return $splits;
+        if (! $allowClearingAccount) {
+            return;
         }
 
-        if (empty($params['payment_account_id'])) {
-            throw new \InvalidArgumentException('Payment account is required.');
+        $policy = app(\App\Modules\Accounting\Services\ClearingPaymentAccounts::class);
+        foreach ($splits as $split) {
+            $account = Account::where('company_id', $companyId)->find($split['payment_account_id']);
+            if (! $account || ! $policy->allows($companyId, $account->id)) {
+                throw new \InvalidArgumentException('This account is not a clearing account that settles to a supplier.');
+            }
         }
-
-        return [[
-            'payment_account_id' => $params['payment_account_id'],
-            'amount' => round((float) $params['amount'], 6),
-            'payment_method' => $params['payment_method'],
-            'reference_number' => $params['reference_number'] ?? null,
-        ]];
     }
 
     private function validateAndBuildAllocationPool(string $companyId, array $params): array
@@ -269,6 +267,35 @@ class CreateAction implements PaletteAction
                 'remaining' => $amount,
             ];
         })->all();
+    }
+
+    private function normalizeSplits(array $params): array
+    {
+        $splits = collect($params['payment_splits'] ?? [])
+            ->filter(fn ($split) => (float) ($split['amount'] ?? 0) > 0)
+            ->map(fn ($split) => [
+                'payment_account_id' => $split['payment_account_id'],
+                'amount' => round((float) $split['amount'], 6),
+                'payment_method' => $split['payment_method'] ?? $params['payment_method'],
+                'reference_number' => $split['reference_number'] ?? null,
+            ])
+            ->values()
+            ->all();
+
+        if (! empty($splits)) {
+            return $splits;
+        }
+
+        if (empty($params['payment_account_id'])) {
+            throw new \InvalidArgumentException('Payment account is required.');
+        }
+
+        return [[
+            'payment_account_id' => $params['payment_account_id'],
+            'amount' => round((float) $params['amount'], 6),
+            'payment_method' => $params['payment_method'],
+            'reference_number' => $params['reference_number'] ?? null,
+        ]];
     }
 
     private function takeAllocationsForAmount(array &$allocationPool, float $amount): array

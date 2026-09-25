@@ -75,6 +75,7 @@ interface TransactionData {
     credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number; source?: string }>
     accounting_invoices_included?: Array<{ invoice_id: string; invoice_number: string; customer: string; amount: number }>
     payment_receipt_postings?: Array<{ channel_code: string; channel_label: string; channel_type: string; account_id: string | null; amount: number }>
+    channel_supplier_settlements?: Array<{ channel_code: string; channel_label: string; vendor_id: string; vendor_name: string; clearing_account_id: string; clearing_account_name: string; card_sales: number; amount_paid: number; excess_in_clearing: number; bill_payment_id: string | null }>
   }
 }
 
@@ -159,6 +160,13 @@ const channelOutRows = computed(() => {
   return postings.filter(p => Number(p.amount) > 0)
 })
 const totalChannelOut = computed(() => channelOutRows.value.reduce((s, p) => s + Number(p.amount), 0))
+
+// A supplier-settled channel (settles_to: 'supplier') pays the vendor from clearing during
+// this same close. Anything left over — the card sales exceeded what the vendor was owed —
+// stays parked in clearing rather than vanishing, so this says so in plain words.
+const supplierSettlementNotes = computed(() =>
+  (metadata.value.channel_supplier_settlements ?? []).filter(s => Number(s.excess_in_clearing) > 0.004)
+)
 
 const totalMoneyIn = computed(() => {
   if (props.reconciliation?.snapshot) return Number(props.reconciliation.snapshot.totals.money_in || 0)
@@ -589,6 +597,9 @@ const unlockTransaction = () => {
               <span>Total Money Out</span>
               <span class="text-status-critical">-<MoneyText :amount="totalMoneyOut" :currency="currency" :fraction-digits="0" /></span>
             </div>
+            <p v-for="note in supplierSettlementNotes" :key="note.channel_code" class="text-xs text-muted-foreground">
+              <MoneyText :amount="note.excess_in_clearing" :currency="currency" :fraction-digits="0" /> of {{ note.channel_label }} sales stay in {{ note.clearing_account_name }}: nothing more is owed to {{ note.vendor_name }}.
+            </p>
           </div>
 
           <Separator />

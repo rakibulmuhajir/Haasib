@@ -229,3 +229,33 @@ test('cash paid into the drawer for a direct delivery is counted in the close\'s
         // ...and the direct sale is not a pump credit sale.
         ->and($posted->metadata['accounting_invoices_included'] ?? [])->toBeEmpty();
 });
+
+test('"Received in cash" on the close pays a direct delivery into the drawer, and the close counts it', function () {
+    require_once __DIR__.'/PendingDeliveryFixtures.php';
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
+    $close = fn (array $f) => app(\App\Modules\FuelStation\Services\DailyCloseService::class)
+        ->processDailyClose($f['company']->id, $f['payload'], $f['user']);
+
+    $plain = creditCloseFixture();
+    $plainVariance = (float) Transaction::findOrFail($close($plain)['transaction_id'])->metadata['variance'];
+
+    $f = pendingDeliveryFixture(); // creditCloseFixture with an owner who may take payments
+    $f['company']->enableModule('fuel_station');
+    $invoice = accountingInvoiceFor($f, 5000, $f['accounts']['4100']->id, '2026-09-15', true);
+
+    $this->actingAs($f['user'])
+        ->post("/{$f['company']->slug}/fuel/daily-close/direct-deliveries/{$invoice->id}/cash", ['date' => '2026-09-15'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+    expect(session('error'))->toBeNull();
+
+    $invoice->refresh();
+    expect((float) $invoice->balance)->toBe(0.0);
+    $payment = \App\Modules\Accounting\Models\Payment::where('company_id', $f['company']->id)->sole();
+    expect($payment->payment_date->toDateString())->toBe('2026-09-15')
+        ->and($payment->deposit_account_id)->toBe($f['accounts']['1050']->id);
+
+    $f['payload']['closing_cash'] += 5000; // the drawer holds the 5,000
+    $posted = Transaction::findOrFail($close($f)['transaction_id']);
+    expect((float) $posted->metadata['variance'])->toBe($plainVariance);
+});

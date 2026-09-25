@@ -311,6 +311,7 @@ const props = defineProps<{
     pendingBillPayments: PendingBillPayment[];
     pendingFuelInvoices?: PendingFuelInvoice[];
     pendingAccountingInvoices?: PendingAccountingInvoice[];
+    unpaidDirectDeliveries?: Array<{ id: string; invoice_number: string; customer_name: string | null; balance: number }>;
     openInvoices?: OpenInvoice[];
     cashAccountIds?: string[];
     purchaseSuppliers?: PurchaseSupplier[];
@@ -700,6 +701,26 @@ const refreshTankFacts = () => {
             ? { ...row, stick_reading: saved.stick_reading, liters: saved.liters }
             : row;
     });
+};
+
+/**
+ * "Received in cash" on a direct delivery: records the customer payment into the cash drawer for
+ * this business day, so the close counts it as money in instead of showing an overage.
+ */
+const receivingDirectCash = ref<string | null>(null);
+const receiveDirectDeliveryCash = (invoiceId: string) => {
+    receivingDirectCash.value = invoiceId;
+    router.post(
+        `/${props.company.slug}/fuel/daily-close/direct-deliveries/${invoiceId}/cash`,
+        { date: form.date },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => {
+                receivingDirectCash.value = null;
+            },
+        },
+    );
 };
 
 const restoreDraft = () => {
@@ -4484,6 +4505,47 @@ const completedWorkflowSteps = computed(() => {
 
                             <Separator />
                         </template>
+
+                        <div
+                            v-if="props.unpaidDirectDeliveries?.length"
+                            class="space-y-3"
+                        >
+                            <div>
+                                <h4 class="font-medium">Direct deliveries not yet paid</h4>
+                                <p class="text-xs text-muted-foreground">
+                                    Fuel sold straight to a customer on this day. If they paid in
+                                    cash, record it here and it is counted in today's money in.
+                                </p>
+                            </div>
+                            <div
+                                v-for="invoice in props.unpaidDirectDeliveries"
+                                :key="invoice.id"
+                                class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                            >
+                                <div class="text-sm">
+                                    <Link
+                                        :href="`/${props.company.slug}/invoices/${invoice.id}`"
+                                        class="font-medium underline-offset-2 hover:underline"
+                                        >{{ invoice.invoice_number }}</Link
+                                    >
+                                    <span class="text-muted-foreground">
+                                        · {{ invoice.customer_name || 'Customer' }} ·
+                                    </span>
+                                    <MoneyText
+                                        :amount="invoice.balance"
+                                        :currency="currencyCode"
+                                        :fraction-digits="0"
+                                    />
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    :disabled="receivingDirectCash !== null"
+                                    @click="receiveDirectDeliveryCash(invoice.id)"
+                                    >Received in cash</Button
+                                >
+                            </div>
+                        </div>
 
                         <div class="space-y-4">
                             <div class="flex items-center justify-between">

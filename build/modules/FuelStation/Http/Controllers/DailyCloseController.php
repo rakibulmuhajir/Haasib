@@ -756,6 +756,7 @@ class DailyCloseController extends Controller
             'pendingBillPayments' => $pendingBillPayments,
             'pendingFuelInvoices' => $pendingFuelInvoices,
             'pendingAccountingInvoices' => $pendingAccountingInvoices,
+            'unpaidDirectDeliveries' => $this->unpaidDirectDeliveries($companyId, $date),
             'purchaseSuppliers' => $purchaseSuppliers,
             'purchaseItems' => $purchaseItems,
             'canEnterPurchases' => $canEnterPurchases,
@@ -823,6 +824,69 @@ class DailyCloseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Direct-delivery invoices of this business day still owed. The close leaves a direct sale
+     * out of its pump credit rows, so a cash payment is what brings its money into the drawer;
+     * listing the unpaid ones lets the close record that payment instead of showing an overage.
+     */
+    private function unpaidDirectDeliveries(string $companyId, string $date): array
+    {
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->where('is_direct_delivery', true)
+            ->whereDate('invoice_date', $date)
+            ->whereNotIn('status', ['void', 'cancelled', 'draft', 'paid'])
+            ->where('balance', '>', 0)
+            ->with('customer:id,name')
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(fn ($invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'customer_name' => $invoice->customer?->name,
+                'balance' => round((float) $invoice->balance, 2),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * "Received in cash" on a direct delivery: the ordinary customer payment, into the cash
+     * drawer, dated the business day, applied to that invoice. The close then counts it as
+     * money in like any other cash that came in that day.
+     */
+    public function receiveDirectDeliveryCash(\App\Modules\FuelStation\Http\Requests\ReceiveDirectDeliveryCashRequest $request, string $company, string $invoice): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        $record = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyModel->id)
+            ->where('is_direct_delivery', true)
+            ->findOrFail($invoice);
+        $amount = round((float) $record->balance, 2);
+        $cashAccountId = $this->dailyCloseService->cashAccountId($companyModel->id);
+
+        if ($amount <= 0) {
+            return back()->with('error', "{$record->invoice_number} is already paid.");
+        }
+        if (! $cashAccountId) {
+            return back()->with('error', 'No cash account is set for this station.');
+        }
+
+        try {
+            app(\App\Services\CommandBus::class)->dispatch('payment.create', [
+                'customer_id' => $record->customer_id,
+                'allocations' => [['invoice_id' => $record->id, 'amount' => $amount]],
+                'amount' => $amount,
+                'method' => 'cash',
+                'date' => $request->validated()['date'],
+                'deposit_account_id' => $cashAccountId,
+                'reference' => $record->invoice_number,
+            ], $request->user());
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Cash received for {$record->invoice_number}. It is counted in today's money in.");
     }
 
     public function storeCorrection(\App\Modules\FuelStation\Http\Requests\StoreCloseReadingCorrectionRequest $request, string $company, string $transaction): RedirectResponse

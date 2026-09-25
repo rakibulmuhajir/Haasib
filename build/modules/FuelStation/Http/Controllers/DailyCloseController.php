@@ -333,11 +333,28 @@ class DailyCloseController extends Controller
             ]);
     }
 
-    private function getTankBaselines(string $companyId, $tanks, string $date, string $previousDate)
+    private function getTankBaselines(string $companyId, $tanks, string $date, string $previousDate, ?array $parkedFigures = null)
     {
         $baselines = collect();
 
         foreach ($tanks as $tank) {
+            // The previous day is parked but not posted: its draft dip is the freshest evidence
+            // we have, dated the parked business date, so it stands in for a real posted dip —
+            // see DailyCloseReconciliationService::parkedClosingFigures.
+            $parkedTank = $parkedFigures['tanks'][$tank->id] ?? null;
+            if ($parkedTank && $parkedTank['liters'] !== null) {
+                $baselines->put($tank->id, (object) [
+                    'tank_id' => $tank->id,
+                    'dip_measurement_liters' => $parkedTank['liters'],
+                    'stick_reading' => $parkedTank['stick_reading'] ?? 0,
+                    'reading_date' => \Carbon\Carbon::parse($parkedFigures['date']),
+                    'source' => 'parked_close',
+                    'source_label' => 'Parked close (not posted)',
+                    'as_of' => $parkedFigures['date'],
+                ]);
+                continue;
+            }
+
             $dipReading = $this->latestTankDipBeforeClose($companyId, $tank->id, $date);
             $stockBaseline = $this->latestStockBaselineBeforeClose($companyId, $tank->id, $tank->linked_item_id, $date);
 
@@ -559,7 +576,13 @@ class DailyCloseController extends Controller
         // Get previous day for lookups
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
 
-        $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
+        // Owner's rule A: even when the previous day was never posted, a parked draft's
+        // figures still open this day - see DailyCloseReconciliationService::parkedClosingFigures.
+        $parkedFigures = app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)
+            ->parkedClosingFigures($companyId, $previousDate);
+        $openingsFromParked = $parkedFigures ? $previousDate : null;
+
+        $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate, $parkedFigures);
         $this->decorateTanksWithStockSnapshot($companyId, $tanks, $date, $previousTankReadings);
 
         // Get nozzles with pump info, item info, and previous day's closing reading
@@ -574,20 +597,28 @@ class DailyCloseController extends Controller
             ->orderBy('sort_order')
             ->orderBy('code')
             ->get(['id', 'company_id', 'pump_id', 'tank_id', 'item_id', 'code', 'label', 'current_meter_reading', 'last_closing_reading', 'last_manual_reading', 'has_electronic_meter'])
-            ->map(function ($nozzle) use ($companyId, $previousDate, $rates) {
+            ->map(function ($nozzle) use ($companyId, $previousDate, $rates, $parkedFigures) {
                 // Get previous day's closing reading if exists
                 $previousReading = NozzleReading::where('company_id', $companyId)
                     ->where('nozzle_id', $nozzle->id)
                     ->where('reading_date', $previousDate)
                     ->first();
 
-                $openingReading = $previousReading?->closing_electronic
-                    ?? $nozzle->last_closing_reading
-                    ?? $nozzle->current_meter_reading
-                    ?? 0;
-                $openingManual = $previousReading?->closing_manual
-                    ?? $nozzle->last_manual_reading
-                    ?? null;
+                // A parked-but-unposted previous day's own closing readings take priority over
+                // the posted fallbacks - see DailyCloseReconciliationService::parkedClosingFigures.
+                $parkedNozzle = $parkedFigures['nozzles'][$nozzle->id] ?? null;
+
+                $openingReading = ($parkedNozzle && ($parkedNozzle['closing_electronic'] ?? 0) > 0)
+                    ? $parkedNozzle['closing_electronic']
+                    : ($previousReading?->closing_electronic
+                        ?? $nozzle->last_closing_reading
+                        ?? $nozzle->current_meter_reading
+                        ?? 0);
+                $openingManual = ($parkedNozzle && ($parkedNozzle['closing_manual'] ?? 0) > 0)
+                    ? $parkedNozzle['closing_manual']
+                    : ($previousReading?->closing_manual
+                        ?? $nozzle->last_manual_reading
+                        ?? null);
 
                 return [
                     'id' => $nozzle->id,
@@ -625,6 +656,14 @@ class DailyCloseController extends Controller
 
         // Get previous day's closing balance (cash)
         $previousClose = $this->dailyCloseService->getPreviousDayClosing($companyId, $date);
+        if ($parkedFigures && $parkedFigures['closing_cash'] !== null) {
+            $previousClose = [
+                'date' => $parkedFigures['date'],
+                'closing_cash' => round($parkedFigures['closing_cash'], 2),
+                'exists' => true,
+                'source' => 'parked',
+            ];
+        }
 
         // Get live people/balance lookups for daily close
         $partners = $this->getPartnersForDailyClose($companyId);
@@ -744,6 +783,7 @@ class DailyCloseController extends Controller
             'parkedDraft' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($companyId, $date),
             'canonicalActivity' => array_values(app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->sources($companyId, $date)),
             'date' => $date,
+            'openingsFromParked' => $openingsFromParked,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
             'rateChangeSnapshots' => $this->getRateChangeSnapshotsForDailyClose($companyId, $date),

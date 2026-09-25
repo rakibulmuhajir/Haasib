@@ -37,6 +37,66 @@ class DailyCloseReconciliationService
         return $row ? json_decode($row->payload, true) : null;
     }
 
+    /**
+     * Openings for the day after $date come from $date's parked draft when $date has one and
+     * has NOT been posted (a posted, non-reversed fuel_daily_close transaction always wins —
+     * the draft is stale once that happens). Returns null when neither condition holds, so the
+     * caller falls back to its normal posted-close lookups.
+     *
+     * Used both by the Create page (to seed the next day's openings — Owner's rule A: "even if
+     * the close is not posted, its values should be taken in the next day") and by
+     * DailyCloseService::processDailyClose (to refuse posting a day whose previous day is
+     * still only parked).
+     */
+    public function parkedClosingFigures(string $companyId, string $date): ?array
+    {
+        $posted = Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereDate('transaction_date', $date)
+            ->whereNull('deleted_at')
+            ->whereNull('reversed_by_id')
+            ->exists();
+
+        if ($posted) {
+            return null;
+        }
+
+        $payload = $this->draft($companyId, $date);
+
+        if (! $payload) {
+            return null;
+        }
+
+        $nozzles = [];
+        foreach ($payload['nozzle_readings'] ?? [] as $reading) {
+            if (empty($reading['nozzle_id'])) {
+                continue;
+            }
+            $nozzles[$reading['nozzle_id']] = [
+                'closing_electronic' => isset($reading['closing_electronic']) ? (float) $reading['closing_electronic'] : null,
+                'closing_manual' => isset($reading['closing_manual']) ? (float) $reading['closing_manual'] : null,
+            ];
+        }
+
+        $tanks = [];
+        foreach ($payload['tank_readings'] ?? [] as $reading) {
+            if (empty($reading['tank_id'])) {
+                continue;
+            }
+            $tanks[$reading['tank_id']] = [
+                'liters' => isset($reading['liters']) ? (float) $reading['liters'] : null,
+                'stick_reading' => isset($reading['stick_reading']) ? (float) $reading['stick_reading'] : null,
+            ];
+        }
+
+        return [
+            'date' => $date,
+            'nozzles' => $nozzles,
+            'tanks' => $tanks,
+            'closing_cash' => isset($payload['closing_cash']) ? (float) $payload['closing_cash'] : null,
+        ];
+    }
+
     public function sources(string $companyId, string $date, ?string $excludeId = null, ?string $snapshotCashAccountId = null): array
     {
         $cashAccount = $snapshotCashAccountId ?? app(DailyCloseService::class)->cashAccountId($companyId);

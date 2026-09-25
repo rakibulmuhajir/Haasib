@@ -258,6 +258,18 @@ class DailyCloseService
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($companyId, $data, $user, $isCorrection) {
             $date = $data['date'];
+
+            // Owner's rule A means openings can silently come from a parked-but-unposted
+            // previous day; posting this day on top of that would freeze figures nobody has
+            // confirmed. Parking stays allowed (see DailyCloseReconciliationService::park) —
+            // only posting is blocked here.
+            $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
+            if (app(DailyCloseReconciliationService::class)->parkedClosingFigures($companyId, $previousDate)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'date' => "Post {$previousDate} first — this day's openings come from it.",
+                ]);
+            }
+
             // Litres are worked out here, from the meters. See litresFromReadings().
             $data['nozzle_readings'] = $this->litresFromReadings($data['nozzle_readings'] ?? []);
             // Reserve the date before reading sources. Row triggers use nonblocking shared

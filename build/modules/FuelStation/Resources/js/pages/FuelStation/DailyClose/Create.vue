@@ -299,6 +299,10 @@ const props = defineProps<{
         cash_effect: number;
     }>;
     date: string;
+    // Set to the previous business date when that date is parked but not posted, and this
+    // day's openings were taken from its draft instead of a posted close. See Owner's rule A
+    // and DailyCloseReconciliationService::parkedClosingFigures.
+    openingsFromParked?: string | null;
     fuelItems: FuelItem[];
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
     rateChangeSnapshots: RateChangeSnapshot[];
@@ -1129,6 +1133,24 @@ const litresFromMeters = (opening: number, closing: number, rolledOver: boolean)
         ? Math.round((meterRolloverPoint(opening) - opening + closing) * 1000) / 1000
         : Math.max(0, closing - opening);
 
+/**
+ * Owner's rule B: typing the litres sold fills in the closing meter reading, the inverse of
+ * litresFromMeters above. Setting closing_electronic here re-triggers the watch below, which
+ * recomputes liters_sold from the same opening/closing/rolled-over triple - landing back on the
+ * value just typed (module rounding), not a feedback loop.
+ */
+const setLitersSold = (idx: number, litersValue: number) => {
+    const row = form.nozzle_readings[idx];
+    const opening = Number(row.opening_electronic || 0);
+    const liters = Number.isFinite(litersValue) ? litersValue : 0;
+    const rolledOver = Boolean(row.meter_rolled_over);
+
+    row.liters_sold = liters;
+    row.closing_electronic = rolledOver
+        ? Math.round((opening + liters - meterRolloverPoint(opening)) * 1000) / 1000
+        : Math.round((opening + liters) * 1000) / 1000;
+};
+
 const otherSaleError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`other_sales.${index}.${field}`];
 
@@ -1288,38 +1310,62 @@ watch(
         if (suppressDateChange.value) {
             return;
         }
-        if (newDate !== oldDate) {
-            // Save current draft before switching dates (only if there's meaningful data)
-            if (oldDate && !isAmendmentMode.value) {
-                const formData = form.data();
-                if (hasFormData(formData)) {
-                    const oldDraftKey = `daily-close-draft-${props.company.id}-${oldDate}`;
-                    const draftData = {
-                        savedAt: new Date().toISOString(),
-                        formData: formData,
-                    };
-                    localStorage.setItem(
-                        oldDraftKey,
-                        JSON.stringify(draftData),
-                    );
-                }
-            }
+        if (newDate === oldDate) {
+            return;
+        }
 
-            if (isAmendmentMode.value) {
-                suppressDateChange.value = true;
-                form.date = oldDate ?? props.date;
-                nextTick(() => {
-                    suppressDateChange.value = false;
-                });
-                return;
-            }
+        if (isAmendmentMode.value) {
+            suppressDateChange.value = true;
+            form.date = oldDate ?? props.date;
+            nextTick(() => {
+                suppressDateChange.value = false;
+            });
+            return;
+        }
 
+        const navigateToNewDate = () => {
             router.get(
                 `/${props.company.slug}/fuel/daily-close`,
                 { date: newDate },
                 { preserveScroll: true, preserveState: false, replace: true },
             );
+        };
+
+        // Save current draft before switching dates (only if there's meaningful data)
+        if (oldDate) {
+            const formData = form.data();
+            if (hasFormData(formData)) {
+                const oldDraftKey = `daily-close-draft-${props.company.id}-${oldDate}`;
+                const draftData = {
+                    savedAt: new Date().toISOString(),
+                    formData: formData,
+                };
+                localStorage.setItem(oldDraftKey, JSON.stringify(draftData));
+
+                // Leaving a date with real data parks it on the server too (Owner's rule A: even
+                // an unposted close's values feed the next day's openings), so the next day sees
+                // it even from a different browser. localStorage above stays as a fallback.
+                router.post(
+                    `/${props.company.slug}/fuel/daily-close`,
+                    { ...getCleanedFormData(), date: oldDate, intent: 'park' },
+                    {
+                        preserveScroll: true,
+                        onError: (errors) => {
+                            const firstError = String(
+                                Object.values(errors)[0] ?? 'unknown error',
+                            );
+                            toast.error(`Couldn't park ${oldDate}: ${firstError}`);
+                        },
+                        onFinish: () => {
+                            navigateToNewDate();
+                        },
+                    },
+                );
+                return;
+            }
         }
+
+        navigateToNewDate();
     },
 );
 
@@ -2863,6 +2909,14 @@ const completedWorkflowSteps = computed(() => {
                                 dip.
                             </p>
                             <InputError :message="form.errors.date" />
+                            <p
+                                v-if="props.openingsFromParked"
+                                class="text-xs text-status-attention"
+                            >
+                                Openings come from {{ props.openingsFromParked }}, which is
+                                parked but not posted. Post {{ props.openingsFromParked }}
+                                before this day.
+                            </p>
                         </div>
                         <div
                             class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
@@ -3025,7 +3079,7 @@ const completedWorkflowSteps = computed(() => {
                                             Closing
                                         </div>
                                         <div class="col-span-2 text-right">
-                                            Liters
+                                            Litres sold
                                         </div>
                                         <div class="col-span-2 text-right">
                                             Rate/L
@@ -3129,19 +3183,30 @@ const completedWorkflowSteps = computed(() => {
                                                 />
                                             </div>
                                             <!-- Liters -->
-                                            <div class="col-span-2 text-right">
-                                                <span
-                                                    class="text-base font-semibold"
-                                                    >{{
+                                            <div class="col-span-2">
+                                                <Input
+                                                    :model-value="
                                                         form.nozzle_readings[
                                                             idx
-                                                        ].liters_sold.toFixed(0)
-                                                    }}</span
-                                                >
-                                                <span
-                                                    class="ml-1 text-xs text-muted-foreground"
-                                                    >L</span
-                                                >
+                                                        ].liters_sold
+                                                    "
+                                                    @update:model-value="
+                                                        (v) =>
+                                                            setLitersSold(
+                                                                idx,
+                                                                Number(v),
+                                                            )
+                                                    "
+                                                    :data-testid="'nozzle-' + idx + '-liters-sold'"
+                                                    type="number"
+                                                    @focus="selectZeroValue"
+                                                    step="1"
+                                                    class="h-9 text-right font-semibold"
+                                                />
+                                                <p class="mt-1 text-xs text-muted-foreground">
+                                                    Type litres or the closing meter — the
+                                                    other fills in.
+                                                </p>
                                             </div>
                                             <!-- Rate -->
                                             <div class="col-span-2">

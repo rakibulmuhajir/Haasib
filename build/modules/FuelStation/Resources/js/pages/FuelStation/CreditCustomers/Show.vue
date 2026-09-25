@@ -281,9 +281,18 @@ const goBack = () => {
       </Card>
 
       <Card class="lg:col-span-2">
-        <CardHeader>
-          <CardTitle class="text-base">Statement</CardTitle>
-          <CardDescription>Every invoice, payment and credit note against this buyer's receivable account, from every entry point, oldest first.</CardDescription>
+        <CardHeader class="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle class="text-base">Statement</CardTitle>
+            <CardDescription>Every invoice, payment and credit note against this buyer's receivable account, from every entry point, oldest first.</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            @click="router.get(`/${companySlug}/reports/statements`, { kind: 'customer', id: customer.id })"
+          >
+            Full statement
+          </Button>
         </CardHeader>
         <CardContent class="p-0">
           <LedgerRegister :data="tableData" :columns="columns">

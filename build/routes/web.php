@@ -26,6 +26,7 @@ use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
 use App\Modules\Accounting\Http\Controllers\ReceivablesAgingReportController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
+use App\Modules\Accounting\Http\Controllers\StatementReportController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
 use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
 use App\Modules\Accounting\Http\Controllers\VendorController;
@@ -108,6 +109,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/trial-balance', [TrialBalanceReportController::class, 'index'])->name('reports.trial-balance');
         Route::get('/{company}/reports/balance-sheet', [BalanceSheetReportController::class, 'index'])->name('reports.balance-sheet');
         Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
+        Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {

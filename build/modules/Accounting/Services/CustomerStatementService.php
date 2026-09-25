@@ -26,7 +26,16 @@ use App\Modules\Accounting\Models\PaymentAllocation;
  */
 class CustomerStatementService
 {
-    public function statement(Customer $customer): array
+    /**
+     * @param  string|null  $from  Rows dated before this collapse into a single "Opening
+     *                             balance" row. Null means the full history, exactly as
+     *                             before this parameter existed — every existing caller
+     *                             (the fuel credit-customer page, etc.) passes nothing and
+     *                             sees the same shape it always has.
+     * @param  string|null  $to  Rows dated after this are left out and a "Closing balance"
+     *                           row is appended. Null means no upper bound and no closing row.
+     */
+    public function statement(Customer $customer, ?string $from = null, ?string $to = null): array
     {
         $rows = [];
 
@@ -87,16 +96,36 @@ class CustomerStatementService
 
         usort($rows, fn ($a, $b) => [$a['date'], $a['created_at']] <=> [$b['date'], $b['created_at']]);
 
-        $running = 0.0;
-        $statement = [[
-            'date' => null, 'type' => 'opening_balance', 'reference' => null,
-            'description' => 'Opening balance', 'debit' => 0.0, 'credit' => 0.0,
-            'source_id' => null, 'link' => null, 'balance' => 0.0,
-        ]];
+        $opening = 0.0;
+        $inRange = [];
         foreach ($rows as $row) {
+            if ($from !== null && $row['date'] !== null && $row['date'] < $from) {
+                $opening = round($opening + $row['debit'] - $row['credit'], 2);
+                continue;
+            }
+            if ($to !== null && $row['date'] !== null && $row['date'] > $to) {
+                continue;
+            }
+            $inRange[] = $row;
+        }
+
+        $running = $opening;
+        $statement = [[
+            'date' => $from, 'type' => 'opening_balance', 'reference' => null,
+            'description' => 'Opening balance', 'debit' => 0.0, 'credit' => 0.0,
+            'source_id' => null, 'link' => null, 'balance' => $opening,
+        ]];
+        foreach ($inRange as $row) {
             $running = round($running + $row['debit'] - $row['credit'], 2);
             $row['balance'] = $running;
             $statement[] = $row;
+        }
+        if ($to !== null) {
+            $statement[] = [
+                'date' => $to, 'type' => 'closing_balance', 'reference' => null,
+                'description' => 'Closing balance', 'debit' => 0.0, 'credit' => 0.0,
+                'source_id' => null, 'link' => null, 'balance' => $running,
+            ];
         }
 
         // Money this buyer already paid but that has not been matched to any invoice yet
@@ -112,8 +141,12 @@ class CustomerStatementService
 
         return [
             'rows' => $statement,
+            'opening_balance' => $opening,
             'closing_balance' => $running,
             'available_credit' => $availableCredit,
+            'from' => $from,
+            'to' => $to,
+            'party' => $customer->name,
         ];
     }
 }

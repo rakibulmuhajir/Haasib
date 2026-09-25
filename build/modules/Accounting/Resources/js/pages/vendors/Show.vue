@@ -416,9 +416,18 @@ const cancelAddressEdit = () => {
               <CardTitle class="font-medium text-text-secondary">Statement of Account</CardTitle>
               <CardDescription>Every bill, payment and credit, oldest first, with what is still owed</CardDescription>
             </div>
-            <div class="text-right">
-              <p class="text-text-metadata">Closing balance</p>
-              <MoneyText :amount="statementClosingBalance" :currency="vendor.base_currency || company.base_currency" locale="en-PK" />
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <p class="text-text-metadata">Closing balance</p>
+                <MoneyText :amount="statementClosingBalance" :currency="vendor.base_currency || company.base_currency" locale="en-PK" />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                @click="router.get(`/${company.slug}/reports/statements`, { kind: 'supplier', id: vendor.id })"
+              >
+                Full statement
+              </Button>
             </div>
           </CardHeader>
           <CardContent>

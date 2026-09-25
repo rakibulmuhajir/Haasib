@@ -21,7 +21,14 @@ use App\Modules\Accounting\Models\VendorCredit;
  */
 class VendorStatementService
 {
-    public function statement(Vendor $vendor): array
+    /**
+     * @param  string|null  $from  Rows dated before this collapse into a single "Opening
+     *                             balance" row. Null keeps the full-history shape every
+     *                             existing caller (the vendor show page, etc.) already relies on.
+     * @param  string|null  $to  Rows dated after this are left out and a "Closing balance"
+     *                           row is appended. Null means no upper bound and no closing row.
+     */
+    public function statement(Vendor $vendor, ?string $from = null, ?string $to = null): array
     {
         $rows = [];
 
@@ -81,21 +88,45 @@ class VendorStatementService
 
         usort($rows, fn ($a, $b) => [$a['date'], $a['created_at']] <=> [$b['date'], $b['created_at']]);
 
-        $running = 0.0;
-        $statement = [[
-            'date' => null, 'type' => 'opening_balance', 'reference' => null,
-            'description' => 'Opening balance', 'debit' => 0.0, 'credit' => 0.0,
-            'source_id' => null, 'link' => null, 'balance' => 0.0,
-        ]];
+        $opening = 0.0;
+        $inRange = [];
         foreach ($rows as $row) {
+            if ($from !== null && $row['date'] !== null && $row['date'] < $from) {
+                $opening = round($opening + $row['credit'] - $row['debit'], 2);
+                continue;
+            }
+            if ($to !== null && $row['date'] !== null && $row['date'] > $to) {
+                continue;
+            }
+            $inRange[] = $row;
+        }
+
+        $running = $opening;
+        $statement = [[
+            'date' => $from, 'type' => 'opening_balance', 'reference' => null,
+            'description' => 'Opening balance', 'debit' => 0.0, 'credit' => 0.0,
+            'source_id' => null, 'link' => null, 'balance' => $opening,
+        ]];
+        foreach ($inRange as $row) {
             $running = round($running + $row['credit'] - $row['debit'], 2);
             $row['balance'] = $running;
             $statement[] = $row;
         }
+        if ($to !== null) {
+            $statement[] = [
+                'date' => $to, 'type' => 'closing_balance', 'reference' => null,
+                'description' => 'Closing balance', 'debit' => 0.0, 'credit' => 0.0,
+                'source_id' => null, 'link' => null, 'balance' => $running,
+            ];
+        }
 
         return [
             'rows' => $statement,
+            'opening_balance' => $opening,
             'closing_balance' => $running,
+            'from' => $from,
+            'to' => $to,
+            'party' => $vendor->name,
         ];
     }
 }

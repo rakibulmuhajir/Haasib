@@ -17,6 +17,7 @@ import {
   Wand2,
   Scale,
   Clock,
+  ScrollText,
 } from 'lucide-vue-next'
 
 export const accountingNav: ModuleNavConfig = {
@@ -37,6 +38,7 @@ export const accountingNav: ModuleNavConfig = {
           { title: 'Trial Balance', href: `/${slug}/reports/trial-balance`, icon: Scale },
           { title: 'Balance Sheet', href: `/${slug}/reports/balance-sheet`, icon: Scale },
           { title: 'Receivables Aging', href: `/${slug}/reports/receivables-aging`, icon: Clock },
+          { title: 'Statements', href: `/${slug}/reports/statements`, icon: ScrollText },
           {
             title: 'Setup',
             icon: Settings,

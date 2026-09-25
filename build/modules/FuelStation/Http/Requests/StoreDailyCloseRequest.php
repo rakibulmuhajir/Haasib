@@ -167,6 +167,17 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'payments_received.*.payment_account_id' => 'nullable|uuid',
             'payments_received.*.reference' => 'nullable|string|max:100',
 
+            // "Pay supplier" rows entered inline in Cash Out instead of at /bill-payments.
+            // Same shape for park and post; on post each row must be complete (see
+            // RequiresCompletePaySupplierRows) and becomes a canonical bill payment through
+            // bill_payment.create dispatched via the CommandBus (DailyClosePaySupplierService).
+            'pay_suppliers' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaySupplierRows()],
+            'pay_suppliers.*.vendor_id' => 'nullable|uuid',
+            'pay_suppliers.*.vendor_name' => 'nullable|string|max:255',
+            'pay_suppliers.*.amount' => 'nullable|numeric|min:0.01',
+            'pay_suppliers.*.payment_account_id' => 'nullable|uuid',
+            'pay_suppliers.*.reference' => 'nullable|string|max:100',
+
             // Tab 5: Summary
             'closing_cash' => 'required|numeric|min:0',
             'cash_variance' => 'nullable|numeric',
@@ -192,12 +203,16 @@ class StoreDailyCloseRequest extends BaseFormRequest
         foreach ([
             'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
             'payments_received.*.customer_id' => 'acct.customers', 'payments_received.*.invoice_id' => 'acct.invoices',
+            'pay_suppliers.*.vendor_id' => 'acct.vendors',
         ] as $field => $table) {
             $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
         }
-        // The account a payment was received into must be this company's own cash or bank account.
-        $rules['payments_received.*.payment_account_id'] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
-            ->where('company_id', $companyId)->where('is_active', true)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')];
+        // The account a payment was received into, or a supplier was paid from, must be this
+        // company's own cash or bank account.
+        foreach (['payments_received.*.payment_account_id', 'pay_suppliers.*.payment_account_id'] as $field) {
+            $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
+                ->where('company_id', $companyId)->where('is_active', true)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')];
+        }
         return $rules;
     }
 

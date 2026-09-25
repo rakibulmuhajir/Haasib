@@ -52,7 +52,9 @@ class PaymentController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $query = Payment::where('company_id', $company->id)
+        $showVoided = $request->boolean('show_voided', false);
+        $query = ($showVoided ? Payment::withTrashed() : Payment::query())
+            ->where('company_id', $company->id)
             ->with('customer:id,name')
             ->orderBy('created_at', 'desc');
 
@@ -89,6 +91,7 @@ class PaymentController extends Controller
                 'search' => $request->search ?? '',
                 'customer_id' => $request->customer_id ?? '',
                 'payment_method' => $request->payment_method ?? '',
+                'show_voided' => $showVoided,
             ],
         ]);
     }

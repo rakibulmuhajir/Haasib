@@ -227,6 +227,45 @@ class DailyCloseService
     }
 
     /**
+     * Allocates an amount being paid to a vendor across that vendor's open bills, oldest
+     * first, up to what is actually owed; anything left over is not applied to any bill and
+     * is reported back as an advance (VendorAdvanceService::autoApply picks it up the moment
+     * the vendor's next bill posts). Shared by every close-initiated vendor payment —
+     * the card-channel supplier settlement above and DailyClosePaySupplierService — so the
+     * oldest-first rule lives in exactly one place.
+     *
+     * @return array{allocations: array<int, array{bill_id: string, amount_allocated: float}>, applied_amount: float, advance_amount: float}
+     */
+    public function allocateOldestFirst(string $companyId, string $vendorId, float $amount): array
+    {
+        $openBills = Bill::where('company_id', $companyId)
+            ->where('vendor_id', $vendorId)
+            ->where('balance', '>', 0.000001)
+            ->orderBy('bill_date')
+            ->orderBy('created_at')
+            ->get(['id', 'bill_number', 'balance']);
+        $openBalance = round((float) $openBills->sum('balance'), 2);
+        $appliedAmount = round(min($amount, $openBalance), 2);
+        $advanceAmount = round($amount - $appliedAmount, 2);
+
+        $allocations = [];
+        $remaining = $appliedAmount;
+        foreach ($openBills as $bill) {
+            if ($remaining <= 0.000001) {
+                break;
+            }
+            $take = round(min((float) $bill->balance, $remaining), 2);
+            if ($take <= 0) {
+                continue;
+            }
+            $allocations[] = ['bill_id' => $bill->id, 'amount_allocated' => $take];
+            $remaining = round($remaining - $take, 2);
+        }
+
+        return ['allocations' => $allocations, 'applied_amount' => $appliedAmount, 'advance_amount' => $advanceAmount];
+    }
+
+    /**
      * The account(s) a fuel-station company's meter revenue can land on: every active fuel
      * item's own income_account_id, plus the station's fallback fuel_sales account. A plain
      * Accounting invoice needs at least one line on one of these to be recognised by the
@@ -965,35 +1004,14 @@ class DailyCloseService
                 }
                 $clearingAccount = Account::where('company_id', $companyId)->find($clearingAccountId);
 
-                $openBills = Bill::where('company_id', $companyId)
-                    ->where('vendor_id', $vendorId)
-                    ->where('balance', '>', 0.000001)
-                    ->orderBy('bill_date')
-                    ->orderBy('created_at')
-                    ->get(['id', 'bill_number', 'balance']);
-                $openBalance = round((float) $openBills->sum('balance'), 2);
                 // The FULL card total always leaves clearing for this vendor now, whether or
                 // not it covers every open bill: whatever exceeds the open balance is not an
                 // error, it's an advance -- money the vendor is holding on account, applied
                 // automatically (VendorAdvanceService::autoApply) the moment its next bill
                 // posts. Clearing therefore always nets to zero for a supplier-settled
                 // channel, never leaves an "excess parked in clearing" balance behind.
-                $appliedAmount = round(min($channelTotal, $openBalance), 2);
-                $advanceAmount = round($channelTotal - $appliedAmount, 2);
-
-                $allocations = [];
-                $remaining = $appliedAmount;
-                foreach ($openBills as $bill) {
-                    if ($remaining <= 0.000001) {
-                        break;
-                    }
-                    $take = round(min((float) $bill->balance, $remaining), 2);
-                    if ($take <= 0) {
-                        continue;
-                    }
-                    $allocations[] = ['bill_id' => $bill->id, 'amount_allocated' => $take];
-                    $remaining = round($remaining - $take, 2);
-                }
+                ['allocations' => $allocations, 'applied_amount' => $appliedAmount, 'advance_amount' => $advanceAmount]
+                    = $this->allocateOldestFirst($companyId, $vendorId, $channelTotal);
 
                 $notes = "{$posting['channel_label']} settlement — Daily Close {$transactionNumber}";
                 if ($advanceAmount > 0.004) {
@@ -1048,6 +1066,52 @@ class DailyCloseService
                     if ($paidTransactionId && isset($refreshedSources['journal:'.$paidTransactionId])) {
                         $canonicalSources['journal:'.$paidTransactionId] = $refreshedSources['journal:'.$paidTransactionId];
                         $canonicalSources['journal:'.$paidTransactionId]['source'] = 'close_supplier_settlement';
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // 4d. "Pay supplier" rows entered directly in this Cash Out section: a supplier,
+            // an amount, and the account it is paid from (defaulting to the station cash
+            // drawer). Each becomes an ordinary bill_payment.create, allocated oldest-first
+            // to that vendor's open bills — the remainder is left as an advance.
+            // ─────────────────────────────────────────────────────────────────
+            $paySupplierDetails = app(DailyClosePaySupplierService::class)->prepare(
+                $companyId, $date, $data['pay_suppliers'] ?? [], $user, $this
+            );
+            $paySuppliersTotal = round(array_sum(array_column($paySupplierDetails, 'amount')), 2);
+            $cashPaySuppliersTotal = round(array_sum(array_map(
+                fn ($detail) => $detail['affects_cash_drawer'] ? $detail['amount'] : 0,
+                $paySupplierDetails
+            )), 2);
+            $metadata['pay_suppliers_total'] = $paySuppliersTotal;
+            $metadata['cash_pay_suppliers'] = $cashPaySuppliersTotal;
+            $metadata['pay_supplier_details'] = $paySupplierDetails;
+
+            // Unlike the "Supplier Bill Payments recorded elsewhere" sweep below (which posts
+            // straight into this close's own journal via $entries, since those payments have no
+            // transaction of their own yet), a Pay Supplier row posts through its own, separately
+            // balanced bill_payment.create transaction -- same as the card-channel supplier
+            // settlement above. A cash-drawer row's cash effect is therefore external to this
+            // journal's own $entries and must be folded into $externalCashOut so the "Cash on
+            // Hand net change" line below and expectedClosing/variance both see it; otherwise the
+            // drawer would appear to have lost cash this journal's own entries cannot explain.
+            $externalCashOut += $cashPaySuppliersTotal;
+
+            // Same reasoning as the card-channel supplier settlement above: tag these
+            // close-initiated payments' own postings as this close's own source, so a later
+            // reconciliation view never lists them as "recorded on other screens".
+            if (!empty($paySupplierDetails)) {
+                $refreshedSources = $reconciliation->sources($companyId, $date);
+                foreach ($paySupplierDetails as $detail) {
+                    if (empty($detail['payment_id'])) {
+                        continue;
+                    }
+                    $paidTransactionId = BillPayment::where('company_id', $companyId)
+                        ->whereKey($detail['payment_id'])->value('transaction_id');
+                    if ($paidTransactionId && isset($refreshedSources['journal:'.$paidTransactionId])) {
+                        $canonicalSources['journal:'.$paidTransactionId] = $refreshedSources['journal:'.$paidTransactionId];
+                        $canonicalSources['journal:'.$paidTransactionId]['source'] = 'close_pay_supplier';
                     }
                 }
             }
@@ -1423,6 +1487,7 @@ class DailyCloseService
                 'employee_advances' => $data['employee_advances'] ?? [],
                 'payroll_payouts' => $payrollPayoutDetails,
                 'bill_payments' => $billPaymentDetails,
+                'pay_suppliers' => $data['pay_suppliers'] ?? [],
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
                 'expenses' => $declaredExpenses,
                 'closing_cash' => $data['closing_cash'],

@@ -10,8 +10,11 @@ use App\Models\PartnerTransaction;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -132,22 +135,11 @@ class SaveAction implements PaletteAction
             $invoiceIds = $this->createOpeningInvoices($company, $params, $accounts, $asOf, $currency);
             $billIds = $this->createOpeningBills($company, $params, $accounts, $asOf, $currency);
 
-            // Every outgoing generation's ids are retired (kept, deduplicated) so the date
-            // guard and view can permanently exclude their now-void/reversed postings without
-            // ever mistaking a genuine, unrelated transaction for one of this feature's own.
-            $retiredInvoiceIds = array_values(array_unique(array_merge(
-                $priorOpening['retired_invoice_ids'] ?? [],
-                $priorOpening['invoice_ids'] ?? []
-            )));
-            $retiredBillIds = array_values(array_unique(array_merge(
-                $priorOpening['retired_bill_ids'] ?? [],
-                $priorOpening['bill_ids'] ?? []
-            )));
-            $retiredJournalIds = array_values(array_unique(array_merge(
-                $priorOpening['retired_journal_ids'] ?? [],
-                array_filter([$priorOpening['journal_id'] ?? null])
-            )));
-
+            // The previous generation is now deleted outright (reversePrevious), not
+            // voided/reversed, so there is nothing left on disk for a future date guard or
+            // view to need to exclude. These keys are kept (written empty) only so older
+            // companies whose prior generation still has genuine retired_* entries from
+            // before this change keep reading correctly via nonOpeningTransactions/ViewAction.
             $settings = $company->settings ?? [];
             $settings['opening_balances'] = [
                 'as_of_date' => $asOf,
@@ -156,9 +148,9 @@ class SaveAction implements PaletteAction
                 'invoice_ids' => $invoiceIds,
                 'bill_ids' => $billIds,
                 'journal_id' => $journalId,
-                'retired_invoice_ids' => $retiredInvoiceIds,
-                'retired_bill_ids' => $retiredBillIds,
-                'retired_journal_ids' => $retiredJournalIds,
+                'retired_invoice_ids' => [],
+                'retired_bill_ids' => [],
+                'retired_journal_ids' => [],
             ];
             $company->settings = $settings;
             $company->save();
@@ -400,8 +392,6 @@ class SaveAction implements PaletteAction
     private function reversePrevious($company, array $opening): void
     {
         $companyId = $company->id;
-        $bus = app(CommandBus::class);
-        $reversalDate = $opening['as_of_date'] ?? null;
 
         $invoiceIds = $opening['invoice_ids'] ?? [];
         $billIds = $opening['bill_ids'] ?? [];
@@ -470,12 +460,12 @@ class SaveAction implements PaletteAction
             $salariesOwedByJournal[$journal->id] = $salariesOwed;
         }
 
-        // ---- Pass 2: mutate ----
+        // ---- Pass 2: mutate — delete outright, never void/reverse ----
         foreach ($invoices as $invoice) {
-            $bus->dispatch('invoice.void', ['id' => $invoice->id, 'reason' => 'Opening balances re-entered', 'reversal_date' => $reversalDate], Auth::user(), true);
+            $this->deleteOpeningInvoice($companyId, $invoice);
         }
         foreach ($bills as $bill) {
-            $bus->dispatch('bill.void', ['id' => $bill->id, 'reason' => 'Opening balances re-entered', 'reversal_date' => $reversalDate], Auth::user(), true);
+            $this->deleteOpeningBill($companyId, $bill);
         }
         foreach ($journals as $journal) {
             foreach ($amanatByJournal[$journal->id] as $amanat) {
@@ -497,8 +487,64 @@ class SaveAction implements PaletteAction
 
             PartnerTransaction::whereIn('journal_entry_id', $journal->journalEntries->pluck('id')->all())->delete();
 
-            $this->postingService->reverseTransaction($journal, 'Opening balances re-entered', $journal->transaction_date);
+            $this->deleteJournal($journal);
         }
+    }
+
+    /**
+     * Deletes a transaction's journal entries (hard — acct.journal_entries has no soft-delete
+     * column) and soft-deletes the transaction itself, exactly what "delete" means for every
+     * other row this action touches. Used instead of PostingService::reverseTransaction, which
+     * posts an offsetting reversal pair rather than removing the original.
+     */
+    private function deleteJournal(Transaction $journal): void
+    {
+        JournalEntry::where('transaction_id', $journal->id)->delete();
+        $journal->delete();
+    }
+
+    /**
+     * Finds the posted transaction behind an opening invoice the same way Invoice\VoidAction
+     * does (transaction_id first, falling back to the reference lookup), then deletes the
+     * invoice tree outright: line items, that transaction's journal entries, the transaction,
+     * and the invoice.
+     */
+    private function deleteOpeningInvoice(string $companyId, Invoice $invoice): void
+    {
+        $transaction = $this->resolvePostedTransaction($companyId, 'acct.invoices', $invoice->id, $invoice->transaction_id);
+        if ($transaction) {
+            $this->deleteJournal($transaction);
+        }
+        InvoiceLineItem::where('invoice_id', $invoice->id)->delete();
+        $invoice->delete();
+    }
+
+    private function deleteOpeningBill(string $companyId, Bill $bill): void
+    {
+        $transaction = $this->resolvePostedTransaction($companyId, 'acct.bills', $bill->id, $bill->transaction_id);
+        if ($transaction) {
+            $this->deleteJournal($transaction);
+        }
+        BillLineItem::where('bill_id', $bill->id)->delete();
+        $bill->delete();
+    }
+
+    private function resolvePostedTransaction(string $companyId, string $referenceType, string $referenceId, ?string $transactionId): ?Transaction
+    {
+        if ($transactionId) {
+            $transaction = Transaction::where('company_id', $companyId)->where('id', $transactionId)->whereNull('deleted_at')->first();
+            if ($transaction) {
+                return $transaction;
+            }
+        }
+
+        return Transaction::where('company_id', $companyId)
+            ->where('reference_type', $referenceType)
+            ->where('reference_id', $referenceId)
+            ->whereNull('reversal_of_id')
+            ->whereNull('deleted_at')
+            ->orderByDesc('created_at')
+            ->first();
     }
 
     private function addCashAndBankLines(string $companyId, array $params, array $accounts, array &$lines): void

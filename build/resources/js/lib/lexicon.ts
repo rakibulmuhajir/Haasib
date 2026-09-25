@@ -509,6 +509,7 @@ export const invoiceBillTerms: TermDictionary = {
   searchBillPlaceholder: 'Search bill # or vendor invoice #',
   allVendors: 'All vendors',
   allStatus: 'All status',
+  showVoided: 'Show voided',
   received: 'Received',
   billReceived: 'Bill received',
   partial: 'Partial',

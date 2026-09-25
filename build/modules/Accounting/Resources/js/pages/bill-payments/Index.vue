@@ -7,6 +7,8 @@ import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { formatDateTime } from '@/lib/datetime'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard, Eye, Pencil, Plus } from 'lucide-vue-next'
@@ -55,6 +57,7 @@ const props = defineProps<{
     vendor_id?: string
     from_date?: string
     to_date?: string
+    show_voided?: boolean
   }
 }>()
 
@@ -62,6 +65,7 @@ const allVendorsValue = '__all_vendors'
 const vendorId = ref(props.filters.vendor_id ?? allVendorsValue)
 const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
+const showVoided = ref(props.filters.show_voided ?? false)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -133,6 +137,7 @@ const handleSearch = () => {
       vendor_id: vendorId.value === allVendorsValue ? '' : vendorId.value,
       from_date: fromDate.value,
       to_date: toDate.value,
+      show_voided: showVoided.value ? 1 : undefined,
     },
     { preserveState: true }
   )
@@ -165,6 +170,10 @@ const handleSearch = () => {
       </Select>
       <Input v-model="fromDate" type="date" @change="handleSearch" />
       <Input v-model="toDate" type="date" @change="handleSearch" />
+      <div class="flex items-center gap-2">
+        <Switch id="show-voided" v-model:checked="showVoided" @update:checked="handleSearch" />
+        <Label for="show-voided" class="text-sm text-text-secondary">Show voided</Label>
+      </div>
     </div>
 
     <div v-if="!payments.data.length">

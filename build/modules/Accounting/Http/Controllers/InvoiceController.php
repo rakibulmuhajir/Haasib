@@ -48,6 +48,11 @@ class InvoiceController extends Controller
             $query->where('customer_id', $request->customer_id);
         }
 
+        $showVoided = $request->boolean('show_voided', false);
+        if (! $showVoided) {
+            $query->whereNotIn('status', ['void', 'cancelled']);
+        }
+
         $invoices = $query->paginate(25)->withQueryString();
 
         return Inertia::render('accounting/invoices/Index', [
@@ -62,6 +67,7 @@ class InvoiceController extends Controller
                 'search' => $request->search ?? '',
                 'status' => $request->status ?? 'all',
                 'customer_id' => $request->customer_id ?? '',
+                'show_voided' => $showVoided,
             ],
         ]);
     }

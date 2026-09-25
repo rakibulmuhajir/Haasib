@@ -302,7 +302,13 @@ class CreateAction implements PaletteAction
     private function nextNumber(string $companyId): string
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($companyId) {
-            $last = Bill::where('company_id', $companyId)
+            // Include soft-deleted bills (e.g. OpeningBalance\SaveAction::reversePrevious
+            // deletes a superseded generation's bills outright) so a number a deleted bill
+            // already used is never re-issued -- it would collide with that bill's own row
+            // on the (company_id, bill_number) unique index, since a soft delete leaves the
+            // row, and its number, in place. Mirrors Invoice::generateInvoiceNumber.
+            $last = Bill::withTrashed()
+                ->where('company_id', $companyId)
                 ->whereNotNull('bill_number')
                 ->lockForUpdate()
                 ->orderByDesc('bill_number')

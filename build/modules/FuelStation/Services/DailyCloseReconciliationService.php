@@ -180,7 +180,14 @@ class DailyCloseReconciliationService
         foreach (array_unique(array_merge(array_keys($before), array_keys($currentSources))) as $key) {
             $old = $before[$key] ?? null;
             $new = $currentSources[$key] ?? null;
-            if ($old == $new) { continue; }
+            // 'source' is a snapshot-only annotation (close_purchase, close_supplier_settlement,
+            // close_pay_supplier, ...) added to $before by processDailyClose's own tagging right
+            // before it saves the snapshot; a freshly recomputed $new from sources() never carries
+            // it. Comparing it along with everything else would make a row that hasn't actually
+            // changed permanently register as "Amended after posting" the moment it is tagged.
+            $oldForCompare = is_array($old) ? \Illuminate\Support\Arr::except($old, ['source']) : $old;
+            $newForCompare = is_array($new) ? \Illuminate\Support\Arr::except($new, ['source']) : $new;
+            if ($oldForCompare == $newForCompare) { continue; }
             $row = $new ?? $old;
             $effect = round(($new['cash_effect'] ?? 0) - ($old['cash_effect'] ?? 0), 2);
             if (!$new && str_starts_with($key, 'journal:')) {

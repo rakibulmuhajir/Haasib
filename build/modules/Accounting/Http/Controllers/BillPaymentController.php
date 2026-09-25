@@ -25,7 +25,8 @@ class BillPaymentController extends Controller
     {
         $company = app(CompanyContextService::class)->requireCompany();
 
-        $query = \App\Modules\Accounting\Models\BillPayment::query()
+        $showVoided = $request->boolean('show_voided', false);
+        $query = ($showVoided ? \App\Modules\Accounting\Models\BillPayment::withTrashed() : \App\Modules\Accounting\Models\BillPayment::query())
             ->with(['vendor:id,name', 'allocations'])
             ->where('company_id', $company->id)
             ->orderByDesc('payment_date');
@@ -91,7 +92,7 @@ class BillPaymentController extends Controller
             ],
             'payments' => $payments,
             'vendors' => $vendors,
-            'filters' => $request->only(['vendor_id', 'from_date', 'to_date']),
+            'filters' => $request->only(['vendor_id', 'from_date', 'to_date']) + ['show_voided' => $showVoided],
         ]);
     }
 

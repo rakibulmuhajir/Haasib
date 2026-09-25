@@ -70,6 +70,9 @@ interface TransactionData {
     amanat_deposits?: number
     other_deposits?: number
     cash_bill_payments?: number
+    cash_pay_suppliers?: number
+    pay_suppliers_total?: number
+    pay_supplier_details?: Array<{ payment_id: string | null; vendor_id: string; vendor_name: string; amount: number; applied_to_bills: number; advance_amount: number; payment_account_id: string; payment_account_name: string; affects_cash_drawer: boolean; reference: string | null }>
     amanat_disbursements?: number
     credit_sales_total?: number
     credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number; source?: string }>
@@ -183,7 +186,7 @@ const totalMoneyOut = computed(() => {
   if (props.reconciliation?.snapshot) return Number(props.reconciliation.snapshot.totals.money_out || 0)
   const m = metadata.value
   return totalChannelOut.value + Number(m.credit_sales_total || 0) + Number(m.bank_deposits || 0) + Number(m.partner_withdrawals || 0) + Number(m.employee_advances || 0)
-    + Number(m.payroll_payouts || 0) + Number(m.cash_bill_payments || 0) + Number(m.amanat_disbursements || 0) + Number(m.expenses || 0)
+    + Number(m.payroll_payouts || 0) + Number(m.cash_bill_payments || 0) + Number(m.cash_pay_suppliers || 0) + Number(m.amanat_disbursements || 0) + Number(m.expenses || 0)
 })
 
 const fuelSalesEntries = computed(() => {
@@ -587,6 +590,10 @@ const unlockTransaction = () => {
               <span>Supplier Bill Payments (station cash)</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.cash_bill_payments" :currency="currency" :fraction-digits="0" /></span>
             </div>
+            <div v-if="metadata.cash_pay_suppliers" class="flex justify-between items-center py-2">
+              <span>Pay Supplier (station cash)</span>
+              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.cash_pay_suppliers" :currency="currency" :fraction-digits="0" /></span>
+            </div>
             <div v-if="metadata.amanat_disbursements" class="flex justify-between items-center py-2">
               <span>Amanat Disbursements</span>
               <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.amanat_disbursements" :currency="currency" :fraction-digits="0" /></span>
@@ -601,6 +608,9 @@ const unlockTransaction = () => {
             </div>
             <p v-for="note in supplierSettlementNotes" :key="note.channel_code" class="text-xs text-muted-foreground">
               <MoneyText :amount="note.advance_amount" :currency="currency" :fraction-digits="0" /> of {{ note.channel_label }} sales are held as an advance with {{ note.vendor_name }}.
+            </p>
+            <p v-for="detail in metadata.pay_supplier_details || []" :key="detail.payment_id ?? detail.vendor_id" class="text-xs text-muted-foreground">
+              Paid {{ detail.vendor_name }} <MoneyText :amount="detail.amount" :currency="currency" :fraction-digits="0" /> (applied to bills <MoneyText :amount="detail.applied_to_bills" :currency="currency" :fraction-digits="0" />, advance <MoneyText :amount="detail.advance_amount" :currency="currency" :fraction-digits="0" />)
             </p>
           </div>
 

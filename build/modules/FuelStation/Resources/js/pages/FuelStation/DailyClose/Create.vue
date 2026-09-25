@@ -58,6 +58,7 @@ import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
 import PaymentsReceivedEntry from '../../../components/PaymentsReceivedEntry.vue';
+import PaySupplierEntry from '../../../components/PaySupplierEntry.vue';
 import { useLexicon } from '@/composables/useLexicon';
 import TankLevelGauge from '../../../components/TankLevelGauge.vue';
 
@@ -316,6 +317,7 @@ const props = defineProps<{
     employees: Employee[];
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
+    stationCashAccountId?: string | null;
     pendingFuelInvoices?: PendingFuelInvoice[];
     pendingAccountingInvoices?: PendingAccountingInvoice[];
     unpaidDirectDeliveries?: Array<{ id: string; invoice_number: string; customer_name: string | null; balance: number }>;
@@ -421,6 +423,13 @@ const props = defineProps<{
         }>;
         payroll_payouts?: PayrollPayout[];
         bill_payments?: PendingBillPayment[];
+        pay_suppliers?: Array<{
+            vendor_id: string;
+            vendor_name: string;
+            amount: number;
+            payment_account_id: string;
+            reference: string;
+        }>;
         amanat_disbursements?: Array<{
             customer_id?: string;
             customer_name?: string;
@@ -470,6 +479,8 @@ const accountingHints = {
     payrollPayout: 'Posting: Dr Payroll Payable · Cr Cash on Hand.',
     billPayment:
         'Posting: Dr Accounts Payable · Cr selected payment account. Cash account payments reduce drawer cash; bank/fuel-card payments do not.',
+    paySupplier:
+        "Pays open bills first, oldest first; anything more is held as an advance for the supplier's next bills.",
     amanatDisbursement:
         'Posting: Dr Amanat Deposits · Cr Cash on Hand, and the depositor balance is reduced.',
     expense: 'Posting: Dr selected expense · Cr Cash on Hand.',
@@ -1047,6 +1058,13 @@ const form = useForm({
         ...payout,
     })),
     bill_payments: props.pendingBillPayments.map((payment) => ({ ...payment })),
+    pay_suppliers: [] as {
+        vendor_id: string;
+        vendor_name: string;
+        amount: number;
+        payment_account_id: string;
+        reference: string;
+    }[],
     amanat_disbursements: [] as {
         customer_id: string;
         customer_name: string;
@@ -1288,6 +1306,7 @@ const resetFormToInitial = () => {
     form.bill_payments = props.pendingBillPayments.map((payment) => ({
         ...payment,
     }));
+    form.pay_suppliers = [];
     form.amanat_disbursements = [];
     form.expenses = [];
     form.purchases = [];
@@ -1541,6 +1560,10 @@ const hydrateFormForAmendment = () => {
         form.bill_payments = orig.bill_payments.map((payment) => ({
             ...payment,
         }));
+    }
+
+    if (orig.pay_suppliers && orig.pay_suppliers.length > 0) {
+        form.pay_suppliers = orig.pay_suppliers.map((row) => ({ ...row }));
     }
 
     // Hydrate amanat disbursements
@@ -1886,6 +1909,17 @@ const totalNonCashBillPayments = computed(() => {
     return totalBillPayments.value - totalCashBillPayments.value;
 });
 
+const totalPaySuppliers = computed(() => {
+    return form.pay_suppliers.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+});
+
+const totalCashPaySuppliers = computed(() => {
+    const cashIds = new Set(props.cashAccountIds ?? []);
+    return form.pay_suppliers
+        .filter((row) => cashIds.has(row.payment_account_id))
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+});
+
 const totalAmanatDisbursements = computed(() => {
     return form.amanat_disbursements.reduce((sum, a) => sum + a.amount, 0);
 });
@@ -1961,6 +1995,7 @@ const totalMoneyOut = computed(() => {
         0,
     );
     const cashBillPayments = totalCashBillPayments.value;
+    const cashPaySuppliers = totalCashPaySuppliers.value;
     const amanat = form.amanat_disbursements.reduce(
         (sum, a) => sum + a.amount,
         0,
@@ -1975,6 +2010,7 @@ const totalMoneyOut = computed(() => {
         employeeAdvances +
         payrollPayouts +
         cashBillPayments +
+        cashPaySuppliers +
         amanat +
         expenses
     );
@@ -5885,6 +5921,17 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
+                        <Separator />
+
+                        <PaySupplierEntry
+                            v-model="form.pay_suppliers"
+                            :errors="form.errors as Record<string, string>"
+                            :disabled="submitting || form.processing"
+                            :payment-accounts="(props as any).paymentAccounts ?? []"
+                            :default-account-id="props.stationCashAccountId"
+                            :currency="currencyCode"
+                        />
+
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->
                         <template v-if="features.has_amanat">
                             <Separator />
@@ -6344,6 +6391,30 @@ const completedWorkflowSteps = computed(() => {
                                     <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalNonCashBillPayments"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
+                                <div
+                                    v-if="totalCashPaySuppliers > 0"
+                                    class="flex justify-between text-sm"
+                                >
+                                    <span>Pay Supplier (station cash)</span>
+                                    <span class="font-medium text-destructive"
+                                        ><MoneyText
+                                            :amount="totalCashPaySuppliers"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
+                                <div
+                                    v-if="totalPaySuppliers - totalCashPaySuppliers > 0"
+                                    class="flex justify-between text-sm"
+                                >
+                                    <span>Pay Supplier (bank)</span>
+                                    <span class="font-medium"
+                                        ><MoneyText
+                                            :amount="totalPaySuppliers - totalCashPaySuppliers"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>

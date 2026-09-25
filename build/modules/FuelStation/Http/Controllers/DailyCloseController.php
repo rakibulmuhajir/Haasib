@@ -802,6 +802,8 @@ class DailyCloseController extends Controller
             'employees' => $employees,
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'pendingBillPayments' => $pendingBillPayments,
+            // Default "paid from" account for a new Pay Supplier row.
+            'stationCashAccountId' => $this->dailyCloseService->cashAccountId($companyId),
             'pendingFuelInvoices' => $pendingFuelInvoices,
             'pendingAccountingInvoices' => $pendingAccountingInvoices,
             'unpaidDirectDeliveries' => $this->unpaidDirectDeliveries($companyId, $date),

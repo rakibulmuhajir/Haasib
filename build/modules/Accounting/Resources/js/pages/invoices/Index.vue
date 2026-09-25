@@ -9,6 +9,8 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,12 +63,14 @@ const props = defineProps<{
     search: string
     status: string
     customer_id: string
+    show_voided?: boolean
   }
 }>()
 
 const search = ref(props.filters.search)
 const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
+const showVoided = ref(props.filters.show_voided ?? false)
 const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -82,6 +86,7 @@ const query = (page?: number) => ({
   search: search.value,
   status: status.value === 'all' ? '' : status.value,
   customer_id: customerId.value,
+  show_voided: showVoided.value ? 1 : undefined,
   page,
 })
 
@@ -171,6 +176,10 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
           <SelectItem value="void">Voided</SelectItem>
         </SelectContent>
       </Select>
+      <div class="flex items-center gap-2">
+        <Switch id="show-voided" v-model:checked="showVoided" @update:checked="handleSearch" />
+        <Label for="show-voided" class="text-sm text-text-secondary">{{ t('showVoided') }}</Label>
+      </div>
     </div>
 
     <!-- A long register of like things: compact is a statement about the work,

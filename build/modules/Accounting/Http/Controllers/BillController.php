@@ -97,6 +97,11 @@ class BillController extends Controller
             $query->where('bill_date', '<=', $request->string('to_date'));
         }
 
+        $showVoided = $request->boolean('show_voided', false);
+        if (! $showVoided) {
+            $query->whereNotIn('status', ['void', 'cancelled']);
+        }
+
         $bills = $query->paginate(25)->withQueryString();
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
@@ -110,7 +115,7 @@ class BillController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'bills' => $bills,
-            'filters' => $request->only(['vendor_id', 'status', 'search', 'from_date', 'to_date', 'item_id', 'needs_receiving']),
+            'filters' => $request->only(['vendor_id', 'status', 'search', 'from_date', 'to_date', 'item_id', 'needs_receiving']) + ['show_voided' => $showVoided],
             'vendors' => $vendors,
         ]);
     }

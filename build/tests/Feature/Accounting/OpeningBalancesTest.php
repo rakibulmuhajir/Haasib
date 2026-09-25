@@ -332,16 +332,17 @@ test('re-saving replaces the previous opening records without duplicating balanc
     expect(ledgerBalance($f['accounts']['cash']))->toBe(120000.0)
         ->and(ledgerBalance($f['accounts']['ar']))->toBe(40000.0);
     $openingSettings = $f['company']->fresh()->settings['opening_balances'];
-    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->where('status', '!=', 'void')->count())->toBe(1);
+    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->count())->toBe(1);
     expect($strayInvoice->fresh()->status)->not->toBe('void');
-    // reverseTransaction() preserves the original transaction_type, so the reversal is
-    // identified by reversal_of_id rather than by a distinct 'opening_balance_reversal' type.
-    $journal = Transaction::where('company_id', $f['company']->id)
+    // The previous generation is deleted outright, not voided/reversed: exactly one
+    // opening_balance journal remains, and it is neither a reversal nor reversed.
+    expect(Transaction::where('company_id', $f['company']->id)
         ->where('transaction_type', 'opening_balance')
-        ->whereNotNull('reversed_by_id')
-        ->first();
-    expect($journal)->not->toBeNull();
-    expect(Transaction::where('reversal_of_id', $journal->id)->count())->toBe(1);
+        ->count())->toBe(1);
+    expect(Transaction::withTrashed()->where('company_id', $f['company']->id)
+        ->where('transaction_type', 'opening_balance')
+        ->whereNotNull('deleted_at')
+        ->count())->toBe(1);
     $view = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true));
     expect($view['rows']['cash']['amount'])->toBe(120000.0)
         ->and($view['rows']['credit_customers'][0]['amount'])->toBe(40000.0)
@@ -412,8 +413,8 @@ test('re-saving every category across three generations never leaks balances or 
     dispatchOpeningBalance($f, $everyCategory(120000, 210000, 40000, 6000, 32000, 260000, 900000));
 
     $openingSettings = $f['company']->fresh()->settings['opening_balances'];
-    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->where('status', '!=', 'void')->count())->toBe(1)
-        ->and(Bill::whereIn('id', $openingSettings['bill_ids'])->where('status', '!=', 'void')->count())->toBe(1)
+    expect(Invoice::whereIn('id', $openingSettings['invoice_ids'])->count())->toBe(1)
+        ->and(Bill::whereIn('id', $openingSettings['bill_ids'])->count())->toBe(1)
         ->and($strayInvoice->fresh()->status)->not->toBe('void');
 
     expect((float) CustomerProfile::where('customer_id', $depositor->id)->first()->amanat_balance)->toBe(32000.0);
@@ -635,7 +636,8 @@ test('locking opening balances freezes the underlying opening invoice and bill a
     });
     expect(Invoice::find($invoiceId)->status)->toBe('void');
 
-    // Re-save (the void above leaves this generation retired) then lock the new one.
+    // Re-save (the voided invoice above is skipped by reversePrevious — already void — and the
+    // bill is deleted outright) then lock the new generation.
     $result = dispatchOpeningBalance($f, [
         'as_of_date' => '2026-08-31',
         'credit_customers' => [['customer_id' => $customer->id, 'amount' => 42000]],

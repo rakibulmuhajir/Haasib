@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -63,6 +65,7 @@ const props = defineProps<{
     to_date?: string
     item_id?: string
     needs_receiving?: string
+    show_voided?: boolean
   }
   vendors: VendorRef[]
 }>()
@@ -77,6 +80,7 @@ const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
 const itemId = ref(props.filters.item_id ?? '')
 const needsReceivingFilter = ref(props.filters.needs_receiving ?? '')
+const showVoided = ref(props.filters.show_voided ?? false)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: t('dashboard'), href: `/${props.company.slug}` },
@@ -172,6 +176,7 @@ const handleSearch = () => {
       to_date: toDate.value,
       item_id: itemId.value,
       needs_receiving: needsReceivingFilter.value,
+      show_voided: showVoided.value ? 1 : undefined,
     },
     { preserveState: true }
   )
@@ -242,6 +247,10 @@ const filterByStatus = (statusValue: string) => {
       <div class="grid grid-cols-2 gap-2">
         <Input v-model="fromDate" type="date" placeholder="From" @change="handleSearch" />
         <Input v-model="toDate" type="date" placeholder="To" @change="handleSearch" />
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch id="show-voided" v-model:checked="showVoided" @update:checked="handleSearch" />
+        <Label for="show-voided" class="text-sm text-text-secondary">{{ t('showVoided') }}</Label>
       </div>
     </div>
 

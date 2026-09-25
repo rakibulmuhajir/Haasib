@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
@@ -68,12 +70,14 @@ const props = defineProps<{
     search: string
     customer_id: string
     payment_method: string
+    show_voided?: boolean
   }
 }>()
 
 const search = ref(props.filters.search)
 const customerId = ref(props.filters.customer_id)
 const paymentMethod = ref(props.filters.payment_method || 'all')
+const showVoided = ref(props.filters.show_voided ?? false)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -87,6 +91,7 @@ const handleSearch = () => {
       search: search.value,
       customer_id: customerId.value,
       payment_method: paymentMethod.value === 'all' ? '' : paymentMethod.value,
+      show_voided: showVoided.value ? 1 : undefined,
     },
     { preserveState: true }
   )
@@ -206,6 +211,10 @@ const filterByMethod = (method: string) => {
           <SelectItem value="other">Other</SelectItem>
         </SelectContent>
       </Select>
+      <div class="flex items-center gap-2">
+        <Switch id="show-voided" v-model:checked="showVoided" @update:checked="handleSearch" />
+        <Label for="show-voided" class="text-sm text-text-secondary">Show voided</Label>
+      </div>
     </div>
 
     <!-- Data Table -->

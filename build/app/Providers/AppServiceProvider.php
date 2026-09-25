@@ -22,6 +22,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // exists/unique rules on "fuel.nozzles" & co. must query the default connection, which
+        // carries the company context, not a schema-named connection that doesn't. See the class.
+        $this->app->extend('validation.presence', fn ($verifier, $app) => new \App\Support\Database\SchemaAwarePresenceVerifier($app['db']));
+
         // Register CompanyContextService as scoped singleton (one instance per request)
         $this->app->scoped(CompanyContextService::class);
         // CurrentCompany should share request scope too

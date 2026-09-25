@@ -723,6 +723,17 @@ const receiveDirectDeliveryCash = (invoiceId: string) => {
     );
 };
 
+/**
+ * A draft keeps what was typed; everything the server works out - opening cash, each tank's
+ * dip and deliveries, each nozzle's opening meter - is taken fresh, never from the draft.
+ * Called by both restore paths (browser draft and parked draft).
+ */
+const refreshServerFacts = () => {
+    form.opening_cash = props.previousClose.closing_cash || 0;
+    refreshTankFacts();
+    refreshNozzleFacts();
+};
+
 const restoreDraft = () => {
     const savedDraft = localStorage.getItem(DRAFT_KEY.value);
     if (savedDraft) {
@@ -736,7 +747,7 @@ const restoreDraft = () => {
                     (form as any)[key] = savedData[key];
                 }
             });
-            refreshTankFacts();
+            refreshServerFacts();
 
             toast.success('Draft restored', {
                 description: 'Your previous work has been loaded',
@@ -788,6 +799,51 @@ const configuredNozzles = computed(() =>
         Boolean(nozzle.pump_id && nozzle.pump_name?.trim()),
     ),
 );
+
+/** A nozzle row from what the server says now; only closing readings and the rollover tick are typed. */
+const nozzleRowFromProps = (nozzle: (typeof props.nozzles)[number]) => ({
+    nozzle_id: nozzle.id,
+    nozzle_code: nozzle.code,
+    nozzle_label: nozzle.label,
+    item_id: nozzle.item_id,
+    fuel_name: nozzle.fuel_name,
+    fuel_category: nozzle.fuel_category,
+    pump_id: nozzle.pump_id,
+    pump_name: nozzle.pump_name,
+    has_electronic_meter: nozzle.has_electronic_meter,
+    opening_electronic: nozzle.opening_reading,
+    closing_electronic: 0,
+    meter_rolled_over: false,
+    opening_manual: nozzle.opening_manual ?? null,
+    closing_manual: null as number | null,
+    liters_sold: 0,
+    sale_rate: nozzle.sale_rate,
+});
+
+/**
+ * After restoring a draft, rebuild every nozzle row from the station's current nozzles and keep
+ * only what was typed. A draft saved before the pumps were set up again carried nozzle ids that
+ * no longer exist, and posting refused them ("nozzle_id is invalid"). Readings are matched by
+ * nozzle, else by pump and nozzle code; a draft row for a nozzle that is gone is dropped.
+ */
+const refreshNozzleFacts = () => {
+    const saved = (form.nozzle_readings || []) as any[];
+    form.nozzle_readings = configuredNozzles.value.map((nozzle) => {
+        const row = nozzleRowFromProps(nozzle);
+        const typed =
+            saved.find((r) => r.nozzle_id === nozzle.id) ??
+            saved.find((r) => r.pump_name === nozzle.pump_name && r.nozzle_code === nozzle.code);
+        return typed
+            ? {
+                  ...row,
+                  closing_electronic: typed.closing_electronic ?? 0,
+                  meter_rolled_over: Boolean(typed.meter_rolled_over),
+                  closing_manual: typed.closing_manual ?? null,
+                  liters_sold: typed.liters_sold ?? 0,
+              }
+            : row;
+    });
+};
 
 // Channels grouped by type for UI sections
 const bankTransferChannels = computed(() =>
@@ -852,24 +908,7 @@ const form = useForm({
     // Empty means the usual - 08:00 the morning after - and the server fills that in.
 
     // Tab 1: Nozzle readings (each nozzle has electronic + optional manual readings)
-    nozzle_readings: configuredNozzles.value.map((nozzle) => ({
-        nozzle_id: nozzle.id,
-        nozzle_code: nozzle.code,
-        nozzle_label: nozzle.label,
-        item_id: nozzle.item_id,
-        fuel_name: nozzle.fuel_name,
-        fuel_category: nozzle.fuel_category,
-        pump_id: nozzle.pump_id,
-        pump_name: nozzle.pump_name,
-        has_electronic_meter: nozzle.has_electronic_meter,
-        opening_electronic: nozzle.opening_reading,
-        closing_electronic: 0,
-        meter_rolled_over: false,
-        opening_manual: nozzle.opening_manual ?? null,
-        closing_manual: null as number | null,
-        liters_sold: 0,
-        sale_rate: nozzle.sale_rate,
-    })),
+    nozzle_readings: configuredNozzles.value.map((nozzle) => nozzleRowFromProps(nozzle)),
 
     other_sales: [] as {
         item_id: string;
@@ -1170,24 +1209,7 @@ const isFuelPurchaseItem = (itemId: string) =>
 // Reset form to initial empty state (preserving structure from props)
 const resetFormToInitial = () => {
     // Reset nozzle readings - keep structure but clear entered values
-    form.nozzle_readings = configuredNozzles.value.map((nozzle) => ({
-        nozzle_id: nozzle.id,
-        nozzle_code: nozzle.code,
-        nozzle_label: nozzle.label,
-        item_id: nozzle.item_id,
-        fuel_name: nozzle.fuel_name,
-        fuel_category: nozzle.fuel_category,
-        pump_id: nozzle.pump_id,
-        pump_name: nozzle.pump_name,
-        has_electronic_meter: nozzle.has_electronic_meter,
-        opening_electronic: nozzle.opening_reading,
-        closing_electronic: 0,
-        meter_rolled_over: false,
-        opening_manual: nozzle.opening_manual ?? null,
-        closing_manual: null,
-        liters_sold: 0,
-        sale_rate: nozzle.sale_rate,
-    }));
+    form.nozzle_readings = configuredNozzles.value.map((nozzle) => nozzleRowFromProps(nozzle));
 
     // Reset other sales
     form.other_sales = [];
@@ -2524,7 +2546,7 @@ onMounted(() => {
         for (const [key, value] of Object.entries(props.parkedDraft)) {
             if (key in form.data()) (form as any)[key] = value;
         }
-        refreshTankFacts();
+        refreshServerFacts();
         showDraftRestoreDialog.value = false;
     }
 });

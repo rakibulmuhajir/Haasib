@@ -309,6 +309,9 @@ const props = defineProps<{
     openingsFromParked?: string | null;
     fuelItems: FuelItem[];
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
+    // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
+    // CustomerFuelDiscountService (the single place this rate is priced).
+    customerFuelDiscounts?: Record<string, Record<string, { discount_type: 'percent' | 'per_litre'; value: number }>>;
     rateChangeSnapshots: RateChangeSnapshot[];
     tanks: Tank[];
     pumps: Pump[];
@@ -1070,7 +1073,7 @@ const form = useForm({
             invoice_number: invoice.invoice_number,
             pending_accounting_invoice: true,
         })),
-    ] as { customer_id: string; customer_name: string; amount: number; reference: string; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }[],
+    ] as { customer_id: string; customer_name: string; amount: number; reference: string; item_id?: string; litres?: number; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }[],
     bank_withdrawals: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
     bank_deposits: [] as {
         bank_account_id: string;
@@ -5222,7 +5225,7 @@ const completedWorkflowSteps = computed(() => {
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" />
+                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" />
                         <Separator />
                         <div class="space-y-4">
                             <div>

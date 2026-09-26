@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Models\SaleMetadata;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
@@ -106,16 +107,36 @@ class DailyCloseCreditSaleService
             if (!$ar || ($ar->currency && $ar->currency !== $company->base_currency)) {
                 throw ValidationException::withMessages(["credit_sales.{$index}.customer_id" => 'Set up a base-currency receivables account for this customer first.']);
             }
+
+            $gross = round((float) $row['amount'], 2);
+            $itemId = $row['item_id'] ?? null;
+            $litres = isset($row['litres']) ? (float) $row['litres'] : null;
+            $discountAmount = 0.0;
+            if ($itemId) {
+                $stored = app(CustomerFuelDiscountService::class)->for($companyId, $customer->id, $itemId);
+                if ($stored) {
+                    if ($stored['discount_type'] === CustomerFuelDiscount::TYPE_PER_LITRE && !$litres) {
+                        throw ValidationException::withMessages(["credit_sales.{$index}.litres" => "{$customer->name} has a per-litre discount on this fuel; enter the litres for this row."]);
+                    }
+                    $discountAmount = app(CustomerFuelDiscountService::class)->amount($stored, (float) $litres, $gross);
+                }
+            }
+            $net = round($gross - $discountAmount, 2);
+
             // Use native numbering and invoice validation; drafts have no independent GL posting.
             $result = app(CompanyContextService::class)->withContext($company, fn () => app(CommandBus::class)->dispatch('invoice.create', [
                 'customer' => $customer->id, 'currency' => $company->base_currency, 'date' => $date,
                 'draft' => true,
                 'notes' => "Credit portion of meter sales for {$date}. ".($row['reference'] ?? ''),
                 'line_items' => [['description' => "Meter sales on credit — {$date}", 'quantity' => 1,
-                    'unit_price' => $row['amount'], 'tax_rate' => 0]],
+                    'unit_price' => $net, 'tax_rate' => 0]],
             ], $user, true));
             $details[] = ['customer_id' => $customer->id, 'customer_name' => $customer->name,
-                'amount' => round((float) $row['amount'], 2), 'reference' => $row['reference'] ?? null,
+                // 'amount' stays the gross meter sale -- this is what the close removes from
+                // expected drawer cash (see DailyCloseService's cashFromSales calc), exactly
+                // once, regardless of any discount.
+                'amount' => $gross, 'net_amount' => $net, 'discount_amount' => $discountAmount,
+                'item_id' => $itemId, 'litres' => $litres, 'reference' => $row['reference'] ?? null,
                 'ar_account_id' => $ar->id, 'invoice_id' => $result['data']['id'], 'invoice_number' => $result['data']['number'],
                 'source' => 'manual'];
         }

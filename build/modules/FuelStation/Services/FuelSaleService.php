@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\Investor;
+use App\Modules\FuelStation\Services\CustomerFuelDiscountService;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\SaleMetadata;
@@ -64,11 +65,31 @@ class FuelSaleService
             // common discounted case at a pump, a transport firm buying on account — while
             // StoreFuelSaleRequest accepted and validated the field. Investor sales are
             // excluded: they already price at purchase_rate and carry their own commission.
+            // Exactly one of discount_per_liter / discount_percent is honoured (the request
+            // refuses both); all the maths goes through CustomerFuelDiscountService::amount()
+            // so a manual override here prices identically to a stored customer discount. When
+            // neither is given but this buyer has a stored discount for this fuel item, it is
+            // applied automatically -- the form only prefills the field for display, the
+            // server is what actually enforces it, so an API caller gets the same price.
             $discount = 0;
             $discountReason = null;
-            if ($saleType !== SaleMetadata::TYPE_INVESTOR && (float) ($data['discount_per_liter'] ?? 0) > 0) {
-                $discount = round($quantity * (float) $data['discount_per_liter'], 2);
-                $discountReason = SaleMetadata::DISCOUNT_BULK;
+            if ($saleType !== SaleMetadata::TYPE_INVESTOR) {
+                $perLiter = (float) ($data['discount_per_liter'] ?? 0);
+                $percent = (float) ($data['discount_percent'] ?? 0);
+                $discountService = app(CustomerFuelDiscountService::class);
+                if ($perLiter > 0) {
+                    $discount = $discountService->amount(['discount_type' => 'per_litre', 'value' => $perLiter], $quantity, $lineTotal);
+                    $discountReason = SaleMetadata::DISCOUNT_BULK;
+                } elseif ($percent > 0) {
+                    $discount = $discountService->amount(['discount_type' => 'percent', 'value' => $percent], $quantity, $lineTotal);
+                    $discountReason = SaleMetadata::DISCOUNT_BULK;
+                } elseif (!empty($data['customer_id'])) {
+                    $stored = $discountService->for($company->id, $data['customer_id'], $data['item_id']);
+                    if ($stored) {
+                        $discount = $discountService->amount($stored, $quantity, $lineTotal);
+                        $discountReason = SaleMetadata::DISCOUNT_BULK;
+                    }
+                }
             }
 
             // Create invoice (using actual Invoice model columns)

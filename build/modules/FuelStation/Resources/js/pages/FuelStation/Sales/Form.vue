@@ -56,11 +56,17 @@ interface Rate {
   margin: number
 }
 
+interface FuelDiscount {
+  discount_type: 'percent' | 'per_litre'
+  value: number
+}
+
 const props = defineProps<{
   pumps: Pump[]
   fuelItems: FuelItem[]
   customers: Customer[]
   rates: Rate[]
+  customerFuelDiscounts: Record<string, Record<string, FuelDiscount>>
 }>()
 
 const page = usePage()
@@ -85,6 +91,10 @@ const saleType = ref<'retail' | 'bulk' | 'amanat' | 'investor' | 'credit' | 'par
 const selectedCustomer = ref<Customer | null>(null)
 const selectedInvestor = ref(null)
 const discountPerLiter = ref<number | null>(null)
+const discountPercent = ref<number | null>(null)
+// True once the operator has typed into a discount field themselves, so a customer's
+// stored discount only prefills the field, it never overwrites a manual edit.
+const discountTouched = ref(false)
 
 // Payment breakdown
 const cashAmount = ref<number>(0)
@@ -120,8 +130,12 @@ const subtotal = computed(() => {
 })
 
 const discount = computed(() => {
-  if (saleType.value === 'bulk' && discountPerLiter.value && quantity.value) {
-    return discountPerLiter.value * quantity.value
+  if (saleType.value === 'investor') return 0
+  if (discountPerLiter.value && quantity.value) {
+    return Math.min(discountPerLiter.value * quantity.value, subtotal.value)
+  }
+  if (discountPercent.value && subtotal.value) {
+    return Math.round((subtotal.value * discountPercent.value / 100) * 100) / 100
   }
   return 0
 })
@@ -163,6 +177,23 @@ watch(saleType, (newType) => {
   }
 })
 
+// Prefill this buyer's stored discount for the chosen fuel item -- editable per sale, so a
+// manual edit (discountTouched) is never overwritten.
+watch([selectedCustomer, selectedFuelItem], ([customer, item]) => {
+  if (discountTouched.value || !customer || !item) return
+  const stored = props.customerFuelDiscounts?.[customer.id]?.[item.id]
+  if (stored?.discount_type === 'per_litre') {
+    discountPerLiter.value = stored.value
+    discountPercent.value = null
+  } else if (stored?.discount_type === 'percent') {
+    discountPercent.value = stored.value
+    discountPerLiter.value = null
+  } else {
+    discountPerLiter.value = null
+    discountPercent.value = null
+  }
+})
+
 // Methods
 const formatCurrency = (value: number) => {
   return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
@@ -185,6 +216,8 @@ const resetForm = () => {
   saleType.value = 'retail'
   selectedCustomer.value = null
   discountPerLiter.value = null
+  discountPercent.value = null
+  discountTouched.value = false
   cashAmount.value = 0
   easypaisaAmount.value = 0
   jazzcashAmount.value = 0
@@ -217,8 +250,11 @@ const validateForm = () => {
   if (!selectedPump.value) errors.pump_id = ['Please select a pump']
   if (!selectedFuelItem.value) errors.item_id = ['Please select a fuel item']
   if (!quantity.value || quantity.value <= 0) errors.quantity = ['Please enter a valid quantity']
-  if (saleType.value === 'bulk' && (!discountPerLiter.value || discountPerLiter.value < 0)) {
-    errors.discount_per_liter = ['Please enter a valid discount per liter']
+  if (saleType.value === 'bulk' && !discountPerLiter.value && !discountPercent.value) {
+    errors.discount_per_liter = ['Please enter a discount for this bulk sale']
+  }
+  if (discountPerLiter.value && discountPercent.value) {
+    errors.discount_percent = ['Enter either a per-litre discount or a percent discount, not both']
   }
   if (totalPaid.value > total.value) {
     errors.payment_total = ['Total payment cannot exceed sale amount']
@@ -243,6 +279,7 @@ const submitSale = () => {
     customer_id: selectedCustomer.value?.id || null,
     investor_id: selectedInvestor.value?.id || null,
     discount_per_liter: discountPerLiter.value || null,
+    discount_percent: discountPercent.value || null,
     payment_breakdown: {
       cash: cashAmount.value,
       easypaisa: easypaisaAmount.value,
@@ -412,18 +449,40 @@ rememberEntryDate(companySlug.value, saleDate)
               <InputError :message="formErrors.customer_id?.[0]" />
             </div>
 
-            <!-- Bulk discount -->
-            <div v-if="saleType === 'bulk'" class="space-y-2">
-              <Label>Discount per Liter</Label>
-              <Input
-                v-model.number="discountPerLiter"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                :class="{ 'border-destructive': formErrors.discount_per_liter }"
-              />
-              <InputError :message="formErrors.discount_per_liter?.[0]" />
+            <!-- Discount: every sale type except investor (an investor already prices at
+                 purchase rate with no margin to discount from). Prefilled from this buyer's
+                 stored fuel discount once both customer and fuel item are chosen; editable
+                 per sale. -->
+            <div v-if="saleType !== 'investor'" class="grid gap-4 sm:grid-cols-2">
+              <div class="space-y-2">
+                <Label>Discount per Liter</Label>
+                <Input
+                  v-model.number="discountPerLiter"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  :disabled="!!discountPercent"
+                  :class="{ 'border-destructive': formErrors.discount_per_liter }"
+                  @input="discountTouched = true"
+                />
+                <InputError :message="formErrors.discount_per_liter?.[0]" />
+              </div>
+              <div class="space-y-2">
+                <Label>Discount %</Label>
+                <Input
+                  v-model.number="discountPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  placeholder="0.00"
+                  :disabled="!!discountPerLiter"
+                  :class="{ 'border-destructive': formErrors.discount_percent }"
+                  @input="discountTouched = true"
+                />
+                <InputError :message="formErrors.discount_percent?.[0]" />
+              </div>
             </div>
           </CardContent>
         </Card>

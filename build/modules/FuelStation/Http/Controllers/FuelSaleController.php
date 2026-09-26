@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\FuelStation\Http\Requests\StoreFuelSaleRequest;
+use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Services\FuelSaleService;
@@ -89,6 +90,16 @@ class FuelSaleController extends Controller
             'customers' => Customer::where('company_id', $company->id)->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'email', 'phone']),
             'rates' => $rates,
+            // Per-customer, per-fuel-item discounts, keyed by customer id then item id, so
+            // the form can prefill without a round trip once both are picked. See
+            // CustomerFuelDiscountService for the single place this same rate is priced.
+            'customerFuelDiscounts' => CustomerFuelDiscount::where('company_id', $company->id)
+                ->get()
+                ->groupBy('customer_id')
+                ->map(fn ($rows) => $rows->keyBy('item_id')->map(fn (CustomerFuelDiscount $d) => [
+                    'discount_type' => $d->discount_type,
+                    'value' => (float) $d->value,
+                ])),
         ]);
     }
 

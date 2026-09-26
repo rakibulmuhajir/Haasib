@@ -172,6 +172,54 @@ This keeps the core accounting module industry-agnostic.
   - `attendant_transit = true` until AttendantHandover recorded.
   - `parco_card` sales go to Parco Clearing account, not bank.
 
+### fuel.customer_fuel_discounts
+- Purpose: A customer's negotiated discount, per fuel item — either a percent of the sale
+  or a flat amount per litre (e.g. a transporter gets Rs 3/L on diesel, nothing on petrol).
+  Set on the Fuel Credit Customer page; read by `CustomerFuelDiscountService`, the only
+  place this discount is looked up or priced — the standalone Fuel → Sales credit sale and
+  a manual Daily Close credit row both go through it.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `customer_id` uuid not null FK → `acct.customers.id` (CASCADE/CASCADE).
+  - `item_id` uuid not null FK → `inv.items.id` (CASCADE/CASCADE).
+  - `discount_type` varchar(20) not null — 'percent', 'per_litre'.
+  - `value` numeric(12,4) not null — the percent (≤ 100) or the Rs/L amount; always > 0.
+  - `created_at`, `updated_at` timestamps.
+- Indexes/constraints:
+  - PK `id`.
+  - Unique (`company_id`, `customer_id`, `item_id`) — one discount per customer per fuel item.
+  - Index: `company_id`.
+  - CHECK: discount_type IN ('percent', 'per_litre').
+  - CHECK: value > 0.
+  - CHECK: discount_type <> 'percent' OR value <= 100.
+- RLS: company_id + super-admin override.
+- Model:
+  - `$connection = 'pgsql'; $table = 'fuel.customer_fuel_discounts'; $keyType = 'string'; public $incrementing = false;`
+  - `$fillable = ['company_id','customer_id','item_id','discount_type','value'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','item_id'=>'string','value'=>'decimal:4','created_at'=>'datetime','updated_at'=>'datetime'];`
+- Relationships: belongsTo Company; belongsTo Customer; belongsTo Item.
+- Validation (`UpdateCustomerFuelDiscountsRequest`):
+  - `discounts.*.item_id`: required|uuid|exists:inv.items,id.
+  - `discounts.*.discount_type`: nullable|in:percent,per_litre — omitted/null clears the row's discount.
+  - `discounts.*.value`: nullable|numeric|min:0.0001|required_with:discount_type; ≤ 100 when percent.
+- Business rules:
+  - `CustomerFuelDiscountService::for($companyId, $customerId, $itemId)` returns the active
+    discount or null; `::amount($discount, $litres, $grossAmount)` prices it (`per_litre` →
+    `round($litres * $value, 2)`, `percent` → `round($grossAmount * $value / 100, 2)`), never
+    more than the gross.
+  - `FuelSaleService::createSale` applies the stored discount automatically when the request
+    supplies neither `discount_per_liter` nor `discount_percent`; an explicit value on the
+    request overrides it. Exactly one of the two is ever honoured.
+  - A manual Daily Close credit row with `item_id` (+ `litres` for a per-litre discount) is
+    repriced server-side by `DailyCloseCreditSaleService::prepare` — a client-sent discount
+    figure is never trusted. A per-litre discount without `litres` is refused
+    (`ValidationException`). The invoice is created for the net amount; the close's journal
+    debits the same Sales Discounts account `FuelSaleService::postDiscount` uses (resolved
+    once via `StationAccountMapper::resolveMappedAccountId`) for the discount, so
+    `Dr AR (net) + Dr Sales Discounts (discount) = gross`, and expected drawer cash is
+    reduced by the gross exactly once regardless of the discount.
+
 ### fuel.pumps
 - Purpose: Dispensing machines (fuel pumps) with meter tracking.
 - Columns:

@@ -1545,8 +1545,24 @@ class DailyCloseService
                     ];
                     continue;
                 }
+                // A discounted manual row invoices at net; the discount itself is booked
+                // below as its own contra-revenue debit, using the same account
+                // FuelSaleService::postDiscount posts to, so Dr AR (net) + Dr Sales
+                // Discounts (discount) together equal the gross this row removes from
+                // expected drawer cash.
+                $netAmount = $credit['net_amount'] ?? $credit['amount'];
                 $entries[] = ['account_id' => $credit['ar_account_id'], 'type' => 'debit',
-                    'amount' => $credit['amount'], 'description' => 'Credit sale '.$credit['invoice_number'].' — '.$credit['customer_name']];
+                    'amount' => $netAmount, 'description' => 'Credit sale '.$credit['invoice_number'].' — '.$credit['customer_name']];
+            }
+            $creditDiscountTotal = round(array_sum(array_column($creditDetails, 'discount_amount')), 2);
+            if ($creditDiscountTotal > 0) {
+                $salesDiscountAccountId = app(StationAccountMapper::class)
+                    ->resolveMappedAccountId($companyId, 'sales_discount_account_id', $user->id);
+                if (!$salesDiscountAccountId) {
+                    throw new \RuntimeException('Set up a sales discount account before closing a date with discounted credit sales.');
+                }
+                $entries[] = ['account_id' => $salesDiscountAccountId, 'type' => 'debit',
+                    'amount' => $creditDiscountTotal, 'description' => 'Customer discount on credit sales — '.$date];
             }
             $metadata['accounting_invoices_included'] = $accountingInvoicesIncluded;
             // Payments received created inline just above already posted their own Dr Cash /

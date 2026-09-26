@@ -75,7 +75,7 @@ interface TransactionData {
     pay_supplier_details?: Array<{ payment_id: string | null; vendor_id: string; vendor_name: string; amount: number; applied_to_bills: number; advance_amount: number; payment_account_id: string; payment_account_name: string; affects_cash_drawer: boolean; reference: string | null }>
     amanat_disbursements?: number
     credit_sales_total?: number
-    credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number; source?: string }>
+    credit_sale_details?: Array<{ invoice_id: string; invoice_number: string; customer_name: string; amount: number; source?: string; discount_amount?: number; net_amount?: number }>
     accounting_invoices_included?: Array<{ invoice_id: string; invoice_number: string; customer: string; amount: number }>
     payment_receipt_postings?: Array<{ channel_code: string; channel_label: string; channel_type: string; account_id: string | null; amount: number }>
     channel_supplier_settlements?: Array<{ channel_code: string; channel_label: string; vendor_id: string; vendor_name: string; clearing_account_id: string; clearing_account_name: string; card_sales: number; amount_paid: number; applied_to_bills: number; advance_amount: number; bill_payment_id: string | null }>
@@ -560,11 +560,17 @@ const unlockTransaction = () => {
 
           <!-- Cash Out -->
           <div class="space-y-2">
-            <div v-for="credit in metadata.credit_sale_details || []" :key="credit.invoice_id" class="flex justify-between items-center py-2">
-              <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">
-                {{ credit.source === 'accounting_invoice' ? 'Invoiced in Accounting' : t('meterCreditSales') }} · {{ credit.invoice_number }} · {{ credit.customer_name }}
-              </Link>
-              <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
+            <div v-for="credit in metadata.credit_sale_details || []" :key="credit.invoice_id" class="flex flex-col py-2">
+              <div class="flex justify-between items-center">
+                <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">
+                  {{ credit.source === 'accounting_invoice' ? 'Invoiced in Accounting' : t('meterCreditSales') }} · {{ credit.invoice_number }} · {{ credit.customer_name }}
+                </Link>
+                <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
+              </div>
+              <div v-if="credit.discount_amount" class="text-xs text-status-success">
+                Discount <MoneyText :amount="credit.discount_amount" :currency="currency" /> ·
+                Owes <MoneyText :amount="credit.net_amount ?? (credit.amount - credit.discount_amount)" :currency="currency" />
+              </div>
             </div>
             <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">
               <span>{{ row.channel_label }} → bank / card account</span>

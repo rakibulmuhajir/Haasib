@@ -153,6 +153,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('credit-customers/{customer}/limit', [CreditCustomerController::class, 'updateLimit'])->name('fuel.credit-customers.limit');
     Route::post('credit-customers/{customer}/toggle-block', [CreditCustomerController::class, 'toggleBlock'])->name('fuel.credit-customers.toggle-block');
     Route::post('credit-customers/{customer}/apply-credit', [CreditCustomerController::class, 'applyCredit'])->name('fuel.credit-customers.apply-credit');
+    Route::post('credit-customers/{customer}/discounts', [CreditCustomerController::class, 'updateDiscounts'])->name('fuel.credit-customers.discounts');
 
     // Credit Sales
     Route::get('credit-sales', [CreditSaleController::class, 'index'])->name('fuel.credit-sales.index');

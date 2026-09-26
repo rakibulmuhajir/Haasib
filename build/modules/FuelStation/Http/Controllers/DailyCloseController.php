@@ -794,6 +794,16 @@ class DailyCloseController extends Controller
             'openingsFromParked' => $openingsFromParked,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
+            // Per-customer, per-fuel-item discounts, keyed by customer then item id, for the
+            // manual credit-sale rows -- the same rate FuelSaleController::create hands to
+            // the standalone sale form. See CustomerFuelDiscountService.
+            'customerFuelDiscounts' => \App\Modules\FuelStation\Models\CustomerFuelDiscount::where('company_id', $companyId)
+                ->get()
+                ->groupBy('customer_id')
+                ->map(fn ($rows) => $rows->keyBy('item_id')->map(fn ($d) => [
+                    'discount_type' => $d->discount_type,
+                    'value' => (float) $d->value,
+                ])),
             'rateChangeSnapshots' => $this->getRateChangeSnapshotsForDailyClose($companyId, $date),
             'tanks' => $tanks,
             'pumps' => $pumps,

@@ -23,6 +23,7 @@ interface Customer {
   credit_limit: number
   current_balance: number
   is_credit_blocked: boolean
+  discount_chips: Array<{ item_id: string; label: string }>
 }
 
 interface Stats {
@@ -190,6 +191,12 @@ const onCreated = (customer: { id: string }) => {
               <div class="font-medium">{{ row._raw.name }}</div>
               <div v-if="row._raw.code || row._raw.phone" class="text-sm text-muted-foreground">
                 {{ row._raw.code || row._raw.phone }}
+              </div>
+              <div v-if="row._raw.discount_chips?.length" class="mt-1 flex flex-wrap gap-1">
+                <span v-for="chip in row._raw.discount_chips" :key="chip.item_id"
+                  class="rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success">
+                  {{ chip.label }}
+                </span>
               </div>
             </div>
           </template>

@@ -31,6 +31,7 @@ class StoreFuelSaleRequest extends BaseFormRequest
             'investor_id' => ['nullable', 'uuid', Rule::exists(Investor::class, 'id')],
             'description' => ['nullable', 'string', 'max:255'],
             'discount_per_liter' => ['nullable', 'numeric', 'min:0'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'payment_terms_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ];
     }
@@ -50,9 +51,15 @@ class StoreFuelSaleRequest extends BaseFormRequest
                 $validator->errors()->add('investor_id', 'Investor is required for investor sales.');
             }
 
-            // Bulk sales should have discount
-            if ($saleType === SaleMetadata::TYPE_BULK && !$this->discount_per_liter) {
-                $validator->errors()->add('discount_per_liter', 'Discount per liter is required for bulk sales.');
+            // A discount is either a per-litre amount or a percent of the sale, never both --
+            // FuelSaleService prices it exactly one way.
+            if ($this->discount_per_liter && $this->discount_percent) {
+                $validator->errors()->add('discount_percent', 'Enter either a per-litre discount or a percent discount, not both.');
+            }
+
+            // Bulk sales should have a discount of one kind or the other
+            if ($saleType === SaleMetadata::TYPE_BULK && !$this->discount_per_liter && !$this->discount_percent) {
+                $validator->errors()->add('discount_per_liter', 'A discount is required for bulk sales.');
             }
         });
     }

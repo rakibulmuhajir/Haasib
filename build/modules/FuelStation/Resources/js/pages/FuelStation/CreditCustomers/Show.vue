@@ -45,6 +45,14 @@ interface OpenInvoice {
   currency: string
 }
 
+interface FuelDiscount {
+  item_id: string
+  item_name: string
+  fuel_category: string | null
+  discount_type: 'percent' | 'per_litre' | null
+  value: number | null
+}
+
 interface StatementRow {
   date: string | null
   type: 'opening_balance' | 'invoice' | 'payment' | 'credit_note'
@@ -61,6 +69,7 @@ const props = defineProps<{
   customer: Customer
   statement: StatementRow[]
   openInvoices: OpenInvoice[]
+  discounts: FuelDiscount[]
   currency: string
 }>()
 
@@ -122,6 +131,28 @@ const submitApplyCredit = () => {
     onSuccess: () => {
       applyCreditDialogOpen.value = false
     },
+  })
+}
+
+// Fuel discounts: one row per active fuel item, "None" by default. Radix's Select cannot
+// hold a null/empty value, so "none" is the sentinel here and mapped back to null on submit;
+// a null row clears whatever was set for that item (see CreditCustomerController::updateDiscounts).
+const discountsForm = useForm({
+  discounts: props.discounts.map((d) => ({
+    item_id: d.item_id,
+    discount_type: (d.discount_type ?? 'none') as 'none' | 'percent' | 'per_litre',
+    value: d.value,
+  })),
+})
+const submitDiscounts = () => {
+  discountsForm.transform((data) => ({
+    discounts: data.discounts.map((row) => ({
+      item_id: row.item_id,
+      discount_type: row.discount_type === 'none' ? null : row.discount_type,
+      value: row.discount_type === 'none' ? null : row.value,
+    })),
+  })).post(`/${companySlug.value}/fuel/credit-customers/${props.customer.id}/discounts`, {
+    preserveScroll: true,
   })
 }
 
@@ -330,6 +361,49 @@ const goBack = () => {
         </CardContent>
       </Card>
     </div>
+
+    <!-- Fuel Discounts -->
+    <Card class="border-border/80">
+      <CardHeader>
+        <CardTitle class="text-base">Discounts</CardTitle>
+        <CardDescription>A negotiated rate for this buyer, per fuel item. Applies automatically on a credit sale unless overridden.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form novalidate @submit.prevent="submitDiscounts" class="space-y-4">
+          <div v-for="(row, index) in discountsForm.discounts" :key="row.item_id"
+            class="grid gap-3 sm:grid-cols-[1fr_10rem_10rem] sm:items-end">
+            <div>
+              <Label>{{ props.discounts[index]?.item_name }}</Label>
+              <p class="text-xs text-muted-foreground">{{ props.discounts[index]?.fuel_category }}</p>
+            </div>
+            <div class="space-y-1">
+              <Label :for="`discount-type-${index}`">Discount</Label>
+              <Select v-model="row.discount_type" :id="`discount-type-${index}`">
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="percent">% of sale</SelectItem>
+                  <SelectItem value="per_litre">Rs per litre</SelectItem>
+                </SelectContent>
+              </Select>
+              <InputError :message="discountsForm.errors[`discounts.${index}.discount_type`]" />
+            </div>
+            <div class="space-y-1">
+              <Label :for="`discount-value-${index}`">Value</Label>
+              <Input v-if="row.discount_type !== 'none'" :id="`discount-value-${index}`" v-model.number="row.value"
+                type="number" min="0.0001" :max="row.discount_type === 'percent' ? 100 : undefined" step="0.01" />
+              <div v-else class="flex h-9 items-center text-sm text-muted-foreground">—</div>
+              <InputError :message="discountsForm.errors[`discounts.${index}.value`]" />
+            </div>
+          </div>
+          <p v-if="!discountsForm.discounts.length" class="text-sm text-muted-foreground">No active fuel items to discount yet.</p>
+          <Button type="submit" :disabled="discountsForm.processing">
+            <span v-if="discountsForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Save Discounts
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
 
     <!-- Credit Limit Dialog -->
     <Dialog v-model:open="limitDialogOpen">

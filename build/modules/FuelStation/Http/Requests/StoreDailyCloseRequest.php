@@ -101,6 +101,11 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.customer_name' => 'nullable|string|max:255',
             'credit_sales.*.reference' => 'nullable|string|max:100',
+            // Optional fuel + litres on a manual row, so a per-litre customer discount can be
+            // priced (see DailyCloseCreditSaleService::prepare, which refuses a per_litre
+            // discount without litres); a percent discount needs only the amount above.
+            'credit_sales.*.item_id' => 'nullable|uuid',
+            'credit_sales.*.litres' => 'nullable|numeric|min:0.01',
             'bank_deposits' => 'nullable|array',
             'bank_deposits.*.bank_account_id' => 'required|uuid',
             'bank_deposits.*.amount' => 'required|numeric|min:0',
@@ -207,6 +212,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
             'payments_received.*.customer_id' => 'acct.customers', 'payments_received.*.invoice_id' => 'acct.invoices',
             'pay_suppliers.*.vendor_id' => 'acct.vendors',
+            'credit_sales.*.item_id' => 'inv.items',
         ] as $field => $table) {
             $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists($table, 'id')->where('company_id', $companyId)];
         }

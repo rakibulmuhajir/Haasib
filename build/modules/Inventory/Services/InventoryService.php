@@ -5,10 +5,12 @@ namespace App\Modules\Inventory\Services;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockReceiptLine;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
@@ -173,6 +175,59 @@ class InventoryService
             ->first();
 
         return $anyWarehouse?->id;
+    }
+
+    /**
+     * Take litres back out of stock that a bill line received but that were in fact sold
+     * straight to a customer (its direct_quantity was raised after receipt). The receipt stays
+     * as history; an adjustment_out on the same tank and date removes the litres, and the
+     * line's quantity_received drops by the same amount. Refuses when the tank no longer
+     * holds them -- they have been sold through the pumps since.
+     */
+    public function unreceiveLineQuantity(Bill $bill, BillLineItem $line, float $quantity): void
+    {
+        $receipt = StockMovement::where('company_id', $bill->company_id)
+            ->where('reference_type', 'acct.bills')
+            ->where('reference_id', $bill->id)
+            ->where('item_id', $line->item_id)
+            ->where('movement_type', 'purchase')
+            ->orderByDesc('movement_date')
+            ->first();
+        if (! $receipt) {
+            throw ValidationException::withMessages([
+                'line_items' => "No stock receipt was found for {$line->description} on Bill {$bill->bill_number}.",
+            ]);
+        }
+
+        $onHand = (float) StockLevel::where('company_id', $bill->company_id)
+            ->where('warehouse_id', $receipt->warehouse_id)
+            ->where('item_id', $line->item_id)
+            ->value('quantity');
+        if ($onHand + 0.0005 < $quantity) {
+            throw ValidationException::withMessages([
+                'line_items' => "Only {$onHand} L of {$line->description} is left in stock, so {$quantity} L can't be taken back out as sold directly.",
+            ]);
+        }
+
+        StockMovement::create([
+            'company_id' => $bill->company_id,
+            'warehouse_id' => $receipt->warehouse_id,
+            'item_id' => $line->item_id,
+            'movement_date' => $receipt->movement_date,
+            'movement_type' => 'adjustment_out',
+            'quantity' => -abs($quantity),
+            'unit_cost' => $receipt->unit_cost,
+            'total_cost' => -abs($quantity * (float) $receipt->unit_cost),
+            'reference_type' => 'acct.bills',
+            'reference_id' => $bill->id,
+            'related_movement_id' => $receipt->id,
+            'reason' => 'Sold directly',
+            'notes' => "Bill #{$bill->bill_number}: {$quantity} L marked sold directly, not into the tank",
+            'created_by_user_id' => Auth::id(),
+        ]);
+
+        $line->quantity_received = max(0, round((float) $line->quantity_received - $quantity, 3));
+        $line->save();
     }
 
     /**

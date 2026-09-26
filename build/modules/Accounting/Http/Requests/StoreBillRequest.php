@@ -63,6 +63,9 @@ class StoreBillRequest extends BaseFormRequest
             'line_items.*.warehouse_id' => ['nullable', 'uuid', Rule::exists(Warehouse::class, 'id')],
             'line_items.*.description' => ['required', 'string', 'max:500'],
             'line_items.*.quantity' => ['required', 'numeric', 'min:0.01'],
+            // Litres sold straight to a customer, never into the tank. Must be listed here or
+            // validated() drops it and the whole line is received into stock.
+            'line_items.*.direct_quantity' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'line_items.*.line_total' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             'line_items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],

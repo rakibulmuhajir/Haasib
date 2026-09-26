@@ -271,7 +271,8 @@ class UpdateAction implements PaletteAction
             if ((string) ($line['item_id'] ?? '') !== (string) ($old->item_id ?? '')) return false;
             if ((string) ($line['warehouse_id'] ?? '') !== (string) ($old->warehouse_id ?? '')) return false;
             if (!$numEqual($line['quantity'] ?? 0, $old->quantity, 6)) return false;
-            if (!$numEqual($line['direct_quantity'] ?? 0, $old->direct_quantity, 3)) return false;
+            // direct_quantity may change: reviseLineItemsInPlace takes any overlap with what
+            // was received back out of stock.
             if (!$numEqual($line['tax_rate'] ?? 0, $old->tax_rate, 4)) return false;
             if (!$numEqual($line['discount_rate'] ?? 0, $old->discount_rate, 4)) return false;
             if ((string) ($line['expense_account_id'] ?? '') !== (string) ($old->expense_account_id ?? '')) return false;
@@ -299,6 +300,18 @@ class UpdateAction implements PaletteAction
 
             $oldUnitPrice = (float) $lineModel->unit_price;
             $newUnitPrice = (float) $src['unit_price'];
+
+            // Litres re-marked as sold directly after the line was received: whatever no
+            // longer fits (received + direct > quantity) comes back out of the tank. Lowering
+            // direct_quantity just leaves more to receive later.
+            $newDirect = round((float) ($src['direct_quantity'] ?? 0), 3);
+            if (abs($newDirect - (float) $lineModel->direct_quantity) > 0.0005) {
+                $overlap = round((float) $lineModel->quantity_received + $newDirect - (float) $lineModel->quantity, 3);
+                $lineModel->direct_quantity = $newDirect;
+                if ($overlap > 0.0005) {
+                    app(InventoryService::class)->unreceiveLineQuantity($bill, $lineModel, $overlap);
+                }
+            }
 
             $lineModel->unit_price = $src['unit_price'];
             $lineModel->line_total = $line['line_total'];

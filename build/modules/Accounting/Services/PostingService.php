@@ -660,6 +660,11 @@ class PostingService
 
         $entries = [];
         foreach ($expenseDebits as $accountId => $amount) {
+            // A line sold entirely directly leaves a 0.00 inventory share; a 0/0 journal
+            // line is refused by journal_entries_debit_credit_chk.
+            if (abs($amount) < 0.005) {
+                continue;
+            }
             $entries[] = [
                 'account_id' => $accountId,
                 'type' => 'debit',

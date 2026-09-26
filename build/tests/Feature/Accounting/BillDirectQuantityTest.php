@@ -187,3 +187,18 @@ test('marking received litres as sold directly takes them back out of the tank',
         ->and($level())->toBe($before - 4000)
         ->and($line->isFullyReceived())->toBeTrue();
 });
+
+test('a fully-direct line posts everything to COGS with no zero inventory line', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
+    $f = pendingDeliveryFixture();
+    $bill = pendingDeliveryBill($f, '2026-09-15', 994, 0, $f['tank']->id, 'BILL-0001', 994);
+
+    $transaction = app(CompanyContextService::class)->withContext(
+        $f['company'],
+        fn () => app(\App\Modules\Accounting\Services\PostingService::class)->postBill($bill->fresh(['lineItems', 'vendor']))
+    );
+
+    $entries = $transaction->journalEntries()->get(['account_id', 'debit_amount', 'credit_amount']);
+    expect($entries->where('account_id', $f['accounts']['1200']->id)->count())->toBe(0)
+        ->and((float) $entries->where('account_id', $f['accounts']['5100']->id)->sum('debit_amount'))->toBe(238560.0);
+});

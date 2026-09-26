@@ -41,6 +41,10 @@ const props = defineProps<{
     currency?: string
 }>()
 
+// A row restored from a parked draft can arrive without invoice_ids (a draft is saved as the
+// posted payload, which drops an empty list). Reading it blind broke the whole close page.
+const idsOf = (row: { invoice_ids?: string[] }): string[] => (row.invoice_ids ??= [])
+
 const invoicesFor = (customerId: string) => props.openInvoices.filter((inv) => inv.customer_id === customerId)
 const invoiceById = (id: string) => props.openInvoices.find((inv) => inv.id === id)
 
@@ -60,12 +64,12 @@ const onCustomerSelected = (row: PaymentRow, entity: { id: string; name: string 
 
 const toggleInvoice = (row: PaymentRow, invoiceId: string, checked: boolean) => {
     if (checked) {
-        if (!row.invoice_ids.includes(invoiceId)) row.invoice_ids.push(invoiceId)
+        if (!idsOf(row).includes(invoiceId)) idsOf(row).push(invoiceId)
     } else {
-        row.invoice_ids = row.invoice_ids.filter((id) => id !== invoiceId)
+        row.invoice_ids = idsOf(row).filter((id) => id !== invoiceId)
     }
     if (!row.amount) {
-        const total = row.invoice_ids.reduce((sum, id) => sum + Number(invoiceById(id)?.balance ?? 0), 0)
+        const total = idsOf(row).reduce((sum, id) => sum + Number(invoiceById(id)?.balance ?? 0), 0)
         if (total) row.amount = total
     }
 }
@@ -116,7 +120,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
         <Label :id="`payment-invoice-${index}`">Invoice(s)</Label>
         <div v-if="row.customer_id && invoicesFor(row.customer_id).length" class="max-h-28 space-y-1 overflow-y-auto rounded border p-2">
           <label v-for="invoice in invoicesFor(row.customer_id)" :key="invoice.id" class="flex items-center gap-2 text-sm">
-            <Checkbox :model-value="row.invoice_ids.includes(invoice.id)" :disabled="disabled"
+            <Checkbox :model-value="idsOf(row).includes(invoice.id)" :disabled="disabled"
               @update:model-value="(v) => toggleInvoice(row, invoice.id, !!v)" />
             {{ invoice.invoice_number }} — <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
           </label>

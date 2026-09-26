@@ -750,6 +750,13 @@ const receiveDirectDeliveryCash = (invoiceId: string) => {
  * Called by both restore paths (browser draft and parked draft).
  */
 const refreshServerFacts = () => {
+    // A draft is stored as the posted payload, which drops empty lists; give restored rows back
+    // their full shape so no section reads a missing field.
+    form.payments_received = (form.payments_received || []).map((row: any) => ({
+        customer_id: '', customer_name: '', amount: 0, payment_account_id: '', reference: '',
+        ...row,
+        invoice_ids: Array.isArray(row.invoice_ids) ? row.invoice_ids : [],
+    }));
     form.opening_cash = props.previousClose.closing_cash || 0;
     refreshTankFacts();
     refreshNozzleFacts();
@@ -2905,24 +2912,6 @@ const completedWorkflowSteps = computed(() => {
             </Button>
         </template>
 
-        <div
-            class="mb-4 flex items-center justify-between gap-4 rounded-lg border p-4"
-        >
-            <p class="text-sm">
-                {{
-                    parkedDraft
-                        ? 'PARKED — changes remain editable.'
-                        : 'Business date is the register day. Entry time is recorded separately.'
-                }}
-            </p>
-            <Button
-                v-if="!isAmendmentMode"
-                variant="outline"
-                :disabled="submitting"
-                @click="parkDailyClose"
-                >Park / Save draft</Button
-            >
-        </div>
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
         <!-- Draft Restore Dialog -->
         <Dialog
@@ -2999,84 +2988,51 @@ const completedWorkflowSteps = computed(() => {
             </div>
         </div>
 
+        <!-- One row: date, previous close, draft state, progress, cash check, park. -->
         <Card class="mb-6 border-border/80">
-            <CardContent class="space-y-4 p-4 lg:p-5">
-                <div
-                    class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
-                >
-                    <div
-                        class="grid gap-4 sm:grid-cols-[12rem_1fr] sm:items-end"
-                    >
-                        <div class="space-y-1.5">
-                            <Label>Date</Label>
-                            <Input v-model="form.date" data-testid="business-date" type="date" />
-                            <p class="text-xs text-muted-foreground">
-                                Close each day the next morning, after the tank
-                                dip.
-                            </p>
-                            <InputError :message="form.errors.date" />
-                            <p
-                                v-if="props.openingsFromParked"
-                                class="text-xs text-status-attention"
-                            >
-                                Openings come from {{ props.openingsFromParked }}, which is
-                                parked but not posted. Post {{ props.openingsFromParked }}
-                                before this day.
-                            </p>
-                        </div>
-                        <div
-                            class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+            <CardContent class="p-3 lg:p-4">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                    <div class="flex items-center gap-2">
+                        <Label
+                            for="business-date"
+                            class="cursor-help"
+                            title="The register day being closed. Close each day the next morning, after the tank dip. Entry time is recorded separately."
+                            >Date</Label
                         >
-                            <template v-if="previousClose.exists">
-                                Previous close was {{ previousClose.date }} with
-                                <MoneyText
-                                    :amount="previousClose.closing_cash"
-                                    :currency="currencyCode"
-                                    :fraction-digits="0"
-                                />
-                                cash.
-                            </template>
-                            <template
-                                v-else-if="
-                                    previousClose.source === 'ledger' &&
-                                    previousClose.closing_cash > 0
-                                "
-                            >
-                                No previous close. Opening cash is the ledger
-                                cash balance as of the day before:
-                                <MoneyText
-                                    :amount="previousClose.closing_cash"
-                                    :currency="currencyCode"
-                                    :fraction-digits="0"
-                                />.
-                            </template>
-                            <template v-else>
-                                No previous close found. Opening cash starts
-                                from zero unless you enter it under Cash In.
-                            </template>
-                        </div>
+                        <Input id="business-date" v-model="form.date" data-testid="business-date" type="date" class="h-9 w-40" />
                     </div>
-
-                    <div
-                        class="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    <span class="text-muted-foreground">
+                        <template v-if="previousClose.exists">
+                            Previous close {{ previousClose.date }}:
+                            <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
+                            cash
+                        </template>
+                        <template v-else-if="previousClose.source === 'ledger' && previousClose.closing_cash > 0">
+                            Opening cash from the ledger:
+                            <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
+                        </template>
+                        <template v-else>No previous close: opening cash starts at zero</template>
+                    </span>
+                    <Badge v-if="parkedDraft" variant="outline">Parked draft</Badge>
+                    <span v-if="props.openingsFromParked" class="text-status-attention">
+                        Openings from {{ props.openingsFromParked }} (parked) — post it first
+                    </span>
+                    <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
+                    <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
+                        {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
+                        <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
+                    </Badge>
+                    <Button
+                        v-if="!isAmendmentMode"
+                        variant="outline"
+                        size="sm"
+                        class="ml-auto"
+                        :disabled="submitting"
+                        @click="parkDailyClose"
+                        >Park / Save draft</Button
                     >
-                        <Badge variant="secondary" class="justify-center">
-                            {{ completedWorkflowSteps }}/4 sections saved
-                        </Badge>
-                        <Badge
-                            v-if="cashVariance !== 0"
-                            variant="outline"
-                            class="border-l-status-attention"
-                        >
-                            {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
-                            <MoneyText
-                                :amount="Math.abs(cashVariance)"
-                                :currency="currencyCode"
-                                :fraction-digits="0"
-                            />
-                        </Badge>
-                    </div>
                 </div>
+                <InputError :message="form.errors.date" />
             </CardContent>
         </Card>
 

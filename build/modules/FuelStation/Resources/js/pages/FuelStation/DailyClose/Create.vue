@@ -371,6 +371,7 @@ const props = defineProps<{
             opening_manual?: number;
             closing_manual?: number;
             liters_sold: number;
+            returned_liters?: number;
             sale_rate: number;
         }>;
         other_sales?: Array<{
@@ -880,6 +881,9 @@ const nozzleRowFromProps = (nozzle: (typeof props.nozzles)[number]) => ({
     opening_manual: nozzle.opening_manual ?? null,
     closing_manual: null as number | null,
     liters_sold: 0,
+    // Fuel run through the pump for a calibration test and poured straight back into the tank.
+    // The meter moved, but nothing was sold - see setLitersSold/the nozzle-readings watch below.
+    returned_liters: 0,
     sale_rate: nozzle.sale_rate,
 });
 
@@ -903,6 +907,7 @@ const refreshNozzleFacts = () => {
                   meter_rolled_over: Boolean(typed.meter_rolled_over),
                   closing_manual: typed.closing_manual ?? null,
                   liters_sold: typed.liters_sold ?? 0,
+                  returned_liters: typed.returned_liters ?? 0,
               }
             : row;
     });
@@ -1202,21 +1207,37 @@ const litresFromMeters = (opening: number, closing: number, rolledOver: boolean)
         : Math.max(0, closing - opening);
 
 /**
+ * What the electronic meter itself moved for a nozzle - litres sold plus any litres returned
+ * to the tank for a pump test. The manual-reading variance check below compares against this,
+ * never against litres sold alone: the manual meter is a second gauge on the same dispensing,
+ * so it moves for a pump test exactly as the electronic one does.
+ */
+const nozzleMeterLiters = (idx: number): number => {
+    const row = form.nozzle_readings[idx];
+    return Number(row.liters_sold || 0) + Number(row.returned_liters || 0);
+};
+
+/**
  * Owner's rule B: typing the litres sold fills in the closing meter reading, the inverse of
  * litresFromMeters above. Setting closing_electronic here re-triggers the watch below, which
- * recomputes liters_sold from the same opening/closing/rolled-over triple - landing back on the
- * value just typed (module rounding), not a feedback loop.
+ * recomputes liters_sold from the same opening/closing/rolled-over/returned quadruple - landing
+ * back on the value just typed (module rounding), not a feedback loop.
+ *
+ * The meter itself moves for the litres sold AND any litres returned to the tank for a pump
+ * test, so the closing reading this fills in is opening + litres sold + litres returned - never
+ * just the litres sold on their own.
  */
 const setLitersSold = (idx: number, litersValue: number) => {
     const row = form.nozzle_readings[idx];
     const opening = Number(row.opening_electronic || 0);
     const liters = Number.isFinite(litersValue) ? litersValue : 0;
+    const returned = Number(row.returned_liters || 0);
     const rolledOver = Boolean(row.meter_rolled_over);
 
     row.liters_sold = liters;
     row.closing_electronic = rolledOver
-        ? Math.round((opening + liters - meterRolloverPoint(opening)) * 1000) / 1000
-        : Math.round((opening + liters) * 1000) / 1000;
+        ? Math.round((opening + liters + returned - meterRolloverPoint(opening)) * 1000) / 1000
+        : Math.round((opening + liters + returned) * 1000) / 1000;
 };
 
 const otherSaleError = (index: number, field: string) =>
@@ -1856,12 +1877,27 @@ const rateSnapshotByItem = computed(() => {
     return map;
 });
 
+/**
+ * The meter positions place a segment's gross litres on either side of a rate change; a return
+ * to the tank is not a meter position, so it comes off the new-rate (after the change) portion
+ * first and only then off the old-rate portion - same rule as
+ * DailyCloseService::calculateRateChangeSplit on the server.
+ */
+const splitReturnedLiters = (oldLitersGross: number, newLitersGross: number, returned: number) => {
+    const returnFromNew = Math.min(returned, newLitersGross);
+    const newLiters = newLitersGross - returnFromNew;
+    const remainingReturn = returned - returnFromNew;
+    const oldLiters = Math.max(0, oldLitersGross - remainingReturn);
+    return { oldLiters, newLiters };
+};
+
 const rateAdjustedNozzleRevenue = (reading: {
     nozzle_id: string;
     item_id: string;
     opening_electronic: number;
     closing_electronic: number;
     liters_sold: number;
+    returned_liters?: number;
     sale_rate: number;
 }) => {
     const snapshot = rateSnapshotByItem.value.get(reading.item_id);
@@ -1884,8 +1920,11 @@ const rateAdjustedNozzleRevenue = (reading: {
         );
     }
 
-    const oldLiters = Math.max(0, snapshotMeter - opening);
-    const newLiters = Math.max(0, closing - snapshotMeter);
+    const { oldLiters, newLiters } = splitReturnedLiters(
+        Math.max(0, snapshotMeter - opening),
+        Math.max(0, closing - snapshotMeter),
+        Number(reading.returned_liters || 0),
+    );
     const segmentedLiters = oldLiters + newLiters;
     const fallbackLiters = Math.max(
         0,
@@ -1904,6 +1943,7 @@ const rateChangeSplitForReading = (reading: {
     item_id: string;
     opening_electronic: number;
     closing_electronic: number;
+    returned_liters?: number;
 }) => {
     const snapshot = rateSnapshotByItem.value.get(reading.item_id);
     const snapshotRow = snapshot?.snapshot_nozzle_readings.find(
@@ -1922,9 +1962,15 @@ const rateChangeSplitForReading = (reading: {
         return null;
     }
 
+    const { oldLiters, newLiters } = splitReturnedLiters(
+        Math.max(0, snapshotMeter - opening),
+        Math.max(0, closing - snapshotMeter),
+        Number(reading.returned_liters || 0),
+    );
+
     return {
-        oldLiters: Math.max(0, snapshotMeter - opening),
-        newLiters: Math.max(0, closing - snapshotMeter),
+        oldLiters,
+        newLiters,
         oldRate: snapshot.old_sale_rate,
         newRate: snapshot.new_sale_rate,
     };
@@ -2125,17 +2171,22 @@ const cashVariance = computed(
     () => Math.round(Number(form.closing_cash || 0)) - Math.round(expectedClosingCash.value),
 );
 
-// Watch for closing reading changes to auto-calculate liters (from electronic readings)
+// Watch for closing reading (or returned-litres) changes to auto-calculate litres sold. The
+// meter itself only ever reports opening/closing/rolled-over; litres sold is that gross meter
+// figure minus whatever was run back into the tank for a pump test.
 watch(
     () =>
         form.nozzle_readings.map((r) => ({
             o: r.opening_electronic,
             c: r.closing_electronic,
             rolled: Boolean(r.meter_rolled_over),
+            returned: Number(r.returned_liters || 0),
         })),
     (readings) => {
         readings.forEach((r, i) => {
-            form.nozzle_readings[i].liters_sold = litresFromMeters(Number(r.o), Number(r.c), r.rolled);
+            const meterLiters = litresFromMeters(Number(r.o), Number(r.c), r.rolled);
+            form.nozzle_readings[i].liters_sold =
+                Math.round(Math.max(0, meterLiters - r.returned) * 1000) / 1000;
         });
     },
     { deep: true },
@@ -3267,6 +3318,44 @@ const completedWorkflowSteps = computed(() => {
                                                     Type litres or the closing meter — the
                                                     other fills in.
                                                 </p>
+                                                <!-- Fuel run through the pump for a calibration test and poured
+                                                     straight back into the tank. Net zero for stock and money -
+                                                     only the meter moved - so it must not read as a sale. -->
+                                                <div
+                                                    class="mt-1 flex items-center gap-1"
+                                                    title="Fuel run through the pump for calibration and poured back into the tank. Not a sale."
+                                                >
+                                                    <Input
+                                                        :model-value="
+                                                            form.nozzle_readings[
+                                                                idx
+                                                            ].returned_liters
+                                                        "
+                                                        @update:model-value="
+                                                            (v) =>
+                                                                (form.nozzle_readings[
+                                                                    idx
+                                                                ].returned_liters = Number(v) || 0)
+                                                        "
+                                                        :data-testid="'nozzle-' + idx + '-returned-liters'"
+                                                        type="number"
+                                                        min="0"
+                                                        @focus="selectZeroValue"
+                                                        step="1"
+                                                        class="h-7 w-16 text-right text-xs"
+                                                    />
+                                                    <span class="text-xs text-muted-foreground">
+                                                        L returned to tank (test)
+                                                    </span>
+                                                </div>
+                                                <InputError
+                                                    :message="
+                                                        nozzleError(
+                                                            idx,
+                                                            'returned_liters',
+                                                        )
+                                                    "
+                                                />
                                             </div>
                                             <!-- Rate -->
                                             <div class="col-span-2">
@@ -3462,11 +3551,7 @@ const completedWorkflowSteps = computed(() => {
                                                                                 idx
                                                                             ]
                                                                                 .opening_manual -
-                                                                            form
-                                                                                .nozzle_readings[
-                                                                                idx
-                                                                            ]
-                                                                                .liters_sold,
+                                                                            nozzleMeterLiters(idx),
                                                                     ) <= 0.5
                                                                 "
                                                                 class="text-sm font-medium text-status-success"
@@ -3491,11 +3576,7 @@ const completedWorkflowSteps = computed(() => {
                                                                             idx
                                                                         ]
                                                                             .opening_manual -
-                                                                        form
-                                                                            .nozzle_readings[
-                                                                            idx
-                                                                        ]
-                                                                            .liters_sold
+                                                                        nozzleMeterLiters(idx)
                                                                     ).toFixed(
                                                                         0,
                                                                     )

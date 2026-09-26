@@ -52,6 +52,8 @@ interface DailyClose {
   status: 'posted' | 'locked' | 'reversed' | 'reversal' | 'correction'
   is_locked?: boolean
   has_post_close_activity?: boolean
+  /** True when any nozzle on this close returned pump-test litres to the tank. */
+  has_pump_test?: boolean
   /** Present only when a rate changed during this close. */
   rate_change?: { changed: boolean; split?: boolean; fallback_liters: number } | null
   readings_taken_at?: string | null
@@ -329,6 +331,13 @@ const confirmUnlock = () => {
                     variant="outline"
                     :title="`Readings ${close.hours_covered} hours after the previous day's, not the usual 24`"
                   >{{ close.hours_covered }} h</Badge>
+                  <!-- Fuel run through a pump for calibration and poured back into the tank -
+                       not a sale, but worth flagging since it lowered this day's litres sold. -->
+                  <Badge
+                    v-if="close.has_pump_test"
+                    variant="outline"
+                    title="Litres were run through a pump for calibration and returned to the tank on this day"
+                  >Pump test</Badge>
                 </div>
               </div>
             </div>

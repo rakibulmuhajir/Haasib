@@ -383,9 +383,13 @@ class DailyCloseService
             $nozzleReadingsData = [];
             $rateChangeSnapshots = $this->getRateChangeSnapshotsForDate($companyId, $date);
             $rateChangeSegments = [];
+            $pumpTests = [];
 
             foreach ($data['nozzle_readings'] as $reading) {
+                // Net of any returned-to-tank calibration litres - see litresFromReadings().
                 $liters = (float) $reading['liters_sold'];
+                $meterLiters = (float) ($reading['meter_liters'] ?? $liters);
+                $returnedLiters = (float) ($reading['returned_liters'] ?? 0);
 
                 // Get the item for cost calculation
                 $item = Item::where('id', $reading['item_id'])
@@ -451,6 +455,14 @@ class DailyCloseService
                     }
                 }
 
+                if ($returnedLiters > 0) {
+                    $pumpTests[] = [
+                        'nozzle_id' => $reading['nozzle_id'],
+                        'fuel' => $item?->name ?? ($item?->fuel_category ?? 'Fuel'),
+                        'liters' => $returnedLiters,
+                    ];
+                }
+
                 // Store nozzle reading data for later save
                 $nozzleReadingsData[] = [
                     'nozzle_id' => $reading['nozzle_id'],
@@ -466,6 +478,8 @@ class DailyCloseService
                     'opening_manual' => isset($reading['opening_manual']) ? (float) $reading['opening_manual'] : null,
                     'closing_manual' => isset($reading['closing_manual']) ? (float) $reading['closing_manual'] : null,
                     'liters_dispensed' => $liters,
+                    'meter_liters' => $meterLiters,
+                    'returned_liters' => $returnedLiters,
                     'revenue' => $revenue,
                     'sale_rate' => $saleRate,
                     'rate_segments' => $rateSplit['segments'],
@@ -474,6 +488,7 @@ class DailyCloseService
 
             $metadata['fuel_sales'] = $salesByFuel;
             $metadata['rate_change_segments'] = $rateChangeSegments;
+            $metadata['pump_tests'] = $pumpTests;
             $metadata['total_revenue'] = $totalRevenue;
             $metadata['total_cogs'] = $totalCogs;
 
@@ -2077,6 +2092,7 @@ class DailyCloseService
                 'is_amendable' => $t->isAmendable(),
                 'has_amendments' => $t->reversed_by_id !== null,
                 'has_post_close_activity' => $activeCloseIds->has($t->id),
+                'has_pump_test' => ! empty($metadata['pump_tests']),
                 'readings_taken_at' => $metadata['readings_taken_at'] ?? null,
 
                 // A rate change is the most common reason a day's revenue or margin looks
@@ -2417,7 +2433,14 @@ class DailyCloseService
      * This is also where the meter rule is enforced for every caller - the web form, the
      * CommandBus action, anything else - rather than only in one form request.
      *
-     * @throws \Illuminate\Validation\ValidationException when a pair of readings is impossible
+     * A nozzle's optional returned_liters is fuel run through the meter for a calibration test
+     * and poured straight back into the tank: the meter genuinely advanced (so it is kept, as
+     * meter_liters, exactly as read), but nothing was sold. liters_sold - what revenue, COGS and
+     * the tank's expected stock are worked out from everywhere downstream - is meter litres minus
+     * whatever came back. It can never exceed the meter litres themselves.
+     *
+     * @throws \Illuminate\Validation\ValidationException when a pair of readings is impossible,
+     *         or more litres are declared returned than the meter moved
      */
     private function litresFromReadings(array $readings): array
     {
@@ -2435,7 +2458,19 @@ class DailyCloseService
                 continue;
             }
 
-            $readings[$i]['liters_sold'] = self::litresFromMeters($opening, $closing, $rolledOver);
+            $meterLiters = self::litresFromMeters($opening, $closing, $rolledOver);
+            $returned = round((float) ($reading['returned_liters'] ?? 0), 3);
+
+            if ($returned > $meterLiters) {
+                $errors["nozzle_readings.{$i}.returned_liters"] = 'Returned litres ('.$returned.' L) cannot exceed the '
+                    .'litres the meter moved ('.$meterLiters.' L).';
+
+                continue;
+            }
+
+            $readings[$i]['meter_liters'] = $meterLiters;
+            $readings[$i]['returned_liters'] = $returned;
+            $readings[$i]['liters_sold'] = round($meterLiters - $returned, 3);
         }
 
         if ($errors) {
@@ -2507,6 +2542,8 @@ class DailyCloseService
 
     public function calculateRateChangeSplit(array $reading, ?array $snapshot, float $fallbackRate): array
     {
+        // Already net of any returned-to-tank test litres (see litresFromReadings) - this is
+        // what gets priced and posted, at whichever rate(s) it falls under below.
         $liters = (float) $reading['liters_sold'];
         $opening = (float) $reading['opening_electronic'];
         $closing = (float) $reading['closing_electronic'];
@@ -2531,8 +2568,21 @@ class DailyCloseService
             ];
         }
 
-        $oldLiters = max(0, round($snapshotReading - $opening, 3));
-        $newLiters = max(0, round($closing - $snapshotReading, 3));
+        // The meter positions place these litres on either side of the change - gross of any
+        // return, since the return is not a meter position but a separate declared amount. A
+        // returned litre is dispensed last, off the pump, so it comes off the new-rate portion
+        // (the one after the snapshot) first; only once that portion is exhausted does it eat
+        // into the old-rate portion. That keeps a return on a day with no rate change (the
+        // ordinary case) doing the equivalent thing: coming off what would otherwise be sold.
+        $returned = round((float) ($reading['returned_liters'] ?? 0), 3);
+        $oldLitersGross = max(0, round($snapshotReading - $opening, 3));
+        $newLitersGross = max(0, round($closing - $snapshotReading, 3));
+
+        $returnFromNew = min($returned, $newLitersGross);
+        $newLiters = round($newLitersGross - $returnFromNew, 3);
+        $remainingReturn = round($returned - $returnFromNew, 3);
+        $oldLiters = max(0, round($oldLitersGross - $remainingReturn, 3));
+
         $segmentedLiters = $oldLiters + $newLiters;
         $fallbackLiters = max(0, round($liters - $segmentedLiters, 3));
         $revenue = round(($oldLiters * $oldRate) + ($newLiters * $newRate) + ($fallbackLiters * $fallbackRate), 2);

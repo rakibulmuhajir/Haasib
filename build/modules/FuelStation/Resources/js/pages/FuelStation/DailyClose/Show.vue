@@ -59,6 +59,8 @@ interface TransactionData {
     variance?: number
     expected_closing?: number
     fuel_sales?: Record<string, { liters: number; revenue: number; cogs: number }>
+    /** Fuel run through a nozzle for a pump-calibration test and poured back into the tank. */
+    pump_tests?: Array<{ nozzle_id: string; fuel: string; liters: number }>
     other_sales?: number
     bank_withdrawals?: number
     bank_deposits?: number
@@ -591,6 +593,14 @@ const unlockTransaction = () => {
           <div v-if="metadata.other_sales" class="flex justify-between items-center py-2 border-b">
             <span>Other Sales (Lubricants, etc.)</span>
             <span class="font-semibold"><MoneyText :amount="metadata.other_sales" :currency="currency" :fraction-digits="0" /></span>
+          </div>
+
+          <!-- Pump tests: litres run through a nozzle for calibration and poured back into the
+               tank. Not a sale - shown here so the litres missing from revenue are explained. -->
+          <div v-if="metadata.pump_tests && metadata.pump_tests.length > 0" class="space-y-1 text-sm text-muted-foreground">
+            <div v-for="(pumpTest, idx) in metadata.pump_tests" :key="idx">
+              Pump test: {{ pumpTest.liters?.toFixed(0) || 0 }} L of {{ pumpTest.fuel }} returned to tank
+            </div>
           </div>
 
           <Separator />

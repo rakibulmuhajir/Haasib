@@ -54,6 +54,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'nozzle_readings.*.closing_manual' => 'nullable|numeric|min:0',
             'nozzle_readings.*.liters_sold' => 'required|numeric|min:0',
             'nozzle_readings.*.sale_rate' => 'required|numeric|min:0',
+            // Litres run through the meter for a calibration test and poured straight back into
+            // the tank - not a sale. See DailyCloseService::litresFromReadings.
+            'nozzle_readings.*.returned_liters' => 'nullable|numeric|min:0',
 
             // Other sales (lubricants, etc.)
             'other_sales' => 'nullable|array',
@@ -250,6 +253,23 @@ class StoreDailyCloseRequest extends BaseFormRequest
 
                 if ($problem !== null) {
                     $validator->errors()->add("nozzle_readings.{$i}.closing_electronic", $problem);
+
+                    continue;
+                }
+
+                $returned = $reading['returned_liters'] ?? null;
+                if (is_numeric($returned)) {
+                    $rolledOver = filter_var($reading['meter_rolled_over'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $meterLiters = \App\Modules\FuelStation\Services\DailyCloseService::litresFromMeters(
+                        (float) $opening, (float) $closing, $rolledOver
+                    );
+
+                    if ((float) $returned > $meterLiters) {
+                        $validator->errors()->add(
+                            "nozzle_readings.{$i}.returned_liters",
+                            'Returned litres ('.$returned.' L) cannot exceed the litres the meter moved ('.$meterLiters.' L).'
+                        );
+                    }
                 }
             }
         });

@@ -131,10 +131,16 @@ class NozzleReading extends Model
         parent::boot();
 
         static::saving(function ($reading) {
-            // Auto-calculate liters dispensed from electronic reading
-            $reading->liters_dispensed = max(0,
-                (float) $reading->closing_electronic - (float) $reading->opening_electronic
-            );
+            // Auto-calculate liters dispensed from electronic reading, but only when the
+            // caller didn't already work it out and set it explicitly. DailyCloseService
+            // always does (net of any pump-test litres returned to the tank - see
+            // litresFromReadings): this must not silently overwrite that with the gross
+            // meter figure.
+            if ($reading->liters_dispensed === null) {
+                $reading->liters_dispensed = max(0,
+                    (float) $reading->closing_electronic - (float) $reading->opening_electronic
+                );
+            }
 
             // Calculate variance if manual readings exist
             if ($reading->opening_manual !== null && $reading->closing_manual !== null) {

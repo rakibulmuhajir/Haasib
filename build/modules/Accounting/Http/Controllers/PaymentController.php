@@ -122,12 +122,6 @@ class PaymentController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'subtype']);
 
-        $arAccounts = Account::where('company_id', $company->id)
-            ->where('subtype', 'accounts_receivable')
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-
         // Pre-selection from URL params (when coming from invoice page)
         $preselect = [
             'customer_id' => $request->query('customer_id'),
@@ -145,7 +139,6 @@ class PaymentController extends Controller
             'invoices' => $invoices,
             'currencies' => $currencies,
             'depositAccounts' => $depositAccounts,
-            'arAccounts' => $arAccounts,
             'preselect' => $preselect,
             'amanat' => $this->amanatAvailable($company, $request->user()) ? ['enabled' => true] : null,
         ]);
@@ -163,9 +156,17 @@ class PaymentController extends Controller
             return $this->storeAmanat($request, $company, $commandBus, $validated);
         }
 
-        // Map payment method from FormRequest format to Action format
+        // Map payment method from FormRequest format to Action format. When the form
+        // leaves it blank (the slimmed /payments form no longer asks), derive it from the
+        // deposit account's own subtype - a cash account raises the drawer, a bank account
+        // never does - exactly as DailyClosePaymentsReceivedService derives it for the
+        // daily close's own "Customer payments & deposits" panel.
         $methodMap = ['cheque' => 'check'];
-        $method = $validated['payment_method'];
+        $method = $validated['payment_method'] ?? null;
+        if (!$method) {
+            $depositAccount = Account::where('company_id', $company->id)->find($validated['deposit_account_id']);
+            $method = ($depositAccount && $depositAccount->subtype === 'cash') ? 'cash' : 'bank_transfer';
+        }
         $method = $methodMap[$method] ?? $method;
 
         // No invoice_id, invoice_ids or allocations at all means "on account" (an advance,

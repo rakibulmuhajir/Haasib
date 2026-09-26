@@ -51,14 +51,17 @@ class StorePaymentRequest extends BaseFormRequest
             'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
-            // Amanat is held in the company's base currency only (see
-            // AmanatService::deposit, which always posts in $company->base_currency), so
-            // the form hides the currency picker for that path and nothing is required.
-            'currency' => [
-                Rule::requiredIf(fn () => ($this->input('received_as') ?? 'invoices') !== 'amanat'),
-                'nullable', 'string', 'size:3', 'uppercase',
-            ],
-            'payment_method' => ['required', 'string', 'in:cash,bank_transfer,card,cheque,other'],
+            // Optional: the form only shows a picker when the company uses more than one
+            // currency (see CompanyCurrencyOptions). Left blank, Payment\CreateAction
+            // defaults to the allocated invoice's currency, then the buyer's/company's
+            // base currency - which is also what amanat always posts in (see
+            // AmanatService::deposit).
+            'currency' => ['nullable', 'string', 'size:3', 'uppercase'],
+            // Optional: the form only shows a picker once a deposit account is chosen, and
+            // even then defaults it from that account's subtype. Left blank,
+            // PaymentController::store() derives cash/bank_transfer from the deposit
+            // account itself.
+            'payment_method' => ['nullable', 'string', 'in:cash,bank_transfer,card,cheque,other'],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'payment_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],

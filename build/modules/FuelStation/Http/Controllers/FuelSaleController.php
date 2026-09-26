@@ -139,8 +139,10 @@ class FuelSaleController extends Controller
         try {
             $invoiceNumber = \Illuminate\Support\Facades\DB::transaction(function () use ($company, $data, $item, $paidInCash, $cashAccountId, $request) {
                 $bus = app(\App\Services\CommandBus::class);
+                // No customer on a cash sale: the same walk-in fuel customer a retail pump sale uses.
+                $customerId = $this->fuelSaleService->resolveCustomerId($company, \App\Modules\FuelStation\Models\SaleMetadata::TYPE_RETAIL, $data);
                 $result = $bus->dispatch('invoice.create', [
-                    'customer' => $data['customer_id'],
+                    'customer' => $customerId,
                     'currency' => $company->base_currency ?: 'PKR',
                     'date' => $data['sale_date'],
                     'payment_terms' => $paidInCash ? 0 : null,

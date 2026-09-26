@@ -158,7 +158,7 @@ class FuelSaleService
         });
     }
 
-    private function resolveCustomerId(Company $company, string $saleType, array $data): string
+    public function resolveCustomerId(Company $company, string $saleType, array $data): string
     {
         if (! empty($data['customer_id'])) {
             $customer = Customer::where('company_id', $company->id)

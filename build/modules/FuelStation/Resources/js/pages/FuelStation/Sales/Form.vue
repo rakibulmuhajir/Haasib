@@ -105,7 +105,8 @@ const directRate = ref<number | null>(null)
 const directPaidInCash = ref(true)
 const directTotal = computed(() => Math.round((quantity.value || 0) * (directRate.value || 0) * 100) / 100)
 const canSubmitDirect = computed(() =>
-  !!selectedFuelItem.value && (quantity.value || 0) > 0 && (directRate.value || 0) > 0 && !!selectedCustomer.value && !!saleDate.value,
+  !!selectedFuelItem.value && (quantity.value || 0) > 0 && (directRate.value || 0) > 0 && !!saleDate.value
+    && (directPaidInCash.value || !!selectedCustomer.value),
 )
 
 // Payment breakdown
@@ -189,7 +190,6 @@ watch(isDirect, (direct) => {
   formErrors.value = {}
   if (direct) {
     selectedPump.value = null
-    if (!selectedCustomer.value) showCustomerDialog.value = true
   }
 })
 
@@ -294,7 +294,7 @@ const validateForm = () => {
 const submitDirectSale = () => {
   if (!canSubmitDirect.value || !companySlug.value) return
   router.post(`/${companySlug.value}/fuel/sales/direct`, {
-    customer_id: selectedCustomer.value!.id,
+    customer_id: selectedCustomer.value?.id ?? null,
     item_id: selectedFuelItem.value!.id,
     quantity: quantity.value!,
     unit_price: directRate.value!,
@@ -497,7 +497,7 @@ rememberEntryDate(companySlug.value, saleDate)
 
             <!-- Customer Selection for special types -->
             <div v-if="isDirect || ['credit', 'amanat', 'investor'].includes(saleType)" class="space-y-2">
-              <Label>Customer *</Label>
+              <Label>Customer{{ isDirect && directPaidInCash ? ' (optional)' : ' *' }}</Label>
               <div v-if="selectedCustomer" class="flex items-center gap-3 p-3 rounded-lg border border-border/70 bg-muted/30">
                 <div class="flex-1">
                   <p class="font-medium">{{ selectedCustomer.name }}</p>
@@ -506,6 +506,10 @@ rememberEntryDate(companySlug.value, saleDate)
                 <Button variant="outline" size="sm" @click="showCustomerDialog = true">
                   Change
                 </Button>
+              </div>
+              <div v-else-if="isDirect && directPaidInCash" class="flex items-center gap-3 p-3 rounded-lg border border-border/70">
+                <p class="flex-1 text-sm text-muted-foreground">Walk-in customer</p>
+                <Button variant="outline" size="sm" @click="showCustomerDialog = true">Select Customer</Button>
               </div>
               <div v-else class="flex items-center gap-3 p-3 rounded-lg border border-status-attention/30 bg-status-attention/10">
                 <Building2 class="h-5 w-5 text-status-attention" />

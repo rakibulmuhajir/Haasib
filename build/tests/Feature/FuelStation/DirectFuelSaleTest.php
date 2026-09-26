@@ -59,3 +59,19 @@ test('a credit direct sale stays owed with no payment', function () {
     expect((float) $invoice->balance)->toBe(278320.0)
         ->and(Payment::where('company_id', $f['company']->id)->count())->toBe(0);
 });
+
+test('a cash direct sale needs no customer: it goes to the walk-in customer', function () {
+    $f = directSaleFixture();
+
+    test()->actingAs($f['user'])->post("/{$f['company']->slug}/fuel/sales/direct", [
+        'item_id' => $f['item']->id,
+        'quantity' => 994,
+        'unit_price' => 280,
+        'sale_date' => '2026-09-15',
+        'paid_in_cash' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $invoice = Invoice::where('company_id', $f['company']->id)->where('is_direct_delivery', true)->with('customer')->sole();
+    expect($invoice->customer->customer_number)->toBe('CASH-FUEL')
+        ->and((float) $invoice->balance)->toBe(0.0);
+});

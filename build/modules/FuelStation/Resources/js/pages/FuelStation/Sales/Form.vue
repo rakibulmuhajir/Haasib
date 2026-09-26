@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import InputError from '@/components/InputError.vue'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Plus, Calculator, CreditCard, Banknote, Smartphone, Building2, Search } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
@@ -96,6 +97,17 @@ const discountPercent = ref<number | null>(null)
 // stored discount only prefills the field, it never overwrites a manual edit.
 const discountTouched = ref(false)
 
+// Direct from the supplier's tanker to a customer: no pump, no tank. It posts its own income
+// as a direct-delivery invoice (FuelSaleController::storeDirect), so it takes a customer, a
+// rate that can differ from the pump rate, and whether it was paid in cash or is on credit.
+const isDirect = ref(false)
+const directRate = ref<number | null>(null)
+const directPaidInCash = ref(true)
+const directTotal = computed(() => Math.round((quantity.value || 0) * (directRate.value || 0) * 100) / 100)
+const canSubmitDirect = computed(() =>
+  !!selectedFuelItem.value && (quantity.value || 0) > 0 && (directRate.value || 0) > 0 && !!selectedCustomer.value && !!saleDate.value,
+)
+
 // Payment breakdown
 const cashAmount = ref<number>(0)
 const easypaisaAmount = ref<number>(0)
@@ -169,10 +181,22 @@ watch(selectedPump, (newPump) => {
   }
 })
 
+// The day's pump rate is only a starting point for a direct sale.
+watch([isDirect, selectedFuelItem], ([direct]) => {
+  if (direct) directRate.value = currentRate.value?.sale_rate ?? null
+})
+watch(isDirect, (direct) => {
+  formErrors.value = {}
+  if (direct) {
+    selectedPump.value = null
+    if (!selectedCustomer.value) showCustomerDialog.value = true
+  }
+})
+
 watch(saleType, (newType) => {
   if (newType === 'investor' || newType === 'amanat' || newType === 'credit') {
     showCustomerDialog.value = true
-  } else {
+  } else if (!isDirect.value) {
     selectedCustomer.value = null
   }
 })
@@ -213,6 +237,9 @@ const resetForm = () => {
   selectedPump.value = null
   selectedFuelItem.value = null
   quantity.value = null
+  isDirect.value = false
+  directRate.value = null
+  directPaidInCash.value = true
   saleType.value = 'retail'
   selectedCustomer.value = null
   discountPerLiter.value = null
@@ -264,7 +291,26 @@ const validateForm = () => {
   return Object.keys(errors).length === 0
 }
 
+const submitDirectSale = () => {
+  if (!canSubmitDirect.value || !companySlug.value) return
+  router.post(`/${companySlug.value}/fuel/sales/direct`, {
+    customer_id: selectedCustomer.value!.id,
+    item_id: selectedFuelItem.value!.id,
+    quantity: quantity.value!,
+    unit_price: directRate.value!,
+    sale_date: saleDate.value,
+    paid_in_cash: directPaidInCash.value,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => resetForm(),
+    onError: (errors) => {
+      formErrors.value = Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, [v as string]]))
+    },
+  })
+}
+
 const submitSale = () => {
+  if (isDirect.value) return submitDirectSale()
   if (!validateForm()) return
 
   const slug = companySlug.value
@@ -337,8 +383,18 @@ rememberEntryDate(companySlug.value, saleDate)
             </CardTitle>
           </CardHeader>
           <CardContent class="space-y-4">
+            <div class="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 p-3">
+              <Checkbox id="direct-sale" v-model="isDirect" class="mt-0.5" />
+              <div class="space-y-0.5">
+                <Label for="direct-sale" class="font-medium">Direct from tanker — not from the pumps</Label>
+                <p class="text-xs text-muted-foreground">
+                  Fuel delivered straight to a customer. No pump or tank is touched; on its bill,
+                  enter these litres under "Sold directly".
+                </p>
+              </div>
+            </div>
             <div class="grid gap-4 sm:grid-cols-2">
-              <div class="space-y-2">
+              <div v-if="!isDirect" class="space-y-2">
                 <Label>Pump *</Label>
                 <Select v-model="selectedPump">
                   <SelectTrigger :class="{ 'border-destructive': formErrors.pump_id }">
@@ -396,7 +452,12 @@ rememberEntryDate(companySlug.value, saleDate)
                 <InputError :message="formErrors.quantity?.[0]" />
               </div>
 
-              <div class="space-y-2">
+              <div v-if="isDirect" class="space-y-2">
+                <Label for="direct-rate">Rate per litre *</Label>
+                <Input id="direct-rate" v-model.number="directRate" type="number" min="0.01" step="0.01" />
+                <InputError :message="formErrors.unit_price?.[0]" />
+              </div>
+              <div v-else class="space-y-2">
                 <Label>Unit Price</Label>
                 <Input
                   :model-value="formatCurrency(unitPrice)"
@@ -405,7 +466,17 @@ rememberEntryDate(companySlug.value, saleDate)
                 />
               </div>
 
-              <div class="space-y-2">
+              <div v-if="isDirect" class="space-y-2">
+                <Label>Paid</Label>
+                <Select :model-value="directPaidInCash ? 'cash' : 'credit'" @update:model-value="(v) => (directPaidInCash = v === 'cash')">
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">In cash</SelectItem>
+                    <SelectItem value="credit">On credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div v-else class="space-y-2">
                 <Label>Sale Type</Label>
                 <Select v-model="saleType">
                   <SelectTrigger>
@@ -425,7 +496,7 @@ rememberEntryDate(companySlug.value, saleDate)
             </div>
 
             <!-- Customer Selection for special types -->
-            <div v-if="['credit', 'amanat', 'investor'].includes(saleType)" class="space-y-2">
+            <div v-if="isDirect || ['credit', 'amanat', 'investor'].includes(saleType)" class="space-y-2">
               <Label>Customer *</Label>
               <div v-if="selectedCustomer" class="flex items-center gap-3 p-3 rounded-lg border border-border/70 bg-muted/30">
                 <div class="flex-1">
@@ -440,7 +511,7 @@ rememberEntryDate(companySlug.value, saleDate)
                 <Building2 class="h-5 w-5 text-status-attention" />
                 <div class="flex-1">
                   <p class="font-medium text-status-attention">No customer selected</p>
-                  <p class="text-sm text-status-attention">Required for {{ saleType }} sales</p>
+                  <p class="text-sm text-status-attention">Required for {{ isDirect ? 'direct' : saleType }} sales</p>
                 </div>
                 <Button size="sm" class="border-status-attention/30 text-status-attention hover:bg-status-attention/10" @click="showCustomerDialog = true">
                   Select Customer
@@ -453,7 +524,7 @@ rememberEntryDate(companySlug.value, saleDate)
                  purchase rate with no margin to discount from). Prefilled from this buyer's
                  stored fuel discount once both customer and fuel item are chosen; editable
                  per sale. -->
-            <div v-if="saleType !== 'investor'" class="grid gap-4 sm:grid-cols-2">
+            <div v-if="!isDirect && saleType !== 'investor'" class="grid gap-4 sm:grid-cols-2">
               <div class="space-y-2">
                 <Label>Discount per Liter</Label>
                 <Input
@@ -488,7 +559,7 @@ rememberEntryDate(companySlug.value, saleDate)
         </Card>
 
         <!-- Payment Breakdown -->
-        <Card class="border-border/80">
+        <Card v-if="!isDirect" class="border-border/80">
           <CardHeader>
             <CardTitle class="text-base flex items-center gap-2">
               <CreditCard class="h-5 w-5 text-status-success" />
@@ -580,20 +651,20 @@ rememberEntryDate(companySlug.value, saleDate)
             <CardTitle class="text-base">Sale Summary</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
-            <div class="flex justify-between">
+            <div v-if="!isDirect" class="flex justify-between">
               <span>Subtotal</span>
               <span><MoneyText :amount="subtotal" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
-            <div v-if="discount > 0" class="flex justify-between text-status-success">
+            <div v-if="!isDirect && discount > 0" class="flex justify-between text-status-success">
               <span>Discount</span>
               <span>-<MoneyText :amount="discount" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
             <div class="flex justify-between text-lg font-semibold pt-2 border-t border-border/50">
               <span>Total</span>
-              <span><MoneyText :amount="total" :currency="currencyCode" :fraction-digits="0" /></span>
+              <span><MoneyText :amount="isDirect ? directTotal : total" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
 
-            <div v-if="selectedFuelItem && currentRate" class="pt-4 space-y-2 text-sm text-text-secondary">
+            <div v-if="!isDirect && selectedFuelItem && currentRate" class="pt-4 space-y-2 text-sm text-text-secondary">
               <div class="flex justify-between">
                 <span>Rate</span>
                 <span><MoneyText :amount="currentRate.sale_rate" :currency="currencyCode" :fraction-digits="0" />/L</span>
@@ -617,7 +688,7 @@ rememberEntryDate(companySlug.value, saleDate)
               <Button
                 class="w-full bg-status-info hover:bg-status-info"
                 size="lg"
-                :disabled="!canSubmit"
+                :disabled="isDirect ? !canSubmitDirect : !canSubmit"
                 @click="submitSale"
               >
                 <Calculator class="mr-2 h-5 w-5" />

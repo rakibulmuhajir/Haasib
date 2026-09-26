@@ -113,4 +113,70 @@ class FuelSaleController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
     }
+
+    /**
+     * Fuel sold straight from the supplier's tanker to a customer. Unlike a pump sale it goes
+     * through no meter and no tank, so nothing else will ever count it: the invoice itself
+     * posts the income (invoice.create, flagged is_direct_delivery so the Daily Close leaves
+     * it out of its credit rows). The litres' cost was already booked to COGS by the bill's
+     * "Sold directly" quantity. Paid in cash, the money goes into the station's cash account
+     * on the sale date, so that day's close counts it as money in -- the same payment the
+     * close's "Received in cash" button records.
+     */
+    public function storeDirect(\App\Modules\FuelStation\Http\Requests\StoreDirectFuelSaleRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $data = $request->validated();
+        $item = Item::where('company_id', $company->id)->findOrFail($data['item_id']);
+        $paidInCash = (bool) $data['paid_in_cash'];
+        $cashAccountId = $paidInCash
+            ? app(\App\Modules\FuelStation\Services\DailyCloseService::class)->cashAccountId($company->id)
+            : null;
+        if ($paidInCash && ! $cashAccountId) {
+            return back()->with('error', 'No cash account is set for this station.');
+        }
+
+        try {
+            $invoiceNumber = \Illuminate\Support\Facades\DB::transaction(function () use ($company, $data, $item, $paidInCash, $cashAccountId, $request) {
+                $bus = app(\App\Services\CommandBus::class);
+                $result = $bus->dispatch('invoice.create', [
+                    'customer' => $data['customer_id'],
+                    'currency' => $company->base_currency ?: 'PKR',
+                    'date' => $data['sale_date'],
+                    'payment_terms' => $paidInCash ? 0 : null,
+                    'is_direct_delivery' => true,
+                    'line_items' => [[
+                        'description' => rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
+                        'quantity' => $data['quantity'],
+                        'unit_price' => $data['unit_price'],
+                        'income_account_id' => $item->income_account_id,
+                    ]],
+                ], $request->user());
+
+                $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)->findOrFail($result['data']['id']);
+                if ($paidInCash) {
+                    $amount = round((float) $invoice->balance, 2);
+                    $bus->dispatch('payment.create', [
+                        'customer_id' => $invoice->customer_id,
+                        'allocations' => [['invoice_id' => $invoice->id, 'amount' => $amount]],
+                        'amount' => $amount,
+                        'method' => 'cash',
+                        'date' => $data['sale_date'],
+                        'deposit_account_id' => $cashAccountId,
+                        'reference' => $invoice->invoice_number,
+                    ], $request->user());
+                }
+
+                return $invoice->invoice_number;
+            });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $paidInCash
+            ? "Direct sale {$invoiceNumber} recorded and paid in cash. It is counted in that day's money in."
+            : "Direct sale {$invoiceNumber} recorded on the customer's account.");
+    }
 }

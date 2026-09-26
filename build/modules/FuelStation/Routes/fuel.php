@@ -123,6 +123,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     // Fuel Sales
     Route::get('sales/form', [FuelSaleController::class, 'create'])->name('fuel.sales.create');
     Route::post('sales', [FuelSaleController::class, 'store'])->name('fuel.sales.store');
+    Route::post('sales/direct', [FuelSaleController::class, 'storeDirect'])->name('fuel.sales.direct');
 
     // Vendor Card Settlement
     Route::get('vendor-cards/pending', [VendorCardSettlementController::class, 'pending'])->name('fuel.vendor-cards.pending');

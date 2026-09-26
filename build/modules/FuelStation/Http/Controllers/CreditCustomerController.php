@@ -127,13 +127,19 @@ class CreditCustomerController extends Controller
             ->where('customer_id', $customerData->id)
             ->get()
             ->keyBy('item_id');
-        $discounts = $fuelItems->map(fn (Item $item) => [
-            'item_id' => $item->id,
-            'item_name' => $item->name,
-            'fuel_category' => $item->fuel_category,
-            'discount_type' => $discountsByItem[$item->id]->discount_type ?? null,
-            'value' => $discountsByItem[$item->id] ? (float) $discountsByItem[$item->id]->value : null,
-        ])->values();
+        // get(), not [$id]: a fuel with no discount has no entry, and indexing a Collection by a
+        // missing key throws - which 500'd every customer page.
+        $discounts = $fuelItems->map(function (Item $item) use ($discountsByItem) {
+            $discount = $discountsByItem->get($item->id);
+
+            return [
+                'item_id' => $item->id,
+                'item_name' => $item->name,
+                'fuel_category' => $item->fuel_category,
+                'discount_type' => $discount?->discount_type,
+                'value' => $discount ? (float) $discount->value : null,
+            ];
+        })->values();
 
         return Inertia::render('FuelStation/CreditCustomers/Show', [
             'customer' => [

@@ -87,10 +87,13 @@ class Payment extends Model
      */
     public static function generatePaymentNumber(string $companyId): string
     {
+        // The highest number, not the newest row: a daily close creates several payments in the
+        // same second, and "latest by created_at" then picked an older one and reissued a taken
+        // number (PAY-00003 twice). Soft-deleted rows count too - the unique index still has them.
         $last = DB::connection('pgsql')->table('acct.payments')
             ->where('company_id', $companyId)
-            ->whereNotNull('payment_number')
-            ->orderByDesc('created_at')
+            ->where('payment_number', '~', '^PAY-[0-9]+$')
+            ->orderByRaw("CAST(substring(payment_number from '[0-9]+$') AS bigint) DESC")
             ->value('payment_number');
 
         $base = 'PAY-';

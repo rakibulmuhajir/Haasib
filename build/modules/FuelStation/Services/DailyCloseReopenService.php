@@ -99,7 +99,7 @@ class DailyCloseReopenService
             $this->guardCreditInvoicesNotPaidElsewhere($companyId, $metadata);
             $this->guardBillsNotPaidElsewhere($companyId, $purchaseDetails);
             $this->guardAdvancesUntouched($companyId, $close->id);
-            $this->guardStockNotIssuedBelowWhatWouldRemain($companyId, $metadata);
+            $this->guardStockNotIssuedBelowWhatWouldRemain($companyId, $close->id, $metadata, $purchaseDetails);
 
             // Keep history before anything is touched.
             DB::table('fuel.daily_close_revisions')->insert([
@@ -386,19 +386,40 @@ class DailyCloseReopenService
         }
     }
 
-    private function guardStockNotIssuedBelowWhatWouldRemain(string $companyId, array $metadata): void
+    private function guardStockNotIssuedBelowWhatWouldRemain(string $companyId, string $closeId, array $metadata, array $purchaseDetails): void
     {
+        // Removing this close takes out every stock movement it made: its reconciliation to the
+        // dip, the purchases it received and the deliveries it booked. Later posted days have
+        // sold from the tank since, so the level is naturally below this day's dip -- that is
+        // fine. What is not fine is a tank going negative once this day's own stock is gone
+        // (e.g. a delivery booked here that later days have already sold).
+        $billIds = array_values(array_filter(array_column($purchaseDetails, 'bill_id')));
+
         foreach ($metadata['posting_snapshot']['tanks'] ?? [] as $tank) {
             $level = StockLevel::where('company_id', $companyId)
                 ->where('warehouse_id', $tank['tank_id'])
                 ->where('item_id', $tank['item_id'])
                 ->value('quantity');
-            // The close's own reconciliation movement moved stock to the physical dip; if the
-            // ledger has since gone below that dip, something was issued out of the tank
-            // after this close's litres were counted, and removing this close's movements
-            // would drive the tank negative.
-            if ($level !== null && (float) $level < ((float) $tank['physical_liters'] - 0.5)) {
-                throw new \RuntimeException("Stock for tank {$tank['tank_name']} has moved since this close (now {$level}L, was declared {$tank['physical_liters']}L). Review before reopening.");
+            if ($level === null) {
+                continue;
+            }
+            $removed = (float) StockMovement::where('company_id', $companyId)
+                ->where('warehouse_id', $tank['tank_id'])
+                ->where('item_id', $tank['item_id'])
+                ->where(fn ($q) => $q->where('gl_transaction_id', $closeId)
+                    ->orWhere(fn ($b) => $b->where('reference_type', 'acct.bills')->whereIn('reference_id', $billIds ?: ['00000000-0000-0000-0000-000000000000'])))
+                ->sum('quantity');
+            // Deliveries against an earlier bill: only the litres this day received (the same
+            // movement unreceiveDeliveries removes), not the bill's other receipts.
+            foreach ($metadata['deliveries_received'] ?? [] as $delivery) {
+                if (($delivery['tank_id'] ?? null) === $tank['tank_id']) {
+                    $removed += (float) $delivery['litres'];
+                }
+            }
+            $after = (float) $level - $removed;
+            if ($after < -0.5) {
+                throw new \RuntimeException("Tank {$tank['tank_name']} would go below zero ("
+                    .number_format($after, 0)."L) without the stock this day added. Later days have already sold it; edit those days first.");
             }
         }
     }

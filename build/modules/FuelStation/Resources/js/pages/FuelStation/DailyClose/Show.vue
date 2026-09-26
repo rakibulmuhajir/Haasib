@@ -113,36 +113,25 @@ const props = defineProps<{
   fuelItems?: Array<{ id: string; name: string }>
   customerFuelDiscounts?: Array<{ customer_id: string; item_id: string; discount_type: 'percent' | 'per_litre'; value: number }>
   canApplyPostCloseDiscount?: boolean
+  canEditDay?: boolean
+  editDayDisabledReason?: string | null
+  revisionHistory?: Array<{ id: string; created_at: string; reason: string; reopened_by_name: string | null }>
   permissions: {
     canLock: boolean
     canUnlock: boolean
   }
 }>()
 
-const expense = useForm({ account_id: '', description: '', amount: 0 })
-const addExpense = () => expense.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/expenses`, {
-  preserveScroll: true,
-  onSuccess: (page) => { if ((page.props as any).flash?.success) expense.reset() },
-  onError: (errors) => toast.error(String(Object.values(errors)[0])),
-})
-
-const correction = useForm({ reading_type: 'tank', reading_id: '', corrected_value: 0, reason: '', expected_revision: 0 })
-const correctableOptions = computed(() => {
-  const options = correction.reading_type === 'nozzle' ? (props.correctableReadings?.nozzle ?? []) : (props.correctableReadings?.tank ?? [])
-  return options.map(option => {
-    const latest = (props.reconciliation?.corrections ?? []).filter(row => row.reading_id === option.id)
-      .sort((a, b) => Number(b.revision) - Number(a.revision))[0]
-    return { ...option, label: latest ? `${option.label} (current: ${latest.corrected_value}L)` : option.label }
+// "Edit day": removes everything this close posted and reopens the same date as a draft on
+// the Create page. Editing the day replaces the old scattered post-close expense/correction
+// inputs entirely, so those forms are gone from this page -- see DailyCloseReopenService.
+const editDayForm = useForm({ reason: '' })
+const editDayOpen = ref(false)
+const editDay = () => {
+  editDayForm.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/reopen`, {
+    preserveScroll: true,
+    onError: (errors) => toast.error(String(Object.values(errors)[0] ?? 'Failed to reopen day')),
   })
-})
-const addCorrection = () => {
-  correction.expected_revision = Math.max(0, ...(props.reconciliation?.corrections ?? [])
-    .filter(row => row.reading_id === correction.reading_id).map(row => Number(row.revision)))
-  correction.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/corrections`, {
-  preserveScroll: true,
-  onSuccess: (page) => { if ((page.props as any).flash?.success) { toast.success('Correction recorded'); correction.reset('reading_id', 'corrected_value', 'reason') } },
-  onError: (errors) => toast.error(String(Object.values(errors)[0])),
-})
 }
 
 // Merges the frozen snapshot (customer name, reference, source) with each invoice's
@@ -355,6 +344,26 @@ const unlockTransaction = () => {
       </CardContent>
     </Card>
 
+    <Card v-if="revisionHistory?.length" class="mb-6 border-status-attention/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <RotateCcw class="h-4 w-4" />
+          This day has been edited {{ revisionHistory.length }} time{{ revisionHistory.length === 1 ? '' : 's' }}
+        </CardTitle>
+        <CardDescription>Each posted version before an edit is kept permanently.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul class="space-y-3">
+          <li v-for="entry in revisionHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
+            <p class="text-sm font-medium">
+              Edited {{ formatDateTime(entry.created_at) }}{{ entry.reopened_by_name ? ` by ${entry.reopened_by_name}` : '' }}
+            </p>
+            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
+
     <Card v-if="reconciliation" class="mb-6">
       <CardHeader>
         <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
@@ -385,15 +394,10 @@ const unlockTransaction = () => {
         </table>
         <div>
           <h3 class="mb-2 font-semibold">POST-CLOSE ACTIVITY</h3>
-          <form v-if="canAddActivity" @submit.prevent="addExpense" class="mb-4 space-y-3 rounded border p-4">
-            <p class="font-medium">Record a forgotten cash expense for {{ transaction.transaction_date }}</p>
-            <Label>Expense account</Label>
-            <Select v-model="expense.account_id"><SelectTrigger><SelectValue placeholder="Choose expense account" /></SelectTrigger><SelectContent><SelectItem v-for="account in expenseAccounts" :key="account.id" :value="account.id">{{ account.name }}</SelectItem></SelectContent></Select>
-            <Label>Description</Label><Input v-model="expense.description" required />
-            <Label>Amount</Label><Input v-model.number="expense.amount" type="number" min="0.01" step="0.01" required />
-            <p v-for="(error, field) in expense.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
-            <Button type="submit" :disabled="expense.processing">{{ expense.processing ? 'Recording…' : 'Record expense' }}</Button>
-          </form>
+          <p class="mb-3 text-sm text-muted-foreground">
+            Read-only. To add a forgotten transaction, use "Edit day" above instead of a separate
+            post-close entry.
+          </p>
           <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
           <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
             <p class="font-medium">{{ row.activity }} · {{ row.type }} · <Link v-if="!row.type.startsWith('stock:')" :href="`/${company.slug}/journals/${row.id}`" class="underline">{{ row.reference }}</Link><span v-else>{{ row.reference }}</span></p>
@@ -407,29 +411,10 @@ const unlockTransaction = () => {
         </div>
         <div>
           <h3 class="mb-2 font-semibold">READING CORRECTIONS</h3>
-          <form v-if="canCorrectReadings" @submit.prevent="addCorrection" class="mb-4 space-y-3 rounded border p-4">
-            <p class="font-medium">Correct a tank or nozzle reading for {{ transaction.transaction_date }}</p>
-            <p class="text-sm text-muted-foreground">The original reading is never changed. This records the correction and its journal/stock adjustments. Counted cash and the posted snapshot stay unchanged.</p>
-            <Label>Reading type</Label>
-            <Select v-model="correction.reading_type" @update:model-value="correction.reading_id = ''">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tank">Tank reading</SelectItem>
-                <SelectItem value="nozzle">Nozzle reading</SelectItem>
-              </SelectContent>
-            </Select>
-            <Label>Reading</Label>
-            <Select v-model="correction.reading_id">
-              <SelectTrigger><SelectValue placeholder="Choose reading" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="option in correctableOptions" :key="option.id" :value="option.id">{{ option.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Label>Corrected value (litres)</Label><Input v-model.number="correction.corrected_value" type="number" min="0" step="0.001" required />
-            <Label>Reason</Label><Input v-model="correction.reason" required />
-            <p v-for="(error, field) in correction.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
-            <Button type="submit" :disabled="correction.processing">{{ correction.processing ? 'Recording…' : 'Record correction' }}</Button>
-          </form>
+          <p class="mb-3 text-sm text-muted-foreground">
+            Read-only. To correct a tank or nozzle reading, use "Edit day" above instead of a
+            separate post-close correction.
+          </p>
           <p v-if="!reconciliation.corrections?.length" class="text-sm text-muted-foreground">No corrections recorded.</p>
           <div v-for="row in reconciliation.corrections" :key="row.id" class="border-b py-3 text-sm">
             <p class="font-medium">{{ row.reading_type === 'tank' ? 'Tank reading' : 'Nozzle reading' }} correction</p>
@@ -480,6 +465,46 @@ const unlockTransaction = () => {
                   <Button variant="outline">Cancel</Button>
                 </DialogClose>
                 <Button @click="lockTransaction">Lock</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </template>
+
+        <template v-if="canEditDay || editDayDisabledReason">
+          <Dialog v-model:open="editDayOpen">
+            <DialogTrigger as-child>
+              <Button variant="outline" :disabled="!canEditDay" :title="!canEditDay ? editDayDisabledReason ?? undefined : undefined">
+                <RotateCcw class="h-4 w-4 mr-2" />
+                Edit day
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit this day?</DialogTitle>
+                <DialogDescription>
+                  Everything this close posted (journal, invoices, stock movements, payments) is
+                  removed and the day becomes a draft in the same form used to create it. Re-post
+                  when ready. This is recorded permanently against the day, with your name and the
+                  reason below.
+                </DialogDescription>
+              </DialogHeader>
+              <div class="space-y-2">
+                <Label for="edit-day-reason">Reason for editing</Label>
+                <Textarea
+                  id="edit-day-reason"
+                  v-model="editDayForm.reason"
+                  rows="3"
+                  placeholder="e.g. Forgot to record a customer payment during posting."
+                />
+                <p v-if="editDayForm.errors.reason" class="text-sm text-status-critical">
+                  {{ editDayForm.errors.reason }}
+                </p>
+              </div>
+              <DialogFooter>
+                <DialogClose as-child>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button :disabled="editDayForm.processing" @click="editDay">Edit day</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

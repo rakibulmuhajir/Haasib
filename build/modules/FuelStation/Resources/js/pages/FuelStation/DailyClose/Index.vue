@@ -72,8 +72,18 @@ const props = defineProps<{
   permissions: {
     canLock: boolean
     canUnlock: boolean
+    canEditDay: boolean
   }
 }>()
+
+// "Edit day" is only offered for the single latest posted, unlocked close: reopening any
+// earlier day is refused server-side too (its openings feed every later day), and the
+// server is the source of truth for that -- this only avoids offering an action that would
+// just bounce back with an error for the common case. `closes` is already ordered newest
+// first (see DailyCloseService::getRecentCloses), so the first non-reversed row is it.
+const latestPostedDate = computed(() => props.closes.find((c) => c.status !== 'reversed')?.date ?? null)
+const canEditClose = (close: DailyClose) =>
+  props.permissions.canEditDay && !close.is_locked && close.status !== 'reversed' && close.date === latestPostedDate.value
 
 const RANGES = [
   { value: '30', label: 'Last 30 days' },
@@ -205,6 +215,26 @@ const confirmUnlock = () => {
   unlockForm.post(`/${props.company.slug}/fuel/daily-close/${unlockTarget.value.id}/unlock`, {
     preserveScroll: true,
     onSuccess: () => { unlockTarget.value = null; unlockForm.reset() },
+  })
+}
+
+// "Edit day": undoes everything the close posted and reopens the Create page as a parked
+// draft for the same date. Always costs a reason, kept permanently in
+// fuel.daily_close_revisions. See DailyCloseReopenService.
+const editDayTarget = ref<{ id: string; label: string } | null>(null)
+const editDayForm = useForm({ reason: '' })
+
+const promptEditDay = (close: { id: string; transaction_number: string }) => {
+  editDayForm.reset()
+  editDayForm.clearErrors()
+  editDayTarget.value = { id: close.id, label: close.transaction_number }
+}
+
+const confirmEditDay = () => {
+  if (!editDayTarget.value) return
+  editDayForm.post(`/${props.company.slug}/fuel/daily-close/${editDayTarget.value.id}/reopen`, {
+    preserveScroll: true,
+    onSuccess: () => { editDayTarget.value = null; editDayForm.reset() },
   })
 }
 </script>
@@ -404,6 +434,18 @@ const confirmUnlock = () => {
                       Reopen day
                     </DropdownMenuItem>
                   </template>
+
+                  <template v-if="permissions.canEditDay && close.status !== 'reversed'">
+                    <DropdownMenuItem
+                      :disabled="!canEditClose(close)"
+                      :title="close.is_locked ? 'Unlock the day first' : (close.date !== latestPostedDate ? 'Reopen the later posted day first' : undefined)"
+                      @click="canEditClose(close) && promptEditDay(close)"
+                      class="flex items-center"
+                    >
+                      <RotateCcw class="h-4 w-4 mr-2" />
+                      Edit day
+                    </DropdownMenuItem>
+                  </template>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -484,6 +526,36 @@ const confirmUnlock = () => {
         <DialogFooter>
           <Button variant="outline" @click="unlockTarget = null">Cancel</Button>
           <Button :disabled="unlockForm.processing" @click="confirmUnlock">Reopen day</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Edit Day Dialog -->
+    <Dialog :open="editDayTarget !== null" @update:open="(open) => { if (!open) editDayTarget = null }">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {{ editDayTarget?.label }}?</DialogTitle>
+          <DialogDescription>
+            Everything this close posted (journal, invoices, stock movements, payments) is removed and
+            the day becomes a draft in the same form used to create it. Re-post when ready. This is
+            recorded permanently against the day, with your name and the reason below.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-2">
+          <Label for="edit-day-reason">Reason for editing</Label>
+          <Textarea
+            id="edit-day-reason"
+            v-model="editDayForm.reason"
+            rows="3"
+            placeholder="e.g. Forgot to record a customer payment during posting."
+          />
+          <p v-if="editDayForm.errors.reason" class="text-sm text-status-critical">
+            {{ editDayForm.errors.reason }}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="editDayTarget = null">Cancel</Button>
+          <Button :disabled="editDayForm.processing" @click="confirmEditDay">Edit day</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

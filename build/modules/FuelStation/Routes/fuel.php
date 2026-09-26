@@ -96,6 +96,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('daily-close/{transaction}', [DailyCloseController::class, 'show'])->name('fuel.daily-close.show');
     Route::post('daily-close/{transaction}/lock', [DailyCloseController::class, 'lock'])->name('fuel.daily-close.lock');
     Route::post('daily-close/{transaction}/unlock', [DailyCloseController::class, 'unlock'])->name('fuel.daily-close.unlock');
+    Route::post('daily-close/{transaction}/reopen', [DailyCloseController::class, 'reopen'])->name('fuel.daily-close.reopen');
     Route::post('daily-close/lock-month', [DailyCloseController::class, 'lockMonth'])->name('fuel.daily-close.lock-month');
 
     // Investors

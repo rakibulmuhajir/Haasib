@@ -24,6 +24,7 @@ use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Services\DailyCloseLockService;
 use App\Modules\FuelStation\Services\DailyClosePostCloseDiscountService;
+use App\Modules\FuelStation\Services\DailyCloseReopenService;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
@@ -1007,6 +1008,7 @@ class DailyCloseController extends Controller
         $user = $request->user();
         $canLock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_LOCK);
         $canUnlock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_UNLOCK);
+        $canEditDay = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE);
 
         return Inertia::render('FuelStation/DailyClose/Index', [
             'company' => [
@@ -1023,6 +1025,7 @@ class DailyCloseController extends Controller
             'permissions' => [
                 'canLock' => $canLock,
                 'canUnlock' => $canUnlock,
+                'canEditDay' => $canEditDay,
             ],
         ]);
     }
@@ -1049,6 +1052,19 @@ class DailyCloseController extends Controller
         // Get user permissions
         $canLock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_LOCK);
         $canUnlock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_UNLOCK);
+
+        // "Edit day" (see DailyCloseReopenService): only for the latest posted, unlocked day —
+        // an earlier day's openings feed every later one, so it must be reopened in order.
+        $laterExists = Transaction::where('company_id', $companyModel->id)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')
+            ->whereNull('reversed_by_id')
+            ->where('transaction_date', '>', $txn->transaction_date)
+            ->exists();
+        $editDayDisabledReason = $txn->is_locked
+            ? 'Unlock the day first.'
+            : ($laterExists ? "Reopen the later posted day first — each day's openings come from the day before." : null);
+        $canEditDay = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && $editDayDisabledReason === null;
 
         $metadata = $txn->metadata ?? [];
         if (!is_array($metadata)) {
@@ -1113,6 +1129,15 @@ class DailyCloseController extends Controller
                 ->whereIn('customer_id', collect($metadata['credit_sale_details'] ?? [])->pluck('customer_id')->filter()->unique()->values()->all())
                 ->get(['customer_id', 'item_id', 'discount_type', 'value']),
             'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && !$txn->is_locked,
+            'canEditDay' => $canEditDay,
+            'editDayDisabledReason' => $editDayDisabledReason,
+            // Every past "Edit day" on this business date, oldest first.
+            'revisionHistory' => DB::table('fuel.daily_close_revisions as r')
+                ->leftJoin('auth.users as actor', 'actor.id', '=', 'r.reopened_by_user_id')
+                ->where('r.company_id', $companyModel->id)
+                ->where('r.business_date', $txn->transaction_date->toDateString())
+                ->orderBy('r.created_at')
+                ->get(['r.id', 'r.created_at', 'r.reason', 'actor.name as reopened_by_name']),
             'permissions' => [
                 'canLock' => $canLock && $txn->isLockable(),
                 'canUnlock' => $canUnlock && $txn->is_locked,
@@ -1198,6 +1223,37 @@ class DailyCloseController extends Controller
         try {
             $this->lockService->unlockTransaction($txn, $request->user(), $request->validated()['reason']);
             return redirect()->back()->with('success', 'Daily close reopened. The reason has been recorded.');
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * "Edit day": turn a posted, unlocked close back into a parked draft for its business
+     * date, undoing everything it created, so it can be reopened on the Create page with
+     * the full form. See DailyCloseReopenService for the guards and the removal itself.
+     */
+    public function reopen(Request $request, string $company, string $transaction, DailyCloseReopenService $reopenService): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE), 403);
+
+        $request->validate(['reason' => 'required|string|min:3|max:2000']);
+
+        $txn = Transaction::where('id', $transaction)
+            ->where('company_id', $companyModel->id)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')
+            ->firstOrFail();
+
+        try {
+            $result = $reopenService->reopen($txn, $request->user(), $request->input('reason'));
+            if (! empty($result['warnings'])) {
+                session()->flash('warnings', $result['warnings']);
+            }
+            return redirect()
+                ->route('fuel.daily-close.create', ['company' => $companyModel->slug, 'date' => $result['parked_date']])
+                ->with('success', 'Day reopened for editing. Everything it posted was removed; re-post when ready.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

@@ -319,9 +319,12 @@ class DailyCloseService
             $declaredExpenses = $data['expenses'] ?? [];
             // Reserve/check the close before creating any canonical entries.
             $transactionNumber = $this->generateTransactionNumber($companyId, $date, $isCorrection);
+            // Recorded so DailyCloseReopenService can find and delete exactly the transaction
+            // each inline expense created -- see metadata['expense_transaction_ids'] below.
+            $expenseTransactionIds = [];
             foreach ($declaredExpenses as $expense) {
                 if ((float) ($expense['amount'] ?? 0) > 0) {
-                    app(DailyCloseEntryService::class)->expense($companyId, $date, $expense);
+                    $expenseTransactionIds[] = app(DailyCloseEntryService::class)->expense($companyId, $date, $expense)->id;
                 }
             }
             $data['expenses'] = [];
@@ -331,6 +334,10 @@ class DailyCloseService
             // so they are picked up exactly like any other canonical activity below.
             $declaredPurchases = $data['purchases'] ?? [];
             $purchaseTransactionIds = [];
+            // Recorded so DailyCloseReopenService can find and undo exactly what an inline
+            // purchase created (the bill, its stock receipt, and any immediate payment) — see
+            // metadata['purchase_details'] below. Never read by anything else.
+            $purchaseDetails = [];
             foreach ($declaredPurchases as $purchase) {
                 if (empty($purchase['supplier_id']) || empty($purchase['item_id']) || (float) ($purchase['quantity'] ?? 0) <= 0) {
                     continue;
@@ -340,6 +347,11 @@ class DailyCloseService
                 if ($purchaseResult['payment_transaction_id']) {
                     $purchaseTransactionIds[] = $purchaseResult['payment_transaction_id'];
                 }
+                $purchaseDetails[] = [
+                    'bill_id' => $purchaseResult['bill_id'],
+                    'bill_transaction_id' => $purchaseResult['bill_transaction_id'],
+                    'payment_transaction_id' => $purchaseResult['payment_transaction_id'],
+                ];
             }
             $data['purchases'] = [];
 
@@ -1505,9 +1517,14 @@ class DailyCloseService
                 'pay_suppliers' => $data['pay_suppliers'] ?? [],
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
                 'expenses' => $declaredExpenses,
+                'purchases' => $declaredPurchases,
                 'closing_cash' => $data['closing_cash'],
                 'notes' => $data['notes'] ?? null,
             ];
+            // What each inline purchase/expense row actually created -- DailyCloseReopenService's
+            // own lookup, never read by anything that renders the close.
+            $metadata['purchase_details'] = $purchaseDetails;
+            $metadata['expense_transaction_ids'] = $expenseTransactionIds;
 
             // Revenue entries. Prefer product-level mappings; station settings are fallback defaults.
             foreach ($revenuePostings as $posting) {

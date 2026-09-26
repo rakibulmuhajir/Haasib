@@ -19,6 +19,19 @@ class DailyCloseCreditSaleService
 {
     public function assertMutable(Invoice $invoice): void
     {
+        // DailyCloseReopenService is the one deliberate, whole-close exception to both checks
+        // below: it sets this Postgres session variable (transaction-local -- see
+        // 2026_09_26_030000_daily_close_reopen_support.php) to the one close it is reopening,
+        // the same variable the DB-level fuel.protect_close_credit_invoice() trigger checks.
+        // Never reachable through request input.
+        $reopeningCloseId = \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT nullif(current_setting('app.reopening_close_id', true), '') as v"
+        )->v ?? null;
+        if ($reopeningCloseId !== null
+            && $reopeningCloseId === ($invoice->getOriginal('included_in_close_id') ?? $invoice->getOriginal('transaction_id') ?? $invoice->transaction_id)) {
+            return;
+        }
+
         // An Accounting invoice a close counted as credit keeps its own journal but is tied to
         // that close by included_in_close_id; changing it would leave the close's figures wrong.
         // The saved value only: the close's own attach() is what sets it, and must get through.

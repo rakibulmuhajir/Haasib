@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import EntitySearch from '@/components/forms/EntitySearch.vue'
+import { usePage } from '@inertiajs/vue3'
 import QuickAddModal from '@/components/forms/QuickAddModal.vue'
 import InputError from '@/components/InputError.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -88,6 +89,12 @@ const isOverLimit = (row: { credit_limit?: number; current_balance?: number; amo
 // Inline "new credit buyer" without leaving the close: EntitySearch's own quick-add
 // button opens the same QuickAddModal used by /invoices and /bills, then selects the
 // created buyer into whichever row asked for it.
+// Amanat (safe-deposit) customers take fuel against their deposit under Amanat Disbursements;
+// they are never offered as credit buyers. Read from the close page's own props.
+const amanatHolderIds = computed<string[]>(() =>
+    ((usePage().props as any).amanatHolders ?? []).map((holder: { id: string }) => holder.id),
+)
+
 const quickAddIndex = ref<number | null>(null)
 const quickAddQuery = ref('')
 const showQuickAdd = ref(false)
@@ -141,6 +148,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
         <Label :id="`credit-customer-${index}`">Customer</Label>
         <EntitySearch v-if="!isLocked(row)" v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
           :company-slug="companySlug"
+          :exclude-ids="amanatHolderIds"
           :aria-labelledby="`credit-customer-${index}`"
           :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
           @entity-selected="(entity) => onCustomerSelected(row, entity)"

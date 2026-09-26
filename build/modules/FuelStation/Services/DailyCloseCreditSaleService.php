@@ -85,6 +85,20 @@ class DailyCloseCreditSaleService
         }
         $rows = $manualRows;
 
+        // Amanat (safe-deposit) customers take fuel against their deposit, recorded under Amanat
+        // Disbursements; a credit sale to one would put them in debt while their deposit sits.
+        $holders = \App\Modules\FuelStation\Models\CustomerProfile::where('company_id', $companyId)
+            ->where('is_amanat_holder', true)
+            ->whereIn('customer_id', array_filter(array_column($rows, 'customer_id')))
+            ->pluck('customer_id')->all();
+        foreach ($rows as $index => $row) {
+            if (in_array($row['customer_id'] ?? null, $holders, true)) {
+                throw ValidationException::withMessages([
+                    "credit_sales.{$index}.customer_id" => ($row['customer_name'] ?? 'This customer').' is an amanat holder: record their fuel under Amanat Disbursements, not as a credit sale.',
+                ]);
+            }
+        }
+
         $total = round(array_sum(array_column($rows, 'amount')) + array_sum(array_column($pending, 'amount')), 2);
         if ($total > round($nozzleRevenue, 2) || $total > round($availableSales, 2)) {
             throw ValidationException::withMessages(['credit_sales' => 'Credit sales must be part of nozzle sales. Cards and credit together cannot exceed total sales.']);

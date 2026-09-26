@@ -67,6 +67,8 @@ export interface EntitySearchProps {
    * the search does not depend on a second, shared source being present.
    */
   companySlug?: string
+  /** Ids never offered, e.g. amanat holders on a credit sale row (they have their own section). */
+  excludeIds?: string[]
 }
 
 // Props
@@ -75,6 +77,9 @@ const props = withDefaults(defineProps<EntitySearchProps>(), {
   allowQuickAdd: true,
   disabled: false,
 })
+
+const withoutExcluded = <T extends { id: string }>(items: T[]): T[] =>
+  props.excludeIds?.length ? items.filter((item) => !props.excludeIds!.includes(item.id)) : items
 
 // Emits
 const emit = defineEmits<{
@@ -182,7 +187,7 @@ const debouncedSearch = useDebounceFn(async (query: string) => {
 
     if (response.ok) {
       const data = await response.json()
-      searchResults.value = data.results || data.data || []
+      searchResults.value = withoutExcluded(data.results || data.data || [])
     } else {
       console.error(`[EntitySearch] Search returned ${response.status} for ${endpoint}`)
       searchResults.value = []
@@ -215,7 +220,7 @@ const loadRecentItems = async () => {
 
     if (response.ok) {
       const data = await response.json()
-      recentItems.value = data.results || data.data || []
+      recentItems.value = withoutExcluded(data.results || data.data || [])
     }
   } catch (error) {
     console.error(`[EntitySearch] Failed to load recent items:`, error)

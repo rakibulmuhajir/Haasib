@@ -1240,6 +1240,30 @@ const setLitersSold = (idx: number, litersValue: number) => {
         : Math.round((opening + liters + returned) * 1000) / 1000;
 };
 
+// "No sale" on a nozzle: the meter did not move, so closing = opening and nothing is sold.
+// Derived from the readings (not stored), so a restored draft shows it ticked too.
+const nozzleHasNoSale = (idx: number) => {
+    const row = form.nozzle_readings[idx];
+    return Number(row.opening_electronic || 0) > 0
+        && Number(row.closing_electronic) === Number(row.opening_electronic)
+        && !row.meter_rolled_over;
+};
+const setNoSale = (idx: number, noSale: boolean) => {
+    const row = form.nozzle_readings[idx];
+    row.meter_rolled_over = false;
+    row.returned_liters = 0;
+    if (noSale) {
+        setLitersSold(idx, 0);
+        if (row.opening_manual !== null && row.opening_manual !== undefined) {
+            row.closing_manual = row.opening_manual;
+        }
+    } else {
+        row.liters_sold = 0;
+        row.closing_electronic = 0;
+        row.closing_manual = null;
+    }
+};
+
 const otherSaleError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`other_sales.${index}.${field}`];
 
@@ -3180,23 +3204,26 @@ const completedWorkflowSteps = computed(() => {
                                 <div class="px-5 py-4">
                                     <!-- Header Row -->
                                     <div
-                                        class="mb-3 grid grid-cols-12 gap-4 text-xs font-medium text-muted-foreground"
+                                        class="mb-3 grid grid-cols-[3.5rem_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_4rem] gap-3 text-xs font-medium text-muted-foreground"
                                     >
-                                        <div class="col-span-1">Side</div>
-                                        <div class="col-span-2 text-right">
+                                        <div>Side</div>
+                                        <div class="text-right">
                                             Opening
                                         </div>
-                                        <div class="col-span-2 text-right">
+                                        <div class="text-right">
                                             Closing
                                         </div>
-                                        <div class="col-span-2 text-right">
+                                        <div class="text-right">
                                             Litres sold
                                         </div>
-                                        <div class="col-span-2 text-right">
+                                        <div class="text-right">
                                             Rate/L
                                         </div>
-                                        <div class="col-span-3 text-right">
+                                        <div class="text-right">
                                             Amount
+                                        </div>
+                                        <div class="text-center">
+                                            No sale
                                         </div>
                                     </div>
 
@@ -3210,10 +3237,10 @@ const completedWorkflowSteps = computed(() => {
                                                 form.nozzle_readings[idx]
                                                     .nozzle_id
                                             "
-                                            class="grid grid-cols-12 items-center gap-4"
+                                            class="grid grid-cols-[3.5rem_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_4rem] items-start gap-3"
                                         >
                                             <!-- Nozzle Label (Front/Back) -->
-                                            <div class="col-span-1">
+                                            <div class="pt-2">
                                                 <span
                                                     class="text-sm font-medium"
                                                     >{{
@@ -3229,7 +3256,7 @@ const completedWorkflowSteps = computed(() => {
                                                 >
                                             </div>
                                             <!-- Opening -->
-                                            <div class="col-span-2">
+                                            <div>
                                                 <Input
                                                     v-model.number="
                                                         form.nozzle_readings[
@@ -3251,7 +3278,7 @@ const completedWorkflowSteps = computed(() => {
                                                 />
                                             </div>
                                             <!-- Closing -->
-                                            <div class="col-span-2">
+                                            <div>
                                                 <Input
                                                     v-model.number="
                                                         form.nozzle_readings[
@@ -3294,7 +3321,7 @@ const completedWorkflowSteps = computed(() => {
                                                 />
                                             </div>
                                             <!-- Liters -->
-                                            <div class="col-span-2">
+                                            <div>
                                                 <Input
                                                     :model-value="
                                                         form.nozzle_readings[
@@ -3358,7 +3385,7 @@ const completedWorkflowSteps = computed(() => {
                                                 />
                                             </div>
                                             <!-- Rate -->
-                                            <div class="col-span-2">
+                                            <div>
                                                 <Input
                                                     v-model.number="
                                                         form.nozzle_readings[
@@ -3380,7 +3407,7 @@ const completedWorkflowSteps = computed(() => {
                                                 />
                                             </div>
                                             <!-- Amount -->
-                                            <div class="col-span-3 text-right">
+                                            <div class="text-right pt-2">
                                                 <span
                                                     class="text-base font-semibold"
                                                     ><MoneyText
@@ -3408,6 +3435,15 @@ const completedWorkflowSteps = computed(() => {
                                                 >
                                                     Split by rate-change meter
                                                 </div>
+                                            </div>
+                                            <!-- No sale: the meter did not move, so closing = opening. -->
+                                            <div class="flex justify-center pt-2">
+                                                <Checkbox
+                                                    :id="'nozzle-' + idx + '-no-sale'"
+                                                    :model-value="nozzleHasNoSale(idx)"
+                                                    :aria-label="'No sale on ' + form.nozzle_readings[idx].nozzle_code"
+                                                    @update:model-value="(v) => setNoSale(idx, v === true)"
+                                                />
                                             </div>
                                         </div>
                                     </div>

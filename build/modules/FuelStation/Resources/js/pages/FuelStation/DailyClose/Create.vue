@@ -2895,14 +2895,51 @@ const completedWorkflowSteps = computed(() => {
         :description="
             isAmendmentMode
                 ? `Amending ${originalTransaction?.transaction_number} for ${form.date}`
-                : `Close the day in five steps: meters, tanks, cash in, cash out, and review.`
+                : undefined
         "
         :icon="isAmendmentMode ? RotateCcw : Calculator"
         :breadcrumbs="breadcrumbs"
     >
         <DailyCloseNav :company="company" :history="isAmendmentMode" />
-        <template v-if="canFillTestData" #actions>
+        <template v-if="!isAmendmentMode" #description>
+            <!-- Slim: date, previous close, draft state, progress and cash check in the header. -->
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                <div class="flex items-center gap-2">
+                    <Label
+                        for="business-date"
+                        class="cursor-help"
+                        title="The register day being closed. Close each day the next morning, after the tank dip. Entry time is recorded separately."
+                        >Date</Label
+                    >
+                    <Input id="business-date" v-model="form.date" data-testid="business-date" type="date" class="h-8 w-40" />
+                </div>
+                <span class="text-muted-foreground">
+                    <template v-if="previousClose.exists">
+                        Previous close {{ previousClose.date }}:
+                        <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
+                        cash
+                    </template>
+                    <template v-else-if="previousClose.source === 'ledger' && previousClose.closing_cash > 0">
+                        Opening cash from the ledger:
+                        <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
+                    </template>
+                    <template v-else>No previous close: opening cash starts at zero</template>
+                </span>
+                <Badge v-if="parkedDraft" variant="outline">Parked draft</Badge>
+                <span v-if="props.openingsFromParked" class="text-status-attention">
+                    Openings from {{ props.openingsFromParked }} (parked) — post it first
+                </span>
+                <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
+                <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
+                    {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
+                    <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
+                </Badge>
+                <InputError :message="form.errors.date" />
+            </div>
+        </template>
+        <template #actions>
             <Button
+                v-if="canFillTestData"
                 type="button"
                 variant="outline"
                 @click="fillDummyDailyCloseData"
@@ -2910,6 +2947,14 @@ const completedWorkflowSteps = computed(() => {
                 <FileWarning class="mr-2 h-4 w-4" />
                 Fill test data
             </Button>
+            <Button
+                v-if="!isAmendmentMode"
+                variant="outline"
+                size="sm"
+                :disabled="submitting"
+                @click="parkDailyClose"
+                >Park / Save draft</Button
+            >
         </template>
 
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
@@ -2988,53 +3033,6 @@ const completedWorkflowSteps = computed(() => {
             </div>
         </div>
 
-        <!-- One row: date, previous close, draft state, progress, cash check, park. -->
-        <Card class="mb-6 border-border/80">
-            <CardContent class="p-3 lg:p-4">
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                    <div class="flex items-center gap-2">
-                        <Label
-                            for="business-date"
-                            class="cursor-help"
-                            title="The register day being closed. Close each day the next morning, after the tank dip. Entry time is recorded separately."
-                            >Date</Label
-                        >
-                        <Input id="business-date" v-model="form.date" data-testid="business-date" type="date" class="h-9 w-40" />
-                    </div>
-                    <span class="text-muted-foreground">
-                        <template v-if="previousClose.exists">
-                            Previous close {{ previousClose.date }}:
-                            <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
-                            cash
-                        </template>
-                        <template v-else-if="previousClose.source === 'ledger' && previousClose.closing_cash > 0">
-                            Opening cash from the ledger:
-                            <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
-                        </template>
-                        <template v-else>No previous close: opening cash starts at zero</template>
-                    </span>
-                    <Badge v-if="parkedDraft" variant="outline">Parked draft</Badge>
-                    <span v-if="props.openingsFromParked" class="text-status-attention">
-                        Openings from {{ props.openingsFromParked }} (parked) — post it first
-                    </span>
-                    <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
-                    <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
-                        {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
-                        <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
-                    </Badge>
-                    <Button
-                        v-if="!isAmendmentMode"
-                        variant="outline"
-                        size="sm"
-                        class="ml-auto"
-                        :disabled="submitting"
-                        @click="parkDailyClose"
-                        >Park / Save draft</Button
-                    >
-                </div>
-                <InputError :message="form.errors.date" />
-            </CardContent>
-        </Card>
 
         <!-- Tabbed Content -->
         <Tabs v-model="activeTab" class="space-y-6">

@@ -1,0 +1,1 @@
+import{D as r}from"./SheetTrigger.vue_vue_type_script_setup_true_lang-ByOfipOc.js";import{d as s,p as t,o as l,w as n,C as p,z as i,u as g}from"./app-CzHu5KZr.js";const m=s({__name:"DialogTrigger",props:{asChild:{type:Boolean},as:{}},setup(e){const a=e;return(o,d)=>(l(),t(g(r),i({"data-slot":"dialog-trigger"},a),{default:n(()=>[p(o.$slots,"default")]),_:3},16))}});export{m as _};

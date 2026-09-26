@@ -750,7 +750,42 @@ const refreshServerFacts = () => {
     form.opening_cash = props.previousClose.closing_cash || 0;
     refreshTankFacts();
     refreshNozzleFacts();
+    // Lists the server works out for this day: salaries still unpaid, supplier payments made
+    // on other screens, and invoices the close must take in. A draft saved before a payslip was
+    // approved carried an empty salary list and hid it. Typed credit rows are kept.
+    form.payroll_payouts = props.approvedPayrollPayouts.map((payout) => ({ ...payout }));
+    form.bill_payments = props.pendingBillPayments.map((payment) => ({ ...payment }));
+    const typedCredit = (form.credit_sales || []).filter(
+        (row: any) => !row.pending_fuel_invoice && !row.pending_accounting_invoice,
+    );
+    form.credit_sales = [
+        ...(props.pendingFuelInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_fuel_invoice: true,
+        })),
+        ...(props.pendingAccountingInvoices ?? []).map((invoice) => ({
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            amount: invoice.amount,
+            reference: invoice.reference,
+            invoice_id: invoice.invoice_id,
+            invoice_number: invoice.invoice_number,
+            pending_accounting_invoice: true,
+        })),
+        ...typedCredit,
+    ];
 };
+
+/** Salary still unpaid for an employee as of this close (approved payslips not yet paid). */
+const unpaidSalaryFor = (employeeId: string) =>
+    props.approvedPayrollPayouts
+        .filter((payout) => payout.employee_id === employeeId)
+        .reduce((sum, payout) => sum + Number(payout.amount || 0), 0);
 
 const restoreDraft = () => {
     const savedDraft = localStorage.getItem(DRAFT_KEY.value);
@@ -5712,7 +5747,13 @@ const completedWorkflowSteps = computed(() => {
                                                     e.full_name ||
                                                     `${e.first_name} ${e.last_name}`
                                                 }}
-                                                · Due
+                                                · Salary unpaid
+                                                <MoneyText
+                                                    :amount="unpaidSalaryFor(e.id)"
+                                                    :currency="currencyCode"
+                                                    :fraction-digits="0"
+                                                />
+                                                · Advance owed
                                                 <MoneyText
                                                     :amount="
                                                         e.outstanding_advances

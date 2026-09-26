@@ -372,10 +372,14 @@ class CreateAction implements PaletteAction
     private function nextNumber(string $companyId): string
     {
         return \App\Services\AccountingWriteTransaction::run(function () use ($companyId) {
-            $last = BillPayment::where('company_id', $companyId)
-                ->whereNotNull('payment_number')
+            // withTrashed: a soft-deleted payment (e.g. removed by Edit day on a daily close)
+            // keeps its number on the (company_id, payment_number) unique index, so it must
+            // never be re-issued. Mirrors Bill\CreateAction / Invoice::generateInvoiceNumber.
+            $last = BillPayment::withTrashed()
+                ->where('company_id', $companyId)
+                ->where('payment_number', '~', '^PMT-[0-9]+$')
                 ->lockForUpdate()
-                ->orderByDesc('payment_number')
+                ->orderByRaw("CAST(substring(payment_number from '[0-9]+$') AS bigint) DESC")
                 ->value('payment_number');
 
             if ($last && preg_match('/(\d+)$/', $last, $m)) {

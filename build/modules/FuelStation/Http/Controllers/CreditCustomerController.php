@@ -41,6 +41,9 @@ class CreditCustomerController extends Controller
             ->map(fn ($rows) => $rows->map(fn (CustomerFuelDiscount $d) => $this->formatDiscountChip($d))->values());
 
         // Get customers from acct.customers
+        $amanatHolderIds = \App\Modules\FuelStation\Models\CustomerProfile::where('company_id', $company->id)
+            ->where('is_amanat_holder', true)->pluck('customer_id')->all();
+
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -54,6 +57,7 @@ class CreditCustomerController extends Controller
                 'credit_limit' => (float) ($c->credit_limit ?? 0),
                 'current_balance' => (float) ($openBalances[$c->id] ?? 0),
                 'is_credit_blocked' => (bool) $c->is_credit_blocked,
+                'is_amanat_holder' => in_array($c->id, $amanatHolderIds, true),
                 'discount_chips' => $discountChips[$c->id] ?? [],
             ]);
 

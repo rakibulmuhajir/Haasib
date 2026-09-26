@@ -35,8 +35,9 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('expenses', 'Record Expense', '/expenses', ReceiptText),
       ] },
       { label: 'Customers', items: [
-        ...item('customers', 'All Customers', '/customers', Users),
-        ...item('customers', 'Credit Customers', '/fuel/credit-customers', CreditCard),
+        // One customer list: balances, limits, discounts and statements, with Edit details
+        // for contact fields. The accounting customer pages stay reachable from there.
+        ...item('customers', 'Customers', '/fuel/credit-customers', Users),
         ...item('fuelSale', 'Record Fuel Sale', '/fuel/sales/form', Fuel),
         ...item('customers', 'Amanat Depositors', '/fuel/amanat', HandCoins),
         ...item('payments', 'Payments Received', '/payments', HandCoins),

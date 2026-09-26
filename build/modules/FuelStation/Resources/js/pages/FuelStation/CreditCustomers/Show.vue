@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -77,7 +77,7 @@ const { companySlug } = useCompanyRoute()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${companySlug.value}` },
-  { title: 'Credit Customers', href: `/${companySlug.value}/fuel/credit-customers` },
+  { title: 'Customers', href: `/${companySlug.value}/fuel/credit-customers` },
   { title: props.customer.name, href: `/${companySlug.value}/fuel/credit-customers/${props.customer.id}` },
 ])
 
@@ -188,11 +188,15 @@ const goBack = () => {
 
   <PageShell
     :title="customer.name"
-    :description="customer.phone || customer.email || 'Credit customer details'"
+    :description="customer.phone || customer.email || 'Customer details'"
     :icon="User"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <!-- Contact details, address and credit limit live on the customer's detail form. -->
+      <Button variant="outline" as-child>
+        <Link :href="`/${companySlug}/customers/${customer.id}/edit`">Edit details</Link>
+      </Button>
       <Button variant="outline" @click="goBack">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back

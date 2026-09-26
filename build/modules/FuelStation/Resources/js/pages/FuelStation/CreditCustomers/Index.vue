@@ -43,7 +43,7 @@ const { companySlug } = useCompanyRoute()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${companySlug.value}` },
-  { title: 'Credit Customers', href: `/${companySlug.value}/fuel/credit-customers` },
+  { title: 'Customers', href: `/${companySlug.value}/fuel/credit-customers` },
 ])
 
 const search = ref('')
@@ -88,10 +88,10 @@ const onCreated = (customer: { id: string }) => {
 </script>
 
 <template>
-  <Head title="Credit Customers" />
+  <Head title="Customers" />
 
   <PageShell
-    title="Credit Customers"
+    title="Customers"
     description="Manage customers with credit accounts for fuel purchases."
     :icon="UsersRound"
     :breadcrumbs="breadcrumbs"
@@ -181,14 +181,17 @@ const onCreated = (customer: { id: string }) => {
         >
           <template #empty>
             <EmptyState
-              title="No credit customers yet"
+              title="No customers yet"
               description="Customers with credit accounts will appear here."
             />
           </template>
 
           <template #cell-name="{ row }">
             <div>
-              <div class="font-medium">{{ row._raw.name }}</div>
+              <div class="flex items-center gap-2 font-medium">
+                {{ row._raw.name }}
+                <span v-if="row._raw.is_amanat_holder" class="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">Amanat</span>
+              </div>
               <div v-if="row._raw.code || row._raw.phone" class="text-sm text-muted-foreground">
                 {{ row._raw.code || row._raw.phone }}
               </div>

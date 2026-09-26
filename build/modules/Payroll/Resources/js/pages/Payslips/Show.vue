@@ -495,7 +495,7 @@ const handleVoid = () => {
                             <span class="font-medium">
                                 {{ formatDate(payslip.paid_at) }}
                                 <template v-if="payslip.paid_from_account_name">
-                                    from {{ payslip.paid_from_account_name }}
+                                    {{ payslip.paid_from_account_name }}
                                 </template>
                             </span>
                         </div>

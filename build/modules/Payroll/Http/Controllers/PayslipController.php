@@ -200,16 +200,25 @@ class PayslipController extends Controller
                 'lines.deductionType:id,code,name',
                 'lines.salaryAdvance:id,advance_date',
                 'approvedBy:id,name',
-                'paymentGlTransaction.journalEntries.account:id,code,name',
+                'paymentGlTransaction.journalEntries.account:id,code,name,subtype',
             ])
             ->findOrFail($payslipId);
 
-        $paidFromAccount = $payslip->paymentGlTransaction?->journalEntries
-            ->first(fn ($entry) => (float) $entry->credit_amount > 0)
+        // Where the money left from: the cash or bank line of the payment's journal. A payment
+        // made inside a bigger entry (a daily close pays wages among sales and expenses) has no
+        // line of its own there, so name that entry instead of whichever line credits first -
+        // which showed a wage as "paid from Fuel Sales - Diesel".
+        $paymentTransaction = $payslip->paymentGlTransaction;
+        $paidFromAccount = $paymentTransaction?->journalEntries
+            ->first(fn ($entry) => (float) $entry->credit_amount > 0 && in_array($entry->account?->subtype, ['cash', 'bank'], true))
             ?->account;
+        $paidFrom = $paidFromAccount ? 'from '.$paidFromAccount->name : null;
+        if (! $paidFrom && $paymentTransaction) {
+            $paidFrom = 'in '.($paymentTransaction->description ?: $paymentTransaction->transaction_number);
+        }
 
         $payslipData = $payslip->toArray();
-        $payslipData['paid_from_account_name'] = $paidFromAccount?->name;
+        $payslipData['paid_from_account_name'] = $paidFrom;
 
         return Inertia::render('Payroll/Payslips/Show', [
             'company' => [

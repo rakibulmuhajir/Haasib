@@ -100,7 +100,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
 
             // Tab 4: Money Out
             'credit_sales' => 'nullable|array',
-            'credit_sales.*.customer_id' => ['required', 'uuid', 'distinct', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Customer::class, 'id')->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)->where('is_active', true)],
+            'credit_sales.*.customer_id' => ['required', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Customer::class, 'id')->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)->where('is_active', true)],
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.customer_name' => 'nullable|string|max:255',
             'credit_sales.*.reference' => 'nullable|string|max:100',

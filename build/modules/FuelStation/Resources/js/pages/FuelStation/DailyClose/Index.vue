@@ -76,14 +76,10 @@ const props = defineProps<{
   }
 }>()
 
-// "Edit day" is only offered for the single latest posted, unlocked close: reopening any
-// earlier day is refused server-side too (its openings feed every later day), and the
-// server is the source of truth for that -- this only avoids offering an action that would
-// just bounce back with an error for the common case. `closes` is already ordered newest
-// first (see DailyCloseService::getRecentCloses), so the first non-reversed row is it.
-const latestPostedDate = computed(() => props.closes.find((c) => c.status !== 'reversed')?.date ?? null)
+// "Edit day" is offered for every posted, unlocked close; a closed accounting period is
+// refused server-side (DocumentDateLock) and the day's own page explains why.
 const canEditClose = (close: DailyClose) =>
-  props.permissions.canEditDay && !close.is_locked && close.status !== 'reversed' && close.date === latestPostedDate.value
+  props.permissions.canEditDay && !close.is_locked && close.status !== 'reversed'
 
 const RANGES = [
   { value: '30', label: 'Last 30 days' },
@@ -438,7 +434,7 @@ const confirmEditDay = () => {
                   <template v-if="permissions.canEditDay && close.status !== 'reversed'">
                     <DropdownMenuItem
                       :disabled="!canEditClose(close)"
-                      :title="close.is_locked ? 'Unlock the day first' : (close.date !== latestPostedDate ? 'Reopen the later posted day first' : undefined)"
+                      :title="close.is_locked ? 'Unlock the day first' : undefined"
                       @click="canEditClose(close) && promptEditDay(close)"
                       class="flex items-center"
                     >

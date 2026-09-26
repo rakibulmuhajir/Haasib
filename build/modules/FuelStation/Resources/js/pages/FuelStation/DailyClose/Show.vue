@@ -115,6 +115,7 @@ const props = defineProps<{
   canApplyPostCloseDiscount?: boolean
   canEditDay?: boolean
   editDayDisabledReason?: string | null
+  editDayLaterDates?: string[]
   revisionHistory?: Array<{ id: string; created_at: string; reason: string; reopened_by_name: string | null }>
   permissions: {
     canLock: boolean
@@ -488,6 +489,10 @@ const unlockTransaction = () => {
                   reason below.
                 </DialogDescription>
               </DialogHeader>
+              <p v-if="editDayLaterDates?.length" class="rounded-md border border-status-attention/40 bg-status-attention/10 px-3 py-2 text-sm">
+                Later days ({{ editDayLaterDates.join(', ') }}) opened from this day's closing cash,
+                meters and dips. If you change those, edit and re-post those days too.
+              </p>
               <div class="space-y-2">
                 <Label for="edit-day-reason">Reason for editing</Label>
                 <Textarea

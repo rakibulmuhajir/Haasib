@@ -49,7 +49,7 @@ class DailyCloseCreditSaleService
     {
         Validator::make(['credit_sales' => $rows], [
             'credit_sales' => 'array',
-            'credit_sales.*.customer_id' => 'required|uuid|distinct',
+            'credit_sales.*.customer_id' => 'required|uuid', // one customer may have several slips a day
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.reference' => 'nullable|string|max:100',
         ])->validate();

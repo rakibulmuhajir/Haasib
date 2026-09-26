@@ -79,9 +79,14 @@ class DailyCloseReopenService
             }
 
             $this->guardLocked($close);
-            $this->guardLaterCloseExists($companyId, $businessDate);
+            // Any posted day can be edited unless its period is closed (or the day is locked).
+            app(\App\Modules\Accounting\Services\DocumentDateLock::class)->assertOpen($companyId, $businessDate, "The {$businessDate} close");
             $this->guardReadingCorrections($close);
             $warnings = [];
+            if ($later = $this->laterPostedDates($companyId, $businessDate)) {
+                $warnings[] = 'Later days ('.implode(', ', $later).') opened from the closing cash, meters and dips. '
+                    .'If you change those, edit and re-post those days too.';
+            }
 
             // metadata['purchase_details'] / ['expense_transaction_ids'] only exist on closes
             // posted after this feature shipped. A close posted before it still made these
@@ -146,20 +151,18 @@ class DailyCloseReopenService
         }
     }
 
-    private function guardLaterCloseExists(string $companyId, string $businessDate): void
+    /** Posted days after this one: they took their openings from this day's closing figures. */
+    private function laterPostedDates(string $companyId, string $businessDate): array
     {
-        $later = Transaction::where('company_id', $companyId)
+        return Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')
             ->whereNull('deleted_at')
             ->whereNull('reversed_by_id')
             ->where('transaction_date', '>', $businessDate)
             ->orderBy('transaction_date')
-            ->value('transaction_date');
-
-        if ($later) {
-            $laterDate = $later instanceof \Carbon\Carbon ? $later->toDateString() : (string) $later;
-            throw new \RuntimeException("Reopen {$laterDate} first — each day's openings come from the day before.");
-        }
+            ->pluck('transaction_date')
+            ->map(fn ($d) => $d instanceof \Carbon\Carbon ? $d->toDateString() : substr((string) $d, 0, 10))
+            ->all();
     }
 
     private function guardReadingCorrections(Transaction $close): void

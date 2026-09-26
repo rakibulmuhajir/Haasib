@@ -1053,17 +1053,22 @@ class DailyCloseController extends Controller
         $canLock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_LOCK);
         $canUnlock = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_UNLOCK);
 
-        // "Edit day" (see DailyCloseReopenService): only for the latest posted, unlocked day —
-        // an earlier day's openings feed every later one, so it must be reopened in order.
-        $laterExists = Transaction::where('company_id', $companyModel->id)
+        // "Edit day" (see DailyCloseReopenService): any posted day unless it is locked or its
+        // accounting period is closed. Later posted days opened from this one's closing
+        // figures, so they are listed in the confirm dialog as a reminder to re-check them.
+        $txnDate = \Illuminate\Support\Carbon::parse($txn->transaction_date)->toDateString();
+        $editDayLaterDates = Transaction::where('company_id', $companyModel->id)
             ->where('transaction_type', 'fuel_daily_close')
             ->whereNull('deleted_at')
             ->whereNull('reversed_by_id')
-            ->where('transaction_date', '>', $txn->transaction_date)
-            ->exists();
+            ->where('transaction_date', '>', $txnDate)
+            ->orderBy('transaction_date')
+            ->pluck('transaction_date')
+            ->map(fn ($d) => \Illuminate\Support\Carbon::parse($d)->toDateString())
+            ->all();
         $editDayDisabledReason = $txn->is_locked
             ? 'Unlock the day first.'
-            : ($laterExists ? "Reopen the later posted day first — each day's openings come from the day before." : null);
+            : app(\App\Modules\Accounting\Services\DocumentDateLock::class)->reason($companyModel->id, $txnDate, 'This day');
         $canEditDay = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && $editDayDisabledReason === null;
 
         $metadata = $txn->metadata ?? [];
@@ -1131,6 +1136,7 @@ class DailyCloseController extends Controller
             'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && !$txn->is_locked,
             'canEditDay' => $canEditDay,
             'editDayDisabledReason' => $editDayDisabledReason,
+            'editDayLaterDates' => $editDayLaterDates,
             // Every past "Edit day" on this business date, oldest first.
             'revisionHistory' => DB::table('fuel.daily_close_revisions as r')
                 ->leftJoin('auth.users as actor', 'actor.id', '=', 'r.reopened_by_user_id')

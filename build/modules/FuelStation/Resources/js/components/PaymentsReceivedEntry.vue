@@ -93,8 +93,8 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
-        <h4 class="font-medium">Payments Received</h4>
-        <p class="text-xs text-muted-foreground">A buyer settling a credit invoice, entered here instead of at Payments.</p>
+        <h4 class="font-medium">Customer payments &amp; deposits</h4>
+        <p class="text-xs text-muted-foreground">Any customer. Tick invoices to pay them, or tick none: it pays their oldest invoices first and anything more stays as credit on their account.</p>
       </div>
       <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' })">
         <Plus class="mr-1 h-4 w-4" /> Add
@@ -149,7 +149,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
     </div>
 
     <div v-if="rows.length" class="flex justify-between text-sm font-medium">
-      <span>Total Payments Received</span>
+      <span>Total customer payments &amp; deposits</span>
       <MoneyText :amount="totalAmount" :currency="currency ?? 'PKR'" />
     </div>
 

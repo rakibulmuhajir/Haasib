@@ -4405,6 +4405,16 @@ const completedWorkflowSteps = computed(() => {
                         >
                     </CardHeader>
                     <CardContent class="space-y-6">
+                        <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
+                        <PaymentsReceivedEntry
+                            v-model="form.payments_received"
+                            :errors="form.errors as Record<string, string>"
+                            :disabled="submitting || form.processing"
+                            :open-invoices="props.openInvoices ?? []"
+                            :payment-accounts="(props as any).paymentAccounts ?? []"
+                            :currency="currencyCode"
+                        />
+                        <Separator />
                         <!-- Opening Cash -->
                         <div class="rounded-lg bg-muted/50 p-4">
                             <div class="flex items-center justify-between">
@@ -5069,14 +5079,6 @@ const completedWorkflowSteps = computed(() => {
 
                         <div v-if="totalBankWithdrawals" class="flex justify-between text-sm"><span>Cash Withdrawn from Bank</span><MoneyText :amount="totalBankWithdrawals" :currency="currencyCode" /></div>
 
-                        <PaymentsReceivedEntry
-                            v-model="form.payments_received"
-                            :errors="form.errors as Record<string, string>"
-                            :disabled="submitting || form.processing"
-                            :open-invoices="props.openInvoices ?? []"
-                            :payment-accounts="(props as any).paymentAccounts ?? []"
-                            :currency="currencyCode"
-                        />
                         <Separator />
 
                         <!-- Money In Summary -->

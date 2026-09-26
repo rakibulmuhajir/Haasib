@@ -23,7 +23,15 @@ class Invoice extends Model
             // fuel.protect_close_credit_invoice() trigger enforces the same invariants as a
             // backstop -- see the 2026_09_26_010000 migration.
             $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount'];
-            if (array_diff(array_keys($invoice->getDirty()), $settlement)
+            // total/discount only count as settlement when they move together as a discount:
+            // the discount grows and the total falls by exactly that much. Any other change to
+            // them is a change of principal and goes through assertMutable like everything else.
+            $oldDiscount = (float) $invoice->getOriginal('discount_amount');
+            $oldTotal = (float) $invoice->getOriginal('total_amount');
+            $principalMoved = ($invoice->isDirty('total_amount') || $invoice->isDirty('discount_amount'))
+                && ! ((float) $invoice->discount_amount >= $oldDiscount
+                    && abs(($oldTotal - (float) $invoice->total_amount) - ((float) $invoice->discount_amount - $oldDiscount)) < 0.000001);
+            if ($principalMoved || array_diff(array_keys($invoice->getDirty()), $settlement)
                 || ($invoice->isDirty('status') && in_array($invoice->status, ['draft', 'void', 'cancelled', 'reversed'], true))) {
                 app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
             }

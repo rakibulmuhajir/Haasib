@@ -49,6 +49,9 @@ const props = defineProps<{
     // Keyed by customer id then fuel item id -- the same rate FuelSaleController::create
     // hands to the standalone sale form. See CustomerFuelDiscountService.
     customerFuelDiscounts?: Record<string, Record<string, FuelDiscount>>
+    // The day's sale rate per fuel item (RateChange::getRateForDate), the same rate the
+    // meters are priced at -- a row's amount is litres x this rate.
+    rates?: Record<string, { sale_rate: number }>
 }>()
 const { t } = useLexicon()
 
@@ -69,6 +72,27 @@ const discountAmount = (row: { amount: number; litres?: number; item_id?: string
         return Math.min(Number(row.litres) * discount.value, gross)
     }
     return Math.min(Math.round((gross * discount.value / 100) * 100) / 100, gross)
+}
+
+type Row = (typeof rows.value)[number]
+const rateFor = (row: Row): number => (row.item_id ? Number(props.rates?.[row.item_id]?.sale_rate ?? 0) : 0)
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+// Litres drive the amount at the day's rate; typing an amount instead works back to litres,
+// so either figure off the slip can be entered. With no fuel (or no rate) the amount is manual.
+const onLitresInput = (row: Row, value: unknown) => {
+    row.litres = value === '' || value === null ? undefined : Number(value)
+    const rate = rateFor(row)
+    if (rate > 0 && row.litres) row.amount = round2(row.litres * rate)
+}
+const onAmountInput = (row: Row, value: unknown) => {
+    row.amount = Number(value || 0)
+    const rate = rateFor(row)
+    if (rate > 0 && row.amount > 0) row.litres = round2(row.amount / rate)
+}
+const onFuelChange = (row: Row) => {
+    const rate = rateFor(row)
+    if (rate > 0 && row.litres) row.amount = round2(Number(row.litres) * rate)
 }
 
 const missingLitres = (row: { item_id?: string; customer_id: string; litres?: number }): boolean => {
@@ -165,7 +189,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
       </div>
       <div class="space-y-1">
         <Label :for="`credit-fuel-${index}`">Fuel</Label>
-        <Select v-if="!isLocked(row)" v-model="row.item_id" :disabled="disabled">
+        <Select v-if="!isLocked(row)" v-model="row.item_id" :disabled="disabled" @update:model-value="onFuelChange(row)">
           <SelectTrigger :id="`credit-fuel-${index}`"><SelectValue placeholder="None" /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="item in fuelItems ?? []" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
@@ -175,7 +199,8 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
       </div>
       <div class="space-y-1">
         <Label :for="`credit-litres-${index}`">Litres</Label>
-        <Input v-if="!isLocked(row)" :id="`credit-litres-${index}`" v-model.number="row.litres" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <Input v-if="!isLocked(row)" :id="`credit-litres-${index}`" :model-value="row.litres" type="number" min="0.01" step="0.01" :disabled="disabled" @update:model-value="(v) => onLitresInput(row, v)" />
+        <p v-if="!isLocked(row) && rateFor(row) > 0" class="text-xs text-muted-foreground">@ {{ rateFor(row) }} / L today</p>
         <InputError :message="errors[`credit_sales.${index}.litres`]" />
         <p v-if="!isLocked(row) && missingLitres(row)" class="flex items-start gap-1 text-xs text-status-attention">
           <TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />Enter litres to apply this buyer's per-litre discount.
@@ -183,7 +208,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
       </div>
       <div class="space-y-1">
         <Label :for="`credit-amount-${index}`">Amount</Label>
-        <Input v-if="!isLocked(row)" :id="`credit-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <Input v-if="!isLocked(row)" :id="`credit-amount-${index}`" :model-value="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" @update:model-value="(v) => onAmountInput(row, v)" />
         <div v-else :id="`credit-amount-${index}`" class="flex h-9 items-center text-sm text-muted-foreground">{{ row.amount }}</div>
         <InputError :message="errors[`credit_sales.${index}.amount`]" />
         <!-- Non-blocking: this amount is still allowed to post (warn-don't-block), it

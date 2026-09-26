@@ -103,6 +103,15 @@ const props = withDefaults(
         overprint?: string | null
         /** Quantities and rates are noise on a document with one flat charge. */
         showQuantity?: boolean
+        /**
+         * Render the Rate column as a plain trimmed number at up to this many
+         * decimals (no trailing zeros, no currency symbol) instead of the
+         * default 2-decimal money format. A bill priced to 3-4 decimals per
+         * unit needs to show the rate it actually carries -- a rate rounded
+         * to 2 decimals silently understates what a large quantity was billed.
+         * Left unset, the Rate column keeps its original MoneyText rendering.
+         */
+        unitPriceFractionDigits?: number
     }>(),
     {
         docNumber: undefined,
@@ -118,8 +127,17 @@ const props = withDefaults(
         locale: 'en-US',
         overprint: null,
         showQuantity: true,
+        unitPriceFractionDigits: undefined,
     },
 )
+
+/** Trims trailing zeros: 338.271605 stays put, 338.000000 becomes plain "338". */
+const formatTrimmedRate = (value: number | string | null | undefined, maxDecimals: number): string => {
+    if (value === null || value === undefined || value === '') return '—'
+    const n = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(n)) return '—'
+    return n.toFixed(maxDecimals).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+}
 
 /**
  * The line table's columns. `amount` is the only one always present — a
@@ -229,7 +247,11 @@ const partyLines = (party: DocumentParty) =>
                     </span>
                 </template>
                 <template #cell-unitPrice="{ row }">
+                    <span v-if="unitPriceFractionDigits !== undefined">
+                        {{ formatTrimmedRate((row as DocumentLine).unitPrice, unitPriceFractionDigits) }}
+                    </span>
                     <MoneyText
+                        v-else
                         :amount="(row as DocumentLine).unitPrice"
                         :currency="currency"
                         :locale="locale"

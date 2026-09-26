@@ -95,10 +95,63 @@ const lineItemTemplate = () => ({
   quantity: 1,
   direct_quantity: 0,
   unit_price: 0,
+  line_total: 0,
+  amount_driven: false,
   tax_rate: 0,
   discount_rate: 0,
   expense_account_id: 'company_default',
 })
+
+/**
+ * A supplier bill is often priced to 3-4 decimals per unit -- entering the
+ * total actually billed and letting the rate fall out of it is the only way
+ * to avoid losing hundreds of rupees to a 2-decimal rate. Each line tracks
+ * which of Amount/Rate was typed last (amount_driven); whichever it is
+ * drives the other when Quantity changes. Amount is always what totals sum,
+ * and is sent to the server (as line_total) only when it was the one typed,
+ * so an untouched rate-driven line behaves exactly as before.
+ */
+const parseFieldValue = (v: string | number): string | number => {
+  if (typeof v === 'number') return v
+  const n = Number.parseFloat(v)
+  return Number.isNaN(n) ? v : n
+}
+
+const recomputeAmountFromRate = (line: ReturnType<typeof lineItemTemplate>) => {
+  const qty = Number(line.quantity) || 0
+  const rate = Number(line.unit_price) || 0
+  line.line_total = Math.round(qty * rate * 100) / 100
+}
+
+const recomputeRateFromAmount = (line: ReturnType<typeof lineItemTemplate>) => {
+  const qty = Number(line.quantity) || 0
+  const amount = Number(line.line_total) || 0
+  line.unit_price = qty > 0 ? Math.round((amount / qty) * 10000) / 10000 : 0
+}
+
+const onQuantityChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.quantity = parseFieldValue(v)
+  if (line.amount_driven) {
+    recomputeRateFromAmount(line)
+  } else {
+    recomputeAmountFromRate(line)
+  }
+}
+
+const onRateChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.unit_price = parseFieldValue(v)
+  line.amount_driven = false
+  recomputeAmountFromRate(line)
+}
+
+const onAmountChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.line_total = parseFieldValue(v)
+  line.amount_driven = true
+  recomputeRateFromAmount(line)
+}
 
 // Only a tracked item's litres can go straight to a customer instead of the tank.
 const isTrackedItem = (itemId: string | null) => {
@@ -156,13 +209,13 @@ watch([() => form.bill_date, () => form.payment_terms], () => {
 })
 
 const totals = computed(() => {
-  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
+  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.line_total) || 0), 0)
   const tax = form.line_items.reduce((sum, li) => {
-    const lineTotal = (Number(li.quantity) || 0) * (Number(li.unit_price) || 0)
+    const lineTotal = Number(li.line_total) || 0
     return sum + lineTotal * ((Number(li.tax_rate) || 0) / 100)
   }, 0)
   const discount = form.line_items.reduce((sum, li) => {
-    const lineTotal = (Number(li.quantity) || 0) * (Number(li.unit_price) || 0)
+    const lineTotal = Number(li.line_total) || 0
     return sum + lineTotal * ((Number(li.discount_rate) || 0) / 100)
   }, 0)
   const total = subtotal + tax - discount
@@ -187,7 +240,10 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
       // Fill only what the line doesn't already say: a price typed from the supplier's bill
       // is the real one and must not be replaced by the item's stored cost.
       if (!line.description?.trim()) line.description = item.name
-      if (!(Number(line.unit_price) > 0)) line.unit_price = Number(item.cost_price) || 0
+      if (!(Number(line.unit_price) > 0)) {
+        line.unit_price = Number(item.cost_price) || 0
+        recomputeAmountFromRate(line)
+      }
       line.warehouse_id = item.preferred_warehouse_id ?? defaultWarehouseId.value
       line.expense_account_id = item.preferred_line_account_id ?? 'company_default'
     }
@@ -205,11 +261,14 @@ const handleSubmit = () => {
   const data = {
     ...form.data(),
     ap_account_id: form.ap_account_id === 'company_default' ? null : form.ap_account_id,
-    line_items: form.line_items.map(item => ({
+    line_items: form.line_items.map(({ amount_driven, line_total, ...item }) => ({
       ...item,
       item_id: item.item_id || null,
       warehouse_id: item.warehouse_id || null,
       expense_account_id: item.expense_account_id === 'company_default' ? null : item.expense_account_id,
+      // Only an amount-driven line tells the server the total it was actually billed --
+      // a rate-driven line behaves exactly as before (line_total from quantity * rate).
+      ...(amount_driven ? { line_total } : {}),
     })),
   }
 
@@ -428,7 +487,7 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
             </div>
 
             <!-- Main Line Item Fields -->
-            <div class="grid gap-3 md:grid-cols-7">
+            <div class="grid gap-3 md:grid-cols-8">
               <div class="md:col-span-2">
                 <Label>Description *</Label>
                 <Input v-model="line.description" placeholder="Item description" required />
@@ -436,7 +495,11 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
               </div>
               <div>
                 <Label>Quantity *</Label>
-                <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+                <Input
+                  :model-value="line.quantity"
+                  type="number" min="0.01" step="0.01" required
+                  @update:model-value="(v) => onQuantityChange(idx, v)"
+                />
                 <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
               </div>
               <div v-if="isTrackedItem(line.item_id)">
@@ -453,9 +516,23 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
                 <InputError :message="form.errors[`line_items.${idx}.direct_quantity`]" />
               </div>
               <div>
-                <Label>Unit Price *</Label>
-                <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+                <Label>Rate *</Label>
+                <Input
+                  :model-value="line.unit_price"
+                  type="number" min="0" step="any" required
+                  @update:model-value="(v) => onRateChange(idx, v)"
+                />
                 <InputError :message="form.errors[`line_items.${idx}.unit_price`]" />
+              </div>
+              <div>
+                <Label>Amount</Label>
+                <Input
+                  :model-value="line.line_total"
+                  type="number" min="0" step="0.01"
+                  title="What the supplier actually billed for this line. Typing here derives the rate."
+                  @update:model-value="(v) => onAmountChange(idx, v)"
+                />
+                <InputError :message="form.errors[`line_items.${idx}.line_total`]" />
               </div>
               <div>
                 <Label>Tax %</Label>

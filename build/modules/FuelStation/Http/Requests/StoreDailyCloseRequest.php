@@ -141,6 +141,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.description' => 'nullable|string|max:255',
             'purchases.*.quantity' => 'nullable|numeric|min:0.01',
             'purchases.*.unit_cost' => 'nullable|numeric|min:0',
+            // The total actually billed, when the supplier's rate carries more decimals
+            // than the row's own unit_cost field does -- see Bill\BillLineTotals.
+            'purchases.*.line_total' => 'nullable|numeric|min:0|decimal:0,2',
             'purchases.*.tank_id' => 'nullable|uuid',
             'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
             'purchases.*.notes' => 'nullable|string|max:500',

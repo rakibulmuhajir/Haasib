@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockReceiptLine;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Facades\Auth;
 
@@ -172,6 +173,75 @@ class InventoryService
             ->first();
 
         return $anyWarehouse?->id;
+    }
+
+    /**
+     * Revalue an already-received bill line whose unit_price was corrected after the goods
+     * physically arrived -- e.g. a daily-close purchase entered at a rounded rate that the
+     * supplier's invoice later priced to 3-4 decimals. This is a correction to stock already
+     * on hand, not a new receipt: the quantity doesn't move again, so unlike receiveLineItem()
+     * it must never be re-added to updateItemCost()'s weighted average -- that would count the
+     * same litres twice and double the cost impact. Instead the item's cost_price is nudged by
+     * exactly the value difference this correction represents (quantity x rate delta), spread
+     * over whatever quantity is on hand now -- not recomputed from every historical movement,
+     * which would also re-litigate any unrelated revaluation (e.g. an OGRA rate-change
+     * revaluation via RateChangeService) already folded into the current cost.
+     *
+     * Every stock receipt line and stock movement this bill line ever produced (normally one
+     * of each, but a partially-received line can have several) is corrected to the new rate.
+     * Stock quantity is untouched.
+     */
+    public function revalueReceivedLine(BillLineItem $line, float $oldUnitPrice, float $newUnitPrice): void
+    {
+        if (abs($newUnitPrice - $oldUnitPrice) < 0.0000001) {
+            return;
+        }
+
+        $receiptLines = StockReceiptLine::where('bill_line_item_id', $line->id)->get();
+        if ($receiptLines->isEmpty()) {
+            return;
+        }
+
+        $revaluedQuantity = 0.0;
+        foreach ($receiptLines as $receiptLine) {
+            $receivedQty = (float) $receiptLine->received_quantity;
+            $receiptLine->unit_cost = $newUnitPrice;
+            $receiptLine->total_cost = round($receivedQty * $newUnitPrice, 2);
+            $receiptLine->variance_cost = round((float) $receiptLine->variance_quantity * $newUnitPrice, 2);
+            $receiptLine->save();
+
+            if ($receiptLine->stock_movement_id) {
+                $movement = StockMovement::find($receiptLine->stock_movement_id);
+                if ($movement) {
+                    $movement->unit_cost = $newUnitPrice;
+                    $movement->total_cost = round((float) $movement->quantity * $newUnitPrice, 2);
+                    $movement->save();
+                }
+            }
+
+            $revaluedQuantity += $receivedQty;
+        }
+
+        if ($revaluedQuantity <= 0) {
+            return;
+        }
+
+        $item = $line->item ?? $line->item()->first();
+        if (! $item) {
+            return;
+        }
+
+        $currentQty = (float) $item->stockLevels()->sum('quantity');
+        if ($currentQty <= 0) {
+            return;
+        }
+
+        $currentAvgCost = (float) ($item->avg_cost ?: $item->cost_price ?: $oldUnitPrice);
+        $currentTotalValue = $currentQty * $currentAvgCost;
+        $deltaValue = $revaluedQuantity * ($newUnitPrice - $oldUnitPrice);
+        $newAvgCost = ($currentTotalValue + $deltaValue) / $currentQty;
+
+        $item->update(['cost_price' => round($newAvgCost, 6)]);
     }
 
     /**

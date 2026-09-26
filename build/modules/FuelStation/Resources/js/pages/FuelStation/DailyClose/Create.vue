@@ -1086,6 +1086,8 @@ const form = useForm({
         description: string;
         quantity: number | null;
         unit_cost: number | null;
+        line_total: number | null;
+        amount_driven: boolean;
         tank_id: string;
         supplier_invoice_number: string;
         notes: string;
@@ -1235,6 +1237,8 @@ const addPurchaseRow = () => {
         description: '',
         quantity: null,
         unit_cost: null,
+        line_total: null,
+        amount_driven: false,
         tank_id: '',
         supplier_invoice_number: '',
         notes: '',
@@ -1244,6 +1248,55 @@ const addPurchaseRow = () => {
 
 const removePurchaseRow = (index: number) => {
     form.purchases.splice(index, 1);
+};
+
+/**
+ * A fuel supplier commonly prices to 3-4 decimals per litre -- entering the total
+ * actually billed and letting the rate fall out of it (same Amount/Rate driver as
+ * the Bills forms) is the only way to avoid losing a chunk of the delivery's cost
+ * to a rate rounded for typing convenience.
+ */
+const parsePurchaseFieldValue = (v: string | number): number | null => {
+    if (typeof v === 'number') return v;
+    if (v === '') return null;
+    const n = Number.parseFloat(v);
+    return Number.isNaN(n) ? null : n;
+};
+
+const recomputePurchaseAmountFromRate = (row: (typeof form.purchases)[number]) => {
+    const qty = Number(row.quantity) || 0;
+    const rate = Number(row.unit_cost) || 0;
+    row.line_total = Math.round(qty * rate * 100) / 100;
+};
+
+const recomputePurchaseRateFromAmount = (row: (typeof form.purchases)[number]) => {
+    const qty = Number(row.quantity) || 0;
+    const amount = Number(row.line_total) || 0;
+    row.unit_cost = qty > 0 ? Math.round((amount / qty) * 10000) / 10000 : 0;
+};
+
+const onPurchaseQuantityChange = (index: number, v: string | number) => {
+    const row = form.purchases[index];
+    row.quantity = parsePurchaseFieldValue(v);
+    if (row.amount_driven) {
+        recomputePurchaseRateFromAmount(row);
+    } else {
+        recomputePurchaseAmountFromRate(row);
+    }
+};
+
+const onPurchaseRateChange = (index: number, v: string | number) => {
+    const row = form.purchases[index];
+    row.unit_cost = parsePurchaseFieldValue(v);
+    row.amount_driven = false;
+    recomputePurchaseAmountFromRate(row);
+};
+
+const onPurchaseAmountChange = (index: number, v: string | number) => {
+    const row = form.purchases[index];
+    row.line_total = parsePurchaseFieldValue(v);
+    row.amount_driven = true;
+    recomputePurchaseRateFromAmount(row);
 };
 
 const isFuelPurchaseItem = (itemId: string) =>
@@ -6190,7 +6243,7 @@ const completedWorkflowSteps = computed(() => {
                                 :key="rowKey(purchase)"
                                 class="space-y-2 rounded-lg border p-3"
                             >
-                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
                                     <div>
                                         <Label class="text-xs">Supplier</Label>
                                         <Select v-model="purchase.supplier_id">
@@ -6227,13 +6280,35 @@ const completedWorkflowSteps = computed(() => {
                                     </div>
                                     <div>
                                         <Label class="text-xs">Quantity</Label>
-                                        <Input v-model.number="purchase.quantity" type="number" @focus="selectZeroValue" />
+                                        <Input
+                                            :model-value="purchase.quantity"
+                                            type="number"
+                                            @focus="selectZeroValue"
+                                            @update:model-value="(v) => onPurchaseQuantityChange(index, v)"
+                                        />
                                         <InputError :message="purchaseError(index, 'quantity')" />
                                     </div>
                                     <div>
                                         <Label class="text-xs">Unit cost</Label>
-                                        <Input v-model.number="purchase.unit_cost" type="number" @focus="selectZeroValue" />
+                                        <Input
+                                            :model-value="purchase.unit_cost"
+                                            type="number"
+                                            step="any"
+                                            @focus="selectZeroValue"
+                                            @update:model-value="(v) => onPurchaseRateChange(index, v)"
+                                        />
                                         <InputError :message="purchaseError(index, 'unit_cost')" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Amount</Label>
+                                        <Input
+                                            :model-value="purchase.line_total"
+                                            type="number"
+                                            title="What the supplier actually billed for this delivery. Typing here derives the unit cost."
+                                            @focus="selectZeroValue"
+                                            @update:model-value="(v) => onPurchaseAmountChange(index, v)"
+                                        />
+                                        <InputError :message="purchaseError(index, 'line_total')" />
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -6272,7 +6347,7 @@ const completedWorkflowSteps = computed(() => {
                                     <div class="flex items-end justify-between gap-2">
                                         <div class="text-sm font-medium">
                                             <MoneyText
-                                                :amount="purchaseLineTotal(purchase)"
+                                                :amount="purchase.line_total ?? purchaseLineTotal(purchase)"
                                                 :currency="currencyCode"
                                                 :fraction-digits="0"
                                             />

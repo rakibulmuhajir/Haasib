@@ -12,6 +12,7 @@ use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\InventoryService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,7 @@ class UpdateAction implements PaletteAction
             'line_items.*.quantity' => 'required|numeric|min:0.01',
             'line_items.*.direct_quantity' => 'nullable|numeric|min:0',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.line_total' => 'nullable|numeric|min:0|decimal:0,2',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.expense_account_id' => 'nullable|uuid',
@@ -65,11 +67,27 @@ class UpdateAction implements PaletteAction
         // daily close) does.
         app(DocumentDateLock::class)->assertOpen($company->id, $bill->bill_date->toDateString(), "Bill {$bill->bill_number}");
 
+        // Stock already received freezes the line's quantity/item/warehouse -- but not its
+        // price. A supplier's invoice arriving with a more precise rate than the one entered
+        // at receipt time (e.g. a daily-close purchase rounded to two decimals) is common
+        // enough to need a way in: when the only thing a resubmitted line changes is its
+        // unit_price/line_total, allow it through as a revaluation instead of refusing
+        // outright. Any other change on a received line -- quantity, item, warehouse, tax,
+        // discount, account -- is still refused with the same message as before.
+        $moneyOnlyLineEdit = false;
         if (!empty($params['line_items']) && $bill->lineItems()->where('quantity_received', '>', 0)->exists()) {
-            throw new \InvalidArgumentException('Stock on this bill has already been received. Record a stock adjustment instead.');
+            $normalizedForCheck = collect($params['line_items'])
+                ->map(fn ($item) => $this->withPurchaseDefaults($bill->company_id, $item))
+                ->all();
+
+            if (!$this->isMoneyOnlyLineEdit($bill, $normalizedForCheck)) {
+                throw new \InvalidArgumentException('Stock on this bill has already been received. Record a stock adjustment instead.');
+            }
+
+            $moneyOnlyLineEdit = true;
         }
 
-        return \App\Services\AccountingWriteTransaction::run(function () use ($bill, $params) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($bill, $params, $moneyOnlyLineEdit) {
             $update = array_intersect_key($params, array_flip([
                 'vendor_invoice_number',
                 'due_date',
@@ -87,15 +105,13 @@ class UpdateAction implements PaletteAction
                 $this->assertLineAccountsValid($normalizedLines);
                 $this->assertDirectQuantityValid($normalizedLines);
 
-                $journalRelevantChanged = $this->lineItemsChanged($bill, $normalizedLines);
+                $totals = collect($normalizedLines)->map(fn ($item) => BillLineTotals::compute($item));
 
-                $totals = collect($normalizedLines)->map(function ($item) {
-                    $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
-                    $taxAmount = round($lineTotal * (($item['tax_rate'] ?? 0) / 100), 6);
-                    $discountAmount = round($lineTotal * (($item['discount_rate'] ?? 0) / 100), 6);
-                    $total = $lineTotal + $taxAmount - $discountAmount;
-                    return ['line_total' => $lineTotal, 'tax_amount' => $taxAmount, 'discount_amount' => $discountAmount, 'total' => $total, 'source' => $item];
-                });
+                // Compare against the derived unit_price (line_total / quantity when a
+                // line_total was submitted), not the raw request value, so a line
+                // resubmitted amount-driven is compared on the same figure that will
+                // actually be stored.
+                $journalRelevantChanged = $this->lineItemsChanged($bill, $totals->pluck('source')->all());
 
                 if ((float) $bill->paid_amount > 0.000001 && $totals->sum('total') < (float) $bill->paid_amount - 0.000001) {
                     throw ValidationException::withMessages([
@@ -103,28 +119,36 @@ class UpdateAction implements PaletteAction
                     ]);
                 }
 
-                $bill->lineItems()->forceDelete();
+                if ($moneyOnlyLineEdit) {
+                    // The lines themselves (item, warehouse, quantity, quantity_received)
+                    // must survive untouched -- StockReceiptLine/StockMovement rows key off
+                    // this line's id, and quantity_received is the very fact that made this
+                    // the revaluation path. Only the money columns move.
+                    $this->reviseLineItemsInPlace($bill, $totals);
+                } else {
+                    $bill->lineItems()->forceDelete();
 
-                foreach ($totals as $index => $line) {
-                    $src = $line['source'];
-                    BillLineItem::create([
-                        'company_id' => $bill->company_id,
-                        'bill_id' => $bill->id,
-                        'line_number' => $index + 1,
-                        'item_id' => $src['item_id'] ?? null,
-                        'warehouse_id' => $src['warehouse_id'] ?? null,
-                        'description' => $src['description'],
-                        'quantity' => $src['quantity'],
-                        'direct_quantity' => $src['direct_quantity'] ?? 0,
-                        'unit_price' => $src['unit_price'],
-                        'tax_rate' => $src['tax_rate'] ?? 0,
-                        'discount_rate' => $src['discount_rate'] ?? 0,
-                        'line_total' => $line['line_total'],
-                        'tax_amount' => $line['tax_amount'],
-                        'total' => $line['total'],
-                        'expense_account_id' => $src['expense_account_id'] ?? null,
-                        'created_by_user_id' => Auth::id(),
-                    ]);
+                    foreach ($totals as $index => $line) {
+                        $src = $line['source'];
+                        BillLineItem::create([
+                            'company_id' => $bill->company_id,
+                            'bill_id' => $bill->id,
+                            'line_number' => $index + 1,
+                            'item_id' => $src['item_id'] ?? null,
+                            'warehouse_id' => $src['warehouse_id'] ?? null,
+                            'description' => $src['description'],
+                            'quantity' => $src['quantity'],
+                            'direct_quantity' => $src['direct_quantity'] ?? 0,
+                            'unit_price' => $src['unit_price'],
+                            'tax_rate' => $src['tax_rate'] ?? 0,
+                            'discount_rate' => $src['discount_rate'] ?? 0,
+                            'line_total' => $line['line_total'],
+                            'tax_amount' => $line['tax_amount'],
+                            'total' => $line['total'],
+                            'expense_account_id' => $src['expense_account_id'] ?? null,
+                            'created_by_user_id' => Auth::id(),
+                        ]);
+                    }
                 }
 
                 $bill->subtotal = $totals->sum('line_total');
@@ -208,6 +232,72 @@ class UpdateAction implements PaletteAction
             ->all();
 
         return $oldLines !== $newLines;
+    }
+
+    /**
+     * True when every submitted line matches the stored one on everything except
+     * unit_price/line_total: same count, same item/warehouse/quantity/direct_quantity,
+     * same tax_rate/discount_rate/expense_account_id, in the same order. That is the one
+     * shape a bill line with stock already received is still allowed to change to.
+     *
+     * @param  array<int, array<string, mixed>>  $normalizedLines
+     */
+    private function isMoneyOnlyLineEdit(Bill $bill, array $normalizedLines): bool
+    {
+        $stored = BillLineItem::where('bill_id', $bill->id)->orderBy('line_number')->get()->values();
+
+        if ($stored->count() !== count($normalizedLines)) {
+            return false;
+        }
+
+        $numEqual = fn ($a, $b, $decimals) => abs(round((float) $a, $decimals) - round((float) $b, $decimals)) < 0.0000001;
+
+        foreach (array_values($normalizedLines) as $index => $line) {
+            $old = $stored[$index];
+
+            if ((string) ($line['item_id'] ?? '') !== (string) ($old->item_id ?? '')) return false;
+            if ((string) ($line['warehouse_id'] ?? '') !== (string) ($old->warehouse_id ?? '')) return false;
+            if (!$numEqual($line['quantity'] ?? 0, $old->quantity, 6)) return false;
+            if (!$numEqual($line['direct_quantity'] ?? 0, $old->direct_quantity, 3)) return false;
+            if (!$numEqual($line['tax_rate'] ?? 0, $old->tax_rate, 4)) return false;
+            if (!$numEqual($line['discount_rate'] ?? 0, $old->discount_rate, 4)) return false;
+            if ((string) ($line['expense_account_id'] ?? '') !== (string) ($old->expense_account_id ?? '')) return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * The money-only revaluation path: update each existing BillLineItem's price columns
+     * in place (never delete/recreate -- that would orphan the StockReceiptLine/
+     * StockMovement rows the received line already produced, and reset quantity_received).
+     * A line whose unit_price actually changed and has been received also gets its stock
+     * receipt/movement rows and the item's cost_price revalued.
+     *
+     * @param  \Illuminate\Support\Collection<int, array{line_total: float, tax_amount: float, discount_amount: float, total: float, source: array<string, mixed>}>  $totals
+     */
+    private function reviseLineItemsInPlace(Bill $bill, \Illuminate\Support\Collection $totals): void
+    {
+        $stored = BillLineItem::where('bill_id', $bill->id)->orderBy('line_number')->get()->values();
+
+        foreach ($totals as $index => $line) {
+            $lineModel = $stored[$index];
+            $src = $line['source'];
+
+            $oldUnitPrice = (float) $lineModel->unit_price;
+            $newUnitPrice = (float) $src['unit_price'];
+
+            $lineModel->unit_price = $src['unit_price'];
+            $lineModel->line_total = $line['line_total'];
+            $lineModel->tax_amount = $line['tax_amount'];
+            $lineModel->total = $line['total'];
+            $lineModel->updated_by_user_id = Auth::id();
+            $lineModel->save();
+
+            if ((float) $lineModel->quantity_received > 0 && abs($newUnitPrice - $oldUnitPrice) > 0.0000001) {
+                app(InventoryService::class)->revalueReceivedLine($lineModel, $oldUnitPrice, $newUnitPrice);
+            }
+        }
     }
 
     private function withPurchaseDefaults(string $companyId, array $line): array

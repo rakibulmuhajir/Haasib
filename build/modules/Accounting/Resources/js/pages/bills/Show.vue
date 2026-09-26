@@ -526,6 +526,7 @@ const navigateToVendor = () => {
           :currency="bill.currency"
           locale="en-PK"
           :overprint="overprint"
+          :unit-price-fraction-digits="4"
         >
           <template v-if="bill.notes" #terms>
             <p dir="auto">{{ bill.notes }}</p>

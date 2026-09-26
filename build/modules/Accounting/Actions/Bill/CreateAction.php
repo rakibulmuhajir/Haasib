@@ -42,6 +42,7 @@ class CreateAction implements PaletteAction
             'line_items.*.quantity' => 'required|numeric|min:0.01',
             'line_items.*.direct_quantity' => 'nullable|numeric|min:0',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.line_total' => 'nullable|numeric|min:0|decimal:0,2',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.expense_account_id' => 'nullable|uuid',
@@ -88,17 +89,11 @@ class CreateAction implements PaletteAction
             $this->assertLineAccountsValid($normalizedLines);
             $this->assertDirectQuantityValid($normalizedLines);
 
-            $lineTotals = collect($normalizedLines)->map(function ($item) {
-                $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
-                $taxAmount = round($lineTotal * (($item['tax_rate'] ?? 0) / 100), 6);
-                $discountAmount = round($lineTotal * (($item['discount_rate'] ?? 0) / 100), 6);
-                $total = $lineTotal + $taxAmount - $discountAmount;
-                return ['line_total' => $lineTotal, 'tax_amount' => $taxAmount, 'total' => $total, 'source' => $item];
-            });
+            $lineTotals = collect($normalizedLines)->map(fn ($item) => BillLineTotals::compute($item));
 
             $subtotal = $lineTotals->sum('line_total');
             $taxAmount = $lineTotals->sum('tax_amount');
-            $discountAmount = $lineTotals->sum(fn ($l) => ($l['source']['discount_rate'] ?? 0) ? $l['line_total'] * ($l['source']['discount_rate'] ?? 0) / 100 : 0);
+            $discountAmount = $lineTotals->sum('discount_amount');
             $totalAmount = $lineTotals->sum('total');
             $baseAmount = round($totalAmount * ($exchangeRate ?? 1), 2);
 

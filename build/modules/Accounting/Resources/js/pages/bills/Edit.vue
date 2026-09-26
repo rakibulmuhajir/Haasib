@@ -34,6 +34,7 @@ interface LineItem {
   quantity: number
   direct_quantity?: number
   unit_price: number
+  line_total?: number | string | null
   tax_rate: number
   discount_rate: number
   account_id?: string
@@ -123,14 +124,69 @@ const form = useForm({
   notes: props.bill.notes ?? '',
   internal_notes: props.bill.internal_notes ?? '',
   ap_account_id: props.bill.ap_account_id ?? '',
+  // Loaded amount-driven, with the stored line_total as the Amount: re-saving an
+  // untouched line must reproduce the exact figure already posted, not a total
+  // recomputed from quantity * a rate that only carries 6 decimals of precision.
   line_items: props.bill.line_items.map((li) => ({
     ...li,
     item_id: li.item_id ?? null,
     warehouse_id: li.warehouse_id ?? null,
     direct_quantity: li.direct_quantity ?? 0,
+    unit_price: Number(li.unit_price) || 0,
+    line_total: Number(li.line_total) || 0,
+    amount_driven: true,
     expense_account_id: li.expense_account_id ?? '__none'
   })),
 })
+
+/**
+ * Same Amount/Rate driver as Create.vue: each line tracks which of the two was
+ * typed last (amount_driven), and that one drives the other when Quantity
+ * changes. Amount is what totals sum and what is sent to the server as
+ * line_total -- only when amount_driven, so a rate-driven line behaves exactly
+ * as before.
+ */
+const parseFieldValue = (v: string | number): string | number => {
+  if (typeof v === 'number') return v
+  const n = Number.parseFloat(v)
+  return Number.isNaN(n) ? v : n
+}
+
+const recomputeAmountFromRate = (line: (typeof form.line_items)[number]) => {
+  const qty = Number(line.quantity) || 0
+  const rate = Number(line.unit_price) || 0
+  line.line_total = Math.round(qty * rate * 100) / 100
+}
+
+const recomputeRateFromAmount = (line: (typeof form.line_items)[number]) => {
+  const qty = Number(line.quantity) || 0
+  const amount = Number(line.line_total) || 0
+  line.unit_price = qty > 0 ? Math.round((amount / qty) * 10000) / 10000 : 0
+}
+
+const onQuantityChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.quantity = parseFieldValue(v) as number
+  if (line.amount_driven) {
+    recomputeRateFromAmount(line)
+  } else {
+    recomputeAmountFromRate(line)
+  }
+}
+
+const onRateChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.unit_price = parseFieldValue(v) as number
+  line.amount_driven = false
+  recomputeAmountFromRate(line)
+}
+
+const onAmountChange = (idx: number, v: string | number) => {
+  const line = form.line_items[idx]
+  line.line_total = parseFieldValue(v)
+  line.amount_driven = true
+  recomputeRateFromAmount(line)
+}
 
 // Only a tracked item's litres can go straight to a customer instead of the tank.
 const isTrackedItem = (itemId: string | null | undefined) => {
@@ -139,13 +195,13 @@ const isTrackedItem = (itemId: string | null | undefined) => {
 }
 
 const totals = computed(() => {
-  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
+  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.line_total) || 0), 0)
   const tax = form.line_items.reduce((sum, li) => {
-    const lineTotal = (Number(li.quantity) || 0) * (Number(li.unit_price) || 0)
+    const lineTotal = Number(li.line_total) || 0
     return sum + lineTotal * ((Number(li.tax_rate) || 0) / 100)
   }, 0)
   const discount = form.line_items.reduce((sum, li) => {
-    const lineTotal = (Number(li.quantity) || 0) * (Number(li.unit_price) || 0)
+    const lineTotal = Number(li.line_total) || 0
     return sum + lineTotal * ((Number(li.discount_rate) || 0) / 100)
   }, 0)
   const total = subtotal + tax - discount
@@ -159,6 +215,8 @@ const addLine = () => form.line_items.push({
   quantity: 1,
   direct_quantity: 0,
   unit_price: 0,
+  line_total: 0,
+  amount_driven: false,
   tax_rate: 0,
   discount_rate: 0,
   expense_account_id: '__none'
@@ -181,7 +239,10 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
       // Fill only what the line doesn't already say: the price on the supplier's bill is the
       // real one, and replacing it with the item's stored cost silently changed the total.
       if (!line.description?.trim()) line.description = item.name
-      if (!(Number(line.unit_price) > 0)) line.unit_price = Number(item.cost_price) || 0
+      if (!(Number(line.unit_price) > 0)) {
+        line.unit_price = Number(item.cost_price) || 0
+        recomputeAmountFromRate(line)
+      }
       line.warehouse_id = item.preferred_warehouse_id ?? defaultWarehouseId.value
       line.expense_account_id = item.preferred_line_account_id ?? '__none'
     }
@@ -198,11 +259,16 @@ const handleSubmit = () => {
   const data = {
     ...form.data(),
     ap_account_id: form.ap_account_id === '__none' ? null : form.ap_account_id,
-    line_items: form.line_items.map((item) => ({
+    line_items: form.line_items.map(({ amount_driven, line_total, ...item }) => ({
       ...item,
       item_id: item.item_id || null,
       warehouse_id: item.warehouse_id || null,
       expense_account_id: item.expense_account_id === '__none' ? null : item.expense_account_id,
+      // Only an amount-driven line resends its line_total -- a rate-driven line, or a
+      // line untouched since load, behaves exactly as before (line_total from
+      // quantity * rate), except an existing line loads amount-driven precisely so
+      // an untouched save reposts the exact figure already on the bill.
+      ...(amount_driven ? { line_total } : {}),
     })),
   }
 
@@ -362,7 +428,7 @@ const handleSubmit = () => {
             </div>
 
             <!-- Main Line Item Fields -->
-            <div class="grid gap-3 md:grid-cols-6">
+            <div class="grid gap-3 md:grid-cols-7">
               <div class="md:col-span-2">
                 <Label>{{ t('description') }}</Label>
                 <Input v-model="line.description" required />
@@ -370,7 +436,11 @@ const handleSubmit = () => {
               </div>
               <div>
                 <Label>{{ t('quantity') }}</Label>
-                <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+                <Input
+                  :model-value="line.quantity"
+                  type="number" min="0.01" step="0.01" required
+                  @update:model-value="(v) => onQuantityChange(idx, v)"
+                />
                 <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
               </div>
               <div v-if="isTrackedItem(line.item_id)">
@@ -387,9 +457,23 @@ const handleSubmit = () => {
                 <InputError :message="form.errors[`line_items.${idx}.direct_quantity`]" />
               </div>
               <div>
-                <Label>{{ t('unitPrice') }}</Label>
-                <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+                <Label>Rate</Label>
+                <Input
+                  :model-value="line.unit_price"
+                  type="number" min="0" step="any" required
+                  @update:model-value="(v) => onRateChange(idx, v)"
+                />
                 <InputError :message="form.errors[`line_items.${idx}.unit_price`]" />
+              </div>
+              <div>
+                <Label>Amount</Label>
+                <Input
+                  :model-value="line.line_total"
+                  type="number" min="0" step="0.01"
+                  title="What the supplier actually billed for this line. Typing here derives the rate."
+                  @update:model-value="(v) => onAmountChange(idx, v)"
+                />
+                <InputError :message="form.errors[`line_items.${idx}.line_total`]" />
               </div>
               <div>
                 <Label>{{ t('taxPercent') }}</Label>

@@ -64,13 +64,17 @@ class DailyCloseEntryService
             'currency' => $company->base_currency ?: 'PKR',
             'base_currency' => $company->base_currency ?: 'PKR',
             'notes' => $purchase['notes'] ?? null,
-            'line_items' => [[
+            'line_items' => [array_filter([
                 'item_id' => $purchase['item_id'] ?? null,
                 'warehouse_id' => $purchase['tank_id'] ?? null,
                 'description' => $purchase['description'] ?? ($item->name ?? 'Purchase'),
                 'quantity' => $purchase['quantity'],
                 'unit_price' => $purchase['unit_cost'],
-            ]],
+                // The total actually billed, when the supplier priced this delivery to
+                // more decimals than the row's rate field carries -- bill.create derives
+                // the exact rate from it instead of the rounded one. See BillLineTotals.
+                'line_total' => $purchase['line_total'] ?? null,
+            ], fn ($v) => $v !== null)],
         ], $user);
 
         $bill = Bill::where('company_id', $companyId)->findOrFail($billResult['data']['id']);

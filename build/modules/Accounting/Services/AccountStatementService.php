@@ -32,6 +32,7 @@ class AccountStatementService
         'acct.bill_payments' => 'Bill payment',
         'fuel.daily_close' => 'Daily close',
         'fuel.daily_close_expense' => 'Daily close expense',
+        'fuel.daily_close_discount' => 'Daily close discount',
         'fuel.reading_correction' => 'Reading correction',
         'fuel.payment_channel_settlement' => 'Card settlement',
     ];
@@ -133,7 +134,7 @@ class AccountStatementService
             'acct.payments' => $referenceId ? "payments/{$referenceId}" : null,
             'acct.bills' => $referenceId ? "bills/{$referenceId}" : null,
             'acct.bill_payments' => $referenceId ? "bill-payments/{$referenceId}" : null,
-            'fuel.daily_close', 'fuel.daily_close_expense', 'fuel.reading_correction' => "fuel/daily-close/{$transactionId}",
+            'fuel.daily_close', 'fuel.daily_close_expense', 'fuel.daily_close_discount', 'fuel.reading_correction' => "fuel/daily-close/{$transactionId}",
             default => null,
         };
     }

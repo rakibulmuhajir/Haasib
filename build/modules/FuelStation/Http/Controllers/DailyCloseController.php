@@ -9,6 +9,7 @@ use App\Models\Partner;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\FuelStation\Http\Requests\ApplyPostCloseDiscountRequest;
 use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\UnlockDailyCloseRequest;
@@ -20,7 +21,9 @@ use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
+use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Services\DailyCloseLockService;
+use App\Modules\FuelStation\Services\DailyClosePostCloseDiscountService;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
@@ -949,6 +952,27 @@ class DailyCloseController extends Controller
         return back()->with('success', "Cash received for {$record->invoice_number}. It is counted in today's money in.");
     }
 
+    /**
+     * Apply a discount to one of this close's credit-sale invoices after the close has
+     * been unlocked. See DailyClosePostCloseDiscountService for the refusal rules and what
+     * gets posted.
+     */
+    public function applyPostCloseDiscount(ApplyPostCloseDiscountRequest $request, string $company, string $transaction, string $invoice): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        $close = Transaction::where('company_id', $companyModel->id)->where('transaction_type', 'fuel_daily_close')->findOrFail($transaction);
+        $validated = $request->validated();
+        try {
+            app(DailyClosePostCloseDiscountService::class)->apply(
+                $close, $invoice, $validated['item_id'], isset($validated['litres']) ? (float) $validated['litres'] : null,
+                (float) $validated['discount_amount'], $request->user()
+            );
+            return back()->with('success', 'Discount applied to the invoice.');
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function storeCorrection(\App\Modules\FuelStation\Http\Requests\StoreCloseReadingCorrectionRequest $request, string $company, string $transaction): RedirectResponse
     {
         $companyModel = app(CurrentCompany::class)->get();
@@ -1072,11 +1096,60 @@ class DailyCloseController extends Controller
                     ->map(fn ($r) => ['id' => $r->id, 'label' => 'Nozzle '.$r->nozzle_id.' — '.$r->liters_dispensed.'L', 'current_value' => (float) $r->liters_dispensed]),
             ] : ['tank' => [], 'nozzle' => []],
             'reconciliation' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->view($txn),
+            // Fresh, current figures for each credit-sale invoice this close created or
+            // absorbed -- not the frozen metadata.credit_sale_details, which never changes
+            // after posting. A post-close discount (see applyPostCloseDiscount()) reduces
+            // an invoice's discount_amount/total_amount/balance after the fact, and this is
+            // what lets the page show that change without waiting for a fresh close.
+            'creditSaleInvoices' => $this->creditSaleInvoicesFor($companyModel->id, $metadata),
+            'fuelItems' => Item::where('company_id', $companyModel->id)
+                ->whereNotNull('fuel_category')
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            // customer_id + item_id -> stored discount, so the "Apply discount" dialog can
+            // prefill the same discount CustomerFuelDiscountService would apply on a fresh
+            // sale, before the user edits it.
+            'customerFuelDiscounts' => CustomerFuelDiscount::where('company_id', $companyModel->id)
+                ->whereIn('customer_id', collect($metadata['credit_sale_details'] ?? [])->pluck('customer_id')->filter()->unique()->values()->all())
+                ->get(['customer_id', 'item_id', 'discount_type', 'value']),
+            'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && !$txn->is_locked,
             'permissions' => [
                 'canLock' => $canLock && $txn->isLockable(),
                 'canUnlock' => $canUnlock && $txn->is_locked,
             ],
         ]);
+    }
+
+    /**
+     * Each credit-sale invoice's current figures (post any post-close discount), keyed by
+     * the frozen snapshot rows so the page can still show the customer/reference context
+     * that lives only in metadata.
+     */
+    private function creditSaleInvoicesFor(string $companyId, array $metadata): array
+    {
+        $details = $metadata['credit_sale_details'] ?? [];
+        if (!$details) {
+            return [];
+        }
+
+        $invoices = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereIn('id', collect($details)->pluck('invoice_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        return collect($details)->map(function ($detail) use ($invoices) {
+            $invoice = $invoices->get($detail['invoice_id'] ?? null);
+            return [
+                'invoice_id' => $detail['invoice_id'] ?? null,
+                'invoice_number' => $detail['invoice_number'] ?? null,
+                'customer_id' => $invoice?->customer_id,
+                'customer_name' => $detail['customer_name'] ?? null,
+                'source' => $detail['source'] ?? null,
+                'amount' => $invoice ? round((float) $invoice->subtotal, 2) : (float) ($detail['amount'] ?? 0),
+                'discount_amount' => $invoice ? round((float) $invoice->discount_amount, 2) : (float) ($detail['discount_amount'] ?? 0),
+                'total_amount' => $invoice ? round((float) $invoice->total_amount, 2) : null,
+                'balance' => $invoice ? round((float) $invoice->balance, 2) : null,
+            ];
+        })->values()->all();
     }
 
 

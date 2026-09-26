@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteItem;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,8 @@ class CreateAction implements PaletteAction
         $creditDate = !empty($params['credit_date'])
             ? Carbon::parse($params['credit_date'])
             : now();
+
+        app(DocumentDateLock::class)->assertOpen($company->id, $creditDate->toDateString(), 'This credit note');
 
         $status = $params['status'] ?? 'draft';
 

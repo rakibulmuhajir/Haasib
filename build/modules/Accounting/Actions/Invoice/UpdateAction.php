@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,15 @@ class UpdateAction implements PaletteAction
             $invoiceDate = !empty($params['date'])
                 ? Carbon::parse($params['date'])
                 : $invoice->invoice_date->copy();
+
+            $dateLock = app(DocumentDateLock::class);
+            $oldInvoiceDate = $invoice->invoice_date->toDateString();
+            $dateLock->assertOpen($company->id, $oldInvoiceDate, "Invoice {$invoice->invoice_number}");
+            $newInvoiceDate = $invoiceDate->toDateString();
+            if ($newInvoiceDate !== $oldInvoiceDate) {
+                $dateLock->assertOpen($company->id, $newInvoiceDate, "Invoice {$invoice->invoice_number}");
+            }
+
             $dueDate = !empty($params['due'])
                 ? Carbon::parse($params['due'])
                 : $invoiceDate->copy()->addDays($paymentTerms);

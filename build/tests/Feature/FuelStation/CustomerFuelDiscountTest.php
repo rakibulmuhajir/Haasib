@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 require_once __DIR__.'/CreditCloseFixtures.php';
+require_once __DIR__.'/CustomerFuelDiscountFixtures.php';
 
 /**
  * A customer's negotiated fuel discount (Rs/L or percent, per fuel item) has to price
@@ -23,48 +24,11 @@ require_once __DIR__.'/CreditCloseFixtures.php';
  * manual Daily Close credit row. Both go through CustomerFuelDiscountService, never their
  * own maths.
  *
- * Follows the same direct-service fixture pattern as FuelSaleDiscountPostingTest's
- * discountFixture() (creditCloseFixture() + CurrentCompany::set(), no HTTP/RBAC needed for
- * calling FuelSaleService/DailyCloseService directly) -- defined locally here rather than
- * depended on from that file, per project convention against cross-Test.php helpers.
+ * discountedCustomerFixture()/fuelDiscountsAccount() now live in
+ * CustomerFuelDiscountFixtures.php: PostCloseDiscountTest.php needs the same fixture, and
+ * per project convention a fixture used by more than one *Test.php lives in its own
+ * *Fixtures.php file rather than being depended on from inside another Test.php.
  */
-function discountedCustomerFixture(): array
-{
-    $f = creditCloseFixture();
-    app(CurrentCompany::class)->set($f['company']);
-
-    $petrol = Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
-
-    $diesel = Item::create([
-        'company_id' => $f['company']->id, 'sku' => 'DIESEL', 'name' => 'Diesel',
-        'item_type' => 'product', 'unit_of_measure' => 'liter', 'currency' => 'PKR',
-        'avg_cost' => 250, 'fuel_category' => 'diesel',
-    ]);
-    RateChange::create([
-        'company_id' => $f['company']->id, 'item_id' => $diesel->id,
-        'effective_date' => '2026-09-01', 'purchase_rate' => 250, 'sale_rate' => 300,
-    ]);
-    $dieselTank = Warehouse::create(['company_id' => $f['company']->id, 'code' => 'T2', 'name' => 'Diesel Tank', 'linked_item_id' => $diesel->id]);
-    $dieselPump = Pump::create(['company_id' => $f['company']->id, 'name' => 'Pump2', 'tank_id' => $dieselTank->id]);
-    $dieselNozzle = Nozzle::create(['company_id' => $f['company']->id, 'pump_id' => $dieselPump->id, 'tank_id' => $dieselTank->id, 'item_id' => $diesel->id, 'code' => 'N2', 'label' => 'Diesel']);
-
-    // A close carrying any variance needs somewhere to post the balancing line.
-    $f['accounts']['6180'] = Account::create([
-        'company_id' => $f['company']->id, 'code' => '6180', 'name' => 'Cash Short/Over',
-        'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_active' => true,
-    ]);
-
-    $f['petrol'] = $petrol;
-    $f['diesel'] = $diesel;
-    $f['dieselNozzle'] = $dieselNozzle;
-
-    return $f;
-}
-
-function fuelDiscountsAccount(string $companyId): ?Account
-{
-    return Account::where('company_id', $companyId)->where('code', '4210')->first();
-}
 
 test('a per-litre diesel discount and a percent petrol discount can be set on a customer', function () {
     $f = discountedCustomerFixture();

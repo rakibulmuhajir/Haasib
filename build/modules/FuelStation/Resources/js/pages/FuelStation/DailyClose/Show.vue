@@ -94,6 +94,23 @@ const props = defineProps<{
   }
   reconciliation?: { has_post_close_activity?: boolean; audit_events?: any[]; snapshot?: any; current?: any; activity: any[]; corrections?: any[] }
   unlockHistory?: Array<{ id: string; unlocked_at: string | null; unlocked_by: string | null; reason: string; previously_locked_at: string | null }>
+  // Current, post-any-discount figures for each of this close's credit-sale invoices --
+  // not the frozen metadata.credit_sale_details, which is the snapshot as it stood the
+  // moment this close posted and never changes after that.
+  creditSaleInvoices?: Array<{
+    invoice_id: string
+    invoice_number: string
+    customer_id: string | null
+    customer_name: string | null
+    source?: string
+    amount: number
+    discount_amount: number
+    total_amount: number | null
+    balance: number | null
+  }>
+  fuelItems?: Array<{ id: string; name: string }>
+  customerFuelDiscounts?: Array<{ customer_id: string; item_id: string; discount_type: 'percent' | 'per_litre'; value: number }>
+  canApplyPostCloseDiscount?: boolean
   permissions: {
     canLock: boolean
     canUnlock: boolean
@@ -124,6 +141,88 @@ const addCorrection = () => {
   onSuccess: (page) => { if ((page.props as any).flash?.success) { toast.success('Correction recorded'); correction.reset('reading_id', 'corrected_value', 'reason') } },
   onError: (errors) => toast.error(String(Object.values(errors)[0])),
 })
+}
+
+// Merges the frozen snapshot (customer name, reference, source) with each invoice's
+// current figures, so a post-close discount shows up here without waiting for another
+// close. Falls back to the snapshot's own figures for an older close rendered before
+// creditSaleInvoices existed.
+const creditRows = computed(() => {
+  const fresh = new Map((props.creditSaleInvoices ?? []).map((row) => [row.invoice_id, row]))
+  return (props.transaction.metadata.credit_sale_details || []).map((frozen) => {
+    const current = fresh.get(frozen.invoice_id)
+    const amount = current?.amount ?? frozen.amount
+    const discountAmount = current?.discount_amount ?? frozen.discount_amount ?? 0
+    const balance = current?.balance ?? current?.total_amount ?? frozen.net_amount ?? (frozen.amount - (frozen.discount_amount ?? 0))
+    return {
+      invoice_id: frozen.invoice_id,
+      invoice_number: frozen.invoice_number,
+      customer_id: current?.customer_id ?? null,
+      customer_name: frozen.customer_name,
+      source: frozen.source,
+      amount,
+      discount_amount: discountAmount,
+      balance,
+    }
+  })
+})
+
+interface DiscountTarget {
+  invoice_id: string
+  invoice_number: string
+  customer_id: string | null
+  customer_name: string | null
+  amount: number
+  balance: number
+}
+
+const discountTarget = ref<DiscountTarget | null>(null)
+const discountForm = useForm({ item_id: '', litres: null as number | null, discount_amount: 0 })
+
+/** Prefills the discount from this customer's stored per-fuel discount, exactly as a
+ *  fresh sale would price it (see CustomerFuelDiscountService). Still editable afterwards. */
+const computeStoredDiscount = () => {
+  if (!discountTarget.value || !discountForm.item_id) return
+  const stored = (props.customerFuelDiscounts ?? []).find(
+    (row) => row.customer_id === discountTarget.value!.customer_id && row.item_id === discountForm.item_id,
+  )
+  if (!stored) return
+  const gross = discountTarget.value.amount
+  const litres = Number(discountForm.litres ?? 0)
+  const value = Number(stored.value)
+  let amount = stored.discount_type === 'per_litre' ? litres * value : (gross * value) / 100
+  amount = Math.min(Math.max(amount, 0), gross)
+  discountForm.discount_amount = Math.round(amount * 100) / 100
+}
+
+const openDiscountDialog = (credit: (typeof creditRows.value)[number]) => {
+  discountTarget.value = {
+    invoice_id: credit.invoice_id,
+    invoice_number: credit.invoice_number,
+    customer_id: credit.customer_id,
+    customer_name: credit.customer_name,
+    amount: credit.amount,
+    balance: credit.balance,
+  }
+  discountForm.reset()
+  discountForm.clearErrors()
+}
+
+const submitDiscount = () => {
+  if (!discountTarget.value) return
+  discountForm.post(
+    `/${props.company.slug}/fuel/daily-close/${props.transaction.id}/credit-sales/${discountTarget.value.invoice_id}/discount`,
+    {
+      preserveScroll: true,
+      onSuccess: (page) => {
+        if ((page.props as any).flash?.success) {
+          toast.success('Discount applied')
+          discountTarget.value = null
+        }
+      },
+      onError: (errors) => toast.error(String(Object.values(errors)[0])),
+    },
+  )
 }
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -296,6 +395,7 @@ const unlockTransaction = () => {
           <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
           <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
             <p class="font-medium">{{ row.activity }} · {{ row.type }} · <Link v-if="!row.type.startsWith('stock:')" :href="`/${company.slug}/journals/${row.id}`" class="underline">{{ row.reference }}</Link><span v-else>{{ row.reference }}</span></p>
+            <p v-if="row.description">{{ row.description }}</p>
             <p>Business date {{ row.business_date }} · Entered {{ formatDateTime(row.entered_at) }} by {{ row.entered_by_name }}</p>
             <p v-if="row.before">Updated {{ formatDateTime(row.updated_at) }} · {{ row.updated_by_name || 'Actor unavailable' }}</p>
             <p>{{ row.source_type }} · {{ row.source_id || row.id }}</p>
@@ -560,16 +660,29 @@ const unlockTransaction = () => {
 
           <!-- Cash Out -->
           <div class="space-y-2">
-            <div v-for="credit in metadata.credit_sale_details || []" :key="credit.invoice_id" class="flex flex-col py-2">
+            <div v-for="credit in creditRows" :key="credit.invoice_id" class="flex flex-col py-2">
               <div class="flex justify-between items-center">
                 <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">
                   {{ credit.source === 'accounting_invoice' ? 'Invoiced in Accounting' : t('meterCreditSales') }} · {{ credit.invoice_number }} · {{ credit.customer_name }}
                 </Link>
                 <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
               </div>
-              <div v-if="credit.discount_amount" class="text-xs text-status-success">
-                Discount <MoneyText :amount="credit.discount_amount" :currency="currency" /> ·
-                Owes <MoneyText :amount="credit.net_amount ?? (credit.amount - credit.discount_amount)" :currency="currency" />
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs" :class="credit.discount_amount ? 'text-status-success' : 'text-muted-foreground'">
+                  <template v-if="credit.discount_amount">
+                    Discount <MoneyText :amount="credit.discount_amount" :currency="currency" /> ·
+                  </template>
+                  Owes <MoneyText :amount="credit.balance" :currency="currency" />
+                </p>
+                <Button
+                  v-if="canApplyPostCloseDiscount"
+                  variant="link"
+                  size="sm"
+                  class="h-auto p-0 text-xs"
+                  @click="openDiscountDialog(credit)"
+                >
+                  Apply discount
+                </Button>
               </div>
             </div>
             <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">
@@ -725,5 +838,49 @@ const unlockTransaction = () => {
         </div>
       </CardContent>
     </Card>
+
+    <Dialog :open="!!discountTarget" @update:open="(open) => { if (!open) discountTarget = null }">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Apply a discount</DialogTitle>
+          <DialogDescription v-if="discountTarget">
+            {{ discountTarget.invoice_number }} · {{ discountTarget.customer_name }}
+          </DialogDescription>
+        </DialogHeader>
+        <div v-if="discountTarget" class="space-y-3">
+          <div>
+            <Label>Fuel</Label>
+            <Select v-model="discountForm.item_id" @update:model-value="computeStoredDiscount">
+              <SelectTrigger><SelectValue placeholder="Choose fuel" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Litres</Label>
+            <Input v-model.number="discountForm.litres" type="number" min="0" step="0.001" @change="computeStoredDiscount" />
+          </div>
+          <div>
+            <Label>Discount amount</Label>
+            <Input v-model.number="discountForm.discount_amount" type="number" min="0.01" step="0.01" required />
+          </div>
+          <p class="text-sm text-muted-foreground">
+            Amount <MoneyText :amount="discountTarget.amount" :currency="currency" /> ·
+            Discount <MoneyText :amount="discountForm.discount_amount" :currency="currency" /> ·
+            Owes <MoneyText :amount="Math.max(0, discountTarget.balance - (discountForm.discount_amount || 0))" :currency="currency" />
+          </p>
+          <p v-for="(error, field) in discountForm.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+        </div>
+        <DialogFooter>
+          <DialogClose as-child>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button :disabled="discountForm.processing || !discountForm.item_id" @click="submitDiscount">
+            {{ discountForm.processing ? 'Applying…' : 'Apply discount' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </PageShell>
 </template>

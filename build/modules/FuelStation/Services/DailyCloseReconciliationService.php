@@ -126,7 +126,7 @@ class DailyCloseReconciliationService
             }
             $sources['journal:'.$transaction->id] = [
                 'id' => $transaction->id, 'type' => $transaction->transaction_type,
-                'reference' => $transaction->transaction_number, 'source_type' => $transaction->reference_type,
+                'reference' => $transaction->transaction_number, 'description' => $transaction->description, 'source_type' => $transaction->reference_type,
                 'source_id' => $transaction->reference_id, 'business_date' => $transaction->transaction_date->toDateString(), 'reconciles_business_date' => $date,
                 'entered_at' => $transaction->created_at?->toISOString(),
                 'entered_by' => $transaction->created_by_user_id,

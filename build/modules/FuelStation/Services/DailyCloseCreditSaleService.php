@@ -123,13 +123,29 @@ class DailyCloseCreditSaleService
             }
             $net = round($gross - $discountAmount, 2);
 
+            // The invoice's own line is at the GROSS amount, with the discount recorded on
+            // it as discount_amount -- the same shape FuelSaleService::createSale gives a
+            // standalone discounted credit sale. This is what lets invoices/Show.vue (and
+            // any statement) show "Amount ... Discount ... Owes ..." for a close-created
+            // invoice exactly like any other discounted invoice, instead of only ever
+            // showing the net figure with the discount invisible. The close's own journal
+            // is unaffected by this: it still nets AR at $net and debits Sales Discounts at
+            // $discountAmount below, in the caller's posting loop.
+            if ($litres && $litres > 0) {
+                $lineQuantity = $litres;
+                $lineUnitPrice = round($gross / $litres, 6);
+            } else {
+                $lineQuantity = 1;
+                $lineUnitPrice = $gross;
+            }
+
             // Use native numbering and invoice validation; drafts have no independent GL posting.
             $result = app(CompanyContextService::class)->withContext($company, fn () => app(CommandBus::class)->dispatch('invoice.create', [
                 'customer' => $customer->id, 'currency' => $company->base_currency, 'date' => $date,
                 'draft' => true,
                 'notes' => "Credit portion of meter sales for {$date}. ".($row['reference'] ?? ''),
-                'line_items' => [['description' => "Meter sales on credit — {$date}", 'quantity' => 1,
-                    'unit_price' => $net, 'tax_rate' => 0]],
+                'line_items' => [['description' => "Meter sales on credit — {$date}", 'quantity' => $lineQuantity,
+                    'unit_price' => $lineUnitPrice, 'tax_rate' => 0, 'discount_amount' => $discountAmount]],
             ], $user, true));
             $details[] = ['customer_id' => $customer->id, 'customer_name' => $customer->name,
                 // 'amount' stays the gross meter sale -- this is what the close removes from

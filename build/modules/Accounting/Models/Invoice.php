@@ -15,7 +15,14 @@ class Invoice extends Model
     protected static function booted(): void
     {
         static::updating(function (self $invoice) {
-            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status'];
+            // discount_amount/total_amount joined the settlement-style whitelist for a
+            // post-close discount (DailyClosePostCloseDiscountService::apply()): a legitimate
+            // amendment to a posted close's credit invoice, gated by that service's own
+            // checks (the close must be unlocked, the invoice must belong to it, the
+            // discount cannot exceed the balance) rather than by this guard. The DB-level
+            // fuel.protect_close_credit_invoice() trigger enforces the same invariants as a
+            // backstop -- see the 2026_09_26_010000 migration.
+            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount'];
             if (array_diff(array_keys($invoice->getDirty()), $settlement)
                 || ($invoice->isDirty('status') && in_array($invoice->status, ['draft', 'void', 'cancelled', 'reversed'], true))) {
                 app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);

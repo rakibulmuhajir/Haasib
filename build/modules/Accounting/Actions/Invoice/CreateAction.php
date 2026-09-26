@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
@@ -83,6 +84,12 @@ class CreateAction implements PaletteAction
             } else {
                 $dueDate = $invoiceDate->copy()->addDays($paymentTerms);
             }
+
+            // A date a module has locked (e.g. FuelStation's daily close, once locked)
+            // cannot receive a new invoice either -- the close's own inline invoice
+            // creation happens while posting, before the day's own close transaction
+            // exists at all, so it is never blocked by its own lock.
+            app(DocumentDateLock::class)->assertOpen($company->id, $invoiceDate->toDateString(), 'This invoice');
 
             // Generate invoice number using existing model method
             $invoiceNumber = Invoice::generateInvoiceNumber($company->id);

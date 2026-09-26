@@ -24,6 +24,7 @@ class UpdateAction implements PaletteAction
         return [
             'id' => 'required|string',
             'vendor_invoice_number' => 'nullable|string|max:100',
+            'bill_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'line_items' => 'nullable|array|min:1',
             'line_items.*.item_id' => 'nullable|uuid',
@@ -67,6 +68,13 @@ class UpdateAction implements PaletteAction
         // daily close) does.
         app(DocumentDateLock::class)->assertOpen($company->id, $bill->bill_date->toDateString(), "Bill {$bill->bill_number}");
 
+        // The bill's date moves its posting too, so the new date must be open as well.
+        $newBillDate = ! empty($params['bill_date']) ? \Illuminate\Support\Carbon::parse($params['bill_date'])->toDateString() : null;
+        $dateChanged = $newBillDate !== null && $newBillDate !== $bill->bill_date->toDateString();
+        if ($dateChanged) {
+            app(DocumentDateLock::class)->assertOpen($company->id, $newBillDate, "Bill {$bill->bill_number}");
+        }
+
         // Stock already received freezes the line's quantity/item/warehouse -- but not its
         // price. A supplier's invoice arriving with a more precise rate than the one entered
         // at receipt time (e.g. a daily-close purchase rounded to two decimals) is common
@@ -87,7 +95,7 @@ class UpdateAction implements PaletteAction
             $moneyOnlyLineEdit = true;
         }
 
-        return \App\Services\AccountingWriteTransaction::run(function () use ($bill, $params, $moneyOnlyLineEdit) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($bill, $params, $moneyOnlyLineEdit, $newBillDate, $dateChanged) {
             $update = array_intersect_key($params, array_flip([
                 'vendor_invoice_number',
                 'due_date',
@@ -96,6 +104,11 @@ class UpdateAction implements PaletteAction
             ]));
 
             $journalRelevantChanged = false;
+
+            if ($dateChanged) {
+                $update['bill_date'] = $newBillDate;
+                $journalRelevantChanged = true; // repost on the new date
+            }
 
             if (!empty($params['line_items'])) {
                 $normalizedLines = collect($params['line_items'])
@@ -111,7 +124,7 @@ class UpdateAction implements PaletteAction
                 // line_total was submitted), not the raw request value, so a line
                 // resubmitted amount-driven is compared on the same figure that will
                 // actually be stored.
-                $journalRelevantChanged = $this->lineItemsChanged($bill, $totals->pluck('source')->all());
+                $journalRelevantChanged = $this->lineItemsChanged($bill, $totals->pluck('source')->all()) || $journalRelevantChanged;
 
                 if ((float) $bill->paid_amount > 0.000001 && $totals->sum('total') < (float) $bill->paid_amount - 0.000001) {
                     throw ValidationException::withMessages([

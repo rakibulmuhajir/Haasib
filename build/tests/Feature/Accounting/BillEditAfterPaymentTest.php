@@ -288,3 +288,33 @@ test('a bill dated in a closed accounting period cannot be edited', function () 
 
     $response->assertSessionHasErrors('date');
 });
+
+test('changing only a paid bill\'s date saves it and reposts the bill on the new date', function () {
+    $f = billEditFixture();
+    $put = fn (string $date) => $this->actingAs($f['user'])->put("/{$f['company']->slug}/bills/{$f['bill']->id}", [
+        'vendor_id' => $f['vendor']->id,
+        'bill_date' => $date,
+        'due_date' => $date,
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'payment_terms' => 0,
+        'line_items' => [[
+            'item_id' => $f['item']->id, 'description' => 'Petrol', 'quantity' => 100,
+            'unit_price' => 250, 'tax_rate' => 0, 'discount_rate' => 0,
+        ]],
+    ]);
+
+    $put('2026-09-10')->assertSessionHasNoErrors()->assertRedirect();
+    $before = $f['bill']->fresh()->transaction_id;
+
+    // Same line, new date: only the date changes.
+    $put('2026-09-05')->assertSessionHasNoErrors()->assertRedirect();
+    expect(session('error'))->toBeNull();
+
+    $bill = $f['bill']->fresh();
+    expect($bill->bill_date->toDateString())->toBe('2026-09-05')
+        ->and($bill->transaction_id)->not->toBe($before)
+        ->and(Transaction::find($bill->transaction_id)->transaction_date->toDateString())->toBe('2026-09-05')
+        ->and(Transaction::find($before)->reversed_by_id)->not->toBeNull()
+        ->and($bill->status)->toBe('paid');
+});

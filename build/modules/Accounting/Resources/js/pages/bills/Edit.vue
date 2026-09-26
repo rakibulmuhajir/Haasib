@@ -315,7 +315,7 @@ const handleSubmit = () => {
         </div>
         <div>
           <Label for="bill_date">{{ t('billDate') }}</Label>
-          <Input id="bill_date" v-model="form.bill_date" type="date" :disabled="!['draft','received'].includes(bill.status)" />
+          <Input id="bill_date" v-model="form.bill_date" type="date" :disabled="['void','cancelled'].includes(bill.status)" />
           <InputError :message="form.errors.bill_date" />
         </div>
         <div>

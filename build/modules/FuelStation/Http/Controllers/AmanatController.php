@@ -189,12 +189,76 @@ class AmanatController extends Controller
             'profile' => $profile,
             'transactions' => $transactions,
             'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
+            'opening' => $this->openingFor($customerModel->id, $request->user()),
             'paymentAccounts' => Account::where('company_id', $company->id)
                 ->where('is_active', true)->whereNull('deleted_at')
                 ->whereIn('subtype', ['cash', 'bank'])
                 ->orderBy('code')
                 ->get(['id', 'code', 'name', 'subtype']),
         ]);
+    }
+
+    /**
+     * This holder's line in the opening balances, for the holder page's Opening balance card:
+     * what they held with us (amanat) or owed us (credit_customers) on the opening date.
+     * Null when the user may not manage opening balances.
+     */
+    private function openingFor(string $customerId, $user): ?array
+    {
+        if (! ($user?->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE) ?? false)) {
+            return null;
+        }
+        $view = app(CommandBus::class)->dispatch('opening_balance.view', [], $user, true);
+        $holds = collect($view['rows']['amanat'] ?? [])->where('customer_id', $customerId)->sum('amount');
+        $owes = collect($view['rows']['credit_customers'] ?? [])->where('customer_id', $customerId)->sum('amount');
+
+        return [
+            'kind' => $owes > 0 ? 'owes' : 'holds',
+            'amount' => round((float) ($owes > 0 ? $owes : $holds), 2),
+            'as_of_date' => $view['as_of_date'] ?? null,
+            'locked' => ! empty($view['locked_at']),
+        ];
+    }
+
+    /**
+     * Set or change a holder's opening balance after creation -- the same opening_balance.set_party
+     * the create dialog uses. Switching holds <-> owes clears the other side, so a holder is never
+     * in both sections.
+     */
+    public function setOpening(\App\Modules\FuelStation\Http\Requests\SetAmanatOpeningRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $customer = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
+        abort_unless($customer, 404);
+        $data = $request->validated();
+        $bus = app(CommandBus::class);
+        $current = $this->openingFor($customer->id, $request->user());
+        $target = $data['opening_kind'] === 'owes' ? 'credit_customers' : 'amanat';
+        $other = $target === 'amanat' ? 'credit_customers' : 'amanat';
+
+        try {
+            DB::transaction(function () use ($bus, $customer, $data, $request, $current, $target, $other, $company) {
+                if ($current && $current['amount'] > 0 && ($current['kind'] === 'owes' ? 'credit_customers' : 'amanat') === $other) {
+                    $bus->dispatch('opening_balance.set_party', [
+                        'section' => $other, 'party_id' => $customer->id, 'amount' => 0,
+                        'as_of_date' => $data['opening_date'] ?? null,
+                    ], $request->user());
+                }
+                $bus->dispatch('opening_balance.set_party', [
+                    'section' => $target, 'party_id' => $customer->id,
+                    'amount' => (float) $data['opening_amount'],
+                    'as_of_date' => $data['opening_date'] ?? null,
+                ], $request->user());
+                if ($target === 'credit_customers' && (float) $data['opening_amount'] > 0) {
+                    CustomerProfile::where('company_id', $company->id)->where('customer_id', $customer->id)
+                        ->update(['is_credit_customer' => true]);
+                }
+            });
+        } catch (ValidationException $e) {
+            throw $this->remapOpeningError($e);
+        }
+
+        return back()->with('success', "Opening balance saved for {$customer->name}.");
     }
 
     public function deposit(\App\Modules\FuelStation\Http\Requests\StoreAmanatMovementRequest $request): RedirectResponse

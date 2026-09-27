@@ -145,3 +145,18 @@ test('amanat business-date ordering happens before pagination with deterministic
     expect(array_column($second['data'], 'id'))->toBe([$ids[50], $opening->id]);
     expect($second['data'][1]['transaction_date'])->toBe('2026-08-31');
 });
+
+test('an amanat holder opening balance can be set after creation from the holder page', function () {
+    $f = amanatHistoryHttpFixture();
+    $customer = Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'LATE-OB', 'name' => 'Late opening', 'base_currency' => 'PKR']);
+    \App\Modules\FuelStation\Models\CustomerProfile::getOrCreateForCustomer($f['company']->id, $customer->id)->update(['is_amanat_holder' => true]);
+
+    test()->actingAs($f['user'])
+        ->post("/{$f['company']->slug}/fuel/amanat/{$customer->id}/opening", [
+            'opening_kind' => 'holds', 'opening_amount' => 45000, 'opening_date' => '2026-08-31',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $opening = test()->actingAs($f['user'])->get("/{$f['company']->slug}/fuel/amanat/{$customer->id}")
+        ->viewData('page')['props']['opening'];
+    expect($opening['kind'])->toBe('holds')->and((float) $opening['amount'])->toBe(45000.0);
+});

@@ -66,6 +66,8 @@ const props = withDefaults(defineProps<{
   canRecordMovement?: boolean
   transactions: AmanatTransaction[] | PaginatedTransactions
   paymentAccounts?: PaymentAccount[]
+  // This holder's opening balance line; null when the user may not manage opening balances.
+  opening?: { kind: 'holds' | 'owes'; amount: number; as_of_date: string | null; locked: boolean } | null
 }>(), {
   transactions: () => [],
   paymentAccounts: () => [],
@@ -80,6 +82,13 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Amanat', href: `/${companySlug.value}/fuel/amanat` },
   { title: props.customer.name, href: `/${companySlug.value}/fuel/amanat/${props.customer.id}` },
 ])
+
+const openingForm = useForm({
+  opening_kind: props.opening?.kind ?? 'holds',
+  opening_amount: props.opening?.amount ?? 0,
+  opening_date: props.opening?.as_of_date ?? '',
+})
+const saveOpening = () => openingForm.post(`/${companySlug.value}/fuel/amanat/${props.customer.id}/opening`, { preserveScroll: true })
 
 const movement = useForm({ business_date: '', amount: 0, payment_account_id: '', reference: '' })
 const recordMovement = (kind: 'deposit' | 'withdraw') => movement.post(`/${companySlug.value}/fuel/amanat/${props.customer.id}/${kind}`, {
@@ -197,6 +206,35 @@ const getTypeBadge = (type: string) => {
             />
             <Label for="allow-amanat-borrowing" class="text-sm font-normal">Allow borrowing — balance may go below zero</Label>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="opening" class="border-border/80">
+        <CardHeader class="pb-2">
+          <CardDescription>Opening balance</CardDescription>
+          <CardTitle class="text-lg">
+            <MoneyText :amount="opening.amount" :currency="currencyCode" />
+            <span class="ml-1 text-sm font-normal text-muted-foreground">{{ opening.kind === 'owes' ? 'owed to us' : 'held with us' }}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 pt-0">
+          <p v-if="opening.locked" class="text-sm text-muted-foreground">Opening balances are locked.</p>
+          <template v-else>
+            <Select v-model="openingForm.opening_kind">
+              <SelectTrigger id="opening-kind"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="holds">Holds amanat with us</SelectItem>
+                <SelectItem value="owes">Owes us</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label for="opening-amount">Amount</Label>
+            <Input id="opening-amount" v-model.number="openingForm.opening_amount" type="number" min="0" step="1" />
+            <Label for="opening-date">As of</Label>
+            <!-- One opening date for the whole company: shown, not changed, once it is set. -->
+            <Input id="opening-date" v-model="openingForm.opening_date" type="date" :disabled="!!opening.as_of_date" />
+            <p v-for="(error, field) in openingForm.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+            <Button :disabled="openingForm.processing" @click="saveOpening">Save opening balance</Button>
+          </template>
         </CardContent>
       </Card>
 

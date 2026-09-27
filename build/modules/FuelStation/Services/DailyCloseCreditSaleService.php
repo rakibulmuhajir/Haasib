@@ -121,6 +121,10 @@ class DailyCloseCreditSaleService
         if (!$rows) { return $details; }
 
         foreach ($rows as $index => $row) {
+            if (! empty($row['kept_invoice_id'])) {
+                $details[] = $this->keptInvoiceDetail($company, $index, $row);
+                continue;
+            }
             $customer = Customer::where('company_id', $companyId)->where('is_active', true)->find($row['customer_id']);
             if (!$customer) {
                 throw ValidationException::withMessages(["credit_sales.{$index}.customer_id" => 'Choose an active customer of this company.']);
@@ -281,6 +285,45 @@ class DailyCloseCreditSaleService
             ->all();
     }
 
+    /**
+     * A credit row whose invoice Edit day kept (a later payment settled it): the close re-uses
+     * that invoice exactly as first posted -- gross, discount and net from the invoice itself --
+     * instead of creating a new one, so the later payment stays on it.
+     */
+    private function keptInvoiceDetail(Company $company, int $index, array $row): array
+    {
+        $invoice = Invoice::where('company_id', $company->id)
+            ->whereKey($row['kept_invoice_id'])
+            ->whereNull('transaction_id')
+            ->where('customer_id', $row['customer_id'] ?? null)
+            ->with('customer')
+            ->first();
+        if (! $invoice) {
+            throw ValidationException::withMessages([
+                "credit_sales.{$index}.customer_id" => 'This credit row\'s invoice is no longer available to re-use; remove the row and enter it again.',
+            ]);
+        }
+        $customer = $invoice->customer;
+        $arId = $customer?->ar_account_id ?: $company->default_ar_account_id;
+        $ar = Account::where('company_id', $company->id)->where('is_active', true)->where('subtype', 'accounts_receivable')
+            ->when($arId, fn ($q) => $q->whereKey($arId), fn ($q) => $q->orderBy('code'))->first();
+
+        return [
+            'customer_id' => $invoice->customer_id,
+            'customer_name' => $customer->name ?? 'Buyer',
+            'amount' => round((float) $invoice->subtotal, 2),
+            'net_amount' => round((float) $invoice->total_amount, 2),
+            'discount_amount' => round((float) $invoice->discount_amount, 2),
+            'item_id' => $row['item_id'] ?? null,
+            'litres' => isset($row['litres']) ? (float) $row['litres'] : null,
+            'reference' => $row['reference'] ?? null,
+            'ar_account_id' => $ar?->id,
+            'invoice_id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'source' => 'manual',
+        ];
+    }
+
     public function attach(string $companyId, string $transactionId, array $details): void
     {
         foreach ($details as $detail) {
@@ -292,7 +335,10 @@ class DailyCloseCreditSaleService
                 $invoice->update(['included_in_close_id' => $transactionId]);
                 continue;
             }
-            $invoice->update(['transaction_id' => $transactionId, 'status' => 'sent', 'sent_at' => now()]);
+            // A kept invoice already settled keeps its paid status.
+            $invoice->update($invoice->status === 'draft'
+                ? ['transaction_id' => $transactionId, 'status' => 'sent', 'sent_at' => now()]
+                : ['transaction_id' => $transactionId]);
         }
     }
 }

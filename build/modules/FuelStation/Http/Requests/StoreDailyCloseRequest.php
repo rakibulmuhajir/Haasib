@@ -108,6 +108,8 @@ class StoreDailyCloseRequest extends BaseFormRequest
             // priced (see DailyCloseCreditSaleService::prepare, which refuses a per_litre
             // discount without litres); a percent discount needs only the amount above.
             'credit_sales.*.item_id' => 'nullable|uuid',
+            // Set by Edit day on a row whose invoice a later payment settled: re-use that invoice.
+            'credit_sales.*.kept_invoice_id' => 'nullable|uuid',
             'credit_sales.*.litres' => 'nullable|numeric|min:0.01',
             'bank_deposits' => 'nullable|array',
             'bank_deposits.*.bank_account_id' => 'required|uuid',

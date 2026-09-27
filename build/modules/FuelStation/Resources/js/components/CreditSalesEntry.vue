@@ -34,6 +34,8 @@ const rows = defineModel<Array<{
     invoice_number?: string
     pending_fuel_invoice?: boolean
     pending_accounting_invoice?: boolean
+    // Edit day kept this row's invoice because a later payment settled it; posting re-uses it.
+    kept_invoice_id?: string
     // Credit-limit context captured at selection time (see onCustomerSelected) so the
     // row can warn inline without a second round trip per keystroke on amount.
     credit_limit?: number
@@ -142,8 +144,8 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
 // Both kinds of pre-loaded row -- a Fuel -> Sales credit invoice and a plain Accounting
 // invoice on a fuel revenue account -- are locked the same way: read-only, not removable,
 // linked to the invoice they came from. Only the label differs.
-const isLocked = (row: { pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }) =>
-    !!row.pending_fuel_invoice || !!row.pending_accounting_invoice
+const isLocked = (row: { pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean; kept_invoice_id?: string }) =>
+    !!row.pending_fuel_invoice || !!row.pending_accounting_invoice || !!row.kept_invoice_id
 
 const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
     name: string

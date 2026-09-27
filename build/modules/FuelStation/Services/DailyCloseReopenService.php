@@ -96,7 +96,7 @@ class DailyCloseReopenService
             $expenseTransactionIds = $this->resolveExpenseTransactionIds($companyId, $close, $metadata);
             $purchaseDetails = $this->resolvePurchaseDetails($companyId, $close, $metadata);
 
-            $this->guardCreditInvoicesNotPaidElsewhere($companyId, $metadata);
+            $this->guardCreditInvoicesNotPaidElsewhere($companyId, $metadata, $warnings);
             $this->guardBillsNotPaidElsewhere($companyId, $purchaseDetails);
             $this->guardAdvancesUntouched($companyId, $close->id);
             $this->guardDirectSalesNotPaidElsewhere($companyId, $metadata);
@@ -116,7 +116,7 @@ class DailyCloseReopenService
 
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
 
-            $this->detachOrDeleteCreditSales($companyId, $metadata);
+            $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
             $this->reverseDirectSales($companyId, $metadata);
             $this->reversePaymentsReceived($companyId, $metadata);
             $this->reversePaySuppliers($companyId, $metadata);
@@ -140,6 +140,7 @@ class DailyCloseReopenService
             // Create page's own "Save as draft" path.
             $formInput = $metadata['form_input'] ?? [];
             $formInput['date'] = $businessDate;
+            $formInput['credit_sales'] = $this->markKeptCreditRows($formInput['credit_sales'] ?? [], $metadata, $keptInvoices);
             app(DailyCloseReconciliationService::class)->park($companyId, $formInput, $user->id);
 
             return ['parked_date' => $businessDate, 'warnings' => $warnings];
@@ -324,7 +325,7 @@ class DailyCloseReopenService
         return $details;
     }
 
-    private function guardCreditInvoicesNotPaidElsewhere(string $companyId, array $metadata): void
+    private function guardCreditInvoicesNotPaidElsewhere(string $companyId, array $metadata, array &$warnings = []): void
     {
         $ownPaymentIds = collect($metadata['payments_received_details'] ?? [])->pluck('payment_id')->filter()->values()->all();
 
@@ -337,7 +338,10 @@ class DailyCloseReopenService
                 ->when($ownPaymentIds, fn ($q) => $q->whereNotIn('payment_id', $ownPaymentIds))
                 ->sum('amount_allocated');
             if ($externalAllocated > 0.004) {
-                throw new \RuntimeException("Invoice {$credit['invoice_number']} has a payment that was not made by this close. Reverse that payment first.");
+                // Paid on a later day (e.g. that day's Payments received): Edit day keeps the
+                // invoice and its payment, and the re-posted day uses it again -- see
+                // detachOrDeleteCreditSales() and DailyCloseCreditSaleService::prepare().
+                $warnings[] = "Invoice {$credit['invoice_number']} was paid later; it is kept and re-used when this day is posted again.";
             }
         }
     }
@@ -455,8 +459,14 @@ class DailyCloseReopenService
         }
     }
 
-    private function detachOrDeleteCreditSales(string $companyId, array $metadata): void
+    /**
+     * @return array<string, string> invoice_id => invoice_number of close-created invoices kept
+     *                               because a payment outside this close settled them
+     */
+    private function detachOrDeleteCreditSales(string $companyId, array $metadata): array
     {
+        $ownPaymentIds = collect($metadata['payments_received_details'] ?? [])->pluck('payment_id')->filter()->values()->all();
+        $kept = [];
         foreach ($metadata['credit_sale_details'] ?? [] as $credit) {
             if (empty($credit['invoice_id'])) {
                 continue;
@@ -470,10 +480,23 @@ class DailyCloseReopenService
                 $invoice->update(['included_in_close_id' => null]);
                 continue;
             }
+            $paidElsewhere = PaymentAllocation::where('company_id', $companyId)
+                ->where('invoice_id', $invoice->id)
+                ->when($ownPaymentIds, fn ($q) => $q->whereNotIn('payment_id', $ownPaymentIds))
+                ->exists();
             if ($source === 'fuel_sale_invoice') {
                 // Pre-existing fuel-sale invoice the close only attached; hand it back to
-                // pending exactly as it stood before the close touched it.
-                $invoice->update(['transaction_id' => null, 'status' => 'draft', 'sent_at' => null]);
+                // pending as it stood before the close touched it -- a paid one keeps its status.
+                $invoice->update($paidElsewhere
+                    ? ['transaction_id' => null]
+                    : ['transaction_id' => null, 'status' => 'draft', 'sent_at' => null]);
+                continue;
+            }
+            if ($paidElsewhere) {
+                // 'manual', but settled by a payment outside this close: keep it (and that
+                // payment) and detach it; the draft row points at it so the re-post re-uses it.
+                $invoice->update(['transaction_id' => null]);
+                $kept[$invoice->id] = $invoice->invoice_number;
                 continue;
             }
             // 'manual': the close itself created this invoice via invoice.create -- delete it
@@ -481,6 +504,8 @@ class DailyCloseReopenService
             $invoice->lineItems()->delete();
             $invoice->delete();
         }
+
+        return $kept;
     }
 
     /** A direct-sale invoice the close made may only carry the close's own cash payment. */
@@ -518,6 +543,30 @@ class DailyCloseReopenService
             $invoice->lineItems()->delete();
             $invoice->delete();
         }
+    }
+
+    /** Point each draft credit row whose invoice was kept at that invoice (matched by customer, amount, reference). */
+    private function markKeptCreditRows(array $rows, array $metadata, array $keptInvoices): array
+    {
+        foreach ($metadata['credit_sale_details'] ?? [] as $credit) {
+            if (($credit['source'] ?? null) !== 'manual' || ! isset($keptInvoices[$credit['invoice_id'] ?? ''])) {
+                continue;
+            }
+            foreach ($rows as $i => $row) {
+                if (! empty($row['kept_invoice_id'])) {
+                    continue;
+                }
+                if (($row['customer_id'] ?? null) === $credit['customer_id']
+                    && round((float) ($row['amount'] ?? 0), 2) === round((float) $credit['amount'], 2)
+                    && ($row['reference'] ?? null) === ($credit['reference'] ?? null)) {
+                    $rows[$i]['kept_invoice_id'] = $credit['invoice_id'];
+                    $rows[$i]['invoice_number'] = $credit['invoice_number'];
+                    break;
+                }
+            }
+        }
+
+        return $rows;
     }
 
     private function reversePaymentsReceived(string $companyId, array $metadata): void

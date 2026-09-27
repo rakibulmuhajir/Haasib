@@ -535,6 +535,19 @@ class DailyCloseController extends Controller
 
         // The close is a morning ritual: today's dip closes yesterday. Before noon, default to yesterday.
         $defaultDate = now()->hour < 12 ? now()->subDay()->toDateString() : now()->toDateString();
+        // Catching up on older days: open the next day still to close, not yesterday. Once the
+        // closes are current, that day is the morning-rule date itself.
+        $lastPosted = Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')
+            ->whereNull('reversed_by_id')
+            ->max('transaction_date');
+        if ($lastPosted) {
+            $nextToClose = \Illuminate\Support\Carbon::parse($lastPosted)->addDay()->toDateString();
+            if ($nextToClose < $defaultDate) {
+                $defaultDate = $nextToClose;
+            }
+        }
         $date = $request->get('date', $defaultDate);
 
         // Get fuel items with current rates

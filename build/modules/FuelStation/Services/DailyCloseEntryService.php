@@ -48,14 +48,48 @@ class DailyCloseEntryService
      *
      * @return array{bill_id:string, bill_transaction_id:?string, payment_transaction_id:?string}
      */
+    /**
+     * The lines of one inline purchase. A purchase is one supplier bill: `lines` holds each
+     * product on it; a draft saved before multi-line purchases carried a single product on the
+     * row itself, which reads as one line. Incomplete lines (no item or quantity) are dropped.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function purchaseLines(array $purchase): array
+    {
+        $lines = isset($purchase['lines']) && is_array($purchase['lines']) ? $purchase['lines'] : [$purchase];
+
+        return array_values(array_filter($lines, fn ($line) => is_array($line)
+            && ! empty($line['item_id']) && (float) ($line['quantity'] ?? 0) > 0));
+    }
+
     public function purchase(string $companyId, string $date, array $purchase, User $user): array
     {
         $company = Company::findOrFail($companyId);
-        $item = !empty($purchase['item_id']) ? Item::where('company_id', $companyId)->find($purchase['item_id']) : null;
-        $directQuantity = round((float) ($purchase['direct_quantity'] ?? 0), 3);
-        // A delivery sold entirely straight to a customer never reaches a tank.
-        if ($item?->fuel_category && empty($purchase['tank_id']) && (float) $purchase['quantity'] - $directQuantity > 0.0005) {
-            throw new \InvalidArgumentException('A tank is required for a fuel purchase.');
+        $lineItems = [];
+        foreach (self::purchaseLines($purchase) as $line) {
+            $item = Item::where('company_id', $companyId)->find($line['item_id']);
+            $directQuantity = round((float) ($line['direct_quantity'] ?? 0), 3);
+            // A delivery sold entirely straight to a customer never reaches a tank.
+            if ($item?->fuel_category && empty($line['tank_id']) && (float) $line['quantity'] - $directQuantity > 0.0005) {
+                throw new \InvalidArgumentException("A tank is required for {$item->name}.");
+            }
+            $lineItems[] = array_filter([
+                'item_id' => $line['item_id'],
+                'warehouse_id' => $line['tank_id'] ?? null,
+                'description' => $line['description'] ?? ($item->name ?? 'Purchase'),
+                'quantity' => $line['quantity'],
+                // Sold directly: its cost goes to COGS on the bill and it is never received.
+                'direct_quantity' => $directQuantity > 0 ? $directQuantity : null,
+                'unit_price' => $line['unit_cost'] ?? null,
+                // The total actually billed, when the supplier priced this delivery to
+                // more decimals than the row's rate field carries -- bill.create derives
+                // the exact rate from it instead of the rounded one. See BillLineTotals.
+                'line_total' => $line['line_total'] ?? null,
+            ], fn ($v) => $v !== null && $v !== '');
+        }
+        if (! $lineItems) {
+            throw new \InvalidArgumentException('A purchase needs at least one product with a quantity.');
         }
 
         $billResult = app(CommandBus::class)->dispatch('bill.create', [
@@ -66,19 +100,7 @@ class DailyCloseEntryService
             'currency' => $company->base_currency ?: 'PKR',
             'base_currency' => $company->base_currency ?: 'PKR',
             'notes' => $purchase['notes'] ?? null,
-            'line_items' => [array_filter([
-                'item_id' => $purchase['item_id'] ?? null,
-                'warehouse_id' => $purchase['tank_id'] ?? null,
-                'description' => $purchase['description'] ?? ($item->name ?? 'Purchase'),
-                'quantity' => $purchase['quantity'],
-                // Sold directly: its cost goes to COGS on the bill and it is never received.
-                'direct_quantity' => $directQuantity > 0 ? $directQuantity : null,
-                'unit_price' => $purchase['unit_cost'],
-                // The total actually billed, when the supplier priced this delivery to
-                // more decimals than the row's rate field carries -- bill.create derives
-                // the exact rate from it instead of the rounded one. See BillLineTotals.
-                'line_total' => $purchase['line_total'] ?? null,
-            ], fn ($v) => $v !== null)],
+            'line_items' => $lineItems,
         ], $user);
 
         $bill = Bill::where('company_id', $companyId)->findOrFail($billResult['data']['id']);

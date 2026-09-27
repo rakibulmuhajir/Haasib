@@ -339,7 +339,7 @@ class DailyCloseService
             // metadata['purchase_details'] below. Never read by anything else.
             $purchaseDetails = [];
             foreach ($declaredPurchases as $purchase) {
-                if (empty($purchase['supplier_id']) || empty($purchase['item_id']) || (float) ($purchase['quantity'] ?? 0) <= 0) {
+                if (empty($purchase['supplier_id']) || ! DailyCloseEntryService::purchaseLines($purchase)) {
                     continue;
                 }
                 $purchaseResult = app(DailyCloseEntryService::class)->purchase($companyId, $date, $purchase, $user);

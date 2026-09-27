@@ -72,6 +72,25 @@ interface FuelItem {
 
 const { t } = useLexicon();
 
+interface PurchaseLine {
+    item_id: string;
+    quantity: number | null;
+    unit_cost: number | null;
+    line_total: number | null;
+    amount_driven: boolean;
+    tank_id: string;
+    direct_quantity: number | null;
+    show_direct?: boolean;
+}
+
+interface PurchaseRow {
+    supplier_id: string;
+    lines: PurchaseLine[];
+    paid_now: boolean;
+    supplier_invoice_number: string;
+    notes: string;
+}
+
 interface Tank {
     id: string;
     code: string;
@@ -313,6 +332,7 @@ const props = defineProps<{
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
     // Fuels whose sale rate changed on this day, with the change against the day before.
     rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
+    lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
     // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
     // CustomerFuelDiscountService (the single place this rate is priced).
     customerFuelDiscounts?: Record<string, Record<string, { discount_type: 'percent' | 'per_litre'; value: number }>>;
@@ -789,6 +809,7 @@ const refreshServerFacts = () => {
         invoice_ids: Array.isArray(row.invoice_ids) ? row.invoice_ids : [],
     }));
     form.opening_cash = props.previousClose.closing_cash || 0;
+    normalizePurchases();
     refreshTankFacts();
     refreshNozzleFacts();
     // Lists the server works out for this day: salaries still unpaid, supplier payments made
@@ -1154,22 +1175,9 @@ const form = useForm({
         amount: number;
     }[],
 
-    // Supplier bills / fuel purchases entered inline instead of via the Bills module.
-    purchases: [] as {
-        supplier_id: string;
-        item_id: string;
-        description: string;
-        quantity: number | null;
-        unit_cost: number | null;
-        line_total: number | null;
-        amount_driven: boolean;
-        tank_id: string;
-        supplier_invoice_number: string;
-        notes: string;
-        paid_now: boolean;
-        // Litres of this delivery sold straight to a customer (never received into the tank).
-        direct_quantity?: number | null;
-    }[],
+    // Supplier bills entered inline instead of via the Bills module: one purchase is one bill,
+    // each product on it a line (litres, rate, total; its tank; litres sold directly).
+    purchases: [] as PurchaseRow[],
 
     // Tab 5: Summary
     closing_cash: 0,
@@ -1344,9 +1352,6 @@ const expenseError = (index: number, field: string) =>
 const purchaseError = (index: number, field: string) =>
     (form.errors as Record<string, string>)[`purchases.${index}.${field}`];
 
-const purchaseLineTotal = (row: { quantity: number | null; unit_cost: number | null }) =>
-    Number(row.quantity || 0) * Number(row.unit_cost || 0);
-
 /**
  * Each tab lists only the entries it supports in an "Add entry" dropdown; a section is shown
  * once picked there, or whenever it already has rows (a restored draft, pre-loaded invoices).
@@ -1408,96 +1413,118 @@ const entryOptions = computed(() => {
             { key: 'channels', label: 'Card / bank / wallet sales' },
             { key: 'expenses', label: 'Expense' },
             { key: 'bank_deposits', label: 'Bank deposit' },
-            ...(props.canEnterPurchases ? [{ key: 'purchases', label: 'Delivery (supplier bill)' }] : []),
             { key: 'pay_suppliers', label: 'Pay supplier' },
             { key: 'employee_advances', label: 'Salary advance' },
             ...(partners ? [{ key: 'partner_withdrawals', label: 'Partner withdrawal' }] : []),
             ...(amanat ? [{ key: 'amanat_disbursements', label: 'Amanat withdrawal' }] : []),
         ],
-        sales: props.features.has_lubricant_sales && props.lubricantItems.length > 0
-            ? [{ key: 'other_sales', label: 'Lubricant / other sale' }]
-            : [],
+        sales: [
+            ...(props.canEnterPurchases ? [{ key: 'purchases', label: 'Purchase / delivery (supplier bill)' }] : []),
+            ...(props.features.has_lubricant_sales && props.lubricantItems.length > 0
+                ? [{ key: 'other_sales', label: 'Lubricant / other sale' }]
+                : []),
+        ],
     };
 });
 
+/**
+ * Purchases (first tab): one purchase is one supplier bill. Tick the products on it and each
+ * gets a line of litres, rate and total -- type the rate or the total and the other follows,
+ * since suppliers price to 3-4 decimals. Litres going into a tank count in that tank's expected
+ * stock straight away, before the close is posted, so the dip is compared against them.
+ */
 const addPurchaseRow = () => {
-    form.purchases.push({
-        supplier_id: '',
-        item_id: '',
-        description: '',
-        quantity: null,
-        unit_cost: null,
-        line_total: null,
-        amount_driven: false,
-        tank_id: '',
-        supplier_invoice_number: '',
-        notes: '',
-        paid_now: false,
-        direct_quantity: null,
-    });
+    form.purchases.push({ supplier_id: '', lines: [], paid_now: false, supplier_invoice_number: '', notes: '' });
 };
-
-// A fuel's tank is picked for it: the only tank holding that fuel, else the operator chooses.
-const tanksForItem = (itemId: string) => props.tanks.filter((t) => t.linked_item_id === itemId);
-const onPurchaseItemChange = (row: (typeof form.purchases)[number]) => {
-    const tanksOfItem = tanksForItem(row.item_id);
-    row.tank_id = tanksOfItem.length === 1 ? tanksOfItem[0].id : tanksOfItem.some((t) => t.id === row.tank_id) ? row.tank_id : '';
-};
-const showDirectFor = ref<Set<number>>(new Set());
-const purchaseRate = (row: (typeof form.purchases)[number]) =>
-    Number(row.quantity) > 0 && Number(row.line_total) > 0 ? Math.round((Number(row.line_total) / Number(row.quantity)) * 10000) / 10000 : null;
-
 const removePurchaseRow = (index: number) => {
     form.purchases.splice(index, 1);
 };
-
-/**
- * A fuel supplier commonly prices to 3-4 decimals per litre -- entering the total
- * actually billed and letting the rate fall out of it (same Amount/Rate driver as
- * the Bills forms) is the only way to avoid losing a chunk of the delivery's cost
- * to a rate rounded for typing convenience.
- */
+const tanksForItem = (itemId: string) => props.tanks.filter((t) => t.linked_item_id === itemId);
+const purchaseHasItem = (row: PurchaseRow, itemId: string) => row.lines.some((l) => l.item_id === itemId);
+const togglePurchaseItem = (row: PurchaseRow, itemId: string, checked: boolean) => {
+    if (!checked) {
+        row.lines = row.lines.filter((l) => l.item_id !== itemId);
+        return;
+    }
+    if (purchaseHasItem(row, itemId)) return;
+    const tanksOfItem = tanksForItem(itemId);
+    row.lines.push({
+        item_id: itemId,
+        quantity: null,
+        unit_cost: props.lastPurchasePrices?.[itemId]?.rate ?? null,
+        line_total: null,
+        amount_driven: false,
+        tank_id: tanksOfItem.length === 1 ? tanksOfItem[0].id : '',
+        direct_quantity: null,
+        show_direct: false,
+    });
+};
+const removePurchaseLine = (row: PurchaseRow, lineIndex: number) => {
+    row.lines.splice(lineIndex, 1);
+};
 const parsePurchaseFieldValue = (v: string | number): number | null => {
     if (typeof v === 'number') return v;
     if (v === '') return null;
     const n = Number.parseFloat(v);
     return Number.isNaN(n) ? null : n;
 };
-
-const recomputePurchaseAmountFromRate = (row: (typeof form.purchases)[number]) => {
-    const qty = Number(row.quantity) || 0;
-    const rate = Number(row.unit_cost) || 0;
-    row.line_total = Math.round(qty * rate * 100) / 100;
+const recomputeLineTotal = (line: PurchaseLine) => {
+    line.line_total = Math.round((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0) * 100) / 100;
 };
-
-const recomputePurchaseRateFromAmount = (row: (typeof form.purchases)[number]) => {
-    const qty = Number(row.quantity) || 0;
-    const amount = Number(row.line_total) || 0;
-    row.unit_cost = qty > 0 ? Math.round((amount / qty) * 10000) / 10000 : 0;
+const recomputeLineRate = (line: PurchaseLine) => {
+    const qty = Number(line.quantity) || 0;
+    line.unit_cost = qty > 0 ? Math.round(((Number(line.line_total) || 0) / qty) * 10000) / 10000 : null;
 };
-
-const onPurchaseQuantityChange = (index: number, v: string | number) => {
-    const row = form.purchases[index];
-    row.quantity = parsePurchaseFieldValue(v);
-    if (row.amount_driven) {
-        recomputePurchaseRateFromAmount(row);
-    } else {
-        recomputePurchaseAmountFromRate(row);
+const onLineQuantity = (line: PurchaseLine, v: string | number) => {
+    line.quantity = parsePurchaseFieldValue(v);
+    if (line.amount_driven) recomputeLineRate(line);
+    else recomputeLineTotal(line);
+};
+const onLineRate = (line: PurchaseLine, v: string | number) => {
+    line.unit_cost = parsePurchaseFieldValue(v);
+    line.amount_driven = false;
+    recomputeLineTotal(line);
+};
+const onLineTotal = (line: PurchaseLine, v: string | number) => {
+    line.line_total = parsePurchaseFieldValue(v);
+    line.amount_driven = true;
+    recomputeLineRate(line);
+};
+const purchaseBillTotal = (row: PurchaseRow) =>
+    row.lines.reduce((sum, l) => sum + Number(l.line_total ?? (Number(l.quantity || 0) * Number(l.unit_cost || 0))), 0);
+const purchaseItemName = (itemId: string) => (props.purchaseItems ?? []).find((i) => i.id === itemId)?.name ?? 'Item';
+// Litres each tank receives from this close's own purchases (quantity less litres sold directly).
+const purchaseLitresByTank = computed(() => {
+    const byTank: Record<string, number> = {};
+    for (const row of form.purchases as PurchaseRow[]) {
+        for (const line of row.lines || []) {
+            if (!line.tank_id) continue;
+            const litres = Math.max(0, Number(line.quantity || 0) - Number(line.direct_quantity || 0));
+            byTank[line.tank_id] = (byTank[line.tank_id] ?? 0) + litres;
+        }
     }
-};
-
-const onPurchaseRateChange = (index: number, v: string | number) => {
-    const row = form.purchases[index];
-    row.unit_cost = parsePurchaseFieldValue(v);
-    row.amount_driven = false;
-    recomputePurchaseAmountFromRate(row);
-};
-
-const onPurchaseAmountChange = (index: number, v: string | number) => {
-    const row = form.purchases[index];
-    row.line_total = parsePurchaseFieldValue(v);
-    row.amount_driven = true;
-    recomputePurchaseRateFromAmount(row);
+    return byTank;
+});
+// Purchases paid from the drawer right now: cash out today.
+const paidNowPurchasesTotal = computed(() =>
+    (form.purchases as PurchaseRow[]).filter((r) => r.paid_now).reduce((sum, r) => sum + purchaseBillTotal(r), 0),
+);
+// A draft saved before multi-line purchases kept one product on the row itself.
+const normalizePurchases = () => {
+    form.purchases = ((form.purchases || []) as any[]).map((row) => {
+        if (Array.isArray(row.lines)) return { paid_now: false, supplier_invoice_number: '', notes: '', ...row };
+        const line = row.item_id
+            ? [{
+                  item_id: row.item_id, quantity: row.quantity ?? null, unit_cost: row.unit_cost ?? null,
+                  line_total: row.line_total ?? null, amount_driven: Boolean(row.amount_driven), tank_id: row.tank_id ?? '',
+                  direct_quantity: row.direct_quantity ?? null, show_direct: Number(row.direct_quantity) > 0,
+              }]
+            : [];
+        return {
+            supplier_id: row.supplier_id ?? '', lines: line, paid_now: Boolean(row.paid_now),
+            supplier_invoice_number: row.supplier_invoice_number ?? '', notes: row.notes ?? '',
+        };
+    });
 };
 
 const isFuelPurchaseItem = (itemId: string) =>
@@ -1939,7 +1966,8 @@ const expectedTankClosingLiters = (tank: {
     return (
         Number(tank.previous_liters || 0) +
         Number(tank.stock_movements_since_baseline_liters || 0) +
-        Number(tank.pending_delivery_liters || 0) -
+        Number(tank.pending_delivery_liters || 0) +
+        Number(purchaseLitresByTank.value[tank.tank_id] || 0) -
         soldFromTank
     );
 };
@@ -1959,7 +1987,8 @@ const tankVariances = computed(() => {
         const usageFromDip =
             tank.previous_liters +
             Number(tank.stock_movements_since_baseline_liters || 0) +
-            Number(tank.pending_delivery_liters || 0) -
+            Number(tank.pending_delivery_liters || 0) +
+            Number(purchaseLitresByTank.value[tank.tank_id] || 0) -
             tank.liters;
 
         return {
@@ -2299,7 +2328,8 @@ const totalMoneyOut = computed(() => {
         cashBillPayments +
         cashPaySuppliers +
         amanat +
-        expenses
+        expenses +
+        paidNowPurchasesTotal.value
     );
 });
 
@@ -3295,6 +3325,110 @@ const completedWorkflowSteps = computed(() => {
                         >
                     </CardHeader>
                     <CardContent class="space-y-6">
+                        <div v-if="entryOptions.sales.length" class="flex flex-wrap items-center gap-2">
+                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="option in entryOptions.sales" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
+                        </div>
+                        <!-- Purchases: one supplier bill each; its litres count in the tanks tab right away -->
+                        <div v-if="canEnterPurchases && showSection('purchases')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Purchases</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        One supplier bill each, posted with this close. Litres going into a tank count in its expected stock straight away.
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" @click="addPurchaseRow"><Plus class="mr-1 h-4 w-4" /> Add bill</Button>
+                            </div>
+                            <div v-for="(purchase, index) in form.purchases" :key="rowKey(purchase)" class="space-y-3 rounded-lg border p-3">
+                                <div class="flex flex-wrap items-end gap-3">
+                                    <div class="w-56">
+                                        <Label class="text-xs">Supplier</Label>
+                                        <Select v-model="purchase.supplier_id">
+                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="s in purchaseSuppliers ?? []" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError :message="purchaseError(index, 'supplier_id')" />
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pb-2">
+                                        <span class="text-xs text-muted-foreground">Products:</span>
+                                        <label v-for="it in purchaseItems ?? []" :key="it.id" class="flex items-center gap-1.5 text-sm">
+                                            <Checkbox
+                                                :model-value="purchaseHasItem(purchase, it.id)"
+                                                @update:model-value="(v) => togglePurchaseItem(purchase, it.id, v === true)"
+                                            />
+                                            {{ it.name }}
+                                        </label>
+                                    </div>
+                                    <Button variant="ghost" size="icon" class="ml-auto" aria-label="Remove bill" @click="removePurchaseRow(index)">
+                                        <Trash2 class="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <InputError :message="purchaseError(index, 'tank_id') || form.errors[`purchases`]" />
+
+                                <div
+                                    v-for="(line, li) in purchase.lines"
+                                    :key="line.item_id"
+                                    class="grid grid-cols-2 gap-3 border-t border-dashed pt-3 md:grid-cols-[9rem_7rem_8rem_9rem_1fr_auto] md:items-end"
+                                >
+                                    <div class="pb-2 text-sm font-medium">{{ purchaseItemName(line.item_id) }}</div>
+                                    <div>
+                                        <Label class="text-xs">Litres</Label>
+                                        <Input :model-value="line.quantity" type="number" min="0" @focus="selectZeroValue" @update:model-value="(v) => onLineQuantity(line, v)" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Rate</Label>
+                                        <Input :model-value="line.unit_cost" type="number" step="any" min="0" @focus="selectZeroValue" @update:model-value="(v) => onLineRate(line, v)" />
+                                    </div>
+                                    <div>
+                                        <Label class="text-xs">Total</Label>
+                                        <Input :model-value="line.line_total" type="number" min="0" @focus="selectZeroValue" @update:model-value="(v) => onLineTotal(line, v)" />
+                                    </div>
+                                    <div class="flex flex-wrap items-end gap-3 text-xs">
+                                        <div v-if="isFuelPurchaseItem(line.item_id) && tanksForItem(line.item_id).length !== 1" class="w-40">
+                                            <Label class="text-xs">Tank</Label>
+                                            <Select v-model="line.tank_id">
+                                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem v-for="t in (tanksForItem(line.item_id).length ? tanksForItem(line.item_id) : tanks)" :key="t.id" :value="t.id">{{ t.name }}</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <span v-else-if="line.tank_id" class="pb-2 text-muted-foreground">Into {{ tanks.find((t) => t.id === line.tank_id)?.name }}</span>
+                                        <div v-if="line.show_direct || Number(line.direct_quantity) > 0" class="w-28">
+                                            <Label class="text-xs">Sold directly (L)</Label>
+                                            <Input v-model.number="line.direct_quantity" type="number" min="0" @focus="selectZeroValue" />
+                                        </div>
+                                        <button
+                                            v-else-if="isFuelPurchaseItem(line.item_id)"
+                                            type="button"
+                                            class="pb-2 text-primary underline-offset-2 hover:underline"
+                                            @click="line.show_direct = true"
+                                        >+ Sold directly</button>
+                                    </div>
+                                    <Button variant="ghost" size="icon" :aria-label="`Remove ${purchaseItemName(line.item_id)}`" @click="removePurchaseLine(purchase, li)">
+                                        <Trash2 class="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox :id="'purchase-paid-now-' + index" v-model="purchase.paid_now" />
+                                        <Label :for="'purchase-paid-now-' + index" class="text-xs">Paid now from cash</Label>
+                                    </div>
+                                    <span v-if="purchase.lines.length" class="font-medium">
+                                        Bill total <MoneyText :amount="purchaseBillTotal(purchase)" :currency="currencyCode" :fraction-digits="0" />
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                         <!-- Empty State: No nozzles configured -->
                         <div
                             v-if="form.nozzle_readings.length === 0"
@@ -3817,15 +3951,6 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
-                        <div v-if="entryOptions.sales.length" class="flex flex-wrap items-center gap-2">
-                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="option in entryOptions.sales" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
-                        </div>
                         <!-- Other Sales (Lubricants, etc.) -->
                         <template
                             v-if="
@@ -6447,106 +6572,6 @@ const completedWorkflowSteps = computed(() => {
                                 >
                                     <Trash2 class="h-4 w-4 text-destructive" />
                                 </Button>
-                            </div>
-                        </div>
-
-
-                        <!-- Supplier bills / fuel purchases entered inline (requires bill.create) -->
-                        <div v-if="canEnterPurchases && showSection('purchases')" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">Purchases</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        A supplier bill (and, for fuel, a stock receipt into a tank) posted the moment this close is posted.
-                                    </p>
-                                </div>
-                                <Button variant="outline" size="sm" @click="addPurchaseRow">
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
-                            </div>
-
-                            <div
-                                v-for="(purchase, index) in form.purchases"
-                                :key="rowKey(purchase)"
-                                class="space-y-2 rounded-lg border p-3"
-                            >
-                                <div class="grid grid-cols-2 gap-3 md:grid-cols-[1fr_1fr_7rem_9rem_auto] md:items-end">
-                                    <div>
-                                        <Label class="text-xs">Supplier</Label>
-                                        <Select v-model="purchase.supplier_id">
-                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem v-for="s in purchaseSuppliers ?? []" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError :message="purchaseError(index, 'supplier_id')" />
-                                    </div>
-                                    <div>
-                                        <Label class="text-xs">Item</Label>
-                                        <Select v-model="purchase.item_id" @update:model-value="onPurchaseItemChange(purchase)">
-                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem v-for="it in purchaseItems ?? []" :key="it.id" :value="it.id">{{ it.name }}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError :message="purchaseError(index, 'item_id')" />
-                                    </div>
-                                    <div>
-                                        <Label class="text-xs">Litres</Label>
-                                        <Input
-                                            :model-value="purchase.quantity"
-                                            type="number"
-                                            @focus="selectZeroValue"
-                                            @update:model-value="(v) => onPurchaseQuantityChange(index, v)"
-                                        />
-                                        <InputError :message="purchaseError(index, 'quantity')" />
-                                    </div>
-                                    <div>
-                                        <Label class="text-xs">Total</Label>
-                                        <Input
-                                            :model-value="purchase.line_total"
-                                            type="number"
-                                            title="What the supplier billed for this delivery; the rate is worked out from it."
-                                            @focus="selectZeroValue"
-                                            @update:model-value="(v) => onPurchaseAmountChange(index, v)"
-                                        />
-                                        <p v-if="purchaseRate(purchase)" class="text-xs text-muted-foreground tabular-nums">@ {{ purchaseRate(purchase) }} / L</p>
-                                        <InputError :message="purchaseError(index, 'line_total') || purchaseError(index, 'unit_cost')" />
-                                    </div>
-                                    <Button variant="ghost" size="icon" aria-label="Remove purchase" @click="removePurchaseRow(index)">
-                                        <Trash2 class="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <div class="flex flex-wrap items-end gap-4 text-sm">
-                                    <div v-if="isFuelPurchaseItem(purchase.item_id) && tanksForItem(purchase.item_id).length !== 1" class="w-48">
-                                        <Label class="text-xs">Tank</Label>
-                                        <Select v-model="purchase.tank_id">
-                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem v-for="t in (tanksForItem(purchase.item_id).length ? tanksForItem(purchase.item_id) : tanks)" :key="t.id" :value="t.id">{{ t.name }}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError :message="purchaseError(index, 'tank_id')" />
-                                    </div>
-                                    <span v-else-if="purchase.tank_id" class="pb-1 text-xs text-muted-foreground">
-                                        Into {{ tanks.find((t) => t.id === purchase.tank_id)?.name }}
-                                    </span>
-                                    <div v-if="showDirectFor.has(index) || Number(purchase.direct_quantity) > 0" class="w-40">
-                                        <Label class="text-xs">Sold directly (L)</Label>
-                                        <Input v-model.number="purchase.direct_quantity" type="number" min="0" @focus="selectZeroValue" />
-                                        <InputError :message="purchaseError(index, 'direct_quantity')" />
-                                    </div>
-                                    <button
-                                        v-else-if="isFuelPurchaseItem(purchase.item_id)"
-                                        type="button"
-                                        class="pb-1 text-xs text-primary underline-offset-2 hover:underline"
-                                        @click="showDirectFor = new Set([...showDirectFor, index])"
-                                    >+ Sold directly</button>
-                                    <div class="flex items-center gap-2 pb-1">
-                                        <Checkbox :id="'purchase-paid-now-' + index" v-model="purchase.paid_now" />
-                                        <Label :for="'purchase-paid-now-' + index" class="text-xs">Paid now from cash</Label>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 

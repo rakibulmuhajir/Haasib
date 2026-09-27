@@ -158,6 +158,12 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
             'purchases.*.notes' => 'nullable|string|max:500',
             'purchases.*.paid_now' => 'nullable|boolean',
+            // One purchase = one supplier bill; each product on it is a line.
+            'purchases.*.lines' => 'nullable|array',
+            'purchases.*.lines.*.quantity' => 'nullable|numeric|min:0',
+            'purchases.*.lines.*.direct_quantity' => 'nullable|numeric|min:0',
+            'purchases.*.lines.*.unit_cost' => 'nullable|numeric|min:0',
+            'purchases.*.lines.*.line_total' => 'nullable|numeric|min:0|decimal:0,2',
 
             'bank_withdrawals' => 'nullable|array',
             'bank_withdrawals.*.bank_account_id' => ['required', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
@@ -215,6 +221,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
         // that is given must belong to this company.
         foreach ([
             'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
+            'purchases.*.lines.*.item_id' => 'inv.items', 'purchases.*.lines.*.tank_id' => 'inv.warehouses',
             'payments_received.*.customer_id' => 'acct.customers', 'payments_received.*.invoice_id' => 'acct.invoices',
             'pay_suppliers.*.vendor_id' => 'acct.vendors',
             'credit_sales.*.item_id' => 'inv.items',

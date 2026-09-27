@@ -290,3 +290,29 @@ test('an inline purchase with litres sold directly receives only the rest into t
         ->and((float) \Illuminate\Support\Facades\DB::table('inv.stock_movements')
             ->where('reference_type', 'acct.bills')->where('reference_id', $line->bill_id)->sum('quantity'))->toBe(300.0);
 });
+
+test('one purchase with several products becomes one bill with a line each', function () {
+    $f = inlinePurchaseFixture();
+    $item = \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $f['company']->id)->where('code', 'T1')->sole();
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000;
+    $f['payload']['purchases'] = [[
+        'supplier_id' => $f['vendor']->id,
+        'paid_now' => false,
+        'lines' => [
+            ['item_id' => $item->id, 'quantity' => 300, 'unit_cost' => 240, 'tank_id' => $tank->id],
+            ['item_id' => $item->id, 'quantity' => 200, 'line_total' => 48000, 'direct_quantity' => 50, 'tank_id' => $tank->id],
+        ],
+    ]];
+
+    inlinePurchasePost($f);
+
+    $bill = Bill::where('company_id', $f['company']->id)->sole();
+    $lines = $bill->lineItems()->orderBy('line_number')->get();
+    expect($lines)->toHaveCount(2)
+        ->and((float) $bill->total_amount)->toBe(120000.0)
+        ->and((float) $lines[1]->direct_quantity)->toBe(50.0)
+        ->and((float) \Illuminate\Support\Facades\DB::table('inv.stock_movements')
+            ->where('reference_type', 'acct.bills')->where('reference_id', $bill->id)->sum('quantity'))->toBe(450.0);
+});

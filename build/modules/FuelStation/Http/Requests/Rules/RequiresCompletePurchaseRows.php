@@ -38,20 +38,27 @@ class RequiresCompletePurchaseRows implements DataAwareRule, ValidationRule
         }
 
         $company = app(CurrentCompany::class)->get();
-        $itemIds = collect($rows)->pluck('item_id')->filter()->unique()->all();
+        $itemIds = collect($rows)->flatMap(fn ($row) => collect(\App\Modules\FuelStation\Services\DailyCloseEntryService::purchaseLines((array) $row))->pluck('item_id'))->filter()->unique()->all();
         $fuelItemIds = $company
             ? Item::where('company_id', $company->id)->whereIn('id', $itemIds)->whereNotNull('fuel_category')->pluck('id')->all()
             : [];
 
         foreach ($rows as $index => $row) {
-            if (empty($row['supplier_id']) || empty($row['item_id']) || empty($row['quantity']) || !isset($row['unit_cost'])) {
-                $fail("purchases.{$index}: a purchase row must have a supplier, item, quantity and unit cost before posting.");
+            $lines = \App\Modules\FuelStation\Services\DailyCloseEntryService::purchaseLines((array) $row);
+            if (empty($row['supplier_id']) || ! $lines) {
+                $fail("purchases.{$index}: a purchase must have a supplier and at least one product with a quantity before posting.");
 
                 continue;
             }
 
-            if (in_array($row['item_id'], $fuelItemIds, true) && empty($row['tank_id'])) {
-                $fail("purchases.{$index}.tank_id: A tank is required for a fuel purchase.");
+            foreach ($lines as $line) {
+                if (! isset($line['unit_cost']) && ! isset($line['line_total'])) {
+                    $fail("purchases.{$index}: enter a rate or total for every product on the purchase.");
+                }
+                $intoTank = (float) $line['quantity'] - (float) ($line['direct_quantity'] ?? 0);
+                if (in_array($line['item_id'], $fuelItemIds, true) && empty($line['tank_id']) && $intoTank > 0.0005) {
+                    $fail("purchases.{$index}.tank_id: A tank is required for a fuel purchase.");
+                }
             }
         }
     }

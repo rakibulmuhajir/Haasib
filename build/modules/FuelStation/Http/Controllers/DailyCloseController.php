@@ -828,6 +828,8 @@ class DailyCloseController extends Controller
             'fuelItems' => $fuelItems,
             'rates' => $rates,
             'rateChangesToday' => $this->rateChangesOn($companyId, $date, $fuelItems),
+            // What each item was last bought at up to this day: a purchase line's starting rate.
+            'lastPurchasePrices' => app(\App\Modules\FuelStation\Services\RateChangeService::class)->lastPurchasePrices($companyId, $date),
             // Per-customer, per-fuel-item discounts, keyed by customer then item id, for the
             // manual credit-sale rows -- the same rate FuelSaleController::create hands to
             // the standalone sale form. See CustomerFuelDiscountService.

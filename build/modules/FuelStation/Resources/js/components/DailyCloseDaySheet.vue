@@ -126,7 +126,7 @@ const tankRows = computed(() =>
 
 // ---------- money in ----------
 const moneyIn = computed<Line[]>(() => {
-  const lines: Line[] = []
+  const lines: Line[] = [{ label: 'Opening cash', detail: 'carried from the previous day', amount: n(totals.value.opening_cash ?? m.value.opening_cash) }]
   if (n(m.value.total_revenue)) lines.push({ label: 'Fuel sales (meters)', detail: 'incl. card and credit, taken out under money out', amount: n(m.value.total_revenue) })
   if (n(m.value.other_sales)) lines.push({ label: 'Lubricants & other sales', amount: n(m.value.other_sales) })
   for (const [id, amt] of Object.entries(m.value.bank_withdrawals_by_account || {})) lines.push({ label: 'Cash withdrawn from bank', detail: accountName(id), amount: n(amt) })
@@ -135,7 +135,7 @@ const moneyIn = computed<Line[]>(() => {
   for (const a of (m.value.amanat_deposit_details || []) as any[]) lines.push({ label: 'Amanat deposit', detail: a.customer_name, amount: n(a.amount) })
   for (const o of (m.value.other_deposit_details || []) as any[]) lines.push({ label: 'Other cash in', detail: o.description || o.deposit_type, amount: n(o.amount) })
   for (const s of otherScreens.value.filter((x) => n(x.money_in) > 0)) lines.push({ label: sourceLabel(s), detail: 'recorded on another screen', amount: n(s.money_in) })
-  return withRemainder(lines, n(totals.value.money_in), 'Other money in')
+  return withRemainder(lines, n(totals.value.opening_cash ?? m.value.opening_cash) + n(totals.value.money_in), 'Other money in')
 })
 
 // ---------- money out ----------
@@ -186,8 +186,7 @@ const cash = computed(() => ({
     <section class="rounded-md border border-rule-default p-4">
       <h3 class="mb-3 font-semibold">Cash</h3>
       <dl class="grid gap-x-8 gap-y-1 text-sm tabular-nums sm:grid-cols-2 lg:grid-cols-3">
-        <div class="flex justify-between"><dt>Opening</dt><dd><MoneyText :amount="cash.opening" :currency="currency" :fraction-digits="0" /></dd></div>
-        <div class="flex justify-between"><dt>+ Money in</dt><dd><MoneyText :amount="cash.in" :currency="currency" :fraction-digits="0" /></dd></div>
+        <div class="flex justify-between"><dt>Total money in <span class="text-xs text-muted-foreground">(incl. opening)</span></dt><dd><MoneyText :amount="cash.opening + cash.in" :currency="currency" :fraction-digits="0" /></dd></div>
         <div class="flex justify-between"><dt>− Money out</dt><dd><MoneyText :amount="cash.out" :currency="currency" :fraction-digits="0" /></dd></div>
         <div class="flex justify-between font-medium"><dt>= Expected</dt><dd><MoneyText :amount="cash.expected" :currency="currency" :fraction-digits="0" /></dd></div>
         <div class="flex justify-between"><dt>Counted</dt><dd><MoneyText :amount="cash.counted" :currency="currency" :fraction-digits="0" /></dd></div>
@@ -270,7 +269,7 @@ const cash = computed(() => ({
           </li>
           <li class="flex justify-between border-t border-rule-default pt-2 font-semibold">
             <span>Total money in</span>
-            <MoneyText :amount="cash.in" :currency="currency" :fraction-digits="0" />
+            <MoneyText :amount="cash.opening + cash.in" :currency="currency" :fraction-digits="0" />
           </li>
         </ul>
       </section>

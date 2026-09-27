@@ -53,7 +53,7 @@ import {
     Wallet,
     Info,
 } from 'lucide-vue-next';
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
@@ -311,8 +311,8 @@ const props = defineProps<{
     openingsFromParked?: string | null;
     fuelItems: FuelItem[];
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
-    // What each fuel was last bought at up to this day (latest bill line).
-    lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
+    // Fuels whose sale rate changed on this day, with the change against the day before.
+    rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
     // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
     // CustomerFuelDiscountService (the single place this rate is priced).
     customerFuelDiscounts?: Record<string, Record<string, { discount_type: 'percent' | 'per_litre'; value: number }>>;
@@ -499,50 +499,49 @@ const accountingHints = {
 
 // Amendment mode
 /**
- * Today's rates, first thing on the close: rates change almost daily, so each fuel shows its
- * rate for this day and can be changed right here (a rate change from 00:00 of this business
- * day, through the same /fuel/rates endpoint as the Rates page). The purchase rate starts
- * from the last bill's price, not the stale one on the last rate change.
+ * Rate change, first thing on the close: pick a fuel, type its new sale rate (the current one
+ * shows under the field), Apply. It is a change from 00:00 of this business day through the
+ * same /fuel/rates endpoint as the Rates page; the purchase figure is only a reference now, so
+ * the current one is sent unchanged. The day's changes read "Petrol: +3.5 · Diesel: -4.3".
  */
-const rateEdits = reactive<Record<string, { sale: number | null; purchase: number | null }>>({});
-const resetRateEdits = () => {
-    for (const item of props.fuelItems) {
-        rateEdits[item.id] = {
-            sale: Number(props.rates?.[item.id]?.sale_rate ?? 0) || null,
-            purchase: Number(props.lastPurchasePrices?.[item.id]?.rate ?? props.rates?.[item.id]?.purchase_rate ?? 0) || null,
-        };
-    }
-};
-resetRateEdits();
-const saleRateDelta = (itemId: string) =>
-    Math.round((Number(rateEdits[itemId]?.sale ?? 0) - Number(props.rates?.[itemId]?.sale_rate ?? 0)) * 100) / 100;
-const purchaseRateDelta = (itemId: string) =>
-    Math.round((Number(rateEdits[itemId]?.purchase ?? 0) - Number(props.rates?.[itemId]?.purchase_rate ?? 0)) * 100) / 100;
+const rateItemId = ref('');
+const newSaleRate = ref<number | null>(null);
+const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
+watch(rateItemId, () => {
+    newSaleRate.value = null;
+});
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-const applyingRate = ref<string | null>(null);
-const applyRate = (itemId: string) => {
-    const edit = rateEdits[itemId];
-    if (!edit?.sale || edit.purchase === null) return;
-    applyingRate.value = itemId;
+const applyingRate = ref(false);
+const applyRate = () => {
+    const itemId = rateItemId.value;
+    const sale = Number(newSaleRate.value);
+    if (!itemId || !(sale > 0)) return;
+    applyingRate.value = true;
     router.post(
         `/${props.company.slug}/fuel/rates`,
-        { item_id: itemId, effective_date: form.date, sale_rate: edit.sale, purchase_rate: edit.purchase },
+        {
+            item_id: itemId,
+            effective_date: form.date,
+            sale_rate: sale,
+            purchase_rate: Number(props.rates?.[itemId]?.purchase_rate ?? 0),
+        },
         {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
                 // The meters for this fuel are now priced at the new rate for the whole day.
                 form.nozzle_readings.forEach((row) => {
-                    if (row.item_id === itemId) row.sale_rate = Number(edit.sale);
+                    if (row.item_id === itemId) row.sale_rate = sale;
                 });
+                rateItemId.value = '';
+                newSaleRate.value = null;
             },
             onFinish: () => {
-                applyingRate.value = null;
+                applyingRate.value = false;
             },
         },
     );
 };
-watch(() => props.rates, resetRateEdits);
 
 const isAmendmentMode = computed(
     () => props.isAmendment && props.originalTransaction !== null,
@@ -3107,39 +3106,37 @@ const completedWorkflowSteps = computed(() => {
 
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
 
-        <!-- Today's rates: checked and changed before anything else. -->
-        <section v-if="!isAmendmentMode && fuelItems.length" class="mb-4 rounded-md border border-rule-default p-3">
-            <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 class="text-sm font-semibold">Rates for {{ form.date }}</h3>
-                <p class="text-xs text-muted-foreground">A change applies from 00:00 of this day.</p>
+        <!-- Rate change: checked and changed before anything else. -->
+        <section v-if="!isAmendmentMode && fuelItems.length" class="mb-4 flex flex-wrap items-start gap-3 rounded-md border border-rule-default p-3">
+            <div class="w-40 space-y-1">
+                <Label for="rate-fuel" class="text-xs">Rate change</Label>
+                <Select v-model="rateItemId">
+                    <SelectTrigger id="rate-fuel" class="h-8"><SelectValue placeholder="Select fuel" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div v-for="item in fuelItems" :key="item.id" class="flex flex-wrap items-end gap-2">
-                    <div class="w-20 pb-2 text-sm font-medium">{{ item.name }}</div>
-                    <div class="w-28 space-y-1">
-                        <Label :for="`rate-sale-${item.id}`" class="text-xs">Sale / L</Label>
-                        <Input :id="`rate-sale-${item.id}`" v-model.number="rateEdits[item.id].sale" type="number" min="0" step="0.01" class="h-8" />
-                        <p class="text-xs tabular-nums" :class="saleRateDelta(item.id) !== 0 ? 'font-medium' : 'text-muted-foreground'">
-                            {{ saleRateDelta(item.id) === 0 ? 'unchanged' : signed(saleRateDelta(item.id)) }}
-                        </p>
-                    </div>
-                    <div class="w-28 space-y-1">
-                        <Label :for="`rate-purchase-${item.id}`" class="text-xs">Purchase / L</Label>
-                        <Input :id="`rate-purchase-${item.id}`" v-model.number="rateEdits[item.id].purchase" type="number" min="0" step="0.01" class="h-8" />
-                        <p class="text-xs tabular-nums text-muted-foreground" :title="lastPurchasePrices?.[item.id] ? `Last bought on ${lastPurchasePrices[item.id].bill_number} (${lastPurchasePrices[item.id].bill_date})` : undefined">
-                            {{ purchaseRateDelta(item.id) === 0 ? 'unchanged' : signed(purchaseRateDelta(item.id)) }}
-                        </p>
-                    </div>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        class="mb-5"
-                        :disabled="applyingRate !== null || (saleRateDelta(item.id) === 0 && purchaseRateDelta(item.id) === 0) || !rateEdits[item.id].sale"
-                        @click="applyRate(item.id)"
-                        >Apply</Button
-                    >
+            <template v-if="rateItemId">
+                <div class="w-32 space-y-1">
+                    <Label for="rate-new" class="text-xs">New sale rate</Label>
+                    <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-8" />
+                    <p class="text-xs text-muted-foreground tabular-nums">Was {{ currentSaleRate }}</p>
                 </div>
-            </div>
+                <Button
+                    size="sm"
+                    class="mt-5"
+                    :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
+                    @click="applyRate"
+                    >Apply</Button
+                >
+            </template>
+            <p v-if="props.rateChangesToday?.length" class="mt-5 text-sm tabular-nums">
+                <template v-for="(change, i) in props.rateChangesToday" :key="change.item_id">
+                    <span v-if="i > 0" class="text-muted-foreground"> · </span>
+                    <span class="font-medium">{{ change.name }}:</span> {{ signed(change.difference) }}
+                </template>
+            </p>
         </section>
         <!-- Draft Restore Dialog -->
         <Dialog

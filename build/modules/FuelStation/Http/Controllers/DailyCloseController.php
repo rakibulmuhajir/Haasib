@@ -832,8 +832,7 @@ class DailyCloseController extends Controller
             'openingsFromParked' => $openingsFromParked,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
-            // What each fuel was last bought at up to this day, to start a rate change from.
-            'lastPurchasePrices' => app(\App\Modules\FuelStation\Services\RateChangeService::class)->lastPurchasePrices($companyId, $date),
+            'rateChangesToday' => $this->rateChangesOn($companyId, $date, $fuelItems),
             // Per-customer, per-fuel-item discounts, keyed by customer then item id, for the
             // manual credit-sale rows -- the same rate FuelSaleController::create hands to
             // the standalone sale form. See CustomerFuelDiscountService.
@@ -925,6 +924,32 @@ class DailyCloseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Each fuel whose sale rate changed on this business day, with the change against the day
+     * before -- the close's rate line reads "Petrol: +3.5 · Diesel: -4.3".
+     */
+    private function rateChangesOn(string $companyId, string $date, $fuelItems): array
+    {
+        $previousDay = \Illuminate\Support\Carbon::parse($date)->subDay()->toDateString();
+        $changes = [];
+        foreach ($fuelItems as $item) {
+            $today = RateChange::where('company_id', $companyId)->where('item_id', $item->id)
+                ->whereDate('effective_date', $date)->orderByDesc('created_at')->first();
+            if (! $today) {
+                continue;
+            }
+            $before = RateChange::getRateForDate($companyId, $item->id, $previousDay);
+            $changes[] = [
+                'item_id' => $item->id,
+                'name' => $item->name,
+                'sale_rate' => (float) $today->sale_rate,
+                'difference' => round((float) $today->sale_rate - (float) ($before?->sale_rate ?? $today->sale_rate), 2),
+            ];
+        }
+
+        return $changes;
     }
 
     /** Active customers a credit sale can go to: everyone but amanat (safe-deposit) holders. */

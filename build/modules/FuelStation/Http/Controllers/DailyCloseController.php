@@ -1259,7 +1259,14 @@ class DailyCloseController extends Controller
             'accountNames' => Account::where('company_id', $companyModel->id)->pluck('name', 'id'),
             'nozzleNames' => \App\Modules\FuelStation\Models\Nozzle::where('company_id', $companyModel->id)
                 ->with('pump:id,name')->get(['id', 'code', 'label', 'pump_id', 'tank_id'])
-                ->mapWithKeys(fn ($n) => [$n->id => ['name' => trim(($n->pump?->name ?? 'Pump').' · '.($n->label ?: $n->code)), 'tank_id' => $n->tank_id]]),
+                ->mapWithKeys(function ($n) {
+                    // A label that already names its pump ("Pump 1 - Front") is shown as it is.
+                    $label = $n->label ?: $n->code;
+                    $pump = $n->pump?->name ?? 'Pump';
+                    $name = str_starts_with(mb_strtolower($label), mb_strtolower($pump)) ? $label : "{$pump} · {$label}";
+
+                    return [$n->id => ['name' => $name, 'tank_id' => $n->tank_id]];
+                }),
             'previousTankDips' => $this->previousTankDips($companyModel->id, $txn->transaction_date->toDateString()),
             'canEditDay' => $canEditDay,
             'editDayDisabledReason' => $editDayDisabledReason,

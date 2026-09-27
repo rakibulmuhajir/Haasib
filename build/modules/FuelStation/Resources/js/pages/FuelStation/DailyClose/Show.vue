@@ -539,7 +539,7 @@ const unlockTransaction = () => {
     </Card>
 
     <!-- Accounting details: for checking the postings; opens itself if anything changed after posting -->
-    <details class="mt-6 rounded-md border border-rule-default p-4" :open="!!reconciliation?.has_post_close_activity">
+    <details class="mt-6 rounded-md border border-rule-default p-4">
       <summary class="cursor-pointer font-semibold">
         Accounting details
         <span class="ml-2 text-xs font-normal text-muted-foreground">reconciliation, ledger accounts, edit and audit history</span>

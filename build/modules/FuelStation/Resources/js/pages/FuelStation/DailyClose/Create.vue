@@ -4388,6 +4388,13 @@ const completedWorkflowSteps = computed(() => {
                                                         }}
                                                         L stock
                                                     </span>
+                                                    <!-- Delivered by this close's own Purchases (first tab), before posting. -->
+                                                    <span
+                                                        v-if="(purchaseLitresByTank[tank.tank_id] || 0) > 0"
+                                                        class="font-medium text-foreground"
+                                                    >
+                                                        + {{ formatLiters(purchaseLitresByTank[tank.tank_id] || 0) }} L delivered today
+                                                    </span>
                                                     <span
                                                         v-if="
                                                             (litersSoldByTank[

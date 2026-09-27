@@ -965,6 +965,30 @@ class DailyCloseController extends Controller
         return $this->directSalesRows($companyId, $date);
     }
 
+    /** @return array<string, array{direct: bool, invoices: string}> keyed by the payment's journal id */
+    private function paymentSourceLabels(string $companyId, array $metadata): array
+    {
+        $journalIds = collect($metadata['posting_snapshot']['sources'] ?? [])
+            ->where('type', 'payment')->pluck('id')->filter()->values()->all();
+        if (! $journalIds) {
+            return [];
+        }
+
+        return \App\Modules\Accounting\Models\Payment::where('company_id', $companyId)
+            ->whereIn('transaction_id', $journalIds)
+            ->with('paymentAllocations.invoice:id,invoice_number,is_direct_delivery')
+            ->get()
+            ->mapWithKeys(function ($payment) {
+                $invoices = $payment->paymentAllocations->pluck('invoice')->filter();
+
+                return [$payment->transaction_id => [
+                    'direct' => $invoices->isNotEmpty() && $invoices->every(fn ($i) => $i->is_direct_delivery),
+                    'invoices' => $invoices->pluck('invoice_number')->implode(', '),
+                ]];
+            })
+            ->all();
+    }
+
     /** Each tank's dip on the posted close before $date: that day's opening stock. */
     private function previousTankDips(string $companyId, string $date): array
     {
@@ -1268,6 +1292,9 @@ class DailyCloseController extends Controller
                     return [$n->id => ['name' => $name, 'tank_id' => $n->tank_id]];
                 }),
             'previousTankDips' => $this->previousTankDips($companyModel->id, $txn->transaction_date->toDateString()),
+            // Customer payments recorded on other screens that day -> what they paid, so the day
+            // sheet can say "Direct sale cash · INV-01068" instead of a bare payment number.
+            'paymentSources' => $this->paymentSourceLabels($companyModel->id, $metadata),
             'canEditDay' => $canEditDay,
             'editDayDisabledReason' => $editDayDisabledReason,
             'editDayLaterDates' => $editDayLaterDates,

@@ -121,6 +121,7 @@ const props = defineProps<{
   accountNames?: Record<string, string>
   nozzleNames?: Record<string, { name: string; tank_id: string | null }>
   previousTankDips?: Record<string, number>
+  paymentSources?: Record<string, { direct: boolean; invoices: string }>
   permissions: {
     canLock: boolean
     canUnlock: boolean
@@ -495,6 +496,7 @@ const unlockTransaction = () => {
       :account-names="accountNames"
       :nozzle-names="nozzleNames"
       :previous-tank-dips="previousTankDips"
+      :payment-sources="paymentSources"
       :credit-rows="creditRows"
       :can-apply-discount="canApplyPostCloseDiscount"
       @apply-discount="openDiscountDialog"

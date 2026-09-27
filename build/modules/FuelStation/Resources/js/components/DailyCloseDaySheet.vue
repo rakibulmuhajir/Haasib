@@ -29,6 +29,7 @@ const props = defineProps<{
   accountNames?: Record<string, string>
   nozzleNames?: Record<string, { name: string; tank_id: string | null }>
   previousTankDips?: Record<string, number>
+  paymentSources?: Record<string, { direct: boolean; invoices: string }>
   creditRows: Array<{ invoice_id: string; invoice_number: string; customer_name: string | null; amount: number; discount_amount: number; balance: number; source?: string }>
   canApplyDiscount?: boolean
 }>()
@@ -134,7 +135,13 @@ const moneyIn = computed<Line[]>(() => {
   if (n(m.value.partner_deposits)) lines.push({ label: 'Partner deposits', amount: n(m.value.partner_deposits) })
   for (const a of (m.value.amanat_deposit_details || []) as any[]) lines.push({ label: 'Amanat deposit', detail: a.customer_name, amount: n(a.amount) })
   for (const o of (m.value.other_deposit_details || []) as any[]) lines.push({ label: 'Other cash in', detail: o.description || o.deposit_type, amount: n(o.amount) })
-  for (const s of otherScreens.value.filter((x) => n(x.money_in) > 0)) lines.push({ label: sourceLabel(s), detail: 'recorded on another screen', amount: n(s.money_in) })
+  for (const s of otherScreens.value.filter((x) => n(x.money_in) > 0)) {
+    // A customer payment is named by what it paid: a direct sale's cash reads as such.
+    const paid = s.type === 'payment' ? props.paymentSources?.[s.id] : undefined
+    if (paid?.direct) lines.push({ label: 'Direct sale cash', detail: paid.invoices, amount: n(s.money_in) })
+    else if (paid?.invoices) lines.push({ label: 'Customer payment', detail: `${s.reference} for ${paid.invoices}`, amount: n(s.money_in) })
+    else lines.push({ label: sourceLabel(s), detail: 'recorded on another screen', amount: n(s.money_in) })
+  }
   return withRemainder(lines, n(totals.value.opening_cash ?? m.value.opening_cash) + n(totals.value.money_in), 'Other money in')
 })
 

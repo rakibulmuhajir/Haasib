@@ -148,6 +148,8 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.item_id' => 'nullable|uuid',
             'purchases.*.description' => 'nullable|string|max:255',
             'purchases.*.quantity' => 'nullable|numeric|min:0.01',
+            // Litres from this delivery sold straight to a customer: never received into the tank.
+            'purchases.*.direct_quantity' => 'nullable|numeric|min:0',
             'purchases.*.unit_cost' => 'nullable|numeric|min:0',
             // The total actually billed, when the supplier's rate carries more decimals
             // than the row's own unit_cost field does -- see Bill\BillLineTotals.

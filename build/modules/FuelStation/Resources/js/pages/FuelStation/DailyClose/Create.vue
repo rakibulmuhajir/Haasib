@@ -1193,6 +1193,8 @@ const form = useForm({
         supplier_invoice_number: string;
         notes: string;
         paid_now: boolean;
+        // Litres of this delivery sold straight to a customer (never received into the tank).
+        direct_quantity?: number | null;
     }[],
 
     // Tab 5: Summary
@@ -1384,8 +1386,19 @@ const addPurchaseRow = () => {
         supplier_invoice_number: '',
         notes: '',
         paid_now: false,
+        direct_quantity: null,
     });
 };
+
+// A fuel's tank is picked for it: the only tank holding that fuel, else the operator chooses.
+const tanksForItem = (itemId: string) => props.tanks.filter((t) => t.linked_item_id === itemId);
+const onPurchaseItemChange = (row: (typeof form.purchases)[number]) => {
+    const tanksOfItem = tanksForItem(row.item_id);
+    row.tank_id = tanksOfItem.length === 1 ? tanksOfItem[0].id : tanksOfItem.some((t) => t.id === row.tank_id) ? row.tank_id : '';
+};
+const showDirectFor = ref<Set<number>>(new Set());
+const purchaseRate = (row: (typeof form.purchases)[number]) =>
+    Number(row.quantity) > 0 && Number(row.line_total) > 0 ? Math.round((Number(row.line_total) / Number(row.quantity)) * 10000) / 10000 : null;
 
 const removePurchaseRow = (index: number) => {
     form.purchases.splice(index, 1);
@@ -6507,43 +6520,29 @@ const completedWorkflowSteps = computed(() => {
                                 :key="rowKey(purchase)"
                                 class="space-y-2 rounded-lg border p-3"
                             >
-                                <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
+                                <div class="grid grid-cols-2 gap-3 md:grid-cols-[1fr_1fr_7rem_9rem_auto] md:items-end">
                                     <div>
                                         <Label class="text-xs">Supplier</Label>
                                         <Select v-model="purchase.supplier_id">
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select" />
-                                            </SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem
-                                                    v-for="s in purchaseSuppliers ?? []"
-                                                    :key="s.id"
-                                                    :value="s.id"
-                                                    >{{ s.name }}</SelectItem
-                                                >
+                                                <SelectItem v-for="s in purchaseSuppliers ?? []" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <InputError :message="purchaseError(index, 'supplier_id')" />
                                     </div>
                                     <div>
                                         <Label class="text-xs">Item</Label>
-                                        <Select v-model="purchase.item_id">
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select" />
-                                            </SelectTrigger>
+                                        <Select v-model="purchase.item_id" @update:model-value="onPurchaseItemChange(purchase)">
+                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem
-                                                    v-for="it in purchaseItems ?? []"
-                                                    :key="it.id"
-                                                    :value="it.id"
-                                                    >{{ it.name }}</SelectItem
-                                                >
+                                                <SelectItem v-for="it in purchaseItems ?? []" :key="it.id" :value="it.id">{{ it.name }}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <InputError :message="purchaseError(index, 'item_id')" />
                                     </div>
                                     <div>
-                                        <Label class="text-xs">Quantity</Label>
+                                        <Label class="text-xs">Litres</Label>
                                         <Input
                                             :model-value="purchase.quantity"
                                             type="number"
@@ -6553,72 +6552,49 @@ const completedWorkflowSteps = computed(() => {
                                         <InputError :message="purchaseError(index, 'quantity')" />
                                     </div>
                                     <div>
-                                        <Label class="text-xs">Unit cost</Label>
-                                        <Input
-                                            :model-value="purchase.unit_cost"
-                                            type="number"
-                                            step="any"
-                                            @focus="selectZeroValue"
-                                            @update:model-value="(v) => onPurchaseRateChange(index, v)"
-                                        />
-                                        <InputError :message="purchaseError(index, 'unit_cost')" />
-                                    </div>
-                                    <div>
-                                        <Label class="text-xs">Amount</Label>
+                                        <Label class="text-xs">Total</Label>
                                         <Input
                                             :model-value="purchase.line_total"
                                             type="number"
-                                            title="What the supplier actually billed for this delivery. Typing here derives the unit cost."
+                                            title="What the supplier billed for this delivery; the rate is worked out from it."
                                             @focus="selectZeroValue"
                                             @update:model-value="(v) => onPurchaseAmountChange(index, v)"
                                         />
-                                        <InputError :message="purchaseError(index, 'line_total')" />
+                                        <p v-if="purchaseRate(purchase)" class="text-xs text-muted-foreground tabular-nums">@ {{ purchaseRate(purchase) }} / L</p>
+                                        <InputError :message="purchaseError(index, 'line_total') || purchaseError(index, 'unit_cost')" />
                                     </div>
+                                    <Button variant="ghost" size="icon" aria-label="Remove purchase" @click="removePurchaseRow(index)">
+                                        <Trash2 class="h-4 w-4" />
+                                    </Button>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-                                    <div v-if="isFuelPurchaseItem(purchase.item_id)">
+                                <div class="flex flex-wrap items-end gap-4 text-sm">
+                                    <div v-if="isFuelPurchaseItem(purchase.item_id) && tanksForItem(purchase.item_id).length !== 1" class="w-48">
                                         <Label class="text-xs">Tank</Label>
                                         <Select v-model="purchase.tank_id">
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select" />
-                                            </SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem
-                                                    v-for="t in tanks"
-                                                    :key="t.id"
-                                                    :value="t.id"
-                                                    >{{ t.name }}</SelectItem
-                                                >
+                                                <SelectItem v-for="t in (tanksForItem(purchase.item_id).length ? tanksForItem(purchase.item_id) : tanks)" :key="t.id" :value="t.id">{{ t.name }}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <InputError :message="purchaseError(index, 'tank_id')" />
                                     </div>
-                                    <div>
-                                        <Label class="text-xs">Supplier invoice #</Label>
-                                        <Input v-model="purchase.supplier_invoice_number" placeholder="Optional" />
+                                    <span v-else-if="purchase.tank_id" class="pb-1 text-xs text-muted-foreground">
+                                        Into {{ tanks.find((t) => t.id === purchase.tank_id)?.name }}
+                                    </span>
+                                    <div v-if="showDirectFor.has(index) || Number(purchase.direct_quantity) > 0" class="w-40">
+                                        <Label class="text-xs">Sold directly (L)</Label>
+                                        <Input v-model.number="purchase.direct_quantity" type="number" min="0" @focus="selectZeroValue" />
+                                        <InputError :message="purchaseError(index, 'direct_quantity')" />
                                     </div>
-                                    <div class="flex items-end gap-2">
-                                        <input
-                                            :id="'purchase-paid-now-' + index"
-                                            v-model="purchase.paid_now"
-                                            type="checkbox"
-                                            class="h-4 w-4"
-                                        />
-                                        <Label :for="'purchase-paid-now-' + index" class="text-xs"
-                                            >Paid now from cash</Label
-                                        >
-                                    </div>
-                                    <div class="flex items-end justify-between gap-2">
-                                        <div class="text-sm font-medium">
-                                            <MoneyText
-                                                :amount="purchase.line_total ?? purchaseLineTotal(purchase)"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                        </div>
-                                        <Button variant="ghost" size="icon" @click="removePurchaseRow(index)">
-                                            <Trash2 class="h-4 w-4 text-destructive" />
-                                        </Button>
+                                    <button
+                                        v-else-if="isFuelPurchaseItem(purchase.item_id)"
+                                        type="button"
+                                        class="pb-1 text-xs text-primary underline-offset-2 hover:underline"
+                                        @click="showDirectFor = new Set([...showDirectFor, index])"
+                                    >+ Sold directly</button>
+                                    <div class="flex items-center gap-2 pb-1">
+                                        <Checkbox :id="'purchase-paid-now-' + index" v-model="purchase.paid_now" />
+                                        <Label :for="'purchase-paid-now-' + index" class="text-xs">Paid now from cash</Label>
                                     </div>
                                 </div>
                             </div>

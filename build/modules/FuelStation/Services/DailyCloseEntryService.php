@@ -52,7 +52,9 @@ class DailyCloseEntryService
     {
         $company = Company::findOrFail($companyId);
         $item = !empty($purchase['item_id']) ? Item::where('company_id', $companyId)->find($purchase['item_id']) : null;
-        if ($item?->fuel_category && empty($purchase['tank_id'])) {
+        $directQuantity = round((float) ($purchase['direct_quantity'] ?? 0), 3);
+        // A delivery sold entirely straight to a customer never reaches a tank.
+        if ($item?->fuel_category && empty($purchase['tank_id']) && (float) $purchase['quantity'] - $directQuantity > 0.0005) {
             throw new \InvalidArgumentException('A tank is required for a fuel purchase.');
         }
 
@@ -69,6 +71,8 @@ class DailyCloseEntryService
                 'warehouse_id' => $purchase['tank_id'] ?? null,
                 'description' => $purchase['description'] ?? ($item->name ?? 'Purchase'),
                 'quantity' => $purchase['quantity'],
+                // Sold directly: its cost goes to COGS on the bill and it is never received.
+                'direct_quantity' => $directQuantity > 0 ? $directQuantity : null,
                 'unit_price' => $purchase['unit_cost'],
                 // The total actually billed, when the supplier priced this delivery to
                 // more decimals than the row's rate field carries -- bill.create derives
@@ -94,7 +98,7 @@ class DailyCloseEntryService
             ->filter(fn ($line) => $line->warehouse_id && $line->item_id)
             ->map(fn ($line) => [
                 'line_id' => $line->id,
-                'quantity' => round((float) $line->quantity - (float) $line->quantity_received, 6),
+                'quantity' => round((float) $line->quantity - (float) $line->direct_quantity - (float) $line->quantity_received, 6),
                 'warehouse_id' => $line->warehouse_id,
             ])
             ->filter(fn ($line) => $line['quantity'] > 0)

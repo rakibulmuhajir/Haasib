@@ -265,3 +265,28 @@ test('a fuel purchase without a tank is rejected before posting', function () {
     expect(Bill::where('company_id', $f['company']->id)->count())->toBe(0);
 });
 
+
+test('an inline purchase with litres sold directly receives only the rest into the tank', function () {
+    $f = inlinePurchaseFixture();
+    $item = \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $f['company']->id)->where('code', 'T1')->sole();
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000;
+    $f['payload']['purchases'] = [[
+        'supplier_id' => $f['vendor']->id,
+        'item_id' => $item->id,
+        'quantity' => 500,
+        'direct_quantity' => 200,
+        'line_total' => 120000,
+        'unit_cost' => 240,
+        'tank_id' => $tank->id,
+    ]];
+
+    inlinePurchasePost($f);
+
+    $line = Bill::where('company_id', $f['company']->id)->sole()->lineItems()->sole();
+    expect((float) $line->direct_quantity)->toBe(200.0)
+        ->and((float) $line->quantity_received)->toBe(300.0)
+        ->and((float) \Illuminate\Support\Facades\DB::table('inv.stock_movements')
+            ->where('reference_type', 'acct.bills')->where('reference_id', $line->bill_id)->sum('quantity'))->toBe(300.0);
+});

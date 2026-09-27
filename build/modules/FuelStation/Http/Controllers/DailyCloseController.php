@@ -832,6 +832,8 @@ class DailyCloseController extends Controller
             'openingsFromParked' => $openingsFromParked,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
+            // What each fuel was last bought at up to this day, to start a rate change from.
+            'lastPurchasePrices' => app(\App\Modules\FuelStation\Services\RateChangeService::class)->lastPurchasePrices($companyId, $date),
             // Per-customer, per-fuel-item discounts, keyed by customer then item id, for the
             // manual credit-sale rows -- the same rate FuelSaleController::create hands to
             // the standalone sale form. See CustomerFuelDiscountService.

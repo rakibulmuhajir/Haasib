@@ -104,6 +104,8 @@ class RateChange extends Model
             ->where('item_id', $itemId)
             ->where('effective_date', '<=', $date)
             ->orderByDesc('effective_date')
+            // Two changes on the same day: the one entered last is the rate.
+            ->orderByDesc('created_at')
             ->first();
     }
 

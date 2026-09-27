@@ -333,6 +333,39 @@ class RateChangeService
     }
 
     /**
+     * The price each item was last bought at, from the most recent bill line on or before
+     * $date (every item when $date is null): what a new purchase rate should start from,
+     * rather than the purchase rate stored on the last rate change, which goes stale.
+     *
+     * @return array<string, array{rate: float, bill_number: string, bill_date: string}>
+     */
+    public function lastPurchasePrices(string $companyId, ?string $date = null): array
+    {
+        $rows = DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')
+            ->whereNotIn('b.status', ['void', 'cancelled', 'draft'])
+            ->whereNotNull('l.item_id')
+            ->where('l.quantity', '>', 0)
+            ->when($date, fn ($q) => $q->whereDate('b.bill_date', '<=', $date))
+            ->orderByDesc('b.bill_date')
+            ->orderByDesc('b.created_at')
+            ->get(['l.item_id', 'l.unit_price', 'b.bill_number', 'b.bill_date']);
+
+        $prices = [];
+        foreach ($rows as $row) {
+            $prices[$row->item_id] ??= [
+                'rate' => round((float) $row->unit_price, 4),
+                'bill_number' => $row->bill_number,
+                'bill_date' => substr((string) $row->bill_date, 0, 10),
+            ];
+        }
+
+        return $prices;
+    }
+
+    /**
      * Get current stock for a fuel item across all tanks.
      */
     public function getCurrentStock(string $companyId, string $itemId): float

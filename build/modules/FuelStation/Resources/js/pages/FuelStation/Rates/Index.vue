@@ -83,6 +83,8 @@ const props = defineProps<{
   stockLevels: Record<string, number>
   tanks: TankRef[]
   nozzles: NozzleRef[]
+  // Price each fuel was last bought at (latest bill line) - where a new purchase rate starts.
+  lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>
 }>()
 
 const page = usePage()
@@ -243,7 +245,12 @@ const selectedStockLevel = computed(() => {
   return Number(props.stockLevels?.[form.item_id] ?? 0)
 })
 
+const lastPurchase = computed(() => (form.item_id ? props.lastPurchasePrices?.[form.item_id] ?? null : null))
+
 const prefillFromCurrent = () => {
+  // The last bill's price, not the purchase rate on the last rate change (that one goes stale
+  // as soon as a delivery comes in at a different price).
+  if (form.purchase_rate === null && lastPurchase.value) form.purchase_rate = Number(lastPurchase.value.rate)
   const current = currentRateForSelectedItem.value
   if (!current) return
 
@@ -268,6 +275,9 @@ const syncSnapshotRows = () => {
 }
 
 watch(() => form.item_id, () => {
+  // Another fuel: start from its own figures, never the previous fuel's.
+  form.purchase_rate = null
+  form.sale_rate = null
   prefillFromCurrent()
   syncSnapshotRows()
 })
@@ -505,6 +515,9 @@ const submit = () => {
                 placeholder="0.00"
                 :class="{ 'border-destructive': form.errors.purchase_rate }"
               />
+              <p v-if="lastPurchase" class="text-xs text-muted-foreground">
+                Last purchase {{ formatMoney(lastPurchase.rate) }} / L on {{ lastPurchase.bill_number }} ({{ lastPurchase.bill_date }}).
+              </p>
               <p class="text-xs text-muted-foreground">
                 This does not change your current stock cost. Use the delivery bill for actual purchase cost.
               </p>

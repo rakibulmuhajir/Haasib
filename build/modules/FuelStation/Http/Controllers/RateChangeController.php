@@ -79,6 +79,7 @@ class RateChangeController extends Controller
             'rates' => $rates,
             'items' => $fuelItems,
             'stockLevels' => $stockLevels,
+            'lastPurchasePrices' => $this->rateChangeService->lastPurchasePrices($company->id),
             'tanks' => $tanks,
             'nozzles' => $nozzles,
         ]);

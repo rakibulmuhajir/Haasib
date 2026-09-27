@@ -38,6 +38,7 @@ class CustomerProfile extends Model
         'relationship',
         'cnic',
         'amanat_balance',
+        'allow_amanat_borrowing',
     ];
 
     protected $casts = [
@@ -47,6 +48,7 @@ class CustomerProfile extends Model
         'is_amanat_holder' => 'boolean',
         'is_investor' => 'boolean',
         'amanat_balance' => 'decimal:2',
+        'allow_amanat_borrowing' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -88,6 +90,15 @@ class CustomerProfile extends Model
     /**
      * Adjust amanat balance (positive for deposits, negative for withdrawals/purchases).
      */
+    /**
+     * Whether this holder may take $amount out of amanat: always within their balance, and
+     * beyond it (going negative -- borrowing from the company) only when the owner allowed it.
+     */
+    public function canDrawAmanat(float $amount): bool
+    {
+        return $this->allow_amanat_borrowing || $amount <= (float) $this->amanat_balance + 0.004;
+    }
+
     public function adjustAmanatBalance(float $amount): void
     {
         $this->amanat_balance += $amount;

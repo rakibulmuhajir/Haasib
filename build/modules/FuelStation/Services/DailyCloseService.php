@@ -1323,7 +1323,7 @@ class DailyCloseService
                         $amanatWithdrawalsCashTotal += $amount;
                     }
 
-                    if ($amount > (float) $profile->amanat_balance) {
+                    if (! $profile->canDrawAmanat((float) $amount)) {
                         $name = $profile->customer?->name ?? 'Selected Amanat depositor';
                         throw new \RuntimeException("{$name} has only {$profile->amanat_balance} available in Amanat.");
                     }

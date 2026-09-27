@@ -126,7 +126,7 @@ class AmanatService
             // Get profile and validate balance
             $profile = CustomerProfile::getOrCreateForCustomer($company->id, $customer->id);
 
-            if ($amount > $profile->amanat_balance) {
+            if (! $profile->canDrawAmanat((float) $amount)) {
                 throw new \InvalidArgumentException(
                     "Withdrawal amount ({$amount}) exceeds available balance ({$profile->amanat_balance})."
                 );
@@ -204,7 +204,7 @@ class AmanatService
             // Get profile and validate balance
             $profile = CustomerProfile::getOrCreateForCustomer($company->id, $customer->id);
 
-            if ($amount > $profile->amanat_balance) {
+            if (! $profile->canDrawAmanat((float) $amount)) {
                 throw new \InvalidArgumentException(
                     "Purchase amount ({$amount}) exceeds available amanat balance ({$profile->amanat_balance})."
                 );

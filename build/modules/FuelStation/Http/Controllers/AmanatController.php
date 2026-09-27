@@ -207,6 +207,18 @@ class AmanatController extends Controller
         return $this->recordMovement($request, 'withdraw');
     }
 
+    /** "Allow borrowing": this holder's amanat may go below zero. See CustomerProfile::canDrawAmanat. */
+    public function setBorrowing(\App\Modules\FuelStation\Http\Requests\SetAmanatBorrowingRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $customer = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
+        abort_unless($customer, 404);
+        $allow = $request->boolean('allow_amanat_borrowing');
+        CustomerProfile::getOrCreateForCustomer($company->id, $customer->id)->update(['allow_amanat_borrowing' => $allow]);
+
+        return back()->with('success', $allow ? "{$customer->name} can now borrow from amanat." : "{$customer->name} can no longer go below zero.");
+    }
+
     private function recordMovement(\App\Modules\FuelStation\Http\Requests\StoreAmanatMovementRequest $request, string $method): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();

@@ -120,6 +120,7 @@ This keeps the core accounting module industry-agnostic.
   - `relationship` varchar(50) nullable — 'owner', 'employee', 'external'.
   - `cnic` varchar(20) nullable — Pakistani national ID.
   - `amanat_balance` numeric(15,2) not null default 0.
+  - `allow_amanat_borrowing` boolean not null default false — the holder may go below zero (borrow from the company).
   - `created_at`, `updated_at` timestamps.
 - Indexes/constraints:
   - PK `id`.
@@ -129,8 +130,8 @@ This keeps the core accounting module industry-agnostic.
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'fuel.customer_profiles'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','is_credit_customer','is_amanat_holder','is_investor','relationship','cnic','amanat_balance'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','is_credit_customer'=>'boolean','is_amanat_holder'=>'boolean','is_investor'=>'boolean','amanat_balance'=>'decimal:2','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','is_credit_customer','is_amanat_holder','is_investor','relationship','cnic','amanat_balance','allow_amanat_borrowing'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','is_credit_customer'=>'boolean','is_amanat_holder'=>'boolean','is_investor'=>'boolean','amanat_balance'=>'decimal:2','allow_amanat_borrowing'=>'boolean','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id|unique.

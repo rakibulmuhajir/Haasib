@@ -113,6 +113,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('amanat/{customer}', [AmanatController::class, 'show'])->name('fuel.amanat.show');
     Route::post('amanat/{customer}/deposit', [AmanatController::class, 'deposit'])->name('fuel.amanat.deposit');
     Route::post('amanat/{customer}/withdraw', [AmanatController::class, 'withdraw'])->name('fuel.amanat.withdraw');
+    Route::post('amanat/{customer}/borrowing', [AmanatController::class, 'setBorrowing'])->name('fuel.amanat.borrowing');
 
     // Attendant Handovers
     Route::get('handovers', [AttendantHandoverController::class, 'index'])->name('fuel.handovers.index');

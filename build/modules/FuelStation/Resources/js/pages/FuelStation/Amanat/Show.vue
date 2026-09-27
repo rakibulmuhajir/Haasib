@@ -7,6 +7,7 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +39,7 @@ interface CustomerProfile {
   relationship?: string | null
   cnic?: string | null
   amanat_balance: number
+  allow_amanat_borrowing?: boolean
 }
 
 interface Customer {
@@ -185,7 +187,15 @@ const getTypeBadge = (type: string) => {
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Wallet class="h-4 w-4 text-status-success" />
-            <span>Available for fuel purchases</span>
+            <span>{{ Number(profile.amanat_balance) < 0 ? 'Borrowed from the company' : 'Available for fuel purchases' }}</span>
+          </div>
+          <div v-if="canRecordMovement" class="mt-3 flex items-center gap-2">
+            <Checkbox
+              id="allow-amanat-borrowing"
+              :model-value="!!profile.allow_amanat_borrowing"
+              @update:model-value="(v) => router.post(`/${companySlug}/fuel/amanat/${customer.id}/borrowing`, { allow_amanat_borrowing: v === true }, { preserveScroll: true })"
+            />
+            <Label for="allow-amanat-borrowing" class="text-sm font-normal">Allow borrowing — balance may go below zero</Label>
           </div>
         </CardContent>
       </Card>

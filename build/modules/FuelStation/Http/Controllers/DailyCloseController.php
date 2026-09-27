@@ -596,7 +596,12 @@ class DailyCloseController extends Controller
             ->where('warehouse_type', 'tank')
             ->where('is_active', true)
             ->with(['linkedItem:id,name,fuel_category', 'dipStick:id,code,name,unit'])
-            ->get(['id', 'code', 'name', 'capacity', 'linked_item_id', 'dip_stick_id']);
+            ->get(['id', 'code', 'name', 'capacity', 'linked_item_id', 'dip_stick_id'])
+            // Dips are taken diesel first, then petrol, then hi-octane; anything else after, by name.
+            ->sortBy(fn ($tank) => sprintf('%d|%s',
+                ['diesel' => 1, 'petrol' => 2, 'hi_octane' => 3, 'high_octane' => 3][$tank->linkedItem?->fuel_category ?? ''] ?? 9,
+                $tank->name))
+            ->values();
 
         // Get previous day for lookups
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));

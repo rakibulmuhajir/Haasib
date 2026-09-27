@@ -232,7 +232,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
       <div class="space-y-1">
         <Label :for="`credit-reference-${index}`">{{ t('creditReference') }}</Label>
         <Input v-if="!isLocked(row)" :id="`credit-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
-        <a v-else-if="row.invoice_id && companySlug" :href="`/${companySlug}/invoices/${row.invoice_id}`"
+        <a v-else-if="(row.invoice_id || row.kept_invoice_id) && companySlug" :href="`/${companySlug}/invoices/${row.invoice_id || row.kept_invoice_id}`"
           class="flex h-9 items-center gap-1 text-sm text-primary underline-offset-2 hover:underline">
           <Lock class="h-3 w-3" />
           <span v-if="row.pending_accounting_invoice">Invoiced in Accounting · {{ row.invoice_number ?? row.reference }} · {{ row.customer_name }}</span>

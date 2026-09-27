@@ -339,7 +339,8 @@ class DailyCloseService
             // metadata['purchase_details'] below. Never read by anything else.
             $purchaseDetails = [];
             foreach ($declaredPurchases as $purchase) {
-                if (empty($purchase['supplier_id']) || ! DailyCloseEntryService::purchaseLines($purchase)) {
+                // A bill Edit day kept (paid or received elsewhere) is already in the books.
+                if (! empty($purchase['kept_bill_id']) || empty($purchase['supplier_id']) || ! DailyCloseEntryService::purchaseLines($purchase)) {
                     continue;
                 }
                 $purchaseResult = app(DailyCloseEntryService::class)->purchase($companyId, $date, $purchase, $user);
@@ -360,7 +361,7 @@ class DailyCloseService
             $declaredDirectSales = $data['direct_sales'] ?? [];
             $directSaleDetails = [];
             foreach ($declaredDirectSales as $row) {
-                if (empty($row['item_id']) || (float) ($row['litres'] ?? 0) <= 0 || (float) ($row['rate'] ?? 0) <= 0) {
+                if (! empty($row['kept_invoice_id']) || empty($row['item_id']) || (float) ($row['litres'] ?? 0) <= 0 || (float) ($row['rate'] ?? 0) <= 0) {
                     continue;
                 }
                 $directSaleDetails[] = app(DailyCloseEntryService::class)->directSale($companyId, $date, $row, $user);
@@ -1241,6 +1242,16 @@ class DailyCloseService
                 foreach ($data['employee_advances'] as $advance) {
                     $amount = (float) $advance['amount'];
                     $employeeAdvancesTotal += $amount;
+
+                    // An advance Edit day kept (it has repayments): pay it out again in this
+                    // journal and re-point the same record, so its repayments stay on it.
+                    $kept = ! empty($advance['kept_advance_id'])
+                        ? SalaryAdvance::where('company_id', $companyId)->find($advance['kept_advance_id'])
+                        : null;
+                    if ($kept) {
+                        $createdAdvances[] = $kept;
+                        continue;
+                    }
 
                     // Create salary advance record
                     $createdAdvances[] = SalaryAdvance::create([

@@ -87,6 +87,8 @@ interface PurchaseLine {
 // Fuel sold straight from the tanker, entered on the close: becomes a direct-delivery invoice
 // (and a cash payment when paid in cash) on posting -- see DailyCloseEntryService::directSale.
 interface DirectSaleRow {
+    kept_invoice_id?: string;
+    kept_invoice_number?: string;
     item_id: string;
     litres: number | null;
     rate: number | null;
@@ -96,6 +98,9 @@ interface DirectSaleRow {
 }
 
 interface PurchaseRow {
+    // Set by Edit day when the bill was paid or received elsewhere: kept, edited on the bill.
+    kept_bill_id?: string;
+    kept_bill_number?: string;
     supplier_id: string;
     lines: PurchaseLine[];
     paid_now: boolean;
@@ -1547,6 +1552,7 @@ const purchaseItemName = (itemId: string) => (props.purchaseItems ?? []).find((i
 const purchaseLitresByTank = computed(() => {
     const byTank: Record<string, number> = {};
     for (const row of form.purchases as PurchaseRow[]) {
+        if (row.kept_bill_id) continue;
         for (const line of row.lines || []) {
             if (!line.tank_id) continue;
             const litres = Math.max(0, Number(line.quantity || 0) - Number(line.direct_quantity || 0));
@@ -1557,12 +1563,12 @@ const purchaseLitresByTank = computed(() => {
 });
 // Purchases paid from the drawer right now: cash out today.
 const paidNowPurchasesTotal = computed(() =>
-    (form.purchases as PurchaseRow[]).filter((r) => r.paid_now).reduce((sum, r) => sum + purchaseBillTotal(r), 0),
+    (form.purchases as PurchaseRow[]).filter((r) => r.paid_now && !r.kept_bill_id).reduce((sum, r) => sum + purchaseBillTotal(r), 0),
 );
 const directSaleAmount = (row: DirectSaleRow) => Math.round(Number(row.litres || 0) * Number(row.rate || 0) * 100) / 100;
-const formDirectSalesTotal = computed(() => (form.direct_sales as DirectSaleRow[]).reduce((sum, r) => sum + directSaleAmount(r), 0));
+const formDirectSalesTotal = computed(() => (form.direct_sales as DirectSaleRow[]).filter((r) => !r.kept_invoice_id).reduce((sum, r) => sum + directSaleAmount(r), 0));
 const formDirectSalesCash = computed(() =>
-    (form.direct_sales as DirectSaleRow[]).filter((r) => r.paid_in_cash).reduce((sum, r) => sum + directSaleAmount(r), 0),
+    (form.direct_sales as DirectSaleRow[]).filter((r) => r.paid_in_cash && !r.kept_invoice_id).reduce((sum, r) => sum + directSaleAmount(r), 0),
 );
 const addDirectSale = (itemId = '', litres: number | null = null) => {
     form.direct_sales.push({
@@ -3410,6 +3416,11 @@ const completedWorkflowSteps = computed(() => {
                     <CardContent class="space-y-4">
                         <p v-if="!form.purchases.length" class="text-sm text-muted-foreground">No deliveries today.</p>
                             <div v-for="(purchase, index) in form.purchases" :key="rowKey(purchase)" class="space-y-3 rounded-lg border p-3">
+                                <p v-if="purchase.kept_bill_id" class="text-sm">
+                                    <Link :href="`/${props.company.slug}/bills/${purchase.kept_bill_id}`" class="font-medium underline underline-offset-2">Bill {{ purchase.kept_bill_number }}</Link>
+                                    <span class="text-muted-foreground"> · kept as it is (paid or received on another screen) and already in the books. Change it on the bill.</span>
+                                </p>
+                                <template v-else>
                                 <div class="flex flex-wrap items-end gap-3">
                                     <div class="w-56">
                                         <Label class="text-xs">Supplier</Label>
@@ -3491,6 +3502,7 @@ const completedWorkflowSteps = computed(() => {
                                         Bill total <MoneyText :amount="purchaseBillTotal(purchase)" :currency="currencyCode" :fraction-digits="0" />
                                     </span>
                                 </div>
+                                </template>
                             </div>
                     </CardContent>
                 </Card>
@@ -4051,8 +4063,13 @@ const completedWorkflowSteps = computed(() => {
                             <div
                                 v-for="(sale, index) in form.direct_sales"
                                 :key="'direct-sale-' + index"
-                                class="grid grid-cols-2 gap-3 md:grid-cols-[9rem_7rem_7rem_8rem_1fr_8rem_auto] md:items-end"
+                                :class="sale.kept_invoice_id ? 'text-sm' : 'grid grid-cols-2 gap-3 md:grid-cols-[9rem_7rem_7rem_8rem_1fr_8rem_auto] md:items-end'"
                             >
+                                <p v-if="sale.kept_invoice_id">
+                                    <Link :href="`/${props.company.slug}/invoices/${sale.kept_invoice_id}`" class="font-medium underline underline-offset-2">Direct sale {{ sale.kept_invoice_number }}</Link>
+                                    <span class="text-muted-foreground"> · kept as it is (paid on another screen) and already in the books. Change it on the invoice.</span>
+                                </p>
+                                <template v-else>
                                 <div>
                                     <Label class="text-xs">Fuel</Label>
                                     <Select v-model="sale.item_id" @update:model-value="onDirectSaleItem(sale)">
@@ -4098,6 +4115,7 @@ const completedWorkflowSteps = computed(() => {
                                 <Button variant="ghost" size="icon" aria-label="Remove direct sale" @click="form.direct_sales.splice(index, 1)">
                                     <Trash2 class="h-4 w-4" />
                                 </Button>
+                                </template>
                             </div>
                         </div>
 
@@ -6238,8 +6256,13 @@ const completedWorkflowSteps = computed(() => {
                                     advance, index
                                 ) in form.employee_advances"
                                 :key="rowKey(advance)"
-                                class="grid grid-cols-4 items-end gap-4"
+                                :class="(advance as any).kept_advance_id ? 'text-sm' : 'grid grid-cols-4 items-end gap-4'"
                             >
+                                <p v-if="(advance as any).kept_advance_id">
+                                    <span class="font-medium">Salary advance · {{ advance.employee_name }} · {{ advance.amount }}</span>
+                                    <span class="text-muted-foreground"> · has repayments, so it is kept; posting pays it out again and keeps its repayments.</span>
+                                </p>
+                                <template v-else>
                                 <div>
                                     <Label class="text-xs">Employee</Label>
                                     <Select
@@ -6340,6 +6363,7 @@ const completedWorkflowSteps = computed(() => {
                                 >
                                     <Trash2 class="h-4 w-4 text-destructive" />
                                 </Button>
+                                </template>
                             </div>
                         </div>
 

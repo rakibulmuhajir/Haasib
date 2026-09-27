@@ -334,3 +334,38 @@ test('a direct sale on the close becomes a paid direct-delivery invoice and cash
         ->and((float) $invoice->balance)->toBe(0.0)
         ->and(\App\Modules\Accounting\Models\Payment::where('company_id', $f['company']->id)->count())->toBe(1);
 });
+
+test('a purchase bill paid on another screen is kept by Edit day and not created again on re-post', function () {
+    $f = inlinePurchaseFixture();
+    $item = \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $f['company']->id)->where('code', 'T1')->sole();
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000;
+    $f['payload']['purchases'] = [[
+        'supplier_id' => $f['vendor']->id,
+        'lines' => [['item_id' => $item->id, 'quantity' => 500, 'unit_cost' => 240, 'tank_id' => $tank->id]],
+    ]];
+    $posted = inlinePurchasePost($f);
+    $bill = Bill::where('company_id', $f['company']->id)->sole();
+
+    // The bill is paid later, from Bills -> Record payment (not by the close).
+    app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Services\CommandBus::class)->dispatch('bill_payment.create', [
+        'vendor_id' => $f['vendor']->id, 'payment_date' => '2026-09-16', 'amount' => 120000,
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'payment_method' => 'cash',
+        'payment_account_id' => $f['accounts']['1050']->id,
+        'allocations' => [['bill_id' => $bill->id, 'amount_allocated' => 120000]],
+    ], $f['user']));
+
+    $close = \App\Modules\Accounting\Models\Transaction::findOrFail($posted['transaction_id']);
+    $result = app(\App\Services\CompanyContextService::class)->withContext($f['company'],
+        fn () => app(\App\Modules\FuelStation\Services\DailyCloseReopenService::class)->reopen($close, $f['user'], 'Checking the day again.'));
+
+    expect(Bill::find($bill->id))->not->toBeNull()
+        ->and(implode(' ', $result['warnings']))->toContain($bill->bill_number);
+    $draft = app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($f['company']->id, '2026-09-15');
+    expect($draft['purchases'][0]['kept_bill_id'] ?? null)->toBe($bill->id);
+
+    $f['payload'] = $draft;
+    inlinePurchasePost($f);
+    expect(Bill::where('company_id', $f['company']->id)->count())->toBe(1);
+});

@@ -110,6 +110,12 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'credit_sales.*.item_id' => 'nullable|uuid',
             // Set by Edit day on a row whose invoice a later payment settled: re-use that invoice.
             'credit_sales.*.kept_invoice_id' => 'nullable|uuid',
+            // Set by Edit day on rows whose documents were kept (settled on another screen).
+            'purchases.*.kept_bill_id' => 'nullable|uuid',
+            'purchases.*.kept_bill_number' => 'nullable|string|max:50',
+            'direct_sales.*.kept_invoice_id' => 'nullable|uuid',
+            'direct_sales.*.kept_invoice_number' => 'nullable|string|max:50',
+            'employee_advances.*.kept_advance_id' => 'nullable|uuid',
             'credit_sales.*.litres' => 'nullable|numeric|min:0.01',
             'bank_deposits' => 'nullable|array',
             'bank_deposits.*.bank_account_id' => 'required|uuid',

@@ -97,9 +97,12 @@ class DailyCloseReopenService
             $purchaseDetails = $this->resolvePurchaseDetails($companyId, $close, $metadata);
 
             $this->guardCreditInvoicesNotPaidElsewhere($companyId, $metadata, $warnings);
-            $this->guardBillsNotPaidElsewhere($companyId, $purchaseDetails);
-            $this->guardAdvancesUntouched($companyId, $close->id);
-            $this->guardDirectSalesNotPaidElsewhere($companyId, $metadata);
+            // Documents settled or touched on other screens are kept (and linked from the draft)
+            // instead of refusing the reopen: the bill / invoice / advance is the real record.
+            $keptBills = $this->billsTouchedElsewhere($companyId, $purchaseDetails, $warnings);
+            $purchaseDetails = array_values(array_filter($purchaseDetails, fn ($p) => ! isset($keptBills[$p['bill_id'] ?? ''])));
+            $keptAdvances = $this->advancesRepaid($companyId, $close->id, $warnings);
+            $keptDirectSales = $this->directSalesPaidElsewhere($companyId, $metadata, $warnings);
             $this->guardStockNotIssuedBelowWhatWouldRemain($companyId, $close->id, $metadata, $purchaseDetails);
 
             // Keep history before anything is touched.
@@ -117,7 +120,7 @@ class DailyCloseReopenService
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
 
             $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
-            $this->reverseDirectSales($companyId, $metadata);
+            $this->reverseDirectSales($companyId, $metadata, $keptDirectSales);
             $this->reversePaymentsReceived($companyId, $metadata);
             $this->reversePaySuppliers($companyId, $metadata);
             $this->reverseChannelSupplierSettlements($companyId, $metadata);
@@ -141,6 +144,7 @@ class DailyCloseReopenService
             $formInput = $metadata['form_input'] ?? [];
             $formInput['date'] = $businessDate;
             $formInput['credit_sales'] = $this->markKeptCreditRows($formInput['credit_sales'] ?? [], $metadata, $keptInvoices);
+            $formInput = $this->markKeptDocuments($formInput, $metadata, $keptBills, $keptDirectSales, $keptAdvances);
             app(DailyCloseReconciliationService::class)->park($companyId, $formInput, $user->id);
 
             return ['parked_date' => $businessDate, 'warnings' => $warnings];
@@ -346,9 +350,15 @@ class DailyCloseReopenService
         }
     }
 
-    /** @param array<int, array{bill_id:?string, bill_transaction_id:?string, payment_transaction_id:?string}> $purchaseDetails */
-    private function guardBillsNotPaidElsewhere(string $companyId, array $purchaseDetails): void
+    /**
+     * Inline purchase bills paid, or received, on another screen/date: kept as they are.
+     *
+     * @param  array<int, array{bill_id:?string, bill_transaction_id:?string, payment_transaction_id:?string}>  $purchaseDetails
+     * @return array<string, string> bill_id => bill_number
+     */
+    private function billsTouchedElsewhere(string $companyId, array $purchaseDetails, array &$warnings): array
     {
+        $kept = [];
         foreach ($purchaseDetails as $purchase) {
             if (empty($purchase['bill_id'])) {
                 continue;
@@ -367,7 +377,9 @@ class DailyCloseReopenService
                 })
                 ->sum('amount_allocated');
             if ($externalAllocated > 0.004) {
-                throw new \RuntimeException("Bill {$bill->bill_number} has a payment that was not made by this close. Reverse that payment first.");
+                $kept[$bill->id] = $bill->bill_number;
+                $warnings[] = "Bill {$bill->bill_number} was paid on another screen; it is kept as it is. Change it on the bill.";
+                continue;
             }
             $receivedElsewhere = (float) $bill->lineItems()->sum('quantity_received') > 0
                 && StockMovement::where('company_id', $companyId)
@@ -376,20 +388,32 @@ class DailyCloseReopenService
                     ->where('movement_date', '>', $bill->bill_date)
                     ->exists();
             if ($receivedElsewhere) {
-                throw new \RuntimeException("Bill {$bill->bill_number} was received on a later date than this close recorded. Review it before reopening.");
+                $kept[$bill->id] = $bill->bill_number;
+                $warnings[] = "Bill {$bill->bill_number} was received on a later date; it is kept as it is. Change it on the bill.";
             }
         }
+
+        return $kept;
     }
 
-    private function guardAdvancesUntouched(string $companyId, string $closeId): void
+    /**
+     * Salary advances this close paid out that already have repayments: kept (the re-posted
+     * day pays them out again in its journal and re-points them there).
+     *
+     * @return array<string, array{employee_id: string, amount: float}> advance_id => its row
+     */
+    private function advancesRepaid(string $companyId, string $closeId, array &$warnings): array
     {
         $entryIds = JournalEntry::where('company_id', $companyId)->where('transaction_id', $closeId)->pluck('id');
-        $advances = SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get();
-        foreach ($advances as $advance) {
+        $kept = [];
+        foreach (SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $advance) {
             if ((float) $advance->amount_recovered > 0) {
-                throw new \RuntimeException("A salary advance recorded by this close (for {$advance->reason}) has already had repayments recorded against it. Reverse those first.");
+                $kept[$advance->id] = ['employee_id' => $advance->employee_id, 'amount' => (float) $advance->amount];
+                $warnings[] = "A salary advance ({$advance->reason}) already has repayments; it is kept and paid out again when this day is posted.";
             }
         }
+
+        return $kept;
     }
 
     private function guardStockNotIssuedBelowWhatWouldRemain(string $companyId, string $closeId, array $metadata, array $purchaseDetails): void
@@ -508,9 +532,15 @@ class DailyCloseReopenService
         return $kept;
     }
 
-    /** A direct-sale invoice the close made may only carry the close's own cash payment. */
-    private function guardDirectSalesNotPaidElsewhere(string $companyId, array $metadata): void
+    /**
+     * Direct-sale invoices this close made that a payment from another screen also settled:
+     * kept as they are, with the close's own payment.
+     *
+     * @return array<string, string> invoice_id => invoice_number
+     */
+    private function directSalesPaidElsewhere(string $companyId, array $metadata, array &$warnings): array
     {
+        $kept = [];
         foreach ($metadata['direct_sale_details'] ?? [] as $detail) {
             $foreign = PaymentAllocation::where('company_id', $companyId)
                 ->where('invoice_id', $detail['invoice_id'] ?? null)
@@ -518,15 +548,18 @@ class DailyCloseReopenService
                 ->exists();
             if ($foreign) {
                 $number = Invoice::where('company_id', $companyId)->whereKey($detail['invoice_id'])->value('invoice_number');
-                throw new \RuntimeException("Direct sale {$number} has a payment recorded outside this close. Remove that payment first.");
+                $kept[$detail['invoice_id']] = $number;
+                $warnings[] = "Direct sale {$number} has a payment from another screen; it is kept as it is. Change it on the invoice.";
             }
         }
+
+        return $kept;
     }
 
     /** Direct sales the close created: its cash payment, then the invoice and its journal. */
-    private function reverseDirectSales(string $companyId, array $metadata): void
+    private function reverseDirectSales(string $companyId, array $metadata, array $kept = []): void
     {
-        $details = $metadata['direct_sale_details'] ?? [];
+        $details = array_values(array_filter($metadata['direct_sale_details'] ?? [], fn ($d) => ! isset($kept[$d['invoice_id'] ?? ''])));
         $this->reversePaymentsReceived($companyId, ['payments_received_details' => array_values(array_filter(
             array_map(fn ($d) => ['payment_id' => $d['payment_id'] ?? null], $details),
             fn ($d) => ! empty($d['payment_id'])
@@ -543,6 +576,44 @@ class DailyCloseReopenService
             $invoice->lineItems()->delete();
             $invoice->delete();
         }
+    }
+
+    /**
+     * Mark the draft rows whose documents were kept, so the form shows them read-only with a
+     * link to the document and the re-post leaves them alone (they are already in the books).
+     */
+    private function markKeptDocuments(array $formInput, array $metadata, array $keptBills, array $keptDirectSales, array $keptAdvances): array
+    {
+        // Purchases and direct sales were created in the order of their complete rows.
+        $purchaseRows = array_keys(array_filter($formInput['purchases'] ?? [], fn ($row) => ! empty($row['supplier_id'])
+            && \App\Modules\FuelStation\Services\DailyCloseEntryService::purchaseLines((array) $row)));
+        foreach (array_values($metadata['purchase_details'] ?? []) as $i => $detail) {
+            $rowKey = $purchaseRows[$i] ?? null;
+            if ($rowKey !== null && isset($keptBills[$detail['bill_id'] ?? ''])) {
+                $formInput['purchases'][$rowKey]['kept_bill_id'] = $detail['bill_id'];
+                $formInput['purchases'][$rowKey]['kept_bill_number'] = $keptBills[$detail['bill_id']];
+            }
+        }
+        $directRows = array_keys(array_filter($formInput['direct_sales'] ?? [], fn ($row) => ! empty($row['item_id'])
+            && (float) ($row['litres'] ?? 0) > 0 && (float) ($row['rate'] ?? 0) > 0));
+        foreach (array_values($metadata['direct_sale_details'] ?? []) as $i => $detail) {
+            $rowKey = $directRows[$i] ?? null;
+            if ($rowKey !== null && isset($keptDirectSales[$detail['invoice_id'] ?? ''])) {
+                $formInput['direct_sales'][$rowKey]['kept_invoice_id'] = $detail['invoice_id'];
+                $formInput['direct_sales'][$rowKey]['kept_invoice_number'] = $keptDirectSales[$detail['invoice_id']];
+            }
+        }
+        foreach ($keptAdvances as $advanceId => $advance) {
+            foreach ($formInput['employee_advances'] ?? [] as $k => $row) {
+                if (empty($row['kept_advance_id']) && ($row['employee_id'] ?? null) === $advance['employee_id']
+                    && round((float) ($row['amount'] ?? 0), 2) === round($advance['amount'], 2)) {
+                    $formInput['employee_advances'][$k]['kept_advance_id'] = $advanceId;
+                    break;
+                }
+            }
+        }
+
+        return $formInput;
     }
 
     /** Point each draft credit row whose invoice was kept at that invoice (matched by customer, amount, reference). */
@@ -780,8 +851,9 @@ class DailyCloseReopenService
         $entryIds = JournalEntry::where('company_id', $companyId)->where('transaction_id', $closeId)->pluck('id');
         foreach (SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $advance) {
             if ((float) $advance->amount_recovered > 0) {
-                // Already refused in guardAdvancesUntouched(); defensive only.
-                $warnings[] = "Salary advance for employee {$advance->employee_id} had repayments recorded and was left in place.";
+                // Kept (see advancesRepaid()): unhook it from the journal line about to be
+                // deleted; the re-posted close points it at its new line.
+                $advance->update(['journal_entry_id' => null]);
                 continue;
             }
             $advance->delete();

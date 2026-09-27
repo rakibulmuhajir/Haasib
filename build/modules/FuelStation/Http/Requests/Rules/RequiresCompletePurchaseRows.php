@@ -44,6 +44,9 @@ class RequiresCompletePurchaseRows implements DataAwareRule, ValidationRule
             : [];
 
         foreach ($rows as $index => $row) {
+            if (! empty($row['kept_bill_id'])) {
+                continue; // kept by Edit day: already a bill in the books
+            }
             $lines = \App\Modules\FuelStation\Services\DailyCloseEntryService::purchaseLines((array) $row);
             if (empty($row['supplier_id']) || ! $lines) {
                 $fail("purchases.{$index}: a purchase must have a supplier and at least one product with a quantity before posting.");

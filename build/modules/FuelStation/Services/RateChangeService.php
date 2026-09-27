@@ -2,15 +2,12 @@
 
 namespace App\Modules\FuelStation\Services;
 
-use App\Models\Company;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Service for handling OGRA rate changes with stock revaluation.
@@ -88,14 +85,12 @@ class RateChangeService
                 $marginImpact = round(($newMargin - $oldMargin) * $stockQuantity, 2);
             }
 
-            // Calculate revaluation amount
-            $newPurchaseRate = (float) $data['purchase_rate'];
-            $revaluationAmount = 0;
-
-            if ($stockQuantity > 0 && $previousAvgCost > 0) {
-                // Revaluation = (new rate - old avg cost) * stock quantity
-                $revaluationAmount = round(($newPurchaseRate - $previousAvgCost) * $stockQuantity, 2);
-            }
+            // The purchase rate on a rate change is a reference (the supplier's new price), not a
+            // cost: what stock actually cost comes from the deliveries, whose receipts keep the
+            // weighted-average cost. So a rate change no longer overwrites avg_cost/cost_price or
+            // posts a stock revaluation -- with near-daily changes that booked a journal almost
+            // every day from a typed figure. The price-change windfall or loss now shows in the
+            // margin as the old stock sells.
 
             $ratePayload = [
                 'company_id' => $company->id,
@@ -105,7 +100,7 @@ class RateChangeService
                 'sale_rate' => $data['sale_rate'],
                 'stock_quantity_at_change' => $stockQuantity > 0 ? $stockQuantity : null,
                 'margin_impact' => $marginImpact,
-                'revaluation_amount' => $revaluationAmount != 0 ? $revaluationAmount : null,
+                'revaluation_amount' => null,
                 'previous_avg_cost' => $previousAvgCost > 0 ? $previousAvgCost : null,
                 'snapshot_tank_id' => $data['snapshot_tank_id'] ?? null,
                 'snapshot_stick_reading' => $data['snapshot_stick_reading'] ?? null,
@@ -123,59 +118,8 @@ class RateChangeService
                 $rateChange = RateChange::create($ratePayload);
             }
 
-            $itemRatePayload = [
-                'cost_price' => $newPurchaseRate,
-                'avg_cost' => $newPurchaseRate,
-                'selling_price' => (float) $data['sale_rate'],
-            ];
-
-            // Only post GL entry when there is actual stock to revalue.
-            if ($stockQuantity > 0 && abs($revaluationAmount) > 0.01 && ! $rateChange->journal_entry_id) {
-                // Post the revaluation GL entry
-                $transaction = $this->postRevaluationEntry(
-                    $company,
-                    $item,
-                    $rateChange,
-                    $revaluationAmount,
-                    $stockQuantity,
-                    $previousAvgCost,
-                    $newPurchaseRate
-                );
-
-                // Update rate change with journal entry reference
-                $rateChange->update(['journal_entry_id' => $transaction->id]);
-
-                $item->update($itemRatePayload);
-
-                Log::info('Fuel stock revaluation posted', [
-                    'company_id' => $company->id,
-                    'item_id' => $item->id,
-                    'item_name' => $item->name,
-                    'previous_avg_cost' => $previousAvgCost,
-                    'new_avg_cost' => $newPurchaseRate,
-                    'stock_quantity' => $stockQuantity,
-                    'revaluation_amount' => $revaluationAmount,
-                    'transaction_id' => $transaction->id,
-                ]);
-            } elseif ($stockQuantity <= 0) {
-                $item->update($itemRatePayload);
-
-                Log::info('Fuel rate changed (no stock to revalue)', [
-                    'company_id' => $company->id,
-                    'item_id' => $item->id,
-                    'new_avg_cost' => $newPurchaseRate,
-                ]);
-            } else {
-                $item->update($itemRatePayload);
-
-                Log::info('Fuel rate changed (no material revaluation)', [
-                    'company_id' => $company->id,
-                    'item_id' => $item->id,
-                    'new_avg_cost' => $newPurchaseRate,
-                    'stock_quantity' => $stockQuantity,
-                    'revaluation_amount' => $revaluationAmount,
-                ]);
-            }
+            // Only the selling price follows the rate change; cost stays delivery-based.
+            $item->update(['selling_price' => (float) $data['sale_rate']]);
 
             return $rateChange;
         });
@@ -197,139 +141,6 @@ class RateChangeService
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * Post the revaluation GL entry.
-     */
-    private function postRevaluationEntry(
-        Company $company,
-        Item $item,
-        RateChange $rateChange,
-        float $revaluationAmount,
-        float $stockQuantity,
-        float $previousAvgCost,
-        float $newPurchaseRate
-    ) {
-        // Find required accounts
-        $inventoryAccount = $this->findInventoryAccount($company->id);
-        $revaluationAccount = $this->findRevaluationAccount($company->id, $revaluationAmount > 0);
-
-        if (!$inventoryAccount) {
-            throw new \RuntimeException('Inventory account not found. Ensure fuel_station COA is set up.');
-        }
-
-        if (!$revaluationAccount) {
-            throw new \RuntimeException('Inventory revaluation account not found. Ensure fuel_station COA is set up.');
-        }
-
-        $absAmount = abs($revaluationAmount);
-        $isGain = $revaluationAmount > 0;
-
-        $description = sprintf(
-            'OGRA rate change revaluation: %s - %.2f liters @ %s %s → %s %s (%s)',
-            $item->name,
-            $stockQuantity,
-            $company->base_currency,
-            number_format($previousAvgCost, 2),
-            $company->base_currency,
-            number_format($newPurchaseRate, 2),
-            $isGain ? 'gain' : 'loss'
-        );
-
-        $entries = [];
-
-        if ($isGain) {
-            // Rate increased: DR Inventory, CR Revaluation Gain
-            $entries[] = [
-                'account_id' => $inventoryAccount->id,
-                'type' => 'debit',
-                'amount' => $absAmount,
-                'description' => 'Inventory revaluation increase',
-            ];
-            $entries[] = [
-                'account_id' => $revaluationAccount->id,
-                'type' => 'credit',
-                'amount' => $absAmount,
-                'description' => 'OGRA rate increase gain',
-            ];
-        } else {
-            // Rate decreased: DR Revaluation Loss, CR Inventory
-            $entries[] = [
-                'account_id' => $revaluationAccount->id,
-                'type' => 'debit',
-                'amount' => $absAmount,
-                'description' => 'OGRA rate decrease loss',
-            ];
-            $entries[] = [
-                'account_id' => $inventoryAccount->id,
-                'type' => 'credit',
-                'amount' => $absAmount,
-                'description' => 'Inventory revaluation decrease',
-            ];
-        }
-
-        return $this->glPostingService->postBalancedTransaction([
-            'company_id' => $company->id,
-            'transaction_number' => 'REVAL-' . strtoupper(substr($rateChange->id, 0, 8)),
-            'transaction_type' => 'inventory_revaluation',
-            'date' => $rateChange->effective_date,
-            'currency' => strtoupper($company->base_currency ?? 'PKR'),
-            'base_currency' => strtoupper($company->base_currency ?? 'PKR'),
-            'description' => $description,
-            'reference_type' => 'fuel.rate_changes',
-            'reference_id' => $rateChange->id,
-        ], $entries);
-    }
-
-    /**
-     * Find the inventory account for fuel items.
-     */
-    private function findInventoryAccount(string $companyId): ?Account
-    {
-        return Account::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->where('subtype', 'inventory')
-                  ->orWhere('code', '1200');
-            })
-            ->first();
-    }
-
-    /**
-     * Find the revaluation account (gain or loss).
-     *
-     * For gains: Other Income account (code 4900 or name like 'Revaluation Gain')
-     * For losses: Expense account (code 6310 or name like 'Revaluation Loss')
-     */
-    private function findRevaluationAccount(string $companyId, bool $isGain): ?Account
-    {
-        if ($isGain) {
-            // Look for gain account
-            return Account::where('company_id', $companyId)
-                ->where('is_active', true)
-                ->whereNull('deleted_at')
-                ->where(function ($q) {
-                    $q->where('code', '4900')
-                      ->orWhere('code', '4910')
-                      ->orWhere('name', 'like', '%Revaluation Gain%')
-                      ->orWhere('name', 'like', '%Variance Gain%');
-                })
-                ->first();
-        }
-
-        // Look for loss account
-        return Account::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->where('code', '6300')
-                  ->orWhere('code', '6310')
-                  ->orWhere('name', 'like', '%Revaluation Loss%')
-                  ->orWhere('name', 'like', '%Shrinkage%');
-            })
-            ->first();
     }
 
     /**

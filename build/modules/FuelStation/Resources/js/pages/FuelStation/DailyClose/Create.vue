@@ -1372,8 +1372,6 @@ const sectionRowCount: Record<string, () => number> = {
     pay_suppliers: () => form.pay_suppliers.length,
     amanat_disbursements: () => form.amanat_disbursements.length,
     expenses: () => form.expenses.length,
-    purchases: () => form.purchases.length,
-    other_sales: () => form.other_sales.length,
 };
 const showSection = (key: string) => openedSections.value.has(key) || (sectionRowCount[key]?.() ?? 0) > 0;
 const sectionAdders: Record<string, () => void> = {
@@ -1389,8 +1387,6 @@ const sectionAdders: Record<string, () => void> = {
     pay_suppliers: () => form.pay_suppliers.push({ vendor_id: '', vendor_name: '', amount: 0, payment_account_id: props.stationCashAccountId ?? '', reference: '' }),
     amanat_disbursements: () => addAmanat(),
     expenses: () => addExpense(),
-    purchases: () => addPurchaseRow(),
-    other_sales: () => addOtherSale(),
 };
 const openSection = (key: string) => {
     if (!key) return;
@@ -1418,12 +1414,7 @@ const entryOptions = computed(() => {
             ...(partners ? [{ key: 'partner_withdrawals', label: 'Partner withdrawal' }] : []),
             ...(amanat ? [{ key: 'amanat_disbursements', label: 'Amanat withdrawal' }] : []),
         ],
-        sales: [
-            ...(props.canEnterPurchases ? [{ key: 'purchases', label: 'Purchase / delivery (supplier bill)' }] : []),
-            ...(props.features.has_lubricant_sales && props.lubricantItems.length > 0
-                ? [{ key: 'other_sales', label: 'Lubricant / other sale' }]
-                : []),
-        ],
+
     };
 });
 
@@ -3316,35 +3307,19 @@ const completedWorkflowSteps = computed(() => {
 
             <!-- Tab 1: Sales -->
             <TabsContent value="sales">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Meter Sales</CardTitle>
-                        <CardDescription
-                            >Enter opening and closing readings for each active
-                            nozzle.</CardDescription
-                        >
-                    </CardHeader>
-                    <CardContent class="space-y-6">
-                        <div v-if="entryOptions.sales.length" class="flex flex-wrap items-center gap-2">
-                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="option in entryOptions.sales" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
+                <!-- Purchases / deliveries: before the meters, so the tanks tab counts them right away -->
+                <Card v-if="canEnterPurchases" class="mb-4">
+                    <CardHeader class="flex flex-row items-start justify-between gap-4 space-y-0">
+                        <div>
+                            <CardTitle>Purchases / deliveries today</CardTitle>
+                            <CardDescription>
+                                One supplier bill each, posted with this close. Litres going into a tank count in its expected stock straight away.
+                            </CardDescription>
                         </div>
-                        <!-- Purchases: one supplier bill each; its litres count in the tanks tab right away -->
-                        <div v-if="canEnterPurchases && showSection('purchases')" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">Purchases</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        One supplier bill each, posted with this close. Litres going into a tank count in its expected stock straight away.
-                                    </p>
-                                </div>
-                                <Button variant="outline" size="sm" @click="addPurchaseRow"><Plus class="mr-1 h-4 w-4" /> Add bill</Button>
-                            </div>
+                        <Button variant="outline" size="sm" @click="addPurchaseRow"><Plus class="mr-1 h-4 w-4" /> Add supplier bill</Button>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <p v-if="!form.purchases.length" class="text-sm text-muted-foreground">No deliveries today.</p>
                             <div v-for="(purchase, index) in form.purchases" :key="rowKey(purchase)" class="space-y-3 rounded-lg border p-3">
                                 <div class="flex flex-wrap items-end gap-3">
                                     <div class="w-56">
@@ -3428,7 +3403,18 @@ const completedWorkflowSteps = computed(() => {
                                     </span>
                                 </div>
                             </div>
-                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Meter Sales</CardTitle>
+                        <CardDescription
+                            >Enter opening and closing readings for each active
+                            nozzle.</CardDescription
+                        >
+                    </CardHeader>
+                    <CardContent class="space-y-6">
                         <!-- Empty State: No nozzles configured -->
                         <div
                             v-if="form.nozzle_readings.length === 0"
@@ -3959,7 +3945,7 @@ const completedWorkflowSteps = computed(() => {
                             "
                         >
                             <Separator />
-                            <div v-if="showSection('other_sales')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <h4 class="font-medium">
                                         Other Sales (Lubricants, etc.)
@@ -4785,12 +4771,11 @@ const completedWorkflowSteps = computed(() => {
                     <CardContent class="space-y-6">
                         <div class="flex flex-wrap items-center gap-2">
                             <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="option in entryOptions.in" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
                         </div>
                         <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
                         <PaymentsReceivedEntry
@@ -5519,12 +5504,11 @@ const completedWorkflowSteps = computed(() => {
                     <CardContent class="space-y-6">
                         <div class="flex flex-wrap items-center gap-2">
                             <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash out…" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="option in entryOptions.out" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
                         </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
                         <CreditSalesEntry v-if="showSection('credit_sales')" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />

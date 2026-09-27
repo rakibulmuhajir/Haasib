@@ -6869,6 +6869,19 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <!-- Purchases (Fuel Sales tab) ticked "Paid now from cash" -->
+                                <div
+                                    v-if="paidNowPurchasesTotal > 0"
+                                    class="flex justify-between text-sm"
+                                >
+                                    <span>Purchases paid now (station cash)</span>
+                                    <span class="font-medium"
+                                        ><MoneyText
+                                            :amount="paidNowPurchasesTotal"
+                                            :currency="currencyCode"
+                                            :fraction-digits="0"
+                                    /></span>
+                                </div>
                                 <div
                                     v-if="totalNonCashBillPayments > 0"
                                     class="flex justify-between text-sm"

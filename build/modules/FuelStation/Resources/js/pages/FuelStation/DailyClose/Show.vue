@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
+import DailyCloseDaySheet from '../../../components/DailyCloseDaySheet.vue'
 import { computed, ref } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
@@ -117,6 +118,9 @@ const props = defineProps<{
   editDayDisabledReason?: string | null
   editDayLaterDates?: string[]
   revisionHistory?: Array<{ id: string; created_at: string; reason: string; reopened_by_name: string | null }>
+  accountNames?: Record<string, string>
+  nozzleNames?: Record<string, { name: string; tank_id: string | null }>
+  previousTankDips?: Record<string, number>
   permissions: {
     canLock: boolean
     canUnlock: boolean
@@ -322,121 +326,6 @@ const unlockTransaction = () => {
   >
     <DailyCloseNav :company="company" history />
 
-    <Card v-if="unlockHistory?.length" class="mb-6 border-status-attention/40">
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Unlock class="h-4 w-4" />
-          This day has been reopened {{ unlockHistory.length }} time{{ unlockHistory.length === 1 ? '' : 's' }}
-        </CardTitle>
-        <CardDescription>
-          A settled day was unlocked so it could be changed. Each reopening is kept permanently.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ul class="space-y-3">
-          <li v-for="entry in unlockHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
-            <p class="text-sm font-medium">
-              {{ entry.unlocked_by || 'Unknown user' }}
-              <span class="font-normal text-muted-foreground">· {{ formatDateTime(entry.unlocked_at) }}</span>
-            </p>
-            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
-          </li>
-        </ul>
-      </CardContent>
-    </Card>
-
-    <Card v-if="revisionHistory?.length" class="mb-6 border-status-attention/40">
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <RotateCcw class="h-4 w-4" />
-          This day has been edited {{ revisionHistory.length }} time{{ revisionHistory.length === 1 ? '' : 's' }}
-        </CardTitle>
-        <CardDescription>Each posted version before an edit is kept permanently.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ul class="space-y-3">
-          <li v-for="entry in revisionHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
-            <p class="text-sm font-medium">
-              Edited {{ formatDateTime(entry.created_at) }}{{ entry.reopened_by_name ? ` by ${entry.reopened_by_name}` : '' }}
-            </p>
-            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
-          </li>
-        </ul>
-      </CardContent>
-    </Card>
-
-    <Card v-if="reconciliation" class="mb-6">
-      <CardHeader>
-        <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
-        <CardDescription>Posted {{ formatDateTime(reconciliation.snapshot?.posted_at) }} by {{ reconciliation.snapshot?.posted_by_name || reconciliation.snapshot?.posted_by }} · Business date {{ transaction.transaction_date }}</CardDescription>
-        <div v-if="reconciliation.snapshot?.zero_sales_confirmed" class="mt-2 rounded-md border border-status-info/30 bg-status-info/10 px-3 py-2 text-sm">
-          <span class="font-medium">Zero-sales day confirmed.</span>
-          <span v-if="reconciliation.snapshot?.zero_sales_reason" class="text-muted-foreground"> {{ reconciliation.snapshot.zero_sales_reason }}</span>
-        </div>
-      </CardHeader>
-      <CardContent class="space-y-6">
-        <table class="w-full text-sm">
-          <thead><tr class="border-b text-left"><th class="py-2">Cash</th><th>POSTED SNAPSHOT</th><th>CURRENT / RECONCILED</th></tr></thead>
-          <tbody>
-            <tr v-for="[key, label] in [['total_revenue','Sales'],['money_in','Money In'],['money_out','Money Out'],['expected_closing','Expected closing cash'],['closing_cash','Physical closing cash'],['variance','Cash variance']]" :key="key" class="border-b">
-              <td class="py-2">{{ label }}</td>
-              <td><MoneyText :amount="reconciliation.snapshot?.totals[key] || 0" :currency="currency" /></td>
-              <td><MoneyText :amount="reconciliation.current?.[key] || 0" :currency="currency" /></td>
-            </tr>
-          </tbody>
-        </table>
-        <table class="w-full text-sm">
-          <thead><tr class="border-b text-left"><th>Channel movement</th><th>Posted snapshot</th><th>Current / reconciled</th></tr></thead>
-          <tbody><tr v-for="(label, accountId) in reconciliation.snapshot?.channel_accounts" :key="accountId" class="border-b"><td class="py-2">{{ label }}</td><td><MoneyText :amount="reconciliation.snapshot?.account_effects?.[accountId] || 0" :currency="currency" /></td><td><MoneyText :amount="reconciliation.current?.account_effects?.[accountId] || 0" :currency="currency" /></td></tr></tbody>
-        </table>
-        <table v-if="reconciliation.snapshot?.tanks?.length" class="w-full text-sm">
-          <thead><tr><th class="text-left">Tank</th><th>Declared physical litres</th><th>Original variance</th><th>Reconciled variance</th></tr></thead>
-          <tbody><tr v-for="(tank, index) in reconciliation.snapshot.tanks" :key="tank.tank_id"><td>{{ tank.tank_name }}</td><td>{{ tank.physical_liters }}</td><td>{{ tank.variance_liters }}</td><td>{{ reconciliation.current?.tanks?.[index]?.variance_liters }}</td></tr></tbody>
-        </table>
-        <div>
-          <h3 class="mb-2 font-semibold">POST-CLOSE ACTIVITY</h3>
-          <p class="mb-3 text-sm text-muted-foreground">
-            Read-only. To add a forgotten transaction, use "Edit day" above instead of a separate
-            post-close entry.
-          </p>
-          <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
-          <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
-            <p class="font-medium">{{ row.activity }} · {{ row.type }} · <Link v-if="!row.type.startsWith('stock:')" :href="`/${company.slug}/journals/${row.id}`" class="underline">{{ row.reference }}</Link><span v-else>{{ row.reference }}</span></p>
-            <p v-if="row.description">{{ row.description }}</p>
-            <p>Business date {{ row.business_date }} · Entered {{ formatDateTime(row.entered_at) }} by {{ row.entered_by_name }}</p>
-            <p v-if="row.before">Updated {{ formatDateTime(row.updated_at) }} · {{ row.updated_by_name || 'Actor unavailable' }}</p>
-            <p>{{ row.source_type }} · {{ row.source_id || row.id }}</p>
-            <p>Amount <MoneyText :amount="row.amount" :currency="currency" /> · Cash reconciliation effect <MoneyText :amount="row.reconciliation_effect" :currency="currency" /></p>
-            <p v-if="row.quantity_effect">Stock effect: {{ row.quantity_effect }} litres · Tank {{ row.warehouse_id }}</p>
-          </div>
-        </div>
-        <div>
-          <h3 class="mb-2 font-semibold">READING CORRECTIONS</h3>
-          <p class="mb-3 text-sm text-muted-foreground">
-            Read-only. To correct a tank or nozzle reading, use "Edit day" above instead of a
-            separate post-close correction.
-          </p>
-          <p v-if="!reconciliation.corrections?.length" class="text-sm text-muted-foreground">No corrections recorded.</p>
-          <div v-for="row in reconciliation.corrections" :key="row.id" class="border-b py-3 text-sm">
-            <p class="font-medium">{{ row.reading_type === 'tank' ? 'Tank reading' : 'Nozzle reading' }} correction</p>
-            <p>{{ row.original_value }}L → {{ row.corrected_value }}L · {{ formatDateTime(row.created_at) }} by {{ row.created_by_name }}</p>
-            <p>Reason: {{ row.reason }}</p>
-            <p v-if="row.revenue_effect !== undefined">Revenue effect <MoneyText :amount="row.revenue_effect" :currency="currency" /></p>
-          </div>
-        </div>
-        <details v-if="reconciliation.audit_events?.length" class="rounded border p-3">
-          <summary class="cursor-pointer font-medium">Audit history ({{ reconciliation.audit_events.length }} events)</summary>
-          <div v-for="event in reconciliation.audit_events" :key="event.id" class="border-b py-2 text-sm">
-            <p>{{ event.operation }} · {{ event.source_table }} · {{ event.source_id }}</p>
-            <p>{{ formatDateTime(event.occurred_at) }} · {{ event.actor_name || 'Actor unavailable' }}</p>
-              <p>Business date {{ event.after_data?.transaction_date || event.after_data?.movement_date || event.after_data?.invoice_date || event.after_data?.bill_date || event.before_data?.transaction_date || transaction.transaction_date }}</p>
-              <p>Reference {{ event.after_data?.transaction_number || event.before_data?.transaction_number || event.source_id }}</p>
-              <p v-if="event.before_data">Before amount: {{ event.before_data.total_amount ?? event.before_data.total_debit ?? event.before_data.amount ?? event.before_data.total_cost ?? event.before_data.debit_amount ?? '—' }}</p>
-              <p v-if="event.after_data">After amount: {{ event.after_data.total_amount ?? event.after_data.total_debit ?? event.after_data.amount ?? event.after_data.total_cost ?? event.after_data.debit_amount ?? '—' }}</p>
-          </div>
-        </details>
-      </CardContent>
-    </Card>
     <template #actions>
       <div class="flex items-center gap-2">
         <Button variant="outline" as-child>
@@ -597,218 +486,19 @@ const unlockTransaction = () => {
       </div>
     </div>
 
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Left Column: Sales Summary -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2">
-            <Fuel class="h-5 w-5" />
-            Sales Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <!-- Fuel Sales by Category -->
-          <div v-if="fuelSalesEntries.length > 0" class="space-y-2">
-            <div v-for="entry in fuelSalesEntries" :key="entry.category" class="flex justify-between items-center py-2 border-b last:border-0">
-              <div>
-                <span class="font-medium capitalize">{{ entry.category }}</span>
-                <span class="text-sm text-muted-foreground ml-2">{{ entry.liters?.toFixed(0) || 0 }} L</span>
-              </div>
-              <span class="font-semibold"><MoneyText :amount="entry.revenue" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-          </div>
-
-          <!-- Other Sales -->
-          <div v-if="metadata.other_sales" class="flex justify-between items-center py-2 border-b">
-            <span>Other Sales (Lubricants, etc.)</span>
-            <span class="font-semibold"><MoneyText :amount="metadata.other_sales" :currency="currency" :fraction-digits="0" /></span>
-          </div>
-
-          <!-- Pump tests: litres run through a nozzle for calibration and poured back into the
-               tank. Not a sale - shown here so the litres missing from revenue are explained. -->
-          <div v-if="metadata.pump_tests && metadata.pump_tests.length > 0" class="space-y-1 text-sm text-muted-foreground">
-            <div v-for="(pumpTest, idx) in metadata.pump_tests" :key="idx">
-              Pump test: {{ pumpTest.liters?.toFixed(0) || 0 }} L of {{ pumpTest.fuel }} returned to tank
-            </div>
-          </div>
-
-          <Separator />
-
-          <!-- Total Revenue -->
-          <div class="flex justify-between items-center text-lg font-bold">
-            <span>Total Revenue</span>
-            <span><MoneyText :amount="metadata.total_revenue" :currency="currency" :fraction-digits="0" /></span>
-          </div>
-
-          <!-- COGS -->
-          <div class="flex justify-between items-center text-muted-foreground">
-            <span>Cost of Goods Sold</span>
-            <span><MoneyText :amount="metadata.total_cogs" :currency="currency" :fraction-digits="0" /></span>
-          </div>
-
-          <!-- Gross Profit -->
-          <div class="flex justify-between items-center text-status-success font-semibold">
-            <span>Gross Profit</span>
-            <span><MoneyText :amount="(metadata.total_revenue || 0) - (metadata.total_cogs || 0)" :currency="currency" :fraction-digits="0" /></span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Right Column: Cash Summary -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2">
-            <Wallet class="h-5 w-5" />
-            Cash Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <!-- Cash In -->
-          <div class="space-y-2">
-            <div class="flex justify-between items-center py-2">
-              <span>Opening Cash</span>
-              <span class="font-semibold"><MoneyText :amount="metadata.opening_cash" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.partner_deposits" class="flex justify-between items-center py-2">
-              <span>Partner Deposits</span>
-              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.partner_deposits" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.amanat_deposits" class="flex justify-between items-center py-2">
-              <span>Amanat Deposits</span>
-              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.amanat_deposits" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.other_deposits" class="flex justify-between items-center py-2">
-              <span>Other Cash In</span>
-              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.other_deposits" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div class="flex justify-between items-center py-2">
-              <span>Total Sales</span>
-              <span class="font-semibold text-status-success">+<MoneyText :amount="metadata.total_revenue" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.bank_withdrawals" class="flex justify-between items-center py-2">
-              <span>Cash Withdrawn from Bank</span>
-              <MoneyText :amount="metadata.bank_withdrawals" :currency="currency" />
-            </div>
-            <div class="flex justify-between items-center py-2 font-semibold">
-              <span>Total Money In</span>
-              <span><MoneyText :amount="totalMoneyIn" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-          </div>
-
-          <Separator />
-
-          <!-- Cash Out -->
-          <div class="space-y-2">
-            <div v-for="credit in creditRows" :key="credit.invoice_id" class="flex flex-col py-2">
-              <div class="flex justify-between items-center">
-                <Link :href="`/${company.slug}/invoices/${credit.invoice_id}`" class="underline">
-                  {{ credit.source === 'accounting_invoice' ? 'Invoiced in Accounting' : t('meterCreditSales') }} · {{ credit.invoice_number }} · {{ credit.customer_name }}
-                </Link>
-                <span>-<MoneyText :amount="credit.amount" :currency="currency" /></span>
-              </div>
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-xs" :class="credit.discount_amount ? 'text-status-success' : 'text-muted-foreground'">
-                  <template v-if="credit.discount_amount">
-                    Discount <MoneyText :amount="credit.discount_amount" :currency="currency" /> ·
-                  </template>
-                  Owes <MoneyText :amount="credit.balance" :currency="currency" />
-                </p>
-                <Button
-                  v-if="canApplyPostCloseDiscount"
-                  variant="link"
-                  size="sm"
-                  class="h-auto p-0 text-xs"
-                  @click="openDiscountDialog(credit)"
-                >
-                  Apply discount
-                </Button>
-              </div>
-            </div>
-            <div v-for="row in channelOutRows" :key="row.channel_code" class="flex justify-between items-center py-2">
-              <span>{{ row.channel_label }} → bank / card account</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="row.amount" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.bank_deposits" class="flex justify-between items-center py-2">
-              <span>Bank Deposits</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.bank_deposits" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.partner_withdrawals" class="flex justify-between items-center py-2">
-              <span>Partner Withdrawals</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.partner_withdrawals" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.employee_advances" class="flex justify-between items-center py-2">
-              <span>Employee Advances</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.employee_advances" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.payroll_payouts" class="flex justify-between items-center py-2">
-              <span>Approved Salaries</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.payroll_payouts" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.cash_bill_payments" class="flex justify-between items-center py-2">
-              <span>Supplier Bill Payments (station cash)</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.cash_bill_payments" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.cash_pay_suppliers" class="flex justify-between items-center py-2">
-              <span>Pay Supplier (station cash)</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.cash_pay_suppliers" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.amanat_disbursements" class="flex justify-between items-center py-2">
-              <span>Amanat Disbursements</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.amanat_disbursements" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div v-if="metadata.expenses" class="flex justify-between items-center py-2">
-              <span>Expenses</span>
-              <span class="font-semibold text-status-critical">-<MoneyText :amount="metadata.expenses" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div class="flex justify-between items-center py-2 font-semibold">
-              <span>Total Money Out</span>
-              <span class="text-status-critical">-<MoneyText :amount="totalMoneyOut" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <p v-for="note in supplierSettlementNotes" :key="note.channel_code" class="text-xs text-muted-foreground">
-              <MoneyText :amount="note.advance_amount" :currency="currency" :fraction-digits="0" /> of {{ note.channel_label }} sales are held as an advance with {{ note.vendor_name }}.
-            </p>
-            <p v-for="detail in metadata.pay_supplier_details || []" :key="detail.payment_id ?? detail.vendor_id" class="text-xs text-muted-foreground">
-              Paid {{ detail.vendor_name }} <MoneyText :amount="detail.amount" :currency="currency" :fraction-digits="0" /> (applied to bills <MoneyText :amount="detail.applied_to_bills" :currency="currency" :fraction-digits="0" />, advance <MoneyText :amount="detail.advance_amount" :currency="currency" :fraction-digits="0" />)
-            </p>
-          </div>
-
-          <Separator />
-
-          <!-- Closing -->
-          <div class="space-y-2">
-            <div class="flex justify-between items-center py-2 text-muted-foreground">
-              <span>Expected Closing</span>
-              <span><MoneyText :amount="metadata.expected_closing" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <div class="flex justify-between items-center py-2 text-lg font-bold">
-              <span>Actual Closing Cash</span>
-              <span><MoneyText :amount="metadata.closing_cash" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <!-- Over and short are both variances, and the label beside the
-                 figure already says which. Blue for one and red for the other
-                 said the till being over was merely informational. -->
-            <div
-              v-if="metadata.variance !== undefined && Math.round(metadata.variance) !== 0"
-              class="flex justify-between items-center py-2 font-semibold text-status-attention"
-            >
-              <span>{{ metadata.variance > 0 ? 'Cash Over' : 'Cash Short' }}</span>
-              <span><MoneyText :amount="Math.abs(Math.round(metadata.variance))" :currency="currency" :fraction-digits="0" /></span>
-            </div>
-            <!-- A till that balanced is the ordinary outcome, not an achievement.
-                 The tick is the indicator; green on top of it is celebration. -->
-            <!-- Whole rupees: a few paisa left over from litres x rate count as balanced. -->
-            <div v-else-if="metadata.variance !== undefined" class="flex justify-between items-center py-2 font-semibold">
-              <span>Variance</span>
-              <span class="flex items-center gap-1">
-                <CheckCircle class="h-4 w-4" />
-                Balanced
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <DailyCloseDaySheet
+      :metadata="metadata"
+      :currency="currency"
+      :company-slug="company.slug"
+      :fuel-items="fuelItems"
+      :expense-accounts="expenseAccounts"
+      :account-names="accountNames"
+      :nozzle-names="nozzleNames"
+      :previous-tank-dips="previousTankDips"
+      :credit-rows="creditRows"
+      :can-apply-discount="canApplyPostCloseDiscount"
+      @apply-discount="openDiscountDialog"
+    />
 
     <!-- Fuel Deliveries Received on Posting -->
     <Card v-if="(metadata.deliveries_received || []).length > 0" class="mt-6">
@@ -848,6 +538,129 @@ const unlockTransaction = () => {
       </CardContent>
     </Card>
 
+    <!-- Accounting details: for checking the postings; opens itself if anything changed after posting -->
+    <details class="mt-6 rounded-md border border-rule-default p-4" :open="!!reconciliation?.has_post_close_activity">
+      <summary class="cursor-pointer font-semibold">
+        Accounting details
+        <span class="ml-2 text-xs font-normal text-muted-foreground">reconciliation, ledger accounts, edit and audit history</span>
+        <Badge v-if="reconciliation?.has_post_close_activity" variant="destructive" class="ml-2">Changed after posting</Badge>
+      </summary>
+      <div class="mt-4 space-y-6">
+    <Card v-if="unlockHistory?.length" class="mb-6 border-status-attention/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <Unlock class="h-4 w-4" />
+          This day has been reopened {{ unlockHistory.length }} time{{ unlockHistory.length === 1 ? '' : 's' }}
+        </CardTitle>
+        <CardDescription>
+          A settled day was unlocked so it could be changed. Each reopening is kept permanently.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul class="space-y-3">
+          <li v-for="entry in unlockHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
+            <p class="text-sm font-medium">
+              {{ entry.unlocked_by || 'Unknown user' }}
+              <span class="font-normal text-muted-foreground">· {{ formatDateTime(entry.unlocked_at) }}</span>
+            </p>
+            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
+
+    <Card v-if="revisionHistory?.length" class="mb-6 border-status-attention/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <RotateCcw class="h-4 w-4" />
+          This day has been edited {{ revisionHistory.length }} time{{ revisionHistory.length === 1 ? '' : 's' }}
+        </CardTitle>
+        <CardDescription>Each posted version before an edit is kept permanently.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul class="space-y-3">
+          <li v-for="entry in revisionHistory" :key="entry.id" class="border-l-2 border-status-attention/50 pl-3">
+            <p class="text-sm font-medium">
+              Edited {{ formatDateTime(entry.created_at) }}{{ entry.reopened_by_name ? ` by ${entry.reopened_by_name}` : '' }}
+            </p>
+            <p class="text-sm text-muted-foreground">{{ entry.reason }}</p>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
+
+    <Card v-if="reconciliation" class="mb-6">
+      <CardHeader>
+        <CardTitle>Daily Close reconciliation <Badge v-if="reconciliation.has_post_close_activity" variant="destructive">Post-close activity</Badge></CardTitle>
+        <CardDescription>Posted {{ formatDateTime(reconciliation.snapshot?.posted_at) }} by {{ reconciliation.snapshot?.posted_by_name || reconciliation.snapshot?.posted_by }} · Business date {{ transaction.transaction_date }}</CardDescription>
+        <div v-if="reconciliation.snapshot?.zero_sales_confirmed" class="mt-2 rounded-md border border-status-info/30 bg-status-info/10 px-3 py-2 text-sm">
+          <span class="font-medium">Zero-sales day confirmed.</span>
+          <span v-if="reconciliation.snapshot?.zero_sales_reason" class="text-muted-foreground"> {{ reconciliation.snapshot.zero_sales_reason }}</span>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-6">
+        <table class="w-full text-sm">
+          <thead><tr class="border-b text-left"><th class="py-2">Cash</th><th>POSTED SNAPSHOT</th><th>CURRENT / RECONCILED</th></tr></thead>
+          <tbody>
+            <tr v-for="[key, label] in [['total_revenue','Sales'],['money_in','Money In'],['money_out','Money Out'],['expected_closing','Expected closing cash'],['closing_cash','Physical closing cash'],['variance','Cash variance']]" :key="key" class="border-b">
+              <td class="py-2">{{ label }}</td>
+              <td><MoneyText :amount="reconciliation.snapshot?.totals[key] || 0" :currency="currency" /></td>
+              <td><MoneyText :amount="reconciliation.current?.[key] || 0" :currency="currency" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <table class="w-full text-sm">
+          <thead><tr class="border-b text-left"><th>Channel movement</th><th>Posted snapshot</th><th>Current / reconciled</th></tr></thead>
+          <tbody><tr v-for="(label, accountId) in reconciliation.snapshot?.channel_accounts" :key="accountId" class="border-b"><td class="py-2">{{ label }}</td><td><MoneyText :amount="reconciliation.snapshot?.account_effects?.[accountId] || 0" :currency="currency" /></td><td><MoneyText :amount="reconciliation.current?.account_effects?.[accountId] || 0" :currency="currency" /></td></tr></tbody>
+        </table>
+        <table v-if="reconciliation.snapshot?.tanks?.length" class="w-full text-sm">
+          <thead><tr><th class="text-left">Tank</th><th>Declared physical litres</th><th>Original variance</th><th>Reconciled variance</th></tr></thead>
+          <tbody><tr v-for="(tank, index) in reconciliation.snapshot.tanks" :key="tank.tank_id"><td>{{ tank.tank_name }}</td><td>{{ tank.physical_liters }}</td><td>{{ tank.variance_liters }}</td><td>{{ reconciliation.current?.tanks?.[index]?.variance_liters }}</td></tr></tbody>
+        </table>
+        <div>
+          <h3 class="mb-2 font-semibold">POST-CLOSE ACTIVITY</h3>
+          <p class="mb-3 text-sm text-muted-foreground">
+            Read-only. To add a forgotten transaction, use "Edit day" above instead of a separate
+            post-close entry.
+          </p>
+          <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
+          <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
+            <p class="font-medium">{{ row.activity }} · {{ row.type }} · <Link v-if="!row.type.startsWith('stock:')" :href="`/${company.slug}/journals/${row.id}`" class="underline">{{ row.reference }}</Link><span v-else>{{ row.reference }}</span></p>
+            <p v-if="row.description">{{ row.description }}</p>
+            <p>Business date {{ row.business_date }} · Entered {{ formatDateTime(row.entered_at) }} by {{ row.entered_by_name }}</p>
+            <p v-if="row.before">Updated {{ formatDateTime(row.updated_at) }} · {{ row.updated_by_name || 'Actor unavailable' }}</p>
+            <p>{{ row.source_type }} · {{ row.source_id || row.id }}</p>
+            <p>Amount <MoneyText :amount="row.amount" :currency="currency" /> · Cash reconciliation effect <MoneyText :amount="row.reconciliation_effect" :currency="currency" /></p>
+            <p v-if="row.quantity_effect">Stock effect: {{ row.quantity_effect }} litres · Tank {{ row.warehouse_id }}</p>
+          </div>
+        </div>
+        <div>
+          <h3 class="mb-2 font-semibold">READING CORRECTIONS</h3>
+          <p class="mb-3 text-sm text-muted-foreground">
+            Read-only. To correct a tank or nozzle reading, use "Edit day" above instead of a
+            separate post-close correction.
+          </p>
+          <p v-if="!reconciliation.corrections?.length" class="text-sm text-muted-foreground">No corrections recorded.</p>
+          <div v-for="row in reconciliation.corrections" :key="row.id" class="border-b py-3 text-sm">
+            <p class="font-medium">{{ row.reading_type === 'tank' ? 'Tank reading' : 'Nozzle reading' }} correction</p>
+            <p>{{ row.original_value }}L → {{ row.corrected_value }}L · {{ formatDateTime(row.created_at) }} by {{ row.created_by_name }}</p>
+            <p>Reason: {{ row.reason }}</p>
+            <p v-if="row.revenue_effect !== undefined">Revenue effect <MoneyText :amount="row.revenue_effect" :currency="currency" /></p>
+          </div>
+        </div>
+        <details v-if="reconciliation.audit_events?.length" class="rounded border p-3">
+          <summary class="cursor-pointer font-medium">Audit history ({{ reconciliation.audit_events.length }} events)</summary>
+          <div v-for="event in reconciliation.audit_events" :key="event.id" class="border-b py-2 text-sm">
+            <p>{{ event.operation }} · {{ event.source_table }} · {{ event.source_id }}</p>
+            <p>{{ formatDateTime(event.occurred_at) }} · {{ event.actor_name || 'Actor unavailable' }}</p>
+              <p>Business date {{ event.after_data?.transaction_date || event.after_data?.movement_date || event.after_data?.invoice_date || event.after_data?.bill_date || event.before_data?.transaction_date || transaction.transaction_date }}</p>
+              <p>Reference {{ event.after_data?.transaction_number || event.before_data?.transaction_number || event.source_id }}</p>
+              <p v-if="event.before_data">Before amount: {{ event.before_data.total_amount ?? event.before_data.total_debit ?? event.before_data.amount ?? event.before_data.total_cost ?? event.before_data.debit_amount ?? '—' }}</p>
+              <p v-if="event.after_data">After amount: {{ event.after_data.total_amount ?? event.after_data.total_debit ?? event.after_data.amount ?? event.after_data.total_cost ?? event.after_data.debit_amount ?? '—' }}</p>
+          </div>
+        </details>
+      </CardContent>
+    </Card>
     <!-- Transaction Details -->
     <Card class="mt-6">
       <CardHeader>
@@ -878,6 +691,9 @@ const unlockTransaction = () => {
         </div>
       </CardContent>
     </Card>
+
+      </div>
+    </details>
 
     <Dialog :open="!!discountTarget" @update:open="(open) => { if (!open) discountTarget = null }">
       <DialogContent>

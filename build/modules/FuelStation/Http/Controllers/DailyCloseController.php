@@ -962,6 +962,23 @@ class DailyCloseController extends Controller
      */
     private function directSalesForDay(string $companyId, string $date): array
     {
+        return $this->directSalesRows($companyId, $date);
+    }
+
+    /** Each tank's dip on the posted close before $date: that day's opening stock. */
+    private function previousTankDips(string $companyId, string $date): array
+    {
+        $previous = Transaction::where('company_id', $companyId)->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')->whereNull('reversed_by_id')
+            ->where('transaction_date', '<', $date)->orderByDesc('transaction_date')->first();
+
+        return collect($previous?->metadata['posting_snapshot']['tanks'] ?? [])
+            ->mapWithKeys(fn ($t) => [$t['tank_id'] => (float) ($t['physical_liters'] ?? 0)])
+            ->all();
+    }
+
+    private function directSalesRows(string $companyId, string $date): array
+    {
         $cashAccountId = $this->dailyCloseService->cashAccountId($companyId);
 
         return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
@@ -1237,6 +1254,13 @@ class DailyCloseController extends Controller
                 ->whereIn('customer_id', collect($metadata['credit_sale_details'] ?? [])->pluck('customer_id')->filter()->unique()->values()->all())
                 ->get(['customer_id', 'item_id', 'discount_type', 'value']),
             'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && !$txn->is_locked,
+            // For the day sheet: names behind the ids the close stored, and each tank's opening
+            // (the previous posted close's dip) so a tank reads opening + delivered - sold.
+            'accountNames' => Account::where('company_id', $companyModel->id)->pluck('name', 'id'),
+            'nozzleNames' => \App\Modules\FuelStation\Models\Nozzle::where('company_id', $companyModel->id)
+                ->with('pump:id,name')->get(['id', 'code', 'label', 'pump_id', 'tank_id'])
+                ->mapWithKeys(fn ($n) => [$n->id => ['name' => trim(($n->pump?->name ?? 'Pump').' · '.($n->label ?: $n->code)), 'tank_id' => $n->tank_id]]),
+            'previousTankDips' => $this->previousTankDips($companyModel->id, $txn->transaction_date->toDateString()),
             'canEditDay' => $canEditDay,
             'editDayDisabledReason' => $editDayDisabledReason,
             'editDayLaterDates' => $editDayLaterDates,

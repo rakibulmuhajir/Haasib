@@ -158,6 +158,13 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.supplier_invoice_number' => 'nullable|string|max:100',
             'purchases.*.notes' => 'nullable|string|max:500',
             'purchases.*.paid_now' => 'nullable|boolean',
+            // Fuel sold straight from the tanker (Fuel Sales -> Direct sales). A credit sale
+            // needs a customer; a cash one without goes to the walk-in fuel customer.
+            'direct_sales' => 'nullable|array',
+            'direct_sales.*.litres' => 'nullable|numeric|min:0',
+            'direct_sales.*.rate' => 'nullable|numeric|min:0',
+            'direct_sales.*.paid_in_cash' => 'nullable|boolean',
+            'direct_sales.*.customer_id' => 'nullable|uuid|required_if:direct_sales.*.paid_in_cash,false,0',
             // One purchase = one supplier bill; each product on it is a line.
             'purchases.*.lines' => 'nullable|array',
             'purchases.*.lines.*.quantity' => 'nullable|numeric|min:0',
@@ -222,6 +229,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
         foreach ([
             'purchases.*.supplier_id' => 'acct.vendors', 'purchases.*.item_id' => 'inv.items', 'purchases.*.tank_id' => 'inv.warehouses',
             'purchases.*.lines.*.item_id' => 'inv.items', 'purchases.*.lines.*.tank_id' => 'inv.warehouses',
+            'direct_sales.*.item_id' => 'inv.items',
             'payments_received.*.customer_id' => 'acct.customers', 'payments_received.*.invoice_id' => 'acct.invoices',
             'pay_suppliers.*.vendor_id' => 'acct.vendors',
             'credit_sales.*.item_id' => 'inv.items',

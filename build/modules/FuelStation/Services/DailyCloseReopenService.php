@@ -99,6 +99,7 @@ class DailyCloseReopenService
             $this->guardCreditInvoicesNotPaidElsewhere($companyId, $metadata);
             $this->guardBillsNotPaidElsewhere($companyId, $purchaseDetails);
             $this->guardAdvancesUntouched($companyId, $close->id);
+            $this->guardDirectSalesNotPaidElsewhere($companyId, $metadata);
             $this->guardStockNotIssuedBelowWhatWouldRemain($companyId, $close->id, $metadata, $purchaseDetails);
 
             // Keep history before anything is touched.
@@ -116,6 +117,7 @@ class DailyCloseReopenService
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
 
             $this->detachOrDeleteCreditSales($companyId, $metadata);
+            $this->reverseDirectSales($companyId, $metadata);
             $this->reversePaymentsReceived($companyId, $metadata);
             $this->reversePaySuppliers($companyId, $metadata);
             $this->reverseChannelSupplierSettlements($companyId, $metadata);
@@ -476,6 +478,43 @@ class DailyCloseReopenService
             }
             // 'manual': the close itself created this invoice via invoice.create -- delete it
             // with its lines, nothing else in the system depends on it.
+            $invoice->lineItems()->delete();
+            $invoice->delete();
+        }
+    }
+
+    /** A direct-sale invoice the close made may only carry the close's own cash payment. */
+    private function guardDirectSalesNotPaidElsewhere(string $companyId, array $metadata): void
+    {
+        foreach ($metadata['direct_sale_details'] ?? [] as $detail) {
+            $foreign = PaymentAllocation::where('company_id', $companyId)
+                ->where('invoice_id', $detail['invoice_id'] ?? null)
+                ->when(! empty($detail['payment_id']), fn ($q) => $q->where('payment_id', '!=', $detail['payment_id']))
+                ->exists();
+            if ($foreign) {
+                $number = Invoice::where('company_id', $companyId)->whereKey($detail['invoice_id'])->value('invoice_number');
+                throw new \RuntimeException("Direct sale {$number} has a payment recorded outside this close. Remove that payment first.");
+            }
+        }
+    }
+
+    /** Direct sales the close created: its cash payment, then the invoice and its journal. */
+    private function reverseDirectSales(string $companyId, array $metadata): void
+    {
+        $details = $metadata['direct_sale_details'] ?? [];
+        $this->reversePaymentsReceived($companyId, ['payments_received_details' => array_values(array_filter(
+            array_map(fn ($d) => ['payment_id' => $d['payment_id'] ?? null], $details),
+            fn ($d) => ! empty($d['payment_id'])
+        ))]);
+        foreach ($details as $detail) {
+            $invoice = Invoice::where('company_id', $companyId)->find($detail['invoice_id'] ?? null);
+            if (! $invoice) {
+                continue;
+            }
+            if ($invoice->transaction_id) {
+                JournalEntry::where('company_id', $companyId)->where('transaction_id', $invoice->transaction_id)->delete();
+                Transaction::where('company_id', $companyId)->whereKey($invoice->transaction_id)->delete();
+            }
             $invoice->lineItems()->delete();
             $invoice->delete();
         }

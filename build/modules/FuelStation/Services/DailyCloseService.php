@@ -355,6 +355,18 @@ class DailyCloseService
             }
             $data['purchases'] = [];
 
+            // Direct sales (Fuel Sales tab): invoices + cash payments made here, so they are read
+            // below like any other canonical activity -- income in sales, cash in money in.
+            $declaredDirectSales = $data['direct_sales'] ?? [];
+            $directSaleDetails = [];
+            foreach ($declaredDirectSales as $row) {
+                if (empty($row['item_id']) || (float) ($row['litres'] ?? 0) <= 0 || (float) ($row['rate'] ?? 0) <= 0) {
+                    continue;
+                }
+                $directSaleDetails[] = app(DailyCloseEntryService::class)->directSale($companyId, $date, $row, $user);
+            }
+            $data['direct_sales'] = [];
+
             $createdAmanat = []; $createdPartners = []; $createdAdvances = [];
             $reconciliation = app(DailyCloseReconciliationService::class);
             $canonicalSources = $reconciliation->sources($companyId, $date);
@@ -1518,12 +1530,14 @@ class DailyCloseService
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
                 'expenses' => $declaredExpenses,
                 'purchases' => $declaredPurchases,
+                'direct_sales' => $declaredDirectSales,
                 'closing_cash' => $data['closing_cash'],
                 'notes' => $data['notes'] ?? null,
             ];
             // What each inline purchase/expense row actually created -- DailyCloseReopenService's
             // own lookup, never read by anything that renders the close.
             $metadata['purchase_details'] = $purchaseDetails;
+            $metadata['direct_sale_details'] = $directSaleDetails;
             $metadata['expense_transaction_ids'] = $expenseTransactionIds;
 
             // Revenue entries. Prefer product-level mappings; station settings are fallback defaults.

@@ -16,6 +16,73 @@ use Illuminate\Support\Facades\DB;
 /** Entry convenience for the reconciliation hub; uses the existing Accounting journal. */
 class DailyCloseEntryService
 {
+    /**
+     * Fuel sold straight from the tanker, entered on the close (Fuel Sales -> Direct sales).
+     * The same documents Record fuel sale -> Direct from tanker makes (FuelSaleController::
+     * storeDirect): a direct-delivery invoice that posts its own income -- no meter counts
+     * these litres -- and, when paid in cash, a payment into the station cash account on the
+     * business date. The litres' cost is on the purchase bill's "sold directly" quantity.
+     *
+     * @return array{invoice_id: string, invoice_transaction_id: ?string, payment_id: ?string, payment_transaction_id: ?string}
+     */
+    public function directSale(string $companyId, string $date, array $row, User $user): array
+    {
+        $company = Company::findOrFail($companyId);
+        $item = Item::where('company_id', $companyId)->findOrFail($row['item_id']);
+        $paidInCash = filter_var($row['paid_in_cash'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $customerId = $row['customer_id'] ?? null;
+        if (! $customerId) {
+            if (! $paidInCash) {
+                throw new \InvalidArgumentException('A direct sale on credit needs a customer.');
+            }
+            $customerId = app(FuelSaleService::class)->resolveCustomerId($company, \App\Modules\FuelStation\Models\SaleMetadata::TYPE_RETAIL, []);
+        }
+        $litres = round((float) $row['litres'], 3);
+        $bus = app(CommandBus::class);
+        $result = $bus->dispatch('invoice.create', [
+            'customer' => $customerId,
+            'currency' => $company->base_currency ?: 'PKR',
+            'date' => $date,
+            'payment_terms' => $paidInCash ? 0 : null,
+            'is_direct_delivery' => true,
+            'line_items' => [[
+                'description' => rtrim(rtrim(number_format($litres, 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
+                'quantity' => $litres,
+                'unit_price' => (float) $row['rate'],
+                'income_account_id' => $item->income_account_id,
+            ]],
+        ], $user);
+        $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)->findOrFail($result['data']['id']);
+
+        $paymentId = null;
+        $paymentTransactionId = null;
+        if ($paidInCash) {
+            $cashId = app(DailyCloseService::class)->cashAccountId($companyId);
+            if (! $cashId) {
+                throw new \RuntimeException('No cash account is configured for this company.');
+            }
+            $amount = round((float) $invoice->balance, 2);
+            $payment = $bus->dispatch('payment.create', [
+                'customer_id' => $invoice->customer_id,
+                'allocations' => [['invoice_id' => $invoice->id, 'amount' => $amount]],
+                'amount' => $amount,
+                'method' => 'cash',
+                'date' => $date,
+                'deposit_account_id' => $cashId,
+                'reference' => $invoice->invoice_number,
+            ], $user);
+            $paymentId = $payment['data']['id'] ?? null;
+            $paymentTransactionId = $paymentId ? \App\Modules\Accounting\Models\Payment::whereKey($paymentId)->value('transaction_id') : null;
+        }
+
+        return [
+            'invoice_id' => $invoice->id,
+            'invoice_transaction_id' => $invoice->fresh()->transaction_id,
+            'payment_id' => $paymentId,
+            'payment_transaction_id' => $paymentTransactionId,
+        ];
+    }
+
     public function expense(string $companyId, string $date, array $expense): Transaction
     {
         return DB::transaction(function () use ($companyId, $date, $expense) {

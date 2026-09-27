@@ -13,6 +13,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import EntitySearch from '@/components/forms/EntitySearch.vue';
 import {
     Dialog,
     DialogContent,
@@ -81,6 +82,17 @@ interface PurchaseLine {
     tank_id: string;
     direct_quantity: number | null;
     show_direct?: boolean;
+}
+
+// Fuel sold straight from the tanker, entered on the close: becomes a direct-delivery invoice
+// (and a cash payment when paid in cash) on posting -- see DailyCloseEntryService::directSale.
+interface DirectSaleRow {
+    item_id: string;
+    litres: number | null;
+    rate: number | null;
+    customer_id: string;
+    customer_name: string;
+    paid_in_cash: boolean;
 }
 
 interface PurchaseRow {
@@ -1178,6 +1190,7 @@ const form = useForm({
     // Supplier bills entered inline instead of via the Bills module: one purchase is one bill,
     // each product on it a line (litres, rate, total; its tank; litres sold directly).
     purchases: [] as PurchaseRow[],
+    direct_sales: [] as DirectSaleRow[],
 
     // Tab 5: Summary
     closing_cash: 0,
@@ -1546,6 +1559,40 @@ const purchaseLitresByTank = computed(() => {
 const paidNowPurchasesTotal = computed(() =>
     (form.purchases as PurchaseRow[]).filter((r) => r.paid_now).reduce((sum, r) => sum + purchaseBillTotal(r), 0),
 );
+const directSaleAmount = (row: DirectSaleRow) => Math.round(Number(row.litres || 0) * Number(row.rate || 0) * 100) / 100;
+const formDirectSalesTotal = computed(() => (form.direct_sales as DirectSaleRow[]).reduce((sum, r) => sum + directSaleAmount(r), 0));
+const formDirectSalesCash = computed(() =>
+    (form.direct_sales as DirectSaleRow[]).filter((r) => r.paid_in_cash).reduce((sum, r) => sum + directSaleAmount(r), 0),
+);
+const addDirectSale = (itemId = '', litres: number | null = null) => {
+    form.direct_sales.push({
+        item_id: itemId,
+        litres,
+        rate: itemId ? Number(props.rates?.[itemId]?.sale_rate ?? 0) || null : null,
+        customer_id: '',
+        customer_name: '',
+        paid_in_cash: true,
+    });
+};
+const onDirectSaleItem = (row: DirectSaleRow) => {
+    row.rate = Number(props.rates?.[row.item_id]?.sale_rate ?? 0) || null;
+};
+// Litres a purchase bill marks "sold directly" that no direct sale row covers yet: offered as
+// one-click rows, so the sale (and its cash) is not forgotten.
+const directSaleSuggestions = computed(() => {
+    const byItem: Record<string, number> = {};
+    for (const row of form.purchases as PurchaseRow[]) {
+        for (const line of row.lines || []) {
+            if (Number(line.direct_quantity) > 0) byItem[line.item_id] = (byItem[line.item_id] ?? 0) + Number(line.direct_quantity);
+        }
+    }
+    for (const sale of form.direct_sales as DirectSaleRow[]) {
+        if (sale.item_id in byItem) byItem[sale.item_id] -= Number(sale.litres || 0);
+    }
+    return Object.entries(byItem).filter(([, litres]) => litres > 0.0005).map(([itemId, litres]) => ({ itemId, litres }));
+});
+const fuelItemName = (itemId: string) => props.fuelItems.find((f) => f.id === itemId)?.name ?? purchaseItemName(itemId);
+
 // A draft saved before multi-line purchases kept one product on the row itself.
 const normalizePurchases = () => {
     form.purchases = ((form.purchases || []) as any[]).map((row) => {
@@ -2309,7 +2356,8 @@ const totalMoneyIn = computed(() => {
         totalPartnerDeposits.value +
         totalAmanatDeposits.value +
         totalOtherDeposits.value +
-        totalSales.value
+        totalSales.value +
+        formDirectSalesCash.value
     );
 });
 
@@ -3137,7 +3185,7 @@ const formatLiters = (liters: number, digits = 0) => {
 };
 
 const tabs = [
-    { id: 'sales', label: 'Meter Sales', icon: Fuel },
+    { id: 'sales', label: 'Fuel Sales', icon: Fuel },
     { id: 'tanks', label: 'Tank Dip', icon: Droplets },
     { id: 'money-in', label: 'Cash In', icon: Wallet },
     { id: 'money-out', label: 'Cash Out', icon: ArrowDownRight },
@@ -3449,7 +3497,7 @@ const completedWorkflowSteps = computed(() => {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Meter Sales</CardTitle>
+                        <CardTitle>Fuel Sales</CardTitle>
                         <CardDescription
                             >Enter opening and closing readings for each active
                             nozzle.</CardDescription
@@ -3978,6 +4026,81 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
+                        <!-- Direct sales: fuel sold straight from the tanker, not through a pump -->
+                        <div class="space-y-3 border-t border-rule-default pt-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium">Direct sales (not from pumps)</h4>
+                                    <p class="text-xs text-muted-foreground">
+                                        Fuel from a delivery sold straight to a customer. Counted as a sale; cash ones in cash in.
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" @click="addDirectSale()"><Plus class="mr-1 h-4 w-4" /> Add direct sale</Button>
+                            </div>
+                            <div v-if="directSaleSuggestions.length" class="flex flex-wrap gap-2">
+                                <Button
+                                    v-for="sug in directSaleSuggestions"
+                                    :key="sug.itemId"
+                                    size="sm"
+                                    variant="secondary"
+                                    @click="addDirectSale(sug.itemId, Math.round(sug.litres * 1000) / 1000)"
+                                >
+                                    + Record sale of {{ Math.round(sug.litres * 1000) / 1000 }} L {{ fuelItemName(sug.itemId) }} sold directly
+                                </Button>
+                            </div>
+                            <div
+                                v-for="(sale, index) in form.direct_sales"
+                                :key="'direct-sale-' + index"
+                                class="grid grid-cols-2 gap-3 md:grid-cols-[9rem_7rem_7rem_8rem_1fr_8rem_auto] md:items-end"
+                            >
+                                <div>
+                                    <Label class="text-xs">Fuel</Label>
+                                    <Select v-model="sale.item_id" @update:model-value="onDirectSaleItem(sale)">
+                                        <SelectTrigger><SelectValue placeholder="Fuel" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem v-for="f in fuelItems" :key="f.id" :value="f.id">{{ f.name }}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError :message="(form.errors as Record<string, string>)[`direct_sales.${index}.item_id`]" />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Litres</Label>
+                                    <Input v-model.number="sale.litres" type="number" min="0" @focus="selectZeroValue" />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Rate</Label>
+                                    <Input v-model.number="sale.rate" type="number" min="0" step="0.01" @focus="selectZeroValue" />
+                                </div>
+                                <div class="pb-2 text-right text-sm font-medium">
+                                    <MoneyText :amount="directSaleAmount(sale)" :currency="currencyCode" :fraction-digits="0" />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Customer {{ sale.paid_in_cash ? '(optional)' : '' }}</Label>
+                                    <EntitySearch
+                                        v-model="sale.customer_id"
+                                        entity-type="customer"
+                                        :company-slug="props.company.slug"
+                                        :initial-entity="sale.customer_name ? { id: sale.customer_id, name: sale.customer_name } : null"
+                                        @entity-selected="(entity: any) => (sale.customer_name = entity.name)"
+                                    />
+                                    <InputError :message="(form.errors as Record<string, string>)[`direct_sales.${index}.customer_id`]" />
+                                </div>
+                                <div>
+                                    <Label class="text-xs">Paid</Label>
+                                    <Select :model-value="sale.paid_in_cash ? 'cash' : 'credit'" @update:model-value="(v) => (sale.paid_in_cash = v === 'cash')">
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="cash">In cash</SelectItem>
+                                            <SelectItem value="credit">On credit</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button variant="ghost" size="icon" aria-label="Remove direct sale" @click="form.direct_sales.splice(index, 1)">
+                                    <Trash2 class="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
                         <!-- Other Sales (Lubricants, etc.) -->
                         <template
                             v-if="
@@ -4189,6 +4312,17 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <div
+                                    v-for="(sale, i) in form.direct_sales"
+                                    :key="'form-direct-' + i"
+                                    class="flex justify-between text-sm"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <span>Direct sale · {{ fuelItemName(sale.item_id) }}</span>
+                                        <span class="text-muted-foreground">({{ Number(sale.litres || 0).toFixed(0) }} L, {{ sale.paid_in_cash ? 'cash' : 'credit' }})</span>
+                                    </div>
+                                    <span class="font-medium"><MoneyText :amount="directSaleAmount(sale)" :currency="currencyCode" :fraction-digits="0" /></span>
+                                </div>
                                 <!-- Direct from tanker (not from the pumps) -->
                                 <div
                                     v-for="sale in props.directSales || []"
@@ -4211,7 +4345,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Sales</span>
                                     <span
                                         ><MoneyText
-                                            :amount="totalSales + directSalesTotal"
+                                            :amount="totalSales + directSalesTotal + formDirectSalesTotal"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -4236,7 +4370,7 @@ const completedWorkflowSteps = computed(() => {
                                 {{
                                     tabsSaved.sales
                                         ? 'Saved'
-                                        : 'Save Meter Sales'
+                                        : 'Save Fuel Sales'
                                 }}
                             </Button>
                         </div>
@@ -5477,7 +5611,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Sales</span>
                                     <span class="font-medium"
                                         ><MoneyText
-                                            :amount="totalSales + directSalesCash"
+                                            :amount="totalSales + directSalesCash + formDirectSalesCash"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -6950,7 +7084,7 @@ const completedWorkflowSteps = computed(() => {
                                         <span>+ Total Sales</span>
                                         <span
                                             ><MoneyText
-                                                :amount="totalSales + directSalesCash"
+                                                :amount="totalSales + directSalesCash + formDirectSalesCash"
                                                 :currency="currencyCode"
                                                 :fraction-digits="0"
                                         /></span>

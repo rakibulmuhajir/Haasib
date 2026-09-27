@@ -316,3 +316,21 @@ test('one purchase with several products becomes one bill with a line each', fun
         ->and((float) \Illuminate\Support\Facades\DB::table('inv.stock_movements')
             ->where('reference_type', 'acct.bills')->where('reference_id', $bill->id)->sum('quantity'))->toBe(450.0);
 });
+
+test('a direct sale on the close becomes a paid direct-delivery invoice and cash in', function () {
+    $f = inlinePurchaseFixture();
+    $item = \App\Modules\Inventory\Models\Item::where('company_id', $f['company']->id)->where('sku', 'PETROL')->sole();
+    $item->update(['income_account_id' => $f['accounts']['4100']->id]);
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000 + 26000; // the drawer holds the direct sale's cash too
+    $f['payload']['direct_sales'] = [[
+        'item_id' => $item->id, 'litres' => 100, 'rate' => 260, 'paid_in_cash' => true,
+    ]];
+
+    inlinePurchasePost($f);
+
+    $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $f['company']->id)->where('is_direct_delivery', true)->sole();
+    expect((float) $invoice->total_amount)->toBe(26000.0)
+        ->and((float) $invoice->balance)->toBe(0.0)
+        ->and(\App\Modules\Accounting\Models\Payment::where('company_id', $f['company']->id)->count())->toBe(1);
+});

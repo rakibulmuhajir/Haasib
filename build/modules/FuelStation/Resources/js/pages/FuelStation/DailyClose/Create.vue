@@ -464,7 +464,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const activeTab = ref('sales');
 const currencyCode = computed(() => props.company.base_currency || 'PKR');
 const partnerSearch = ref('');
-const investorSearch = ref('');
 
 // Numeric fields start at zero for the accounting calculations. Selecting a
 // zero on focus lets the first typed digit replace it, so operators can enter
@@ -777,26 +776,6 @@ const refreshTankFacts = () => {
 };
 
 /**
- * "Received in cash" on a direct delivery: records the customer payment into the cash drawer for
- * this business day, so the close counts it as money in instead of showing an overage.
- */
-const receivingDirectCash = ref<string | null>(null);
-const receiveDirectDeliveryCash = (invoiceId: string) => {
-    receivingDirectCash.value = invoiceId;
-    router.post(
-        `/${props.company.slug}/fuel/daily-close/direct-deliveries/${invoiceId}/cash`,
-        { date: form.date },
-        {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => {
-                receivingDirectCash.value = null;
-            },
-        },
-    );
-};
-
-/**
  * A draft keeps what was typed; everything the server works out - opening cash, each tank's
  * dip and deliveries, each nozzle's opening meter - is taken fresh, never from the draft.
  * Called by both restore paths (browser draft and parked draft).
@@ -899,11 +878,6 @@ const searchMatches = (
 const filteredPartners = computed(() =>
     props.partners.filter((partner) =>
         searchMatches(partner.name, partnerSearch.value),
-    ),
-);
-const filteredInvestors = computed(() =>
-    props.investors.filter((investor) =>
-        searchMatches(investor.name, investorSearch.value),
     ),
 );
 
@@ -1372,6 +1346,79 @@ const purchaseError = (index: number, field: string) =>
 
 const purchaseLineTotal = (row: { quantity: number | null; unit_cost: number | null }) =>
     Number(row.quantity || 0) * Number(row.unit_cost || 0);
+
+/**
+ * Each tab lists only the entries it supports in an "Add entry" dropdown; a section is shown
+ * once picked there, or whenever it already has rows (a restored draft, pre-loaded invoices).
+ * Automatic lists (approved salaries, pending supplier payments) are not part of this.
+ */
+const openedSections = ref<Set<string>>(new Set());
+const sectionRowCount: Record<string, () => number> = {
+    payments_received: () => form.payments_received.length,
+    partner_deposits: () => form.partner_deposits.length,
+    amanat_deposits: () => form.amanat_deposits.length,
+    other_deposits: () => form.other_deposits.length,
+    bank_withdrawals: () => form.bank_withdrawals.length,
+    credit_sales: () => form.credit_sales.length,
+    channels: () => Object.values(form.payment_receipts || {}).reduce((n, r: any) => n + (r?.entries?.length ?? 0), 0),
+    bank_deposits: () => form.bank_deposits.length,
+    partner_withdrawals: () => form.partner_withdrawals.length,
+    employee_advances: () => form.employee_advances.length,
+    pay_suppliers: () => form.pay_suppliers.length,
+    amanat_disbursements: () => form.amanat_disbursements.length,
+    expenses: () => form.expenses.length,
+    purchases: () => form.purchases.length,
+    other_sales: () => form.other_sales.length,
+};
+const showSection = (key: string) => openedSections.value.has(key) || (sectionRowCount[key]?.() ?? 0) > 0;
+const sectionAdders: Record<string, () => void> = {
+    payments_received: () => form.payments_received.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' }),
+    partner_deposits: () => addPartnerDeposit(),
+    amanat_deposits: () => addAmanatDeposit(),
+    other_deposits: () => addOtherDeposit(),
+    bank_withdrawals: () => addBankWithdrawal(),
+    credit_sales: () => form.credit_sales.push({ customer_id: '', customer_name: '', amount: 0, reference: '' }),
+    bank_deposits: () => addBankDeposit(),
+    partner_withdrawals: () => addPartnerWithdrawal(),
+    employee_advances: () => addEmployeeAdvance(),
+    pay_suppliers: () => form.pay_suppliers.push({ vendor_id: '', vendor_name: '', amount: 0, payment_account_id: props.stationCashAccountId ?? '', reference: '' }),
+    amanat_disbursements: () => addAmanat(),
+    expenses: () => addExpense(),
+    purchases: () => addPurchaseRow(),
+    other_sales: () => addOtherSale(),
+};
+const openSection = (key: string) => {
+    if (!key) return;
+    openedSections.value = new Set([...openedSections.value, key]);
+    sectionAdders[key]?.();
+};
+const entryOptions = computed(() => {
+    const partners = props.features.has_partners && props.partners.length > 0;
+    const amanat = props.features.has_amanat;
+    return {
+        in: [
+            { key: 'payments_received', label: 'Payment received (customer)' },
+            ...(partners ? [{ key: 'partner_deposits', label: 'Partner deposit' }] : []),
+            ...(amanat ? [{ key: 'amanat_deposits', label: 'Amanat deposit' }] : []),
+            { key: 'bank_withdrawals', label: 'Cash withdrawn from bank' },
+            { key: 'other_deposits', label: 'Other cash in' },
+        ],
+        out: [
+            { key: 'credit_sales', label: 'Credit sale' },
+            { key: 'channels', label: 'Card / bank / wallet sales' },
+            { key: 'expenses', label: 'Expense' },
+            { key: 'bank_deposits', label: 'Bank deposit' },
+            ...(props.canEnterPurchases ? [{ key: 'purchases', label: 'Delivery (supplier bill)' }] : []),
+            { key: 'pay_suppliers', label: 'Pay supplier' },
+            { key: 'employee_advances', label: 'Salary advance' },
+            ...(partners ? [{ key: 'partner_withdrawals', label: 'Partner withdrawal' }] : []),
+            ...(amanat ? [{ key: 'amanat_disbursements', label: 'Amanat withdrawal' }] : []),
+        ],
+        sales: props.features.has_lubricant_sales && props.lubricantItems.length > 0
+            ? [{ key: 'other_sales', label: 'Lubricant / other sale' }]
+            : [],
+    };
+});
 
 const addPurchaseRow = () => {
     form.purchases.push({
@@ -3084,12 +3131,6 @@ const completedWorkflowSteps = computed(() => {
                     Openings from {{ props.openingsFromParked }} (parked) — post it first
                 </span>
                 <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
-                <Link
-                    v-if="!props.isAmendment"
-                    :href="`/${props.company.slug}/fuel/daily-close/quick?date=${form.date}`"
-                    class="text-primary underline-offset-2 hover:underline"
-                    >Quick entry</Link
-                >
                 <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
                     {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
@@ -3776,6 +3817,15 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
+                        <div v-if="entryOptions.sales.length" class="flex flex-wrap items-center gap-2">
+                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="option in entryOptions.sales" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
+                        </div>
                         <!-- Other Sales (Lubricants, etc.) -->
                         <template
                             v-if="
@@ -3784,7 +3834,7 @@ const completedWorkflowSteps = computed(() => {
                             "
                         >
                             <Separator />
-                            <div class="space-y-4">
+                            <div v-if="showSection('other_sales')" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <h4 class="font-medium">
                                         Other Sales (Lubricants, etc.)
@@ -4608,8 +4658,19 @@ const completedWorkflowSteps = computed(() => {
                         >
                     </CardHeader>
                     <CardContent class="space-y-6">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="option in entryOptions.in" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
+                        </div>
                         <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
                         <PaymentsReceivedEntry
+                            v-if="showSection('payments_received')"
+                            class="space-y-4 border-t border-rule-default pt-4"
                             v-model="form.payments_received"
                             :errors="form.errors as Record<string, string>"
                             :disabled="submitting || form.processing"
@@ -4617,7 +4678,6 @@ const completedWorkflowSteps = computed(() => {
                             :payment-accounts="(props as any).paymentAccounts ?? []"
                             :currency="currencyCode"
                         />
-                        <Separator />
                         <!-- Opening Cash -->
                         <div class="rounded-lg bg-muted/50 p-4">
                             <div class="flex items-center justify-between">
@@ -4669,9 +4729,8 @@ const completedWorkflowSteps = computed(() => {
                         <template
                             v-if="features.has_partners && partners.length > 0"
                         >
-                            <Separator />
 
-                            <div class="space-y-4">
+                            <div v-if="showSection('partner_deposits')" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -4791,10 +4850,9 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
-                        <Separator />
 
                         <template v-if="features.has_amanat">
-                            <div class="space-y-4">
+                            <div v-if="showSection('amanat_deposits')" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -4946,51 +5004,9 @@ const completedWorkflowSteps = computed(() => {
                                 </div>
                             </div>
 
-                            <Separator />
                         </template>
 
-                        <div
-                            v-if="props.unpaidDirectDeliveries?.length"
-                            class="space-y-3"
-                        >
-                            <div>
-                                <h4 class="font-medium">Direct deliveries not yet paid</h4>
-                                <p class="text-xs text-muted-foreground">
-                                    Fuel sold straight to a customer on this day. If they paid in
-                                    cash, record it here and it is counted in today's money in.
-                                </p>
-                            </div>
-                            <div
-                                v-for="invoice in props.unpaidDirectDeliveries"
-                                :key="invoice.id"
-                                class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-                            >
-                                <div class="text-sm">
-                                    <Link
-                                        :href="`/${props.company.slug}/invoices/${invoice.id}`"
-                                        class="font-medium underline-offset-2 hover:underline"
-                                        >{{ invoice.invoice_number }}</Link
-                                    >
-                                    <span class="text-muted-foreground">
-                                        · {{ invoice.customer_name || 'Customer' }} ·
-                                    </span>
-                                    <MoneyText
-                                        :amount="invoice.balance"
-                                        :currency="currencyCode"
-                                        :fraction-digits="0"
-                                    />
-                                </div>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    :disabled="receivingDirectCash !== null"
-                                    @click="receiveDirectDeliveryCash(invoice.id)"
-                                    >Received in cash</Button
-                                >
-                            </div>
-                        </div>
-
-                        <div class="space-y-4">
+                        <div v-if="showSection('other_deposits')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Other Cash In</h4>
@@ -5120,74 +5136,8 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
-                        <Separator />
 
-                        <template
-                            v-if="
-                                features.has_investors && investors.length > 0
-                            "
-                        >
-                            <Separator />
-
-                            <div class="space-y-3 rounded-lg border p-4">
-                                <div>
-                                    <h4 class="font-medium">
-                                        Investor Balances
-                                    </h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        Live lookup only. Investor lot posting
-                                        stays in investor tools.
-                                    </p>
-                                </div>
-                                <Input
-                                    v-model="investorSearch"
-                                    placeholder="Search investors by name"
-                                    class="max-w-sm"
-                                />
-                                <div class="grid gap-2 md:grid-cols-2">
-                                    <div
-                                        v-for="investor in filteredInvestors.slice(
-                                            0,
-                                            6,
-                                        )"
-                                        :key="investor.id"
-                                        class="rounded-md border bg-muted/20 p-3 text-sm"
-                                    >
-                                        <div class="font-medium">
-                                            {{ investor.name }}
-                                        </div>
-                                        <div
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Invested
-                                            <MoneyText
-                                                :amount="
-                                                    investor.total_invested
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                            · Remaining
-                                            {{
-                                                formatLiters(
-                                                    investor.units_remaining,
-                                                    2,
-                                                )
-                                            }}L · Commission due
-                                            <MoneyText
-                                                :amount="
-                                                    investor.outstanding_commission
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-
-                        <div class="space-y-4">
+                        <div v-if="showSection('bank_withdrawals')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Cash Withdrawn from Bank</h4>
@@ -5296,7 +5246,6 @@ const completedWorkflowSteps = computed(() => {
 
                         <div v-if="totalBankWithdrawals" class="flex justify-between text-sm"><span>Cash Withdrawn from Bank</span><MoneyText :amount="totalBankWithdrawals" :currency="currencyCode" /></div>
 
-                        <Separator />
 
                         <!-- Money In Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">
@@ -5443,10 +5392,18 @@ const completedWorkflowSteps = computed(() => {
                         >
                     </CardHeader>
                     <CardContent class="space-y-6">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add entry…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="option in entryOptions.out" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span class="text-xs text-muted-foreground">Only the entries you add, or that already have rows, are shown.</span>
+                        </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
-                        <Separator />
-                        <div class="space-y-4">
+                        <CreditSalesEntry v-if="showSection('credit_sales')" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
+                        <div v-if="showSection('channels')" class="space-y-4 border-t border-rule-default pt-4">
                             <div>
                                 <h4 class="text-sm font-semibold">
                                     Sales that went to bank / card accounts
@@ -5628,10 +5585,9 @@ const completedWorkflowSteps = computed(() => {
                             </template>
                         </div>
 
-                        <Separator />
 
                         <!-- Bank Deposits -->
-                        <div class="space-y-4">
+                        <div v-if="showSection('bank_deposits')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Bank Deposits</h4>
@@ -5742,9 +5698,8 @@ const completedWorkflowSteps = computed(() => {
                         <template
                             v-if="features.has_partners && partners.length > 0"
                         >
-                            <Separator />
 
-                            <div class="space-y-4">
+                            <div v-if="showSection('partner_withdrawals')" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -5907,10 +5862,9 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
-                        <Separator />
 
                         <!-- Employee Advances -->
-                        <div class="space-y-4">
+                        <div v-if="showSection('employee_advances')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">
@@ -6065,7 +6019,6 @@ const completedWorkflowSteps = computed(() => {
                         </div>
 
                         <template v-if="form.payroll_payouts.length > 0">
-                            <Separator />
 
                             <div class="space-y-4">
                                 <div>
@@ -6133,7 +6086,6 @@ const completedWorkflowSteps = computed(() => {
                         </template>
 
                         <template v-if="form.bill_payments.length > 0">
-                            <Separator />
 
                             <div class="space-y-4">
                                 <div>
@@ -6251,9 +6203,10 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
-                        <Separator />
 
                         <PaySupplierEntry
+                            v-if="showSection('pay_suppliers')"
+                            class="space-y-4 border-t border-rule-default pt-4"
                             v-model="form.pay_suppliers"
                             :errors="form.errors as Record<string, string>"
                             :disabled="submitting || form.processing"
@@ -6264,9 +6217,8 @@ const completedWorkflowSteps = computed(() => {
 
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->
                         <template v-if="features.has_amanat">
-                            <Separator />
 
-                            <div class="space-y-4">
+                            <div v-if="showSection('amanat_disbursements')" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -6413,10 +6365,9 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </template>
 
-                        <Separator />
 
                         <!-- Operating Expenses -->
-                        <div class="space-y-4">
+                        <div v-if="showSection('expenses')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">
@@ -6499,10 +6450,9 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
-                        <Separator />
 
                         <!-- Supplier bills / fuel purchases entered inline (requires bill.create) -->
-                        <div v-if="canEnterPurchases" class="space-y-4">
+                        <div v-if="canEnterPurchases && showSection('purchases')" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Purchases</h4>
@@ -6600,7 +6550,6 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
-                        <Separator v-if="canEnterPurchases" />
 
                         <!-- Money Out Summary -->
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">

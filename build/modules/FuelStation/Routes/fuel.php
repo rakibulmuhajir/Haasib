@@ -87,7 +87,6 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
 
     // Daily Close (full daily register matching manual workflow)
     Route::get('daily-close', [DailyCloseController::class, 'create'])->name('fuel.daily-close.create');
-    Route::get('daily-close/quick', [DailyCloseController::class, 'create'])->name('fuel.daily-close.quick');
     Route::post('daily-close/{transaction}/expenses', [DailyCloseController::class, 'postCloseExpense'])->name('fuel.daily-close.expenses.store');
     Route::post('daily-close/{transaction}/corrections', [DailyCloseController::class, 'storeCorrection'])->name('fuel.daily-close.corrections.store');
     Route::post('daily-close/{transaction}/credit-sales/{invoice}/discount', [DailyCloseController::class, 'applyPostCloseDiscount'])->name('fuel.daily-close.credit-sales.discount');

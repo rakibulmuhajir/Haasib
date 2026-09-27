@@ -3157,6 +3157,33 @@ const completedWorkflowSteps = computed(() => {
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
                 </Badge>
                 <InputError :message="form.errors.date" />
+                <!-- Rate change, first thing: pick a fuel, type its new sale rate, Apply. -->
+                <div v-if="fuelItems.length" class="flex w-full flex-wrap items-center gap-2">
+                    <Label for="rate-fuel">Rate change</Label>
+                    <Select v-model="rateItemId">
+                        <SelectTrigger id="rate-fuel" class="h-8 w-36"><SelectValue placeholder="Select fuel" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <template v-if="rateItemId">
+                        <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-8 w-28" placeholder="New rate" />
+                        <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }}</span>
+                        <Button
+                            size="sm"
+                            class="h-8"
+                            :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
+                            @click="applyRate"
+                            >Apply</Button
+                        >
+                    </template>
+                    <span v-if="props.rateChangesToday?.length" class="text-sm tabular-nums">
+                        <template v-for="(change, i) in props.rateChangesToday" :key="change.item_id">
+                            <span v-if="i > 0" class="text-muted-foreground"> · </span>
+                            <span class="font-medium">{{ change.name }}:</span> {{ signed(change.difference) }}
+                        </template>
+                    </span>
+                </div>
             </div>
         </template>
         <template #actions>
@@ -3181,38 +3208,6 @@ const completedWorkflowSteps = computed(() => {
 
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
 
-        <!-- Rate change: checked and changed before anything else. -->
-        <section v-if="!isAmendmentMode && fuelItems.length" class="mb-4 flex flex-wrap items-start gap-3 rounded-md border border-rule-default p-3">
-            <div class="w-40 space-y-1">
-                <Label for="rate-fuel" class="text-xs">Rate change</Label>
-                <Select v-model="rateItemId">
-                    <SelectTrigger id="rate-fuel" class="h-8"><SelectValue placeholder="Select fuel" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <template v-if="rateItemId">
-                <div class="w-32 space-y-1">
-                    <Label for="rate-new" class="text-xs">New sale rate</Label>
-                    <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-8" />
-                    <p class="text-xs text-muted-foreground tabular-nums">Was {{ currentSaleRate }}</p>
-                </div>
-                <Button
-                    size="sm"
-                    class="mt-5"
-                    :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
-                    @click="applyRate"
-                    >Apply</Button
-                >
-            </template>
-            <p v-if="props.rateChangesToday?.length" class="mt-5 text-sm tabular-nums">
-                <template v-for="(change, i) in props.rateChangesToday" :key="change.item_id">
-                    <span v-if="i > 0" class="text-muted-foreground"> · </span>
-                    <span class="font-medium">{{ change.name }}:</span> {{ signed(change.difference) }}
-                </template>
-            </p>
-        </section>
         <!-- Draft Restore Dialog -->
         <Dialog
             :open="showDraftRestoreDialog"
@@ -4776,25 +4771,6 @@ const completedWorkflowSteps = computed(() => {
                         >
                     </CardHeader>
                     <CardContent class="space-y-6">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="option in entryOptions.in" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
-                        <PaymentsReceivedEntry
-                            v-if="showSection('payments_received')"
-                            class="space-y-4 border-t border-rule-default pt-4"
-                            v-model="form.payments_received"
-                            :errors="form.errors as Record<string, string>"
-                            :disabled="submitting || form.processing"
-                            :open-invoices="props.openInvoices ?? []"
-                            :payment-accounts="(props as any).paymentAccounts ?? []"
-                            :currency="currencyCode"
-                        />
                         <!-- Opening Cash -->
                         <div class="rounded-lg bg-muted/50 p-4">
                             <div class="flex items-center justify-between">
@@ -4818,6 +4794,25 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
+                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="option in entryOptions.in" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
+                        <PaymentsReceivedEntry
+                            v-if="showSection('payments_received')"
+                            class="space-y-4 border-t border-rule-default pt-4"
+                            v-model="form.payments_received"
+                            :errors="form.errors as Record<string, string>"
+                            :disabled="submitting || form.processing"
+                            :open-invoices="props.openInvoices ?? []"
+                            :payment-accounts="(props as any).paymentAccounts ?? []"
+                            :currency="currencyCode"
+                        />
                         <div class="rounded-lg border p-4">
                             <div class="flex items-center justify-between">
                                 <div>

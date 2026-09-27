@@ -173,6 +173,8 @@ interface BankAccount {
     id: string;
     code: string;
     name: string;
+    // Ledger balance up to and including this business date.
+    balance?: number;
 }
 
 interface ExpenseAccount {
@@ -2107,6 +2109,14 @@ const totalNonCashReceipts = computed(() => {
 });
 
 // Money In = opening cash + every cash deposit + TOTAL sales (cash, card, transfer — all of it)
+// A bank's balance after this close's own withdrawals (out) and deposits (in).
+const bankBalanceAfterClose = (accountId: string) => {
+    const account = props.bankAccounts.find((a) => a.id === accountId);
+    const withdrawn = form.bank_withdrawals.filter((r) => r.bank_account_id === accountId).reduce((s, r) => s + Number(r.amount || 0), 0);
+    const deposited = form.bank_deposits.filter((r) => r.bank_account_id === accountId).reduce((s, r) => s + Number(r.amount || 0), 0);
+    return Number(account?.balance ?? 0) - withdrawn + deposited;
+};
+
 const totalBankWithdrawals = computed(() => form.bank_withdrawals.reduce((sum, row) => sum + Number(row.amount || 0), 0));
 // Only a payment received into a cash account raises expected drawer cash, matching
 // DailyClosePaymentsReceivedService's affects_cash_drawer flag on the backend; a bank
@@ -5101,6 +5111,20 @@ const completedWorkflowSteps = computed(() => {
                                         "
                                     />
                                 </div>
+                                <p
+                                    v-if="deposit.bank_account_id"
+                                    class="order-last col-span-5 -mt-2 text-xs text-muted-foreground"
+                                >
+                                    Balance
+                                    <MoneyText :amount="bankAccounts.find((b) => b.id === deposit.bank_account_id)?.balance ?? 0" :currency="currencyCode" :fraction-digits="0" />
+                                    → after this close
+                                    <MoneyText
+                                        :amount="bankBalanceAfterClose(deposit.bank_account_id)"
+                                        :currency="currencyCode"
+                                        :fraction-digits="0"
+                                        :class="bankBalanceAfterClose(deposit.bank_account_id) < 0 ? 'text-status-critical' : ''"
+                                    />
+                                </p>
                                 <div>
                                     <Label class="text-xs">Amount</Label>
                                     <Input
@@ -5531,6 +5555,20 @@ const completedWorkflowSteps = computed(() => {
                                         "
                                     />
                                 </div>
+                                <p
+                                    v-if="deposit.bank_account_id"
+                                    class="order-last col-span-5 -mt-2 text-xs text-muted-foreground"
+                                >
+                                    Balance
+                                    <MoneyText :amount="bankAccounts.find((b) => b.id === deposit.bank_account_id)?.balance ?? 0" :currency="currencyCode" :fraction-digits="0" />
+                                    → after this close
+                                    <MoneyText
+                                        :amount="bankBalanceAfterClose(deposit.bank_account_id)"
+                                        :currency="currencyCode"
+                                        :fraction-digits="0"
+                                        :class="bankBalanceAfterClose(deposit.bank_account_id) < 0 ? 'text-status-critical' : ''"
+                                    />
+                                </p>
                                 <div>
                                     <Label class="text-xs">Amount</Label>
                                     <Input

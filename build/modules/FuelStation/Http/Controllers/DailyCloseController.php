@@ -699,6 +699,22 @@ class DailyCloseController extends Controller
             ->where('subtype', 'bank')
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
+        // Each bank's ledger balance up to and including this business date, so the close can
+        // show what a withdrawal or deposit leaves in it.
+        $bankBalances = \Illuminate\Support\Facades\DB::table('acct.journal_entries as e')
+            ->join('acct.transactions as t', 't.id', '=', 'e.transaction_id')
+            ->where('t.company_id', $companyId)
+            ->whereIn('e.account_id', $bankAccounts->pluck('id'))
+            ->whereNull('t.deleted_at')
+            ->whereIn('t.status', ['posted', 'locked'])
+            ->whereDate('t.transaction_date', '<=', $date)
+            ->groupBy('e.account_id')
+            ->selectRaw('e.account_id, SUM(e.debit_amount - e.credit_amount) AS balance')
+            ->pluck('balance', 'account_id');
+        $bankAccounts = $bankAccounts->map(fn ($a) => [
+            'id' => $a->id, 'code' => $a->code, 'name' => $a->name,
+            'balance' => round((float) ($bankBalances[$a->id] ?? 0), 2),
+        ])->values();
         $openInvoices = $this->getOpenInvoicesForDailyClose($companyId);
         // Which of paymentAccounts (below) are cash, so the Payments Received section can
         // tell the frontend which rows raise expected drawer cash without redeclaring the

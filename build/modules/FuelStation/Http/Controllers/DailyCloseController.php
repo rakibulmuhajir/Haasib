@@ -801,7 +801,12 @@ class DailyCloseController extends Controller
             'dual_meter_readings' => $stationSettings?->dual_meter_readings ?? false,
         ];
 
-        return Inertia::render('FuelStation/DailyClose/Create', [
+        // The quick-entry page (DailyClose/Quick) works on the same day and the same parked
+        // draft as the full form; it only adds the credit-customer list for its dropdown.
+        $quick = $request->routeIs('fuel.daily-close.quick');
+
+        return Inertia::render($quick ? 'FuelStation/DailyClose/Quick' : 'FuelStation/DailyClose/Create', [
+            'creditCustomers' => $quick ? $this->creditCustomersForQuickEntry($companyId) : [],
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
@@ -905,6 +910,21 @@ class DailyCloseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /** Active customers a credit sale can go to: everyone but amanat (safe-deposit) holders. */
+    private function creditCustomersForQuickEntry(string $companyId): array
+    {
+        $amanatHolderIds = CustomerProfile::where('company_id', $companyId)->where('is_amanat_holder', true)->pluck('customer_id');
+
+        return \App\Modules\Accounting\Models\Customer::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNotIn('id', $amanatHolderIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_credit_blocked'])
+            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'is_credit_blocked' => (bool) $c->is_credit_blocked])
+            ->values()
+            ->all();
     }
 
     /**

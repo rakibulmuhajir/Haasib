@@ -3024,6 +3024,12 @@ const completedWorkflowSteps = computed(() => {
                     Openings from {{ props.openingsFromParked }} (parked) — post it first
                 </span>
                 <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
+                <Link
+                    v-if="!props.isAmendment"
+                    :href="`/${props.company.slug}/fuel/daily-close/quick?date=${form.date}`"
+                    class="text-primary underline-offset-2 hover:underline"
+                    >Quick entry</Link
+                >
                 <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
                     {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />

@@ -53,7 +53,7 @@ import {
     Wallet,
     Info,
 } from 'lucide-vue-next';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
@@ -1374,6 +1374,51 @@ const sectionRowCount: Record<string, () => number> = {
     expenses: () => form.expenses.length,
 };
 const showSection = (key: string) => openedSections.value.has(key) || (sectionRowCount[key]?.() ?? 0) > 0;
+
+/**
+ * Cash In / Cash Out work like a stack: the entry picked last opens right under the dropdown,
+ * fully editable, and every other entry used today folds into a one-line total below it (most
+ * recent first). Clicking a folded line opens it at the top again. A restored draft opens with
+ * everything folded, so the totals show first.
+ */
+const tabOfSection: Record<string, 'in' | 'out'> = {
+    payments_received: 'in', partner_deposits: 'in', amanat_deposits: 'in', other_deposits: 'in', bank_withdrawals: 'in',
+    credit_sales: 'out', channels: 'out', bank_deposits: 'out', partner_withdrawals: 'out', employee_advances: 'out',
+    pay_suppliers: 'out', amanat_disbursements: 'out', expenses: 'out',
+};
+const sumAmounts = (rows: any[]) => rows.reduce((sum, r) => sum + Number(r?.amount || 0), 0);
+const sectionTotal: Record<string, () => number> = {
+    payments_received: () => sumAmounts(form.payments_received),
+    partner_deposits: () => sumAmounts(form.partner_deposits),
+    amanat_deposits: () => sumAmounts(form.amanat_deposits),
+    other_deposits: () => sumAmounts(form.other_deposits),
+    bank_withdrawals: () => sumAmounts(form.bank_withdrawals),
+    credit_sales: () => sumAmounts(form.credit_sales),
+    channels: () => Number(totalNonCashReceipts.value || 0),
+    bank_deposits: () => sumAmounts(form.bank_deposits),
+    partner_withdrawals: () => sumAmounts(form.partner_withdrawals),
+    employee_advances: () => sumAmounts(form.employee_advances),
+    pay_suppliers: () => sumAmounts(form.pay_suppliers),
+    amanat_disbursements: () => sumAmounts(form.amanat_disbursements),
+    expenses: () => sumAmounts(form.expenses),
+};
+const activeSection = reactive<{ in: string; out: string }>({ in: '', out: '' });
+const sectionRecency = ref<string[]>([]);
+const isExpanded = (key: string) => activeSection[tabOfSection[key]] === key;
+const expandSection = (key: string) => {
+    activeSection[tabOfSection[key]] = key;
+    sectionRecency.value = [key, ...sectionRecency.value.filter((k) => k !== key)];
+};
+const collapsedFor = (tab: 'in' | 'out') => {
+    const used = Object.keys(tabOfSection).filter((k) => tabOfSection[k] === tab && showSection(k) && !isExpanded(k));
+    const rank = (k: string) => {
+        const i = sectionRecency.value.indexOf(k);
+        return i === -1 ? 1000 + Object.keys(tabOfSection).indexOf(k) : i;
+    };
+    return used.sort((a, b) => rank(a) - rank(b));
+};
+const sectionLabel = (key: string) =>
+    [...entryOptions.value.in, ...entryOptions.value.out].find((o) => o.key === key)?.label ?? key;
 const sectionAdders: Record<string, () => void> = {
     payments_received: () => form.payments_received.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' }),
     partner_deposits: () => addPartnerDeposit(),
@@ -1392,6 +1437,7 @@ const openSection = (key: string) => {
     if (!key) return;
     openedSections.value = new Set([...openedSections.value, key]);
     sectionAdders[key]?.();
+    if (tabOfSection[key]) expandSection(key);
 };
 const entryOptions = computed(() => {
     const partners = props.features.has_partners && props.partners.length > 0;
@@ -4770,9 +4816,9 @@ const completedWorkflowSteps = computed(() => {
                             receipts.</CardDescription
                         >
                     </CardHeader>
-                    <CardContent class="space-y-6">
+                    <CardContent class="flex flex-col gap-6">
                         <!-- Opening Cash -->
-                        <div class="rounded-lg bg-muted/50 p-4">
+                        <div class="rounded-lg bg-muted/50 p-4" style="order: -3">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <Label>Opening Cash Balance</Label>
@@ -4794,7 +4840,7 @@ const completedWorkflowSteps = computed(() => {
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2" style="order: -2">
                             <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
                                 <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
                                 <SelectContent>
@@ -4802,9 +4848,26 @@ const completedWorkflowSteps = computed(() => {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <!-- Entries used today, folded to their totals; click one to edit it at the top. -->
+                        <div v-if="collapsedFor('in').length" class="divide-y divide-rule-default rounded-md border border-rule-default">
+                            <button
+                                v-for="key in collapsedFor('in')"
+                                :key="key"
+                                type="button"
+                                class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:outline focus-visible:outline-2"
+                                @click="expandSection(key)"
+                            >
+                                <span class="font-medium">{{ sectionLabel(key) }}</span>
+                                <span class="flex items-center gap-3 text-muted-foreground">
+                                    <span>{{ sectionRowCount[key]?.() ?? 0 }} {{ (sectionRowCount[key]?.() ?? 0) === 1 ? 'entry' : 'entries' }}</span>
+                                    <MoneyText class="font-medium text-foreground" :amount="sectionTotal[key]?.() ?? 0" :currency="currencyCode" :fraction-digits="0" />
+                                    <span class="text-xs">Edit</span>
+                                </span>
+                            </button>
+                        </div>
                         <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
                         <PaymentsReceivedEntry
-                            v-if="showSection('payments_received')"
+                            v-if="isExpanded('payments_received')" style="order: -1"
                             class="space-y-4 border-t border-rule-default pt-4"
                             v-model="form.payments_received"
                             :errors="form.errors as Record<string, string>"
@@ -4842,7 +4905,7 @@ const completedWorkflowSteps = computed(() => {
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                            <div v-if="showSection('partner_deposits')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div v-if="isExpanded('partner_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -4964,7 +5027,7 @@ const completedWorkflowSteps = computed(() => {
 
 
                         <template v-if="features.has_amanat">
-                            <div v-if="showSection('amanat_deposits')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div v-if="isExpanded('amanat_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -5118,7 +5181,7 @@ const completedWorkflowSteps = computed(() => {
 
                         </template>
 
-                        <div v-if="showSection('other_deposits')" class="space-y-4 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('other_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Other Cash In</h4>
@@ -5249,7 +5312,7 @@ const completedWorkflowSteps = computed(() => {
                         </div>
 
 
-                        <div v-if="showSection('bank_withdrawals')" class="space-y-4 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('bank_withdrawals')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Cash Withdrawn from Bank</h4>
@@ -5503,8 +5566,8 @@ const completedWorkflowSteps = computed(() => {
                             expenses.</CardDescription
                         >
                     </CardHeader>
-                    <CardContent class="space-y-6">
-                        <div class="flex flex-wrap items-center gap-2">
+                    <CardContent class="flex flex-col gap-6">
+                        <div class="flex flex-wrap items-center gap-2" style="order: -2">
                             <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
                                 <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash out…" /></SelectTrigger>
                                 <SelectContent>
@@ -5512,9 +5575,26 @@ const completedWorkflowSteps = computed(() => {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <!-- Entries used today, folded to their totals; click one to edit it at the top. -->
+                        <div v-if="collapsedFor('out').length" class="divide-y divide-rule-default rounded-md border border-rule-default">
+                            <button
+                                v-for="key in collapsedFor('out')"
+                                :key="key"
+                                type="button"
+                                class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:outline focus-visible:outline-2"
+                                @click="expandSection(key)"
+                            >
+                                <span class="font-medium">{{ sectionLabel(key) }}</span>
+                                <span class="flex items-center gap-3 text-muted-foreground">
+                                    <span>{{ sectionRowCount[key]?.() ?? 0 }} {{ (sectionRowCount[key]?.() ?? 0) === 1 ? 'entry' : 'entries' }}</span>
+                                    <MoneyText class="font-medium text-foreground" :amount="sectionTotal[key]?.() ?? 0" :currency="currencyCode" :fraction-digits="0" />
+                                    <span class="text-xs">Edit</span>
+                                </span>
+                            </button>
+                        </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-if="showSection('credit_sales')" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
-                        <div v-if="showSection('channels')" class="space-y-4 border-t border-rule-default pt-4">
+                        <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
+                        <div v-if="isExpanded('channels')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div>
                                 <h4 class="text-sm font-semibold">
                                     Sales that went to bank / card accounts
@@ -5698,7 +5778,7 @@ const completedWorkflowSteps = computed(() => {
 
 
                         <!-- Bank Deposits -->
-                        <div v-if="showSection('bank_deposits')" class="space-y-4 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('bank_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">Bank Deposits</h4>
@@ -5810,7 +5890,7 @@ const completedWorkflowSteps = computed(() => {
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                            <div v-if="showSection('partner_withdrawals')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div v-if="isExpanded('partner_withdrawals')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -5975,7 +6055,7 @@ const completedWorkflowSteps = computed(() => {
 
 
                         <!-- Employee Advances -->
-                        <div v-if="showSection('employee_advances')" class="space-y-4 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">
@@ -6316,7 +6396,7 @@ const completedWorkflowSteps = computed(() => {
 
 
                         <PaySupplierEntry
-                            v-if="showSection('pay_suppliers')"
+                            v-if="isExpanded('pay_suppliers')" style="order: -1"
                             class="space-y-4 border-t border-rule-default pt-4"
                             v-model="form.pay_suppliers"
                             :errors="form.errors as Record<string, string>"
@@ -6329,7 +6409,7 @@ const completedWorkflowSteps = computed(() => {
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->
                         <template v-if="features.has_amanat">
 
-                            <div v-if="showSection('amanat_disbursements')" class="space-y-4 border-t border-rule-default pt-4">
+                            <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="font-medium">
@@ -6478,7 +6558,7 @@ const completedWorkflowSteps = computed(() => {
 
 
                         <!-- Operating Expenses -->
-                        <div v-if="showSection('expenses')" class="space-y-4 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('expenses')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-medium">

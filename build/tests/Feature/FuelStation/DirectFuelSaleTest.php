@@ -75,3 +75,32 @@ test('a cash direct sale needs no customer: it goes to the walk-in customer', fu
     expect($invoice->customer->customer_number)->toBe('CASH-FUEL')
         ->and((float) $invoice->balance)->toBe(0.0);
 });
+
+test('editing a payment on the same invoice keeps it paid once and moves its journal to the new date', function () {
+    // INV-01073: re-saving a payment against the same invoice doubled paid_amount and left
+    // balance/status unpaid, and a changed date never moved the payment's journal.
+    $f = directSaleFixture();
+    postDirectSale($f, true)->assertRedirect()->assertSessionHasNoErrors();
+    $invoice = Invoice::where('company_id', $f['company']->id)->where('is_direct_delivery', true)->sole();
+    $payment = Payment::where('company_id', $f['company']->id)->sole();
+    $oldJournalId = $payment->transaction_id;
+
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Services\CommandBus::class)->dispatch('payment.update', [
+        'id' => $payment->id,
+        'invoice' => $invoice->id,
+        'amount' => (float) $payment->amount,
+        'method' => 'cash',
+        'date' => '2026-09-14',
+    ], $f['user']));
+
+    $invoice->refresh();
+    expect((float) $invoice->paid_amount)->toBe((float) $invoice->total_amount)
+        ->and((float) $invoice->balance)->toBe(0.0)
+        ->and($invoice->status)->toBe('paid');
+
+    $payment->refresh();
+    expect($payment->transaction_id)->not->toBe($oldJournalId)
+        ->and(\App\Modules\Accounting\Models\Transaction::findOrFail($payment->transaction_id)->transaction_date->toDateString())->toBe('2026-09-14')
+        ->and(\App\Modules\Accounting\Models\Transaction::findOrFail($oldJournalId)->reversed_by_id)->not->toBeNull();
+});

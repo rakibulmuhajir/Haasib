@@ -75,7 +75,7 @@ class PostingService
         return $this->buildInvoiceEntries($template, $invoice, $company);
     }
 
-    public function postPayment(Payment $payment, string $depositAccountId, string $arAccountId): Transaction
+    public function postPayment(Payment $payment, string $depositAccountId, string $arAccountId, ?string $transactionNumber = null): Transaction
     {
         $payment->loadMissing(['paymentAllocations', 'customer', 'company']);
 
@@ -105,7 +105,9 @@ class PostingService
 
         return $this->createTransaction([
             'company_id' => $company->id,
-            'transaction_number' => $payment->payment_number,
+            // A re-post after an amendment takes its own number: the original journal keeps
+            // payment_number (it stays, reversed, on the unique index).
+            'transaction_number' => $transactionNumber ?? $payment->payment_number,
             'transaction_type' => 'payment',
             'transaction_date' => $transactionDate,
             'posting_date' => $transactionDate,

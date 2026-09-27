@@ -837,6 +837,7 @@ class DailyCloseController extends Controller
             'pendingFuelInvoices' => $pendingFuelInvoices,
             'pendingAccountingInvoices' => $pendingAccountingInvoices,
             'unpaidDirectDeliveries' => $this->unpaidDirectDeliveries($companyId, $date),
+            'directSales' => $this->directSalesForDay($companyId, $date),
             'purchaseSuppliers' => $purchaseSuppliers,
             'purchaseItems' => $purchaseItems,
             'canEnterPurchases' => $canEnterPurchases,
@@ -904,6 +905,45 @@ class DailyCloseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Fuel sold straight from the tanker on this business day (Record fuel sale -> Direct from
+     * tanker). Already posted by its own invoice and payment, so the close only shows it: as a
+     * sale, with the cash paid for it that day, instead of among "recorded on other screens".
+     * payment_transaction_ids lets the form take those payments out of that list.
+     */
+    private function directSalesForDay(string $companyId, string $date): array
+    {
+        $cashAccountId = $this->dailyCloseService->cashAccountId($companyId);
+
+        return \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->where('is_direct_delivery', true)
+            ->whereDate('invoice_date', $date)
+            ->whereNotIn('status', ['void', 'cancelled', 'draft'])
+            ->with(['customer:id,name', 'lineItems:id,invoice_id,quantity'])
+            ->orderBy('invoice_number')
+            ->get()
+            ->map(function ($invoice) use ($date, $cashAccountId) {
+                $payments = \App\Modules\Accounting\Models\Payment::where('company_id', $invoice->company_id)
+                    ->whereHas('paymentAllocations', fn ($q) => $q->where('invoice_id', $invoice->id))
+                    ->whereDate('payment_date', $date)
+                    ->where('deposit_account_id', $cashAccountId)
+                    ->with(['paymentAllocations' => fn ($q) => $q->where('invoice_id', $invoice->id)])
+                    ->get();
+
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'customer_name' => $invoice->customer?->name,
+                    'litres' => round((float) $invoice->lineItems->sum('quantity'), 2),
+                    'amount' => round((float) $invoice->total_amount, 2),
+                    'cash_received' => round((float) $payments->sum(fn ($p) => $p->paymentAllocations->sum('amount_allocated')), 2),
+                    'payment_transaction_ids' => $payments->pluck('transaction_id')->filter()->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

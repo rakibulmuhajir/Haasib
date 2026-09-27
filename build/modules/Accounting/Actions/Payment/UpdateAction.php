@@ -124,6 +124,17 @@ class UpdateAction implements PaletteAction
                 }
             }
 
+            // Same invoice: keep working on the instance the reversal above just updated.
+            // $invoice was loaded before it and still holds the pre-reversal figures;
+            // applying to it wrote paid_amount twice while balance/status, unchanged
+            // against the stale copy, were never written at all (INV-01073).
+            if ($originalInvoice && $originalInvoice->id === $invoice->id) {
+                $invoice = $originalInvoice;
+            }
+
+            $oldPaymentDate = $payment->payment_date?->toDateString();
+            $oldAmount = round((float) $payment->amount, 2);
+
             // Update payment record
             $payment->update([
                 'customer_id' => $invoice->customer_id,
@@ -167,6 +178,14 @@ class UpdateAction implements PaletteAction
                 'paid_at' => $newStatus === 'paid' ? now() : null,
             ]);
 
+            // The journal follows the payment: a new date or amount re-posts it (reversal of
+            // the old journal on its own date, the payment on the new one). Without this an
+            // edited date only changed the payment row, and the cash stayed on the old day.
+            if ($payment->transaction_id
+                && ($oldPaymentDate !== $payment->fresh()->payment_date?->toDateString() || abs($oldAmount - round($newAmount, 2)) >= 0.005)) {
+                $this->repostJournal($payment->fresh(['paymentAllocations', 'customer', 'company']), $company);
+            }
+
             $statusMsg = $newStatus === 'paid'
                 ? '{success}Paid in full{/}'
                 : PaletteFormatter::money(max(0, $newBalance), $invoice->currency) . ' remaining';
@@ -185,6 +204,27 @@ class UpdateAction implements PaletteAction
                 'redirect' => "/{$company->slug}/payments/{$payment->id}",
             ];
         });
+    }
+
+    private function repostJournal(Payment $payment, $company): void
+    {
+        $old = \App\Modules\Accounting\Models\Transaction::where('company_id', $company->id)->findOrFail($payment->transaction_id);
+        $depositAccountId = $payment->deposit_account_id
+            ?? $old->journalEntries()->where('debit_amount', '>', 0)->orderBy('line_number')->value('account_id');
+        $arAccountId = $old->journalEntries()->where('credit_amount', '>', 0)->orderBy('line_number')->value('account_id')
+            ?? $payment->customer?->ar_account_id ?? $company->ar_account_id;
+        if (! $depositAccountId || ! $arAccountId) {
+            throw new \RuntimeException('Cannot re-post this payment: its deposit or receivable account is unknown.');
+        }
+
+        app(\App\Modules\Accounting\Services\PostingService::class)
+            ->reverseTransaction($old, 'Payment amended', $old->transaction_date);
+
+        $amendments = \App\Modules\Accounting\Models\Transaction::where('company_id', $company->id)
+            ->where('transaction_number', 'like', $payment->payment_number.'-A%')->count();
+        $new = app(\App\Modules\Accounting\Services\GlPostingService::class)
+            ->postPayment($payment, $depositAccountId, $arAccountId, $payment->payment_number.'-A'.($amendments + 1));
+        $payment->forceFill(['transaction_id' => $new->id])->save();
     }
 
     private function resolveInvoice(string $identifier, string $companyId): Invoice

@@ -91,9 +91,9 @@ class GlPostingService
      * Post a payment to the general ledger.
      * Creates: DR Bank/Cash, CR AR.
      */
-    public function postPayment(Payment $payment, string $depositAccountId, string $arAccountId): Transaction
+    public function postPayment(Payment $payment, string $depositAccountId, string $arAccountId, ?string $transactionNumber = null): Transaction
     {
-        return app(PostingService::class)->postPayment($payment, $depositAccountId, $arAccountId);
+        return app(PostingService::class)->postPayment($payment, $depositAccountId, $arAccountId, $transactionNumber);
     }
 
     /**

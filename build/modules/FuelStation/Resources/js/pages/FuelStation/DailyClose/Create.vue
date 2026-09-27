@@ -326,6 +326,8 @@ const props = defineProps<{
     pendingFuelInvoices?: PendingFuelInvoice[];
     pendingAccountingInvoices?: PendingAccountingInvoice[];
     unpaidDirectDeliveries?: Array<{ id: string; invoice_number: string; customer_name: string | null; balance: number }>;
+    // Direct-from-tanker sales of this day (already posted by their own invoice/payment).
+    directSales?: Array<{ id: string; invoice_number: string; customer_name: string | null; litres: number; amount: number; cash_received: number; payment_transaction_ids: string[] }>;
     openInvoices?: OpenInvoice[];
     cashAccountIds?: string[];
     purchaseSuppliers?: PurchaseSupplier[];
@@ -2839,9 +2841,16 @@ const recordedTypeLabels: Record<string, string> = {
     invoice: 'Invoice',
     expense: 'Expense',
 };
+// A direct sale is shown as a sale (Sales Summary), so its cash payment is not listed again
+// among "recorded on other screens"; its cash still counts through externalCashEffect.
+const directSalesTotal = computed(() => (props.directSales || []).reduce((s, d) => s + Number(d.amount || 0), 0));
+const directSalesCash = computed(() => (props.directSales || []).reduce((s, d) => s + Number(d.cash_received || 0), 0));
+const directSalePaymentIds = computed(() => new Set((props.directSales || []).flatMap((d) => d.payment_transaction_ids)));
+
 const recordedElsewhere = computed(() => {
     const groups = new Map<string, { key: string; label: string; amount: number; sources: any[] }>();
     for (const row of props.canonicalActivity || []) {
+        if (directSalePaymentIds.value.has(row.id)) continue;
         const reference = String(row.reference ?? '').replace(/-REV(-\d+)?$/, '');
         const key = `${row.type}|${reference}`;
         const label = `${recordedTypeLabels[row.type] ?? String(row.type).replace(/[_:]/g, ' ')} · ${reference}`;
@@ -2858,7 +2867,7 @@ const recordedMoneyInTotal = computed(() => recordedMoneyIn.value.reduce((sum, g
 const recordedMoneyOutTotal = computed(() => -recordedMoneyOut.value.reduce((sum, g) => sum + g.amount, 0));
 // What the summaries show: this form's own figures plus what was recorded on other screens.
 // Expected closing is unchanged: in - out + (recorded in - recorded out) is the same sum.
-const shownMoneyIn = computed(() => totalMoneyIn.value + recordedMoneyInTotal.value);
+const shownMoneyIn = computed(() => totalMoneyIn.value + recordedMoneyInTotal.value + directSalesCash.value);
 const shownMoneyOut = computed(() => totalMoneyOut.value + recordedMoneyOutTotal.value);
 
 const submitDailyClose = () => {
@@ -3879,6 +3888,20 @@ const completedWorkflowSteps = computed(() => {
                                             :fraction-digits="0"
                                     /></span>
                                 </div>
+                                <!-- Direct from tanker (not from the pumps) -->
+                                <div
+                                    v-for="sale in props.directSales || []"
+                                    :key="sale.id"
+                                    class="flex justify-between text-sm"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <span>Direct sale · {{ sale.invoice_number }}</span>
+                                        <span class="text-muted-foreground">({{ sale.litres.toFixed(0) }} L{{ sale.cash_received > 0 ? ', cash' : ', credit' }})</span>
+                                    </div>
+                                    <span class="font-medium"
+                                        ><MoneyText :amount="sale.amount" :currency="currencyCode" :fraction-digits="0"
+                                    /></span>
+                                </div>
                                 <Separator />
                                 <!-- Grand Total -->
                                 <div
@@ -3887,7 +3910,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Sales</span>
                                     <span
                                         ><MoneyText
-                                            :amount="totalSales"
+                                            :amount="totalSales + directSalesTotal"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -5231,7 +5254,7 @@ const completedWorkflowSteps = computed(() => {
                                     <span>Total Sales</span>
                                     <span class="font-medium"
                                         ><MoneyText
-                                            :amount="totalSales"
+                                            :amount="totalSales + directSalesCash"
                                             :currency="currencyCode"
                                             :fraction-digits="0"
                                     /></span>
@@ -6825,7 +6848,7 @@ const completedWorkflowSteps = computed(() => {
                                         <span>+ Total Sales</span>
                                         <span
                                             ><MoneyText
-                                                :amount="totalSales"
+                                                :amount="totalSales + directSalesCash"
                                                 :currency="currencyCode"
                                                 :fraction-digits="0"
                                         /></span>

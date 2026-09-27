@@ -148,7 +148,9 @@ class DailyCloseEntryService
                 'quantity' => $line['quantity'],
                 // Sold directly: its cost goes to COGS on the bill and it is never received.
                 'direct_quantity' => $directQuantity > 0 ? $directQuantity : null,
-                'unit_price' => $line['unit_cost'] ?? null,
+                // Only a total typed: the rate is total / quantity (bill.create needs one).
+                'unit_price' => $line['unit_cost'] ?? ((float) $line['quantity'] > 0 && isset($line['line_total'])
+                    ? round((float) $line['line_total'] / (float) $line['quantity'], 6) : null),
                 // The total actually billed, when the supplier priced this delivery to
                 // more decimals than the row's rate field carries -- bill.create derives
                 // the exact rate from it instead of the rounded one. See BillLineTotals.

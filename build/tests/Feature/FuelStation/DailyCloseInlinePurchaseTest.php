@@ -325,6 +325,7 @@ test('a direct sale on the close becomes a paid direct-delivery invoice and cash
     $f['payload']['closing_cash'] = 31000 + 26000; // the drawer holds the direct sale's cash too
     $f['payload']['direct_sales'] = [[
         'item_id' => $item->id, 'litres' => 100, 'rate' => 260, 'paid_in_cash' => true,
+        'customer_id' => $f['customer']->id, // the fixture's walk-in has no receivables account
     ]];
 
     inlinePurchasePost($f);

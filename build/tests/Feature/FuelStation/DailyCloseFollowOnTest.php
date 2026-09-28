@@ -18,6 +18,9 @@ test('after an edit the next day is flagged and re-posted from the corrected clo
     app(\App\Services\CurrentCompany::class)->set($f['company']);
     $closes = app(DailyCloseService::class);
     $companyId = $f['company']->id;
+    // Where a short or over posts; the shared fixture never needed one.
+    \App\Modules\Accounting\Models\Account::create(['company_id' => $companyId, 'code' => '6180', 'name' => 'Cash Short/Over',
+        'type' => 'expense', 'subtype' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true]);
 
     // 15th: 100 L at 300, 9,000 on card, 6,000 on credit: 15,000 cash on 10,000 -> 25,000.
     $first = Transaction::findOrFail($closes->processDailyClose($companyId, $f['payload'], $f['user'])['transaction_id']);

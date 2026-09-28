@@ -833,6 +833,9 @@ class DailyCloseController extends Controller
             'fuelItems' => $fuelItems,
             'rates' => $rates,
             'rateChangesToday' => $this->rateChangesOn($companyId, $date, $fuelItems),
+            // Business dates with a parked draft, for the previous / next day buttons.
+            'parkedDates' => DB::table('fuel.daily_close_drafts')->where('company_id', $companyId)
+                ->pluck('business_date')->map(fn ($d) => substr((string) $d, 0, 10))->values(),
             // What each item was last bought at up to this day: a purchase line's starting rate.
             'lastPurchasePrices' => app(\App\Modules\FuelStation\Services\RateChangeService::class)->lastPurchasePrices($companyId, $date),
             // Per-customer, per-fuel-item discounts, keyed by customer then item id, for the
@@ -1138,9 +1141,15 @@ class DailyCloseController extends Controller
         // The window is the user's to choose, and it has to be reachable. Thirty days was
         // hardcoded, so a back-dated close - or simply last quarter's - was unreachable from
         // this page, which then reported that no closes existed at all.
-        $range = (string) $request->query('range', '30');
+        // No range chosen: the smallest window that still shows the most recent close, so
+        // back-dated (catch-up) closes are not hidden behind "last 30 days".
+        $latest = Transaction::where('company_id', $company->id)->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')->max('transaction_date');
+        $daysSinceLatest = $latest ? \Illuminate\Support\Carbon::parse($latest)->startOfDay()->diffInDays(now()->startOfDay()) : 0;
+        $defaultRange = collect(['30', '90', '365'])->first(fn ($days) => $daysSinceLatest <= (int) $days) ?? 'all';
+        $range = (string) $request->query('range', $defaultRange);
         if (! in_array($range, ['30', '90', '365', 'all'], true)) {
-            $range = '30';
+            $range = $defaultRange;
         }
 
         $closes = $this->dailyCloseService->getRecentCloses(

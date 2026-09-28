@@ -349,6 +349,7 @@ const props = defineProps<{
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
     // Fuels whose sale rate changed on this day, with the change against the day before.
     rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
+    parkedDates?: string[];
     lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
     // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
     // CustomerFuelDiscountService (the single place this rate is priced).
@@ -510,7 +511,7 @@ const selectZeroValue = (event: FocusEvent) => {
     if (input?.value === '0') input.select();
 };
 
-const accountingHints = {
+const ACCOUNTING_HINTS: Record<string, string> = {
     fuelSales:
         'Posting: Dr Cash/Bank/Clearing · Cr Fuel Sales. Cost also posts Dr Fuel COGS · Cr Fuel Inventory.',
     partnerDeposit: 'Posting: Dr Cash on Hand · Cr Partner Deposits.',
@@ -532,6 +533,29 @@ const accountingHints = {
     expense: 'Posting: Dr selected expense · Cr Cash on Hand.',
     variance: 'Cash difference posts to Cash Over/Short.',
 };
+
+// The "Posting: Dr ... Cr ..." lines are for an accountant; an owner closing the day sees them
+// only when "Show postings" is ticked (remembered in this browser). Plain-language hints stay.
+const readShowPostings = () => {
+    try {
+        return localStorage.getItem('haasib.dailyClose.showPostings') === '1';
+    } catch {
+        return false;
+    }
+};
+const showPostings = ref(readShowPostings());
+watch(showPostings, (on) => {
+    try {
+        localStorage.setItem('haasib.dailyClose.showPostings', on ? '1' : '0');
+    } catch {
+        /* storage blocked: the choice lasts for this page only */
+    }
+});
+const accountingHints = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+        Object.entries(ACCOUNTING_HINTS).map(([key, text]) => [key, !showPostings.value && text.startsWith('Posting:') ? '' : text]),
+    ),
+);
 
 // Amendment mode
 /**
@@ -1470,7 +1494,7 @@ const entryOptions = computed(() => {
         ],
         out: [
             { key: 'credit_sales', label: 'Credit sale' },
-            { key: 'channels', label: 'Card / bank / wallet sales' },
+            ...(enabledChannels.value.some((ch) => ch.type !== 'cash') ? [{ key: 'channels', label: 'Card / bank / wallet sales' }] : []),
             { key: 'expenses', label: 'Expense' },
             { key: 'bank_deposits', label: 'Bank deposit' },
             { key: 'pay_suppliers', label: 'Pay supplier' },
@@ -3202,6 +3226,18 @@ const completedWorkflowSteps = computed(() => {
     return Object.values(tabsSaved.value).filter(Boolean).length;
 });
 
+// Previous / next business day. Changing form.date runs the date watcher, which parks what is
+// typed on the day being left before moving -- the same as editing the date field.
+const shiftedDate = (days: number) => {
+    const d = new Date(`${form.date}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const dayHasDraft = (date: string) => (props.parkedDates ?? []).includes(date);
+const goToDay = (days: number) => {
+    form.date = shiftedDate(days);
+};
+
 // What is actually filled in -- read from the form, so a reloaded draft shows it too (the
 // per-tab "Saved" flags are only clicks in this browser session).
 const cashCounted = computed(() => Number(form.closing_cash) > 0);
@@ -3269,7 +3305,14 @@ const cashFlowOut = computed(() => [
                         title="The register day being closed. Close each day the next morning, after the tank dip. Entry time is recorded separately."
                         >Date</Label
                     >
+                    <Button type="button" variant="outline" size="sm" class="h-8 px-2" :title="`Previous day${dayHasDraft(shiftedDate(-1)) ? ' (has a draft)' : ''}`" aria-label="Previous day" @click="goToDay(-1)">
+                        ‹<span v-if="dayHasDraft(shiftedDate(-1))" class="ml-0.5 text-status-attention">•</span>
+                    </Button>
                     <Input id="business-date" v-model="form.date" data-testid="business-date" type="date" class="h-8 w-40" />
+                    <Button type="button" variant="outline" size="sm" class="h-8 px-2" :title="`Next day${dayHasDraft(shiftedDate(1)) ? ' (has a draft)' : ''}`" aria-label="Next day" @click="goToDay(1)">
+                        <span v-if="dayHasDraft(shiftedDate(1))" class="mr-0.5 text-status-attention">•</span>›
+                    </Button>
+                    <Link :href="`/${props.company.slug}/fuel/daily-close`" class="text-xs text-primary underline-offset-2 hover:underline">Next to close</Link>
                 </div>
                 <span class="text-muted-foreground">
                     <template v-if="previousClose.exists">
@@ -3298,6 +3341,9 @@ const cashFlowOut = computed(() => [
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
                 </Badge>
                 <InputError :message="form.errors.date" />
+                <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Checkbox v-model="showPostings" /> Show postings
+                </label>
                 <!-- Rate change, first thing: pick a fuel, type its new sale rate, Apply. -->
                 <div v-if="fuelItems.length" class="flex w-full flex-wrap items-center gap-2">
                     <Label for="rate-fuel">Rate change</Label>
@@ -3683,7 +3729,7 @@ const cashFlowOut = computed(() => [
                                                         form.nozzle_readings[
                                                             idx
                                                         ].opening_electronic
-                                                    " :data-testid="'nozzle-' + idx + '-opening-electronic'"
+                                                    " :data-testid="'nozzle-' + idx + '-opening-electronic'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Opening meter`"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="1"
@@ -3705,7 +3751,7 @@ const cashFlowOut = computed(() => [
                                                         form.nozzle_readings[
                                                             idx
                                                         ].closing_electronic
-                                                    " :data-testid="'nozzle-' + idx + '-closing-electronic'"
+                                                    " :data-testid="'nozzle-' + idx + '-closing-electronic'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Closing meter`"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="1"
@@ -3756,7 +3802,7 @@ const cashFlowOut = computed(() => [
                                                                 Number(v),
                                                             )
                                                     "
-                                                    :data-testid="'nozzle-' + idx + '-liters-sold'"
+                                                    :data-testid="'nozzle-' + idx + '-liters-sold'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Litres sold`"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="1"
@@ -3785,7 +3831,7 @@ const cashFlowOut = computed(() => [
                                                                     idx
                                                                 ].returned_liters = Number(v) || 0)
                                                         "
-                                                        :data-testid="'nozzle-' + idx + '-returned-liters'"
+                                                        :data-testid="'nozzle-' + idx + '-returned-liters'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Litres returned to tank`"
                                                         type="number"
                                                         min="0"
                                                         @focus="selectZeroValue"
@@ -3812,7 +3858,7 @@ const cashFlowOut = computed(() => [
                                                         form.nozzle_readings[
                                                             idx
                                                         ].sale_rate
-                                                    " :data-testid="'nozzle-' + idx + '-sale-rate'"
+                                                    " :data-testid="'nozzle-' + idx + '-sale-rate'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Rate per litre`"
                                                     type="number"
                                                     @focus="selectZeroValue"
                                                     step="0.01"
@@ -3929,7 +3975,7 @@ const cashFlowOut = computed(() => [
                                                                         idx
                                                                     ]
                                                                         .opening_manual
-                                                                " :data-testid="'nozzle-' + idx + '-opening-manual'"
+                                                                " :data-testid="'nozzle-' + idx + '-opening-manual'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Opening manual reading`"
                                                                 type="number"
                                                                 @focus="
                                                                     selectZeroValue
@@ -3959,7 +4005,7 @@ const cashFlowOut = computed(() => [
                                                                         idx
                                                                     ]
                                                                         .closing_manual
-                                                                " :data-testid="'nozzle-' + idx + '-closing-manual'"
+                                                                " :data-testid="'nozzle-' + idx + '-closing-manual'" :aria-label="`${form.nozzle_readings[idx].pump_name ?? 'Pump'} · ${form.nozzle_readings[idx].nozzle_code ?? ''} · Closing manual reading`"
                                                                 type="number"
                                                                 @focus="
                                                                     selectZeroValue
@@ -4733,7 +4779,7 @@ const cashFlowOut = computed(() => [
                                             <Input
                                                 v-model.number="
                                                     tank.stick_reading
-                                                " :data-testid="'tank-' + index + '-stick'"
+                                                " :data-testid="'tank-' + index + '-stick'" :aria-label="`${tank.tank_name} · Dip stick reading`"
                                                 type="number"
                                                 step="0.1"
                                                 placeholder="cm"
@@ -4754,7 +4800,7 @@ const cashFlowOut = computed(() => [
                                                 >Dip this morning (L)</Label
                                             >
                                             <Input
-                                                v-model.number="tank.liters" :data-testid="'tank-' + index + '-liters'"
+                                                v-model.number="tank.liters" :data-testid="'tank-' + index + '-liters'" :aria-label="`${tank.tank_name} · Litres in tank`"
                                                 type="number"
                                                 step="1"
                                                 @focus="selectZeroValue"
@@ -4785,22 +4831,17 @@ const cashFlowOut = computed(() => [
                                         <div class="col-span-2">
                                             <Label
                                                 class="text-xs text-muted-foreground"
-                                                >Used since yesterday's
-                                                dip</Label
+                                                >Change since yesterday's dip</Label
                                             >
+                                            <!-- Dip minus opening: + stock rose (a delivery), - it fell (sales).
+                                                 Sold and delivered are shown on their own lines. -->
                                             <div
                                                 class="mt-1 text-base font-medium"
                                             >
-                                                {{
-                                                    tank.previous_liters > 0 &&
-                                                    tank.liters > 0
-                                                        ? formatLiters(
-                                                              tank.previous_liters -
-                                                                  tank.liters,
-                                                          )
-                                                        : '—'
-                                                }}
-                                                L
+                                                <template v-if="tank.previous_liters > 0 && tank.liters > 0">
+                                                    {{ tank.liters - tank.previous_liters > 0 ? '+' : '' }}{{ formatLiters(tank.liters - tank.previous_liters) }} L
+                                                </template>
+                                                <template v-else>—</template>
                                             </div>
                                         </div>
                                         <div class="col-span-2">
@@ -5021,7 +5062,7 @@ const cashFlowOut = computed(() => [
                                 </div>
                                 <div class="w-48">
                                     <Input
-                                        v-model.number="form.opening_cash" data-testid="opening-cash"
+                                        v-model.number="form.opening_cash" data-testid="opening-cash" aria-label="Opening cash balance"
                                         type="number"
                                         @focus="selectZeroValue"
                                         class="text-right text-lg font-semibold"
@@ -5798,6 +5839,10 @@ const cashFlowOut = computed(() => [
                                     here so they are taken out of expected cash.
                                 </p>
                             </div>
+                            <p v-if="!enabledChannels.some((ch) => ch.type !== 'cash')" class="text-sm text-muted-foreground">
+                                No card, bank transfer or wallet channels are set up for this station.
+                                <Link :href="`/${props.company.slug}/fuel/settings`" class="underline underline-offset-2">Set them up in Station settings</Link>.
+                            </p>
                             <template
                                 v-for="channel in enabledChannels"
                                 :key="channel.code"
@@ -7226,7 +7271,7 @@ const cashFlowOut = computed(() => [
                                 </div>
                                 <div class="w-64">
                                     <Input
-                                        v-model.number="form.closing_cash" data-testid="closing-cash"
+                                        v-model.number="form.closing_cash" data-testid="closing-cash" aria-label="Counted closing cash"
                                         type="number"
                                         @focus="selectZeroValue"
                                         class="h-14 text-right text-2xl font-bold"

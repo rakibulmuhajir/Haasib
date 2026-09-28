@@ -310,6 +310,9 @@ const handleKeydown = (e: KeyboardEvent) => {
 // Watch search query
 watch(searchQuery, (query) => {
   if (query && query.length >= 2) {
+    // Searching from the first keystroke, not only once the debounce fires: otherwise the
+    // "No ... found" message flashes while the request has not even been sent.
+    isSearching.value = true
     debouncedSearch(query)
   } else {
     searchResults.value = []
@@ -468,6 +471,12 @@ onMounted(() => {
           <!-- Search could not be performed. Deliberately distinct from "no matches": the
                two used to render the same sentence, which is how a broken search read as an
                empty company. -->
+          <div
+            v-else-if="searchQuery && searchQuery.length >= 2 && isSearching"
+            class="py-6 text-center text-sm text-muted-foreground"
+          >
+            Searching…
+          </div>
           <div
             v-else-if="searchQuery && searchQuery.length >= 2 && !isSearching && searchFailed"
             class="py-6 text-center text-sm text-destructive"

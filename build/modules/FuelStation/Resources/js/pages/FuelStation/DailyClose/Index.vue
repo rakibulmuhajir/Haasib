@@ -287,6 +287,14 @@ const confirmEditDay = () => {
         </div>
       </CardHeader>
       <CardContent>
+        <!-- Some closes are older than this window: say how many, one click to show them. -->
+        <p
+          v-if="!hiddenByRange && (totalCloses ?? 0) > closes.length && activeRange !== 'all'"
+          class="mb-3 text-sm text-muted-foreground"
+        >
+          {{ (totalCloses ?? 0) - closes.length }} older close{{ (totalCloses ?? 0) - closes.length === 1 ? ' is' : 's are' }} outside this range.
+          <button type="button" class="text-primary underline underline-offset-2" @click="setRange('all')">Show all</button>
+        </p>
         <!-- Closes exist, just not in this window. Saying "none found" here was a lie. -->
         <div v-if="hiddenByRange" class="text-center py-12 text-muted-foreground">
           <Calculator class="h-12 w-12 mx-auto mb-4 opacity-50" />

@@ -173,71 +173,70 @@ test('a bill naming a vendor_id that does not exist at all is rejected', functio
     $response->assertSessionHasErrors('vendor_id');
 });
 
-// --- Bank transactions: BankReconciliationController::toggleTransaction transaction_id ---
+// --- Bank reconciliation: ticking a book line (journal entry on the bank's ledger account) ---
+// Reconciliation ticks journal entries now, not acct.bank_transactions rows; a line that is not
+// on this company's bank is refused by BankReconciliationService, whatever company it is from.
 
-test('a bank transaction toggle is accepted when the transaction belongs to this company', function () {
-    $f = existsRuleFixture();
-
-    $reconciliation = BankReconciliation::create([
+function reconciliationFor(array $f): BankReconciliation
+{
+    return BankReconciliation::create([
         'company_id' => $f['company']->id, 'bank_account_id' => $f['bankAccount']->id,
         'statement_date' => '2026-09-15', 'statement_ending_balance' => 1000,
         'book_balance' => 1000, 'reconciled_balance' => 0, 'difference' => 1000,
         'status' => 'in_progress', 'started_at' => now(), 'created_by_user_id' => $f['owner']->id,
     ]);
+}
 
-    $response = $this->actingAs($f['owner'])->postJson(
-        "/{$f['company']->slug}/banking/reconciliation/{$reconciliation->id}/toggle",
-        ['transaction_id' => $f['bankTransaction']->id]
-    );
+function bankBookLine(array $f): string
+{
+    $bankGl = $f['bankAccount']->gl_account_id;
+    $other = \App\Modules\Accounting\Models\Account::where('company_id', $f['company']->id)->where('id', '!=', $bankGl)->where('type', 'revenue')->value('id');
+    $txn = app(\App\Modules\Accounting\Services\GlPostingService::class)->postBalancedTransaction(
+        ['company_id' => $f['company']->id, 'transaction_type' => 'journal', 'date' => '2026-09-10', 'currency' => 'PKR', 'description' => 'Deposit'], [
+            ['account_id' => $bankGl, 'type' => 'debit', 'amount' => 1000, 'description' => 'Deposit'],
+            ['account_id' => $other, 'type' => 'credit', 'amount' => 1000, 'description' => 'Deposit'],
+        ]);
 
-    $response->assertOk();
-});
+    return \Illuminate\Support\Facades\DB::table('acct.journal_entries')->where('transaction_id', $txn->id)->where('account_id', $bankGl)->value('id');
+}
 
-test('a bank transaction toggle naming a transaction that does not exist at all is rejected', function () {
+test('a book line on this bank can be ticked', function () {
     $f = existsRuleFixture();
+    $reconciliation = reconciliationFor($f);
+    $line = bankBookLine($f);
 
-    $reconciliation = BankReconciliation::create([
-        'company_id' => $f['company']->id, 'bank_account_id' => $f['bankAccount']->id,
-        'statement_date' => '2026-09-15', 'statement_ending_balance' => 1000,
-        'book_balance' => 1000, 'reconciled_balance' => 0, 'difference' => 1000,
-        'status' => 'in_progress', 'started_at' => now(), 'created_by_user_id' => $f['owner']->id,
-    ]);
-
-    $response = $this->actingAs($f['owner'])->postJson(
+    $this->actingAs($f['owner'])->postJson(
         "/{$f['company']->slug}/banking/reconciliation/{$reconciliation->id}/toggle",
-        ['transaction_id' => (string) Str::uuid()]
-    );
+        ['journal_entry_id' => $line, 'cleared' => true]
+    )->assertRedirect();
 
-    $response->assertStatus(422);
+    expect(\Illuminate\Support\Facades\DB::table('acct.bank_reconciliation_items')->where('journal_entry_id', $line)->exists())->toBeTrue();
 });
 
-test('a bank transaction toggle naming a transaction from another company is not applied', function () {
-    // BankTransaction::where('bank_account_id', ...) exists() rule is a global row-exists
-    // check, unscoped to company -- same as before this conversion. Cross-company
-    // protection here happens in the controller's own bank_account_id-scoped findOrFail(),
-    // which 404s. That is unchanged, pre-existing behaviour, not something the exists()
-    // conversion itself is responsible for proving.
+test('ticking a line that does not exist is refused', function () {
+    $f = existsRuleFixture();
+    $reconciliation = reconciliationFor($f);
+
+    $this->actingAs($f['owner'])->postJson(
+        "/{$f['company']->slug}/banking/reconciliation/{$reconciliation->id}/toggle",
+        ['journal_entry_id' => (string) Str::uuid(), 'cleared' => true]
+    )->assertStatus(422);
+});
+
+test('ticking another company\'s line is refused', function () {
     $f = existsRuleFixture();
     $other = existsRuleFixture();
+    $otherLine = bankBookLine($other);
 
     // Building the second fixture left the session inside the second company.
     enterCompany($f['company']);
-
-    $reconciliation = BankReconciliation::create([
-        'company_id' => $f['company']->id, 'bank_account_id' => $f['bankAccount']->id,
-        'statement_date' => '2026-09-15', 'statement_ending_balance' => 1000,
-        'book_balance' => 1000, 'reconciled_balance' => 0, 'difference' => 1000,
-        'status' => 'in_progress', 'started_at' => now(), 'created_by_user_id' => $f['owner']->id,
-    ]);
+    $reconciliation = reconciliationFor($f);
 
     $response = $this->actingAs($f['owner'])->postJson(
         "/{$f['company']->slug}/banking/reconciliation/{$reconciliation->id}/toggle",
-        ['transaction_id' => $other['bankTransaction']->id]
+        ['journal_entry_id' => $otherLine, 'cleared' => true]
     );
 
-    // Refused either way. Without enforcement the exists rule sees the other
-    // company's row and the controller's own scoped findOrFail 404s; with
-    // enforcement the row is invisible, so validation rejects it first.
     expect($response->getStatusCode())->toBeIn([404, 422]);
 });
 

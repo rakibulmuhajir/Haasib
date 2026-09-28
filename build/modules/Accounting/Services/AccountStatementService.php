@@ -130,7 +130,7 @@ class AccountStatementService
         ];
     }
 
-    private function link(?string $referenceType, ?string $referenceId, string $transactionId): ?string
+    public function link(?string $referenceType, ?string $referenceId, string $transactionId): ?string
     {
         return match ($referenceType) {
             'acct.invoices' => $referenceId ? "invoices/{$referenceId}" : null,

@@ -7,8 +7,8 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Models\BankReconciliation;
-use App\Modules\Accounting\Models\BankTransaction;
-use Illuminate\Http\JsonResponse;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\BankReconciliationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -65,7 +65,15 @@ class BankReconciliationController extends Controller
         $bankAccounts = BankAccount::where('company_id', $company->id)
             ->active()
             ->orderBy('account_name')
-            ->get(['id', 'account_name', 'account_number', 'currency', 'current_balance', 'last_reconciled_date', 'last_reconciled_balance']);
+            ->get(['id', 'account_name', 'account_number', 'currency', 'gl_account_id', 'current_balance', 'last_reconciled_date', 'last_reconciled_balance']);
+        // The balance the books carry today, from the bank's ledger account.
+        $bankAccounts->each(function ($account) use ($company) {
+            $account->current_balance = round((float) DB::table('acct.journal_entries as je')
+                ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                ->where('t.company_id', $company->id)->where('je.account_id', $account->gl_account_id)
+                ->whereIn('t.status', ['posted', 'locked'])->whereNull('t.deleted_at')
+                ->sum(DB::raw('je.debit_amount - je.credit_amount')), 2);
+        });
 
         return Inertia::render('accounting/bank-reconciliation/Start', [
             'company' => [
@@ -78,87 +86,62 @@ class BankReconciliationController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, BankReconciliationService $service): RedirectResponse
     {
         $company = CompanyContext::getCompany();
-
         $validated = $request->validate([
-            'bank_account_id' => ['required', 'uuid', Rule::exists(BankAccount::class, 'id')],
-            'statement_date' => 'required|date',
-            'statement_ending_balance' => 'required|numeric',
+            'bank_account_id' => ['required', 'uuid', Rule::exists(BankAccount::class, 'id')->where('company_id', $company->id)],
+            'statement_date' => ['required', 'date_format:Y-m-d'],
+            'statement_ending_balance' => ['required', 'numeric'],
+            'statement' => ['nullable', 'file', 'mimes:csv,txt', 'max:5120'],
         ]);
 
-        // Check for existing reconciliation for this account and date
-        $existing = BankReconciliation::where('bank_account_id', $validated['bank_account_id'])
-            ->where('statement_date', $validated['statement_date'])
-            ->first();
-
-        if ($existing) {
-            return redirect()
-                ->route('banking.reconciliation.show', ['company' => $company->slug, 'reconciliation' => $existing->id])
-                ->with('info', 'Resuming existing reconciliation for this date.');
+        $bank = BankAccount::where('company_id', $company->id)->findOrFail($validated['bank_account_id']);
+        if (! $bank->gl_account_id) {
+            return back()->withErrors(['bank_account_id' => 'This bank has no ledger account.']);
+        }
+        $open = BankReconciliation::where('bank_account_id', $bank->id)->where('status', 'in_progress')->first();
+        if ($open) {
+            return redirect()->route('banking.reconciliation.show', ['company' => $company->slug, 'reconciliation' => $open->id])
+                ->with('info', 'This bank already has a reconciliation in progress.');
+        }
+        $last = BankReconciliation::where('bank_account_id', $bank->id)->where('status', 'completed')->max('statement_date');
+        if ($last && $validated['statement_date'] <= substr((string) $last, 0, 10)) {
+            return back()->withErrors(['statement_date' => 'Must be after the last reconciled statement ('.substr((string) $last, 0, 10).').']);
         }
 
-        // Get the book balance (system balance at statement date)
-        $bankAccount = BankAccount::find($validated['bank_account_id']);
-        $bookBalance = BankTransaction::where('bank_account_id', $validated['bank_account_id'])
-            ->where('transaction_date', '<=', $validated['statement_date'])
-            ->whereNull('deleted_at')
-            ->sum('amount') + $bankAccount->opening_balance;
-
-        $reconciliation = BankReconciliation::create([
+        $recon = BankReconciliation::create([
             'company_id' => $company->id,
-            'bank_account_id' => $validated['bank_account_id'],
+            'bank_account_id' => $bank->id,
             'statement_date' => $validated['statement_date'],
             'statement_ending_balance' => $validated['statement_ending_balance'],
-            'book_balance' => $bookBalance,
+            'book_balance' => 0,
             'reconciled_balance' => 0,
             'difference' => $validated['statement_ending_balance'],
             'status' => 'in_progress',
             'started_at' => now(),
             'created_by_user_id' => Auth::id(),
         ]);
+        $show = fn () => redirect()->route('banking.reconciliation.show', ['company' => $company->slug, 'reconciliation' => $recon->id]);
 
-        return redirect()
-            ->route('banking.reconciliation.show', ['company' => $company->slug, 'reconciliation' => $reconciliation->id]);
+        if (! $request->hasFile('statement')) {
+            return $show()->with('success', 'Reconciliation started');
+        }
+        try {
+            $matched = $service->importStatement($recon->fresh('bankAccount'), $request->file('statement')->getRealPath());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $show()->withErrors($e->errors());
+        }
+
+        return $show()->with('success', "Statement imported · {$matched} matched");
     }
 
-    public function show(Request $request, string $company, string $reconciliation): Response
+    public function show(Request $request, string $company, string $reconciliation, BankReconciliationService $service): Response
     {
         $companyModel = CompanyContext::getCompany();
-
         $recon = BankReconciliation::where('company_id', $companyModel->id)
-            ->with(['bankAccount:id,account_name,account_number,currency,current_balance'])
+            ->with(['bankAccount:id,account_name,account_number,currency,gl_account_id'])
             ->findOrFail($reconciliation);
-
-        // Get transactions for this reconciliation period
-        $transactions = BankTransaction::where('bank_account_id', $recon->bank_account_id)
-            ->where('transaction_date', '<=', $recon->statement_date)
-            ->where(function ($q) use ($recon) {
-                $q->where('is_reconciled', false)
-                    ->orWhere('reconciliation_id', $recon->id);
-            })
-            ->orderBy('transaction_date')
-            ->orderBy('created_at')
-            ->get([
-                'id',
-                'transaction_date',
-                'description',
-                'transaction_type',
-                'amount',
-                'is_reconciled',
-                'reconciliation_id',
-                'payee_name',
-                'reference_number',
-            ]);
-
-        // Calculate current reconciled balance
-        $reconciledBalance = $transactions
-            ->where('reconciliation_id', $recon->id)
-            ->sum('amount') + $recon->bankAccount->opening_balance;
-
-        // Get transactions that were reconciled with this reconciliation
-        $startingBalance = $recon->bankAccount->last_reconciled_balance ?? $recon->bankAccount->opening_balance;
 
         return Inertia::render('accounting/bank-reconciliation/Show', [
             'company' => [
@@ -167,141 +150,77 @@ class BankReconciliationController extends Controller
                 'slug' => $companyModel->slug,
                 'base_currency' => $companyModel->base_currency,
             ],
-            'reconciliation' => $recon,
-            'transactions' => $transactions,
-            'summary' => [
-                'starting_balance' => $startingBalance,
+            'reconciliation' => [
+                'id' => $recon->id,
+                'status' => $recon->status,
+                'statement_date' => $recon->statement_date->toDateString(),
                 'statement_ending_balance' => (float) $recon->statement_ending_balance,
-                'reconciled_balance' => $reconciledBalance,
-                'book_balance' => (float) $recon->book_balance,
-                'difference' => (float) $recon->statement_ending_balance - $reconciledBalance,
-                'cleared_deposits' => $transactions->where('reconciliation_id', $recon->id)->where('amount', '>', 0)->sum('amount'),
-                'cleared_withdrawals' => $transactions->where('reconciliation_id', $recon->id)->where('amount', '<', 0)->sum('amount'),
-                'uncleared_count' => $transactions->whereNull('reconciliation_id')->count(),
+                'completed_at' => $recon->completed_at?->toISOString(),
+                'bank_account' => [
+                    'id' => $recon->bankAccount->id,
+                    'name' => $recon->bankAccount->account_name,
+                    'number' => $recon->bankAccount->account_number,
+                    'currency' => $recon->bankAccount->currency,
+                ],
             ],
-            'canComplete' => abs((float) $recon->statement_ending_balance - $reconciledBalance) < 0.01,
+            ...$service->view($recon),
+            // Accounts a missing statement line (charge, profit, returned cheque) can be booked to.
+            'entryAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->whereNull('deleted_at')
+                ->whereIn('type', ['expense', 'revenue', 'other_income', 'other_expense', 'asset', 'liability', 'equity'])
+                ->where('id', '!=', $recon->bankAccount->gl_account_id)
+                ->orderBy('code')->get(['id', 'code', 'name', 'type']),
         ]);
     }
 
-    public function toggleTransaction(Request $request, string $company, string $reconciliation): JsonResponse
+    public function toggleTransaction(Request $request, string $company, string $reconciliation, BankReconciliationService $service): RedirectResponse
     {
-        $companyModel = CompanyContext::getCompany();
-
-        $recon = BankReconciliation::where('company_id', $companyModel->id)
-            ->where('status', 'in_progress')
-            ->findOrFail($reconciliation);
-
         $validated = $request->validate([
-            'transaction_id' => ['required', 'uuid', Rule::exists(BankTransaction::class, 'id')],
+            'journal_entry_id' => ['required', 'uuid'],
+            'cleared' => ['required', 'boolean'],
         ]);
+        $service->toggle($this->find($reconciliation), $validated['journal_entry_id'], (bool) $validated['cleared']);
 
-        $transaction = BankTransaction::where('bank_account_id', $recon->bank_account_id)
-            ->findOrFail($validated['transaction_id']);
-
-        // Toggle reconciliation status
-        if ($transaction->reconciliation_id === $recon->id) {
-            // Unreconcile
-            $transaction->update([
-                'reconciliation_id' => null,
-                'is_reconciled' => false,
-                'reconciled_date' => null,
-                'reconciled_by_user_id' => null,
-            ]);
-        } else {
-            // Reconcile
-            $transaction->update([
-                'reconciliation_id' => $recon->id,
-                'is_reconciled' => true,
-                'reconciled_date' => now()->toDateString(),
-                'reconciled_by_user_id' => Auth::id(),
-            ]);
-        }
-
-        // Recalculate reconciled balance
-        $reconciledBalance = BankTransaction::where('reconciliation_id', $recon->id)
-            ->sum('amount') + $recon->bankAccount->opening_balance;
-
-        $recon->update([
-            'reconciled_balance' => $reconciledBalance,
-            'difference' => $recon->statement_ending_balance - $reconciledBalance,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'reconciled_balance' => $reconciledBalance,
-            'difference' => (float) $recon->statement_ending_balance - $reconciledBalance,
-            'can_complete' => abs((float) $recon->statement_ending_balance - $reconciledBalance) < 0.01,
-        ]);
+        return back();
     }
 
-    public function complete(Request $request, string $company, string $reconciliation): RedirectResponse
+    public function import(Request $request, string $company, string $reconciliation, BankReconciliationService $service): RedirectResponse
     {
-        $companyModel = CompanyContext::getCompany();
+        $request->validate(['statement' => ['required', 'file', 'mimes:csv,txt', 'max:5120']]);
+        $matched = $service->importStatement($this->find($reconciliation), $request->file('statement')->getRealPath());
 
-        $recon = BankReconciliation::where('company_id', $companyModel->id)
-            ->where('status', 'in_progress')
-            ->findOrFail($reconciliation);
-
-        // Verify difference is zero
-        $reconciledBalance = BankTransaction::where('reconciliation_id', $recon->id)
-            ->sum('amount') + $recon->bankAccount->opening_balance;
-
-        $difference = abs((float) $recon->statement_ending_balance - $reconciledBalance);
-
-        if ($difference >= 0.01) {
-            return redirect()
-                ->back()
-                ->with('error', 'Cannot complete reconciliation. Difference must be zero.');
-        }
-
-        DB::transaction(function () use ($recon, $reconciledBalance) {
-            // Complete the reconciliation
-            $recon->update([
-                'status' => 'completed',
-                'reconciled_balance' => $reconciledBalance,
-                'difference' => 0,
-                'completed_at' => now(),
-                'completed_by_user_id' => Auth::id(),
-            ]);
-
-            // Update bank account
-            $recon->bankAccount->update([
-                'last_reconciled_date' => $recon->statement_date,
-                'last_reconciled_balance' => $recon->statement_ending_balance,
-            ]);
-        });
-
-        return redirect()
-            ->route('banking.reconciliation.index', ['company' => $companyModel->slug])
-            ->with('success', 'Bank reconciliation completed successfully.');
+        return back()->with('success', "Statement imported · {$matched} matched");
     }
 
-    public function cancel(Request $request, string $company, string $reconciliation): RedirectResponse
+    public function addEntry(Request $request, string $company, string $reconciliation, BankReconciliationService $service): RedirectResponse
     {
         $companyModel = CompanyContext::getCompany();
+        $validated = $request->validate([
+            'statement_line_id' => ['required', 'uuid'],
+            'account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyModel->id)],
+        ]);
+        $service->addEntry($this->find($reconciliation), $validated['statement_line_id'], $validated['account_id'], Auth::id());
 
-        $recon = BankReconciliation::where('company_id', $companyModel->id)
-            ->where('status', 'in_progress')
-            ->findOrFail($reconciliation);
+        return back()->with('success', 'Entry added');
+    }
 
-        DB::transaction(function () use ($recon) {
-            // Unreconcile all transactions
-            BankTransaction::where('reconciliation_id', $recon->id)
-                ->update([
-                    'reconciliation_id' => null,
-                    'is_reconciled' => false,
-                    'reconciled_date' => null,
-                    'reconciled_by_user_id' => null,
-                ]);
+    public function complete(Request $request, string $company, string $reconciliation, BankReconciliationService $service): RedirectResponse
+    {
+        $service->complete($this->find($reconciliation), Auth::id());
 
-            // Cancel the reconciliation
-            $recon->update([
-                'status' => 'cancelled',
-            ]);
-        });
+        return redirect()->route('banking.reconciliation.index', ['company' => CompanyContext::getCompany()->slug])
+            ->with('success', 'Reconciliation completed');
+    }
 
-        return redirect()
-            ->route('banking.reconciliation.index', ['company' => $companyModel->slug])
-            ->with('success', 'Bank reconciliation cancelled.');
+    public function cancel(Request $request, string $company, string $reconciliation, BankReconciliationService $service): RedirectResponse
+    {
+        $service->discard($this->find($reconciliation));
+
+        return redirect()->route('banking.reconciliation.index', ['company' => CompanyContext::getCompany()->slug])
+            ->with('success', 'Reconciliation discarded');
+    }
+
+    private function find(string $id): BankReconciliation
+    {
+        return BankReconciliation::where('company_id', CompanyContext::getCompany()->id)->with('bankAccount')->findOrFail($id);
     }
 }

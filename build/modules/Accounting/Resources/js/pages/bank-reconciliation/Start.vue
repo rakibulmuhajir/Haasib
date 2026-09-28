@@ -49,6 +49,7 @@ const form = useForm({
   bank_account_id: noneValue,
   statement_date: localToday(),
   statement_ending_balance: 0,
+  statement: null as File | null,
 })
 
 const selectedAccount = computed(() => {
@@ -77,6 +78,7 @@ const handleSubmit = () => {
   }
   form.post(`/${props.company.slug}/banking/reconciliation`, {
     preserveScroll: true,
+    forceFormData: true,
   })
 }
 
@@ -96,11 +98,10 @@ const handleCancel = () => {
       <!-- Info Alert -->
       <Alert class="mb-6">
         <Info class="h-4 w-4" />
-        <AlertTitle>What is Bank Reconciliation?</AlertTitle>
+        <AlertTitle>Match your books to the bank statement</AlertTitle>
         <AlertDescription>
-          Bank reconciliation compares your recorded transactions with your bank statement
-          to ensure your books match your actual bank balance. You'll mark transactions
-          as cleared until the difference is zero.
+          Tick each entry that appears on the statement until the difference is zero.
+          Import the statement as CSV and matching entries are ticked for you.
         </AlertDescription>
       </Alert>
 
@@ -145,7 +146,7 @@ const handleCancel = () => {
               <h4 class="font-medium mb-3">Account Summary</h4>
               <div class="grid gap-3 sm:grid-cols-2 text-sm">
                 <div>
-                  <p class="text-muted-foreground">Current Book Balance</p>
+                  <p class="text-muted-foreground">Book balance today</p>
                   <p class="font-medium text-lg">
                     <MoneyText :amount="selectedAccount.current_balance" :currency="selectedAccount.currency" />
                   </p>
@@ -200,6 +201,19 @@ const handleCancel = () => {
               <p v-if="form.errors.statement_ending_balance" class="text-sm text-destructive">
                 {{ form.errors.statement_ending_balance }}
               </p>
+            </div>
+
+            <!-- Statement file (optional) -->
+            <div class="space-y-2">
+              <Label for="statement">Bank statement (CSV, optional)</Label>
+              <Input
+                id="statement"
+                type="file"
+                accept=".csv,text/csv"
+                @change="(e: Event) => (form.statement = (e.target as HTMLInputElement).files?.[0] ?? null)"
+              />
+              <p class="text-xs text-muted-foreground">Needs a Date column and Amount, or Debit and Credit.</p>
+              <p v-if="form.errors.statement" class="text-sm text-destructive">{{ form.errors.statement }}</p>
             </div>
 
             <!-- Actions -->

@@ -344,6 +344,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/banking/reconciliation', [BankReconciliationController::class, 'store'])->name('banking.reconciliation.store');
         Route::get('/{company}/banking/reconciliation/{reconciliation}', [BankReconciliationController::class, 'show'])->whereUuid('reconciliation')->name('banking.reconciliation.show');
         Route::post('/{company}/banking/reconciliation/{reconciliation}/toggle', [BankReconciliationController::class, 'toggleTransaction'])->whereUuid('reconciliation')->name('banking.reconciliation.toggle');
+        Route::post('/{company}/banking/reconciliation/{reconciliation}/import', [BankReconciliationController::class, 'import'])->whereUuid('reconciliation')->name('banking.reconciliation.import');
+        Route::post('/{company}/banking/reconciliation/{reconciliation}/entry', [BankReconciliationController::class, 'addEntry'])->whereUuid('reconciliation')->name('banking.reconciliation.entry');
         Route::post('/{company}/banking/reconciliation/{reconciliation}/complete', [BankReconciliationController::class, 'complete'])->whereUuid('reconciliation')->name('banking.reconciliation.complete');
         Route::post('/{company}/banking/reconciliation/{reconciliation}/cancel', [BankReconciliationController::class, 'cancel'])->whereUuid('reconciliation')->name('banking.reconciliation.cancel');
 

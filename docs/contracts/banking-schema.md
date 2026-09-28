@@ -404,7 +404,26 @@ When a vendor bill payment is recorded:
    - `matched_bill_payment_id` = bill_payment.id
 4. GL posting: DR AP, CR Bank
 
-### Reconciliation → GL
+### Bank Reconciliation (against the books) — 2026-09-28
+
+Reconciliation ticks **journal entries on the bank's ledger account** (`company_bank_accounts.gl_account_id`),
+not `bank_transactions` rows (nothing fills that table). Service: `BankReconciliationService`.
+
+- `acct.bank_reconciliation_items` — a book line cleared in a reconciliation.
+  - `id` uuid PK, `company_id` uuid FK auth.companies, `reconciliation_id` uuid FK bank_reconciliations (CASCADE),
+    `journal_entry_id` uuid FK acct.journal_entries (CASCADE) **unique** (a line clears once, ever),
+    `amount` numeric(15,2) signed (money in +, out −), timestamps. RLS on company_id.
+- `acct.bank_statement_lines` — the bank's statement imported from CSV (`BankStatementCsvParser`).
+  - `id` uuid PK, `company_id`, `reconciliation_id` FK (CASCADE), `line_number` int, `line_date` date,
+    `description` varchar(500) null, `reference` varchar(100) null, `amount` numeric(15,2) signed,
+    `balance` numeric(15,2) null, `journal_entry_id` uuid null FK journal_entries (SET NULL) = the matched book line. RLS.
+- Cleared balance = Σ items of completed reconciliations for the bank + Σ items ticked in this one; must equal
+  `statement_ending_balance` to complete (the existing trigger also requires `difference = 0`).
+- Auto-match: same signed amount, nearest date within 5 days. A statement line missing from the books is
+  booked as a `bank_adjustment` transaction (reference_type `acct.bank_statement_lines`) and cleared.
+- Discarding an in-progress reconciliation deletes it; its items and statement lines cascade.
+
+### Reconciliation → GL (bank feed, legacy)
 
 When a bank transaction is matched and not yet posted to GL:
 

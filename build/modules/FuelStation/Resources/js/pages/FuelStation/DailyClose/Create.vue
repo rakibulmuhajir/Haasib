@@ -2082,6 +2082,46 @@ const stockMovementLabel = (liters: number) => {
         : 'Stock removed since opening';
 };
 
+// A tank that sold nothing and took nothing in holds what it held yesterday: fill its empty dip
+// with yesterday's reading. Only an empty dip is filled -- a typed one is never overwritten.
+watch(
+    () => form.tank_readings.map((t: any) => [
+        activeTab.value,
+        t.tank_id,
+        form.nozzle_readings.map((r: any) => Number(r.closing_electronic || 0)).join(','),
+        litersSoldByTank.value[t.tank_id] || 0,
+        purchaseLitresByTank.value[t.tank_id] || 0,
+        Number(t.pending_delivery_liters || 0),
+        Number(t.stock_movements_since_baseline_liters || 0),
+        Number(t.liters || 0),
+    ]),
+    () => {
+        // Only once the Tanks tab is open: by then the day's sales have been entered.
+        if (activeTab.value !== 'tanks') return;
+        for (const tank of form.tank_readings as any[]) {
+            // "No sale" must be known, not just "nothing typed yet": every nozzle on this tank
+            // has its closing meter entered (No sale sets closing = opening). A tank without
+            // nozzles (bulk lubricant) sells only through other sales, counted below.
+            const nozzles = configuredNozzles.value.filter((n) => n.tank_id === tank.tank_id);
+            const metersEntered = nozzles.every((n) => {
+                const row: any = form.nozzle_readings.find((r: any) => r.nozzle_id === n.id);
+                return row && Number(row.closing_electronic) > 0;
+            });
+            const idle = metersEntered
+                && !(litersSoldByTank.value[tank.tank_id] > 0)
+                && !(purchaseLitresByTank.value[tank.tank_id] > 0)
+                && !(Number(tank.pending_delivery_liters) > 0)
+                && Math.abs(Number(tank.stock_movements_since_baseline_liters || 0)) < 0.001;
+            const empty = !(Number(tank.liters) > 0) && !(Number(tank.stick_reading) > 0);
+            if (idle && empty && Number(tank.previous_liters) > 0) {
+                tank.liters = Number(tank.previous_liters);
+                tank.stick_reading = Number(tank.previous_stick || 0);
+            }
+        }
+    },
+    { immediate: true },
+);
+
 const expectedTankClosingLiters = (tank: {
     previous_liters: number;
     stock_movements_since_baseline_liters?: number | null;

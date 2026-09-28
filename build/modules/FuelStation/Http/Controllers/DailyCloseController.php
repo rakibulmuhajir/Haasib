@@ -1346,6 +1346,8 @@ class DailyCloseController extends Controller
             'paymentSources' => $this->paymentSourceLabels($companyModel->id, $metadata),
             'canEditDay' => $canEditDay,
             'editDayDisabledReason' => $editDayDisabledReason,
+            // The next posted day still opening from this day's old closing figures (after an edit).
+            'nextDayDrift' => $canEditDay ? app(\App\Modules\FuelStation\Services\DailyCloseFollowOnService::class)->nextDayDrift($txn) : null,
             'editDayLaterDates' => $editDayLaterDates,
             // Every past "Edit day" on this business date, oldest first.
             'revisionHistory' => DB::table('fuel.daily_close_revisions as r')
@@ -1470,6 +1472,31 @@ class DailyCloseController extends Controller
             return redirect()
                 ->route('fuel.daily-close.create', ['company' => $companyModel->slug, 'date' => $result['parked_date']])
                 ->with('success', 'Day reopened for editing. Everything it posted was removed; re-post when ready.');
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    /** Re-post the next day from this day's closing figures (see DailyCloseFollowOnService). */
+    public function refreshNextDay(Request $request, string $company, string $transaction): RedirectResponse
+    {
+        $companyModel = app(CurrentCompany::class)->get();
+        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE), 403);
+
+        $txn = Transaction::where('id', $transaction)
+            ->where('company_id', $companyModel->id)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')
+            ->firstOrFail();
+
+        try {
+            $result = app(\App\Modules\FuelStation\Services\DailyCloseFollowOnService::class)->refreshNextDay($txn, $request->user());
+            if (! empty($result['warnings'])) {
+                session()->flash('warnings', $result['warnings']);
+            }
+
+            return redirect()->back()->with('success', "{$result['next_date']} updated"
+                .($result['recosted'] ? " · {$result['recosted']} later day(s) re-costed" : ''));
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

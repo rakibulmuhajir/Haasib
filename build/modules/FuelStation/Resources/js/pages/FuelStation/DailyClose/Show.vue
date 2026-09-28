@@ -117,6 +117,7 @@ const props = defineProps<{
   canEditDay?: boolean
   editDayDisabledReason?: string | null
   editDayLaterDates?: string[]
+  nextDayDrift?: { next_id: string; next_date: string; changes: Array<{ what: string; was: number; now: number }> } | null
   revisionHistory?: Array<{ id: string; created_at: string; reason: string; reopened_by_name: string | null }>
   accountNames?: Record<string, string>
   nozzleNames?: Record<string, { name: string; tank_id: string | null }>
@@ -293,6 +294,16 @@ const fuelSalesEntries = computed(() => {
   }))
 })
 
+// The next day still opens from this day's old closing figures: re-post it from the new ones.
+const refreshingNext = ref(false)
+const refreshNextDay = () => {
+  refreshingNext.value = true
+  router.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/refresh-next-day`, {}, {
+    preserveScroll: true,
+    onFinish: () => { refreshingNext.value = false },
+  })
+}
+
 const lockTransaction = () => {
   router.post(`/${props.company.slug}/fuel/daily-close/${props.transaction.id}/lock`, {}, {
     preserveScroll: true,
@@ -377,8 +388,8 @@ const unlockTransaction = () => {
                 </DialogDescription>
               </DialogHeader>
               <p v-if="editDayLaterDates?.length" class="rounded-md border border-status-attention/40 bg-status-attention/10 px-3 py-2 text-sm">
-                Later days ({{ editDayLaterDates.join(', ') }}) opened from this day's closing cash,
-                meters and dips. If you change those, edit and re-post those days too.
+                {{ editDayLaterDates[0] }} opens from this day's closing cash, meters and dips.
+                If you change those, you can update it from here after re-posting.
               </p>
               <div class="space-y-2">
                 <Label for="edit-day-reason">Reason for editing</Label>
@@ -441,6 +452,20 @@ const unlockTransaction = () => {
         </template>
       </div>
     </template>
+
+    <div v-if="nextDayDrift" class="mb-6 rounded-lg border border-status-attention/40 bg-status-attention/10 p-4 text-sm">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-1">
+          <p class="font-medium">{{ nextDayDrift.next_date }} still opens from the old figures</p>
+          <ul class="text-muted-foreground">
+            <li v-for="change in nextDayDrift.changes" :key="change.what">
+              {{ change.what }}: {{ change.was.toLocaleString() }} → {{ change.now.toLocaleString() }}
+            </li>
+          </ul>
+        </div>
+        <Button size="sm" :disabled="refreshingNext" @click="refreshNextDay">Update {{ nextDayDrift.next_date }}</Button>
+      </div>
+    </div>
 
     <!-- Status Banner -->
     <div v-if="transaction.status !== 'posted' || transaction.is_locked" class="mb-6">

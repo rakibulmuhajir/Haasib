@@ -21,7 +21,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Printer } from 'lucide-vue-next'
 
-type Kind = 'bank' | 'customer' | 'supplier'
+type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
 
 type Row = {
   date: string | null
@@ -40,7 +40,7 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; from: string; to: string }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[] }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -83,6 +83,9 @@ const currentOptions = computed<{ id: string; label: string; sublabel?: string }
   if (kind.value === 'customer') {
     return props.options.customer.map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
   }
+  if (kind.value === 'amanat') {
+    return (props.options.amanat ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
+  }
   return props.options.supplier.map((v) => ({ id: v.id, label: v.name, sublabel: v.vendor_number }))
 })
 
@@ -118,6 +121,7 @@ const changeParty = (value: string) => {
 const partyLabel = computed(() => {
   if (kind.value === 'bank') return 'Account'
   if (kind.value === 'customer') return 'Customer'
+  if (kind.value === 'amanat') return 'Holder'
   return 'Supplier'
 })
 
@@ -157,6 +161,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
               <TabsTrigger value="bank">Bank &amp; Cash</TabsTrigger>
               <TabsTrigger value="customer">Customer</TabsTrigger>
               <TabsTrigger value="supplier">Supplier</TabsTrigger>
+              <TabsTrigger v-if="(options.amanat ?? []).length > 0" value="amanat">Amanat</TabsTrigger>
             </TabsList>
           </Tabs>
 

@@ -11,6 +11,8 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\AccountStatementService;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
+use App\Modules\FuelStation\Services\AmanatStatementService;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,10 +39,22 @@ class StatementReportController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
-        $customers = Customer::where('company_id', $company->id)
+        // Amanat holders get their own list: their movements are deposits held for them, not
+        // invoices and payments. A holder who also buys on credit stays under Customer too.
+        $holderIds = DB::table('fuel.customer_profiles')
+            ->where('company_id', $company->id)
+            ->where('is_amanat_holder', true)
+            ->pluck('is_credit_customer', 'customer_id');
+
+        $allCustomers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'customer_number']);
+
+        $customers = $allCustomers
+            ->reject(fn ($c) => $holderIds->has($c->id) && ! $holderIds[$c->id])
+            ->values();
+        $holders = $allCustomers->filter(fn ($c) => $holderIds->has($c->id))->values();
 
         $vendors = Vendor::where('company_id', $company->id)
             ->where('is_active', true)
@@ -50,6 +64,7 @@ class StatementReportController extends Controller
         [$statement, $columns, $resolvedId] = match ($kind) {
             'customer' => $this->customerStatement($customers, $id, $from, $to),
             'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
+            'amanat' => $this->amanatStatement($holders, $id, $from, $to),
             default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
         };
 
@@ -65,6 +80,7 @@ class StatementReportController extends Controller
                 'bank' => $bankAccounts,
                 'customer' => $customers,
                 'supplier' => $vendors,
+                'amanat' => $holders,
             ],
             'columns' => $columns,
             'statement' => $statement,
@@ -125,6 +141,24 @@ class StatementReportController extends Controller
             ['money_in' => 'Invoiced', 'money_out' => 'Received', 'balance' => 'Owes'],
             $customer->id,
         ];
+    }
+
+    private function amanatStatement($holders, ?string $id, string $from, string $to): array
+    {
+        $holder = $id ? $holders->firstWhere('id', $id) : null;
+        $holder ??= $holders->first();
+        $holder = $holder ? Customer::find($holder->id) : null;
+        $columns = ['money_in' => 'Deposited', 'money_out' => 'Paid out', 'balance' => 'We hold'];
+
+        if (! $holder) {
+            return [
+                ['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null],
+                $columns,
+                null,
+            ];
+        }
+
+        return [app(AmanatStatementService::class)->statement($holder, $from, $to), $columns, $holder->id];
     }
 
     private function supplierStatement($vendors, ?string $id, string $from, string $to): array

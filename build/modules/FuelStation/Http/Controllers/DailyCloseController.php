@@ -1266,6 +1266,8 @@ class DailyCloseController extends Controller
         if (!is_array($metadata)) {
             $metadata = [];
         }
+        $costs = app(\App\Modules\FuelStation\Services\DailyCloseCostCorrectionService::class);
+        $metadata = $costs->adjusted($metadata, $costs->correctionsFor($companyModel->id, [$txn->id])[$txn->id] ?? []);
 
         return Inertia::render('FuelStation/DailyClose/Show', [
             'company' => [

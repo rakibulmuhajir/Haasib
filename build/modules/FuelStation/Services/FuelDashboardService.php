@@ -592,6 +592,9 @@ class FuelDashboardService
             ->orderBy('transaction_date')
             ->get(['id', 'transaction_date', 'metadata']);
 
+        // Posted cost corrections (fuel:recost-closes) laid over each close's own figures.
+        app(DailyCloseCostCorrectionService::class)->applyTo($companyId, $transactions);
+
         foreach ($transactions as $transaction) {
             $date = Carbon::parse($transaction->transaction_date);
             $periods = [];

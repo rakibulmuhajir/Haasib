@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Re-costs a posted daily close at its own day's fuel cost (FuelCostService) without re-posting
  * it: one companion journal per close moves the difference between cost of sales, tank
- * gain/loss and fuel stock, and the close's figures (metadata) are brought in line so the
- * station reports agree with the ledger. Edit day removes the correction together with the
+ * gain/loss and fuel stock. A posted close's own figures are immutable (a DB trigger), so the
+ * journal's metadata carries the per-fuel differences and adjusted() lays them over the close's
+ * figures wherever a report reads them. Edit day removes the correction together with the
  * close (DailyCloseReopenService), and the re-post then carries the right cost by itself.
  *
  * Written for closes posted while cost came from a single frozen avg_cost figure.
@@ -29,7 +30,8 @@ class DailyCloseCostCorrectionService
     {
         $companyId = $close->company_id;
         $date = $close->transaction_date->toDateString();
-        $metadata = $close->metadata ?? [];
+        // Start from the figures as already corrected, so a second run finds nothing to do.
+        $metadata = $this->adjusted($close->metadata ?? [], $this->correctionsFor($companyId, [$close->id])[$close->id] ?? []);
         $items = DB::table('inv.items')->where('company_id', $companyId)->whereNotNull('fuel_category')->whereNull('deleted_at')
             ->get(['id', 'name', 'fuel_category', 'expense_account_id', 'asset_account_id']);
         $closeLines = DB::table('acct.journal_entries')->where('transaction_id', $close->id)->get(['account_id', 'description', 'debit_amount', 'credit_amount']);
@@ -58,7 +60,8 @@ class DailyCloseCostCorrectionService
             }
             $inventory = $accountFor("Inventory reduction - {$item->name}") ?? $item->asset_account_id;
 
-            $row = ['item' => $item->name, 'cost' => $cost, 'cogs_delta' => 0.0, 'loss_delta' => 0.0, 'gain_delta' => 0.0];
+            $row = ['item' => $item->name, 'fuel_category' => $item->fuel_category, 'cost' => $cost,
+                'cogs_delta' => 0.0, 'loss_delta' => 0.0, 'gain_delta' => 0.0, 'variance_deltas' => []];
             if ($sale && (float) $sale['liters'] > 0) {
                 $liters = (float) $sale['liters'];
                 $row['used'] = round((float) $sale['cogs'] / $liters, 4);
@@ -66,7 +69,6 @@ class DailyCloseCostCorrectionService
                 $row['cogs_delta'] = round($right - (float) $sale['cogs'], 2);
                 $post($accountFor("Cost of goods sold - {$item->name}") ?? $item->expense_account_id, $inventory, $row['cogs_delta'],
                     "Cost correction - {$item->name} {$liters} L at {$cost}");
-                $metadata['fuel_sales'][$item->fuel_category]['cogs'] = $right;
             }
 
             foreach ($metadata['tank_variances'] ?? [] as $i => $variance) {
@@ -82,7 +84,7 @@ class DailyCloseCostCorrectionService
                     $row['gain_delta'] += $delta;
                     $post($inventory, $accountFor('Fuel variance gain'), $delta, "Cost correction - {$item->name} tank gain at {$cost}");
                 }
-                $metadata['tank_variances'][$i]['amount'] = $right;
+                $row['variance_deltas'][$i] = $delta;
             }
 
             $summary['profit_effect'] += -$row['cogs_delta'] - $row['loss_delta'] + $row['gain_delta'];
@@ -94,12 +96,8 @@ class DailyCloseCostCorrectionService
             return $summary;
         }
 
-        $metadata['total_cogs'] = round(collect($metadata['fuel_sales'] ?? [])->sum('cogs'), 2);
-        $metadata['total_shrinkage'] = round(collect($metadata['tank_variances'] ?? [])->where('type', 'loss')->sum('amount'), 2);
-        $metadata['total_gain'] = round(collect($metadata['tank_variances'] ?? [])->where('type', 'gain')->sum('amount'), 2);
-
         $posted = null;
-        AccountingWriteTransaction::run(function () use ($close, $date, $entries, $metadata, $summary, &$posted) {
+        AccountingWriteTransaction::run(function () use ($close, $date, $entries, $summary, &$posted) {
             $transaction = app(GlPostingService::class)->postBalancedTransaction([
                 'company_id' => $close->company_id,
                 'transaction_type' => self::TYPE,
@@ -110,12 +108,82 @@ class DailyCloseCostCorrectionService
                 'reference_id' => $close->id,
                 'metadata' => ['close_id' => $close->id, 'lines' => $summary['lines']],
             ], $entries);
-            $metadata['cost_corrections'][] = ['transaction_id' => $transaction->id, 'at' => now()->toISOString(), 'profit_effect' => $summary['profit_effect']];
-            DB::table('acct.transactions')->where('id', $close->id)->update(['metadata' => json_encode($metadata)]);
             $posted = $transaction->transaction_number;
         });
         $summary['posted'] = $posted;
 
         return $summary;
+    }
+
+    /**
+     * Lays the corrections' differences over a close's figures: cost of sales per fuel, the tank
+     * gain/loss amounts and the totals. The close itself is never changed.
+     *
+     * @param array<int,array<string,mixed>> $corrections the correction journals' metadata
+     */
+    public function adjusted(array $metadata, array $corrections): array
+    {
+        if (empty($corrections)) {
+            return $metadata;
+        }
+        foreach ($corrections as $correction) {
+            foreach ($correction['lines'] ?? [] as $line) {
+                $category = $line['fuel_category'] ?? null;
+                if ($category && isset($metadata['fuel_sales'][$category])) {
+                    $metadata['fuel_sales'][$category]['cogs'] = round((float) $metadata['fuel_sales'][$category]['cogs'] + (float) ($line['cogs_delta'] ?? 0), 2);
+                }
+                foreach ($line['variance_deltas'] ?? [] as $i => $delta) {
+                    if (isset($metadata['tank_variances'][$i])) {
+                        $metadata['tank_variances'][$i]['amount'] = round((float) $metadata['tank_variances'][$i]['amount'] + (float) $delta, 2);
+                    }
+                }
+            }
+        }
+        $metadata['total_cogs'] = round(collect($metadata['fuel_sales'] ?? [])->sum('cogs'), 2);
+        if (isset($metadata['tank_variances'])) {
+            $metadata['total_shrinkage'] = round(collect($metadata['tank_variances'])->where('type', 'loss')->sum('amount'), 2);
+            $metadata['total_gain'] = round(collect($metadata['tank_variances'])->where('type', 'gain')->sum('amount'), 2);
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * Posted corrections for these closes, keyed by close id.
+     *
+     * @param array<int,string> $closeIds
+     * @return array<string,array<int,array<string,mixed>>>
+     */
+    public function correctionsFor(string $companyId, array $closeIds): array
+    {
+        if (empty($closeIds)) {
+            return [];
+        }
+
+        return Transaction::where('company_id', $companyId)
+            ->where('transaction_type', self::TYPE)
+            ->whereIn('reference_id', $closeIds)
+            ->whereIn('status', ['posted', 'locked'])
+            ->whereNull('deleted_at')
+            ->get(['reference_id', 'metadata'])
+            ->groupBy('reference_id')
+            ->map(fn ($rows) => $rows->map(fn ($t) => $t->metadata ?? [])->all())
+            ->all();
+    }
+
+    /**
+     * Swaps each loaded close's metadata for the corrected figures, in memory only (reports).
+     *
+     * @param iterable<Transaction> $closes
+     */
+    public function applyTo(string $companyId, iterable $closes): void
+    {
+        $closes = collect($closes);
+        $corrections = $this->correctionsFor($companyId, $closes->pluck('id')->all());
+        foreach ($closes as $close) {
+            if (isset($corrections[$close->id])) {
+                $close->setAttribute('metadata', $this->adjusted($close->metadata ?? [], $corrections[$close->id]));
+            }
+        }
     }
 }

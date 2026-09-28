@@ -33,6 +33,9 @@ class ProductProfitabilityReportService
             ->orderBy('transaction_date')
             ->get(['id', 'transaction_number', 'transaction_date', 'metadata']);
 
+        // Posted cost corrections (fuel:recost-closes) laid over each close's own figures.
+        app(DailyCloseCostCorrectionService::class)->applyTo($companyId, $transactions);
+
         $products = [];
         $periods = [];
         $rateChangeRows = [];

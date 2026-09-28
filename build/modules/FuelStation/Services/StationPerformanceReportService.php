@@ -32,6 +32,9 @@ class StationPerformanceReportService
             ->orderBy('transaction_date')
             ->get(['id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked']);
 
+        // Posted cost corrections (fuel:recost-closes) laid over each close's own figures.
+        app(DailyCloseCostCorrectionService::class)->applyTo($companyId, $transactions);
+
         // Net profit is the ledger's, the same figure the Profit & Loss shows for these days: it
         // also carries tank gains and losses, discounts, card charges, other income and
         // anything booked outside the close. Worked out here as gross minus expenses minus

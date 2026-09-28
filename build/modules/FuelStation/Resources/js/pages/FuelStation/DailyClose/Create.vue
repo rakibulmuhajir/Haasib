@@ -56,6 +56,7 @@ import {
     Wallet,
     Info,
     ChevronDown,
+    Tag,
 } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -502,7 +503,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     { title: 'Daily Close', href: `/${props.company.slug}/fuel/daily-close` },
 ]);
 
-const activeTab = ref('sales');
+const activeTab = ref('rates');
 const currencyCode = computed(() => props.company.base_currency || 'PKR');
 const partnerSearch = ref('');
 
@@ -568,7 +569,6 @@ const accountingHints = computed<Record<string, string>>(() =>
  * the current one is sent unchanged. The day's changes read "Petrol: +3.5 · Diesel: -4.3".
  */
 const rateItemId = ref('');
-const showRateChange = ref(false);
 const newSaleRate = ref<number | null>(null);
 const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
 watch(rateItemId, () => {
@@ -3028,7 +3028,7 @@ const tabsSaved = ref({
     moneyOut: false,
 });
 
-const tabSequence = ['sales', 'tanks', 'money-in', 'money-out', 'summary'];
+const tabSequence = ['rates', 'sales', 'tanks', 'money-in', 'money-out', 'summary'];
 
 const goToNextTab = (current: string) => {
     const index = tabSequence.indexOf(current);
@@ -3337,6 +3337,7 @@ const formatLiters = (liters: number, digits = 0) => {
 };
 
 const tabs = [
+    { id: 'rates', label: 'Rates & Purchases', icon: Tag },
     { id: 'sales', label: 'Fuel Sales', icon: Fuel },
     { id: 'tanks', label: 'Tank Dip', icon: Droplets },
     { id: 'money-in', label: 'Cash In', icon: Wallet },
@@ -3460,35 +3461,6 @@ const cashFlowOut = computed(() => [
                 <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Checkbox v-model="showPostings" /> Show postings
                 </label>
-                <!-- Rate change, first thing: pick a fuel, type its new sale rate, Apply. -->
-                <div v-if="fuelItems.length" class="flex w-full flex-wrap items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" class="h-8" @click="showRateChange = !showRateChange">Rate change</Button>
-                    <template v-if="showRateChange">
-                    <Select v-model="rateItemId">
-                        <SelectTrigger id="rate-fuel" class="h-8 w-36"><SelectValue placeholder="Select fuel" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <template v-if="rateItemId">
-                        <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-8 w-28" placeholder="New rate" />
-                        <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }}</span>
-                        <Button
-                            size="sm"
-                            class="h-8"
-                            :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
-                            @click="applyRate"
-                            >Apply</Button
-                        >
-                    </template>
-                    </template>
-                    <span v-if="props.rateChangesToday?.length" class="text-sm tabular-nums">
-                        <template v-for="(change, i) in props.rateChangesToday" :key="change.item_id">
-                            <span v-if="i > 0" class="text-muted-foreground"> · </span>
-                            <span class="font-medium">{{ change.name }}:</span> {{ signed(change.difference) }}
-                        </template>
-                    </span>
-                </div>
             </div>
         </template>
         <template #actions>
@@ -3585,7 +3557,7 @@ const cashFlowOut = computed(() => [
         <!-- Tabbed Content -->
         <Tabs v-model="activeTab" class="space-y-6">
             <TabsList
-                class="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-5"
+                class="grid h-auto w-full grid-cols-3 gap-1 md:grid-cols-6"
             >
                 <TabsTrigger
                     v-for="tab in tabs"
@@ -3599,7 +3571,43 @@ const cashFlowOut = computed(() => [
             </TabsList>
 
             <!-- Tab 1: Sales -->
-            <TabsContent value="sales">
+            <TabsContent value="rates">
+                <!-- Rates: a change applies from 00:00 of this day -->
+                <Card class="mb-4">
+                    <CardHeader>
+                        <CardTitle>Rates</CardTitle>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Select v-model="rateItemId">
+                                <SelectTrigger id="rate-fuel" class="h-9 w-44"><SelectValue placeholder="Select fuel" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <template v-if="rateItemId">
+                                <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-9 w-32" placeholder="New rate" aria-label="New sale rate" />
+                                <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }}</span>
+                                <Button
+                                    size="sm"
+                                    :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
+                                    @click="applyRate"
+                                    >Apply</Button
+                                >
+                            </template>
+                        </div>
+                        <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
+                            <span v-for="item in fuelItems" :key="item.id">
+                                <span class="font-medium">{{ item.name }}</span>
+                                {{ Number(props.rates?.[item.id]?.sale_rate ?? 0) }}
+                                <template v-for="change in (props.rateChangesToday ?? []).filter((c) => c.item_id === item.id)" :key="change.item_id">
+                                    <span class="text-muted-foreground">({{ signed(change.difference) }})</span>
+                                </template>
+                            </span>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <!-- Purchases / deliveries: before the meters, so the tanks tab counts them right away -->
                 <Card v-if="canEnterPurchases" class="mb-4">
                     <CardHeader class="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -3704,7 +3712,9 @@ const cashFlowOut = computed(() => [
                             </div>
                     </CardContent>
                 </Card>
+            </TabsContent>
 
+            <TabsContent value="sales">
                 <Card>
                     <CardHeader>
                         <div class="flex items-center justify-between gap-3">

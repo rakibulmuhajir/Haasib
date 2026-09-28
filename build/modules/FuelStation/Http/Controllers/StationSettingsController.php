@@ -126,6 +126,8 @@ class StationSettingsController extends Controller
             'payment_channels.*.clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'payment_channels.*.settles_to' => ['nullable', 'string', 'in:clearing,bank,supplier'],
             'payment_channels.*.settles_to_vendor_id' => ['nullable', 'uuid', Rule::exists(Vendor::class, 'id')],
+            // What the bank keeps of this channel's sales, e.g. 0.8 / 1 / 1.2 (% of the total).
+            'payment_channels.*.fee_percent' => ['nullable', 'numeric', 'min:0', 'max:10'],
             'cash_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'fuel_sales_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
             'fuel_cogs_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],

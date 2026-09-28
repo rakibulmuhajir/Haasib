@@ -370,3 +370,20 @@ test('a purchase bill paid on another screen is kept by Edit day and not created
     inlinePurchasePost($f);
     expect(Bill::where('company_id', $f['company']->id)->count())->toBe(1);
 });
+
+test('a card channel bank charge goes to POS/Bank Charges and the rest to the account', function () {
+    $f = inlinePurchaseFixture();
+    $charges = \App\Modules\Accounting\Models\Account::create([
+        'company_id' => $f['company']->id, 'code' => '6160', 'name' => 'POS/Bank Charges',
+        'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_active' => true,
+    ]);
+    $f['payload']['credit_sales'] = [];
+    $f['payload']['closing_cash'] = 31000;
+    $f['payload']['payment_receipts']['pos']['fee_percent'] = 1; // 1% of 9,000
+
+    $posted = inlinePurchasePost($f);
+
+    $lines = \App\Modules\Accounting\Models\JournalEntry::where('transaction_id', $posted['transaction_id'])->get();
+    expect((float) $lines->where('account_id', $charges->id)->sum('debit_amount'))->toBe(90.0)
+        ->and((float) $lines->where('account_id', $f['accounts']['1020']->id)->sum('debit_amount'))->toBe(8910.0);
+});

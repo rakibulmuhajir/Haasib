@@ -217,6 +217,21 @@ class DailyCloseService
      * Resolve the station's cash-on-hand account the same way resolveAccounts() does:
      * station settings first, then account code 1050, then any active cash-subtype account.
      */
+    /** The expense a card / wallet channel's bank charge posts to: POS / bank charges (6160). */
+    private function cardChargesAccountId(string $companyId): string
+    {
+        $id = Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)
+            ->where('type', 'expense')
+            ->where(fn ($q) => $q->where('code', '6160')->orWhere('name', 'ilike', '%bank charge%')->orWhere('name', 'ilike', '%pos%charge%'))
+            ->orderByRaw("case when code = '6160' then 0 else 1 end")
+            ->value('id');
+        if (! $id) {
+            throw new \RuntimeException('Card charges need an expense account: add "POS/Bank Charges" (6160) to the chart of accounts.');
+        }
+
+        return $id;
+    }
+
     public function cashAccountId(string $companyId): ?string
     {
         $stationSettings = StationSettings::where('company_id', $companyId)->first();
@@ -985,12 +1000,18 @@ class DailyCloseService
 
                     if ($channelType !== 'cash') {
                         $totalNonCashReceipts += $channelTotal;
+                        // The bank keeps a percentage of card / wallet sales: the day's own figure
+                        // if entered on the close, else the channel's setting. The sales stay
+                        // gross; the account receives the rest and the charge is an expense.
+                        $feePercent = (float) ($channelData['fee_percent'] ?? $channel['fee_percent'] ?? 0);
                         $paymentReceiptPostings[] = [
                             'channel_code' => $channelCode,
                             'channel_label' => $channel['label'] ?? $channelCode,
                             'channel_type' => $channelType,
                             'account_id' => $destinationAccountId,
                             'amount' => $channelTotal,
+                            'fee_percent' => $feePercent,
+                            'fee_amount' => round($channelTotal * $feePercent / 100, 2),
                         ];
                     }
 
@@ -1033,7 +1054,8 @@ class DailyCloseService
 
                 $vendorId = $channel['settles_to_vendor_id'] ?? null;
                 $clearingAccountId = $posting['account_id'];
-                $channelTotal = round((float) $posting['amount'], 2);
+                // What actually reached clearing: the sales less the bank's charge.
+                $channelTotal = round((float) $posting['amount'] - (float) ($posting['fee_amount'] ?? 0), 2);
                 if (!$vendorId || !$clearingAccountId || $channelTotal <= 0) {
                     continue;
                 }
@@ -1665,14 +1687,24 @@ class DailyCloseService
                 ];
             }
 
-            // Non-cash payment channels land in their configured clearing/bank accounts.
+            // Non-cash payment channels land in their configured clearing/bank accounts, less the
+            // bank's charge, which is an expense (POS / bank charges).
             foreach ($paymentReceiptPostings as $posting) {
+                $fee = round((float) ($posting['fee_amount'] ?? 0), 2);
                 $entries[] = [
                     'account_id' => $posting['account_id'],
                     'type' => 'debit',
-                    'amount' => round($posting['amount'], 2),
+                    'amount' => round($posting['amount'] - $fee, 2),
                     'description' => ($posting['channel_label'] ?? 'Payment channel') . ' receipts',
                 ];
+                if ($fee > 0) {
+                    $entries[] = [
+                        'account_id' => $this->cardChargesAccountId($companyId),
+                        'type' => 'debit',
+                        'amount' => $fee,
+                        'description' => ($posting['channel_label'] ?? 'Payment channel') . " charge {$posting['fee_percent']}%",
+                    ];
+                }
             }
 
             // Partner deposits (capital contributions)

@@ -158,7 +158,11 @@ const moneyOut = computed<Line[]>(() => {
     })
   }
   for (const r of (m.value.payment_receipt_postings || []) as any[]) {
-    if (n(r.amount)) lines.push({ label: r.channel_label ?? 'Card / bank sale', detail: `into ${accountName(r.account_id)}`, amount: n(r.amount) })
+    if (n(r.amount)) lines.push({
+      label: r.channel_label ?? 'Card / bank sale',
+      detail: [`into ${accountName(r.account_id)}`, n(r.fee_amount) ? `charge ${r.fee_percent}% ${round0(n(r.fee_amount)).toLocaleString()}` : null].filter(Boolean).join(' · '),
+      amount: n(r.amount),
+    })
   }
   for (const [id, amt] of Object.entries(m.value.bank_deposits_by_account || {})) lines.push({ label: 'Bank deposit', detail: accountName(id), amount: n(amt) })
   for (const p of (m.value.pay_supplier_details || []) as any[]) {

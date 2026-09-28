@@ -31,6 +31,8 @@ interface PaymentChannel {
   clearing_account_id: string | null
   settles_to?: 'clearing' | 'bank' | 'supplier'
   settles_to_vendor_id?: string | null
+  // Bank's charge on this channel's sales, % (e.g. 0.8, 1, 1.2)
+  fee_percent?: number | null
 }
 
 interface CompanyVendor {
@@ -180,6 +182,15 @@ const updateChannelAccount = (code: string, key: 'bank_account_id' | 'clearing_a
   const idx = channels.findIndex(ch => ch.code === code)
   if (idx !== -1) {
     channels[idx] = { ...channels[idx], [key]: value || null }
+    form.payment_channels = channels
+  }
+}
+
+const updateChannelFee = (code: string, value: string | number) => {
+  const channels = [...form.payment_channels]
+  const idx = channels.findIndex(ch => ch.code === code)
+  if (idx !== -1) {
+    channels[idx] = { ...channels[idx], fee_percent: value === '' || value === null ? null : Number(value) }
     form.payment_channels = channels
   }
 }
@@ -483,6 +494,22 @@ const formatFuelCategory = (category: string | null) => {
                   </SelectContent>
                 </Select>
                 <InputError :message="channelError(channelIndex, 'clearing_account_id')" />
+              </div>
+
+              <div v-if="['card_pos', 'fuel_card', 'mobile_wallet', 'bank_transfer'].includes(channel.type)" class="space-y-2">
+                <Label :for="`fee-${channel.code}`" class="text-xs">Bank charge %</Label>
+                <Input
+                  :id="`fee-${channel.code}`"
+                  :model-value="channel.fee_percent ?? ''"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.01"
+                  placeholder="0"
+                  class="w-28"
+                  @update:model-value="(v) => updateChannelFee(channel.code, v)"
+                />
+                <InputError :message="channelError(channelIndex, 'fee_percent')" />
               </div>
 
               <div v-if="['card_pos', 'fuel_card', 'mobile_wallet'].includes(channel.type)" class="space-y-2 md:col-span-2">

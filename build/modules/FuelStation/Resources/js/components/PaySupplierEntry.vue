@@ -48,7 +48,7 @@ const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
-        <h4 class="font-medium">Pay Supplier</h4>
+        <h4 class="font-medium">Pay Vendor</h4>
         <p class="text-xs text-muted-foreground">Pays open bills first, oldest first; anything more is held as an advance for the supplier's next bills.</p>
       </div>
       <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="addRow">
@@ -94,7 +94,7 @@ const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(
     </div>
 
     <div v-if="rows.length" class="flex justify-between text-sm font-medium">
-      <span>Total Pay Supplier</span>
+      <span>Total</span>
       <MoneyText :amount="totalAmount" :currency="currency ?? 'PKR'" />
     </div>
   </section>

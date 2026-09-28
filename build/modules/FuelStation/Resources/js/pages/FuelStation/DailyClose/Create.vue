@@ -15,6 +15,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import EntitySearch from '@/components/forms/EntitySearch.vue';
 import FloatingCalculator from '@/components/FloatingCalculator.vue';
+import CloseEntryList from '../../../components/CloseEntryList.vue';
 import {
     Dialog,
     DialogContent,
@@ -54,6 +55,7 @@ import {
     Trash2,
     Wallet,
     Info,
+    ChevronDown,
 } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -566,6 +568,7 @@ const accountingHints = computed<Record<string, string>>(() =>
  * the current one is sent unchanged. The day's changes read "Petrol: +3.5 · Diesel: -4.3".
  */
 const rateItemId = ref('');
+const showRateChange = ref(false);
 const newSaleRate = ref<number | null>(null);
 const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
 watch(rateItemId, () => {
@@ -1332,6 +1335,20 @@ const nozzleHasNoSale = (idx: number) => {
         && Number(row.closing_electronic) === Number(row.opening_electronic)
         && !row.meter_rolled_over;
 };
+// Pumps show folded to one line (litres x rate = amount, No sale); open one to type its meters.
+const openPumps = ref<Set<string>>(new Set());
+const isPumpOpen = (pumpId: string) => openPumps.value.has(pumpId);
+const togglePump = (pumpId: string) => {
+    const next = new Set(openPumps.value);
+    if (next.has(pumpId)) next.delete(pumpId);
+    else next.add(pumpId);
+    openPumps.value = next;
+};
+const showManualReadings = ref(false);
+const pumpRate = (indices: number[]) => Number(form.nozzle_readings[indices[0]]?.sale_rate || 0);
+const pumpHasNoSale = (indices: number[]) => indices.length > 0 && indices.every((idx) => nozzleHasNoSale(idx));
+const setPumpNoSale = (indices: number[], noSale: boolean) => indices.forEach((idx) => setNoSale(idx, noSale));
+
 const setNoSale = (idx: number, noSale: boolean) => {
     const row = form.nozzle_readings[idx];
     row.meter_rolled_over = false;
@@ -1407,22 +1424,36 @@ const purchaseError = (index: number, field: string) =>
  * Automatic lists (approved salaries, pending supplier payments) are not part of this.
  */
 const openedSections = ref<Set<string>>(new Set());
-const sectionRowCount: Record<string, () => number> = {
-    payments_received: () => form.payments_received.length,
-    partner_deposits: () => form.partner_deposits.length,
-    amanat_deposits: () => form.amanat_deposits.length,
-    other_deposits: () => form.other_deposits.length,
-    bank_withdrawals: () => form.bank_withdrawals.length,
-    credit_sales: () => form.credit_sales.length,
-    channels: () => Object.values(form.payment_receipts || {}).reduce((n, r: any) => n + (r?.entries?.length ?? 0), 0),
-    bank_deposits: () => form.bank_deposits.length,
-    partner_withdrawals: () => form.partner_withdrawals.length,
-    employee_advances: () => form.employee_advances.length,
-    pay_suppliers: () => form.pay_suppliers.length,
-    amanat_disbursements: () => form.amanat_disbursements.length,
-    expenses: () => form.expenses.length,
+
+// Card / wallet channels, each its own entry named as in Station settings (bank transfer is
+// not taken on the close). Keyed "channel:<code>".
+const cardChannels = computed(() => enabledChannels.value.filter((ch) => ['card_pos', 'fuel_card', 'mobile_wallet'].includes(ch.type)));
+const channelKey = (code: string) => `channel:${code}`;
+const channelOfKey = (key: string) => key.startsWith('channel:') ? cardChannels.value.find((ch) => channelKey(ch.code) === key) : undefined;
+const channelEntries = (code: string) => ((form.payment_receipts as any)[code]?.entries || []) as any[];
+
+const sumAmounts = (rows: any[]) => (rows || []).reduce((sum, r) => sum + Number(r?.amount || 0), 0);
+const listOf: Record<string, () => any[]> = {
+    payments_received: () => form.payments_received,
+    partner_deposits: () => form.partner_deposits,
+    amanat_deposits: () => form.amanat_deposits,
+    other_deposits: () => form.other_deposits,
+    bank_withdrawals: () => form.bank_withdrawals,
+    credit_sales: () => form.credit_sales,
+    bank_deposits: () => form.bank_deposits,
+    partner_withdrawals: () => form.partner_withdrawals,
+    employee_advances: () => form.employee_advances,
+    pay_suppliers: () => form.pay_suppliers,
+    amanat_disbursements: () => form.amanat_disbursements,
+    expenses: () => form.expenses,
 };
-const showSection = (key: string) => openedSections.value.has(key) || (sectionRowCount[key]?.() ?? 0) > 0;
+const rowsOf = (key: string) => {
+    const channel = channelOfKey(key);
+    return channel ? channelEntries(channel.code) : (listOf[key]?.() ?? []);
+};
+const sectionRowCount = new Proxy({} as Record<string, () => number>, { get: (_t, key: string) => () => rowsOf(key).length });
+const sectionTotal = new Proxy({} as Record<string, () => number>, { get: (_t, key: string) => () => sumAmounts(rowsOf(key)) });
+const showSection = (key: string) => openedSections.value.has(key) || rowsOf(key).length > 0;
 
 /**
  * Cash In / Cash Out work like a stack: the entry picked last opens right under the dropdown,
@@ -1432,42 +1463,57 @@ const showSection = (key: string) => openedSections.value.has(key) || (sectionRo
  */
 const tabOfSection: Record<string, 'in' | 'out'> = {
     payments_received: 'in', partner_deposits: 'in', amanat_deposits: 'in', other_deposits: 'in', bank_withdrawals: 'in',
-    credit_sales: 'out', channels: 'out', bank_deposits: 'out', partner_withdrawals: 'out', employee_advances: 'out',
+    credit_sales: 'out', bank_deposits: 'out', partner_withdrawals: 'out', employee_advances: 'out',
     pay_suppliers: 'out', amanat_disbursements: 'out', expenses: 'out',
 };
-const sumAmounts = (rows: any[]) => rows.reduce((sum, r) => sum + Number(r?.amount || 0), 0);
-const sectionTotal: Record<string, () => number> = {
-    payments_received: () => sumAmounts(form.payments_received),
-    partner_deposits: () => sumAmounts(form.partner_deposits),
-    amanat_deposits: () => sumAmounts(form.amanat_deposits),
-    other_deposits: () => sumAmounts(form.other_deposits),
-    bank_withdrawals: () => sumAmounts(form.bank_withdrawals),
-    credit_sales: () => sumAmounts(form.credit_sales),
-    channels: () => Number(totalNonCashReceipts.value || 0),
-    bank_deposits: () => sumAmounts(form.bank_deposits),
-    partner_withdrawals: () => sumAmounts(form.partner_withdrawals),
-    employee_advances: () => sumAmounts(form.employee_advances),
-    pay_suppliers: () => sumAmounts(form.pay_suppliers),
-    amanat_disbursements: () => sumAmounts(form.amanat_disbursements),
-    expenses: () => sumAmounts(form.expenses),
-};
+const tabOf = (key: string): 'in' | 'out' => (key.startsWith('channel:') ? 'out' : tabOfSection[key]);
+const allSectionKeys = computed(() => [...Object.keys(tabOfSection), ...cardChannels.value.map((ch) => channelKey(ch.code))]);
 const activeSection = reactive<{ in: string; out: string }>({ in: '', out: '' });
 const sectionRecency = ref<string[]>([]);
-const isExpanded = (key: string) => activeSection[tabOfSection[key]] === key;
+const isExpanded = (key: string) => activeSection[tabOf(key)] === key;
 const expandSection = (key: string) => {
-    activeSection[tabOfSection[key]] = key;
+    activeSection[tabOf(key)] = key;
     sectionRecency.value = [key, ...sectionRecency.value.filter((k) => k !== key)];
 };
 const collapsedFor = (tab: 'in' | 'out') => {
-    const used = Object.keys(tabOfSection).filter((k) => tabOfSection[k] === tab && showSection(k) && !isExpanded(k));
+    const keys = allSectionKeys.value;
+    const used = keys.filter((k) => tabOf(k) === tab && showSection(k) && !isExpanded(k));
     const rank = (k: string) => {
         const i = sectionRecency.value.indexOf(k);
-        return i === -1 ? 1000 + Object.keys(tabOfSection).indexOf(k) : i;
+        return i === -1 ? 1000 + keys.indexOf(k) : i;
     };
     return used.sort((a, b) => rank(a) - rank(b));
 };
-const sectionLabel = (key: string) =>
-    [...entryOptions.value.in, ...entryOptions.value.out].find((o) => o.key === key)?.label ?? key;
+
+// Choices for the second dropdown and for each row's "who / what".
+const partnerOptions = computed(() => props.partners.map((p) => ({ id: p.id, name: p.name })));
+const holderOptions = computed(() => props.amanatHolders.map((h) => ({ id: h.id, name: h.name })));
+const bankOptions = computed(() => props.bankAccounts.map((b) => ({ id: b.id, name: b.name })));
+const paymentAccountOptions = computed(() => ((props as any).paymentAccounts ?? []).map((a: any) => ({ id: a.id, name: a.name })));
+const employeeOptions = computed(() => props.employees.map((e) => ({ id: e.id, name: e.full_name || `${e.first_name} ${e.last_name}` })));
+const expenseOptions = computed(() => props.expenseAccounts.map((a) => ({ id: a.id, name: a.name })));
+const otherTypeOptions = computed(() => otherDepositTypes.map((t) => ({ id: t.value, name: t.label })));
+const otherAccountOptions = computed(() => props.otherDepositAccounts.map((a) => ({ id: a.id, name: `${a.code} — ${a.name}` })));
+const vendorOptions = computed(() => (props.purchaseSuppliers ?? []).map((v) => ({ id: v.id, name: v.name })));
+
+/** The row field the second dropdown fills, per entry: [field, name field, options]. */
+const partyOf = computed<Record<string, { key: string; nameKey?: string; options: Array<{ id: string; name: string }> }>>(() => ({
+    partner_deposits: { key: 'partner_id', nameKey: 'partner_name', options: partnerOptions.value },
+    amanat_deposits: { key: 'customer_id', nameKey: 'customer_name', options: holderOptions.value },
+    other_deposits: { key: 'deposit_type', options: otherTypeOptions.value },
+    bank_withdrawals: { key: 'bank_account_id', options: bankOptions.value },
+    bank_deposits: { key: 'bank_account_id', options: bankOptions.value },
+    partner_withdrawals: { key: 'partner_id', nameKey: 'partner_name', options: partnerOptions.value },
+    employee_advances: { key: 'employee_id', nameKey: 'employee_name', options: employeeOptions.value },
+    amanat_disbursements: { key: 'customer_id', nameKey: 'customer_name', options: holderOptions.value },
+    expenses: { key: 'account_id', nameKey: 'account_name', options: expenseOptions.value },
+    pay_suppliers: { key: 'vendor_id', nameKey: 'vendor_name', options: vendorOptions.value },
+}));
+const holderBalance = (row: any) => {
+    const holder = props.amanatHolders.find((h) => h.id === row.customer_id);
+    if (holder) row.available_balance = holder.amanat_balance;
+};
+
 const sectionAdders: Record<string, () => void> = {
     payments_received: () => form.payments_received.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' }),
     partner_deposits: () => addPartnerDeposit(),
@@ -1482,12 +1528,40 @@ const sectionAdders: Record<string, () => void> = {
     amanat_disbursements: () => addAmanat(),
     expenses: () => addExpense(),
 };
-const openSection = (key: string) => {
+/** Add a row to an entry (and fill its "who / what" when picked in the second dropdown). */
+const openSection = (key: string, partyId = '') => {
     if (!key) return;
     openedSections.value = new Set([...openedSections.value, key]);
-    sectionAdders[key]?.();
-    if (tabOfSection[key]) expandSection(key);
+    const channel = channelOfKey(key);
+    if (channel) addPaymentEntry(channel.code);
+    else sectionAdders[key]?.();
+    const party = partyOf.value[key];
+    const rows = rowsOf(key);
+    if (party && partyId && rows.length) {
+        const row = rows[rows.length - 1];
+        row[party.key] = partyId;
+        if (party.nameKey) row[party.nameKey] = party.options.find((o) => o.id === partyId)?.name ?? '';
+        if (key === 'amanat_deposits' || key === 'amanat_disbursements') holderBalance(row);
+    }
+    if (tabOf(key)) expandSection(key);
 };
+
+// The two dropdowns of each money tab: what, then (when it has one) who / which account.
+const picker = reactive<{ in: { kind: string }; out: { kind: string } }>({ in: { kind: '' }, out: { kind: '' } });
+const pickKind = (tab: 'in' | 'out', kind: string) => {
+    if (partyOf.value[kind]?.options.length) {
+        picker[tab].kind = kind; // wait for the second dropdown
+        return;
+    }
+    picker[tab].kind = '';
+    openSection(kind);
+};
+const pickParty = (tab: 'in' | 'out', partyId: string) => {
+    const kind = picker[tab].kind;
+    picker[tab].kind = '';
+    openSection(kind, partyId);
+};
+
 const entryOptions = computed(() => {
     const partners = props.features.has_partners && props.partners.length > 0;
     const amanat = props.features.has_amanat;
@@ -1500,18 +1574,19 @@ const entryOptions = computed(() => {
             { key: 'other_deposits', label: 'Other cash in' },
         ],
         out: [
-            { key: 'credit_sales', label: 'Credit sale' },
-            ...(enabledChannels.value.some((ch) => ch.type !== 'cash') ? [{ key: 'channels', label: 'Card / bank / wallet sales' }] : []),
+            { key: 'credit_sales', label: 'Sale' },
+            ...cardChannels.value.map((ch) => ({ key: channelKey(ch.code), label: ch.label })),
             { key: 'expenses', label: 'Expense' },
             { key: 'bank_deposits', label: 'Bank deposit' },
-            { key: 'pay_suppliers', label: 'Pay supplier' },
-            { key: 'employee_advances', label: 'Salary advance' },
+            { key: 'pay_suppliers', label: 'Pay Vendor' },
+            { key: 'employee_advances', label: 'Employee advance' },
             ...(partners ? [{ key: 'partner_withdrawals', label: 'Partner withdrawal' }] : []),
             ...(amanat ? [{ key: 'amanat_disbursements', label: 'Amanat withdrawal' }] : []),
         ],
-
     };
 });
+const sectionLabel = (key: string) =>
+    [...entryOptions.value.in, ...entryOptions.value.out].find((o) => o.key === key)?.label ?? key;
 
 /**
  * Purchases (first tab): one purchase is one supplier bill. Tick the products on it and each
@@ -3352,13 +3427,7 @@ const cashFlowOut = computed(() => [
                         title="The register day being closed. Close each day the next morning, after the tank dip. Entry time is recorded separately."
                         >Date</Label
                     >
-                    <Button type="button" variant="outline" size="sm" class="h-8 px-2" :title="`Previous day${dayHasDraft(shiftedDate(-1)) ? ' (has a draft)' : ''}`" aria-label="Previous day" @click="goToDay(-1)">
-                        ‹<span v-if="dayHasDraft(shiftedDate(-1))" class="ml-0.5 text-status-attention">•</span>
-                    </Button>
                     <Input id="business-date" v-model="form.date" data-testid="business-date" type="date" class="h-8 w-40" />
-                    <Button type="button" variant="outline" size="sm" class="h-8 px-2" :title="`Next day${dayHasDraft(shiftedDate(1)) ? ' (has a draft)' : ''}`" aria-label="Next day" @click="goToDay(1)">
-                        <span v-if="dayHasDraft(shiftedDate(1))" class="mr-0.5 text-status-attention">•</span>›
-                    </Button>
                     <Link :href="`/${props.company.slug}/fuel/daily-close`" class="text-xs text-primary underline-offset-2 hover:underline">Next to close</Link>
                 </div>
                 <span class="text-muted-foreground">
@@ -3393,7 +3462,8 @@ const cashFlowOut = computed(() => [
                 </label>
                 <!-- Rate change, first thing: pick a fuel, type its new sale rate, Apply. -->
                 <div v-if="fuelItems.length" class="flex w-full flex-wrap items-center gap-2">
-                    <Label for="rate-fuel">Rate change</Label>
+                    <Button type="button" variant="outline" size="sm" class="h-8" @click="showRateChange = !showRateChange">Rate change</Button>
+                    <template v-if="showRateChange">
                     <Select v-model="rateItemId">
                         <SelectTrigger id="rate-fuel" class="h-8 w-36"><SelectValue placeholder="Select fuel" /></SelectTrigger>
                         <SelectContent>
@@ -3410,6 +3480,7 @@ const cashFlowOut = computed(() => [
                             @click="applyRate"
                             >Apply</Button
                         >
+                    </template>
                     </template>
                     <span v-if="props.rateChangesToday?.length" class="text-sm tabular-nums">
                         <template v-for="(change, i) in props.rateChangesToday" :key="change.item_id">
@@ -3430,18 +3501,10 @@ const cashFlowOut = computed(() => [
                 <FileWarning class="mr-2 h-4 w-4" />
                 Fill test data
             </Button>
-            <Button
-                v-if="!isAmendmentMode"
-                variant="outline"
-                size="sm"
-                :disabled="submitting"
-                @click="parkDailyClose"
-                >Park / Save draft</Button
-            >
         </template>
 
         <InputError v-if="nozzleErrorMessage" class="mb-4" :message="nozzleErrorMessage" />
-        <FloatingCalculator />
+        <FloatingCalculator bottom="4.5rem" />
 
         <!-- Draft Restore Dialog -->
         <Dialog
@@ -3644,11 +3707,12 @@ const cashFlowOut = computed(() => [
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Fuel Sales</CardTitle>
-                        <CardDescription
-                            >Enter opening and closing readings for each active
-                            nozzle.</CardDescription
-                        >
+                        <div class="flex items-center justify-between gap-3">
+                            <CardTitle>Fuel Sales</CardTitle>
+                            <Button variant="outline" size="sm" @click="showManualReadings = !showManualReadings">
+                                {{ showManualReadings ? 'Hide manual readings' : 'Show manual readings' }}
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Empty State: No nozzles configured -->
@@ -3684,39 +3748,34 @@ const cashFlowOut = computed(() => [
                                 :key="pump.pump_id"
                                 class="rounded-lg border"
                             >
-                                <!-- Pump Header -->
+                                <!-- Pump line: folded by default; click to type its meters -->
                                 <div
-                                    class="flex items-center justify-between border-b bg-muted/40 px-5 py-3"
+                                    class="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3"
+                                    :class="isPumpOpen(pump.pump_id) ? 'border-b bg-muted/40' : ''"
+                                    @click="togglePump(pump.pump_id)"
                                 >
                                     <div class="flex items-center gap-3">
-                                        <div class="text-base font-semibold">
-                                            {{ pump.pump_name }}
-                                        </div>
-                                        <span
-                                            class="text-sm text-muted-foreground"
-                                            >{{ pump.fuel_name }}</span
-                                        >
+                                        <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isPumpOpen(pump.pump_id) ? '' : '-rotate-90'" />
+                                        <span class="font-semibold">{{ pump.pump_name }}</span>
+                                        <span class="text-sm text-muted-foreground">{{ pump.fuel_name }}</span>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="text-sm text-muted-foreground"
-                                            >Total:</span
-                                        >
-                                        <span class="text-lg font-bold"
-                                            ><MoneyText
-                                                :amount="
-                                                    getPumpTotalAmount(
-                                                        pump.nozzle_indices,
-                                                    )
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                    <div class="flex items-center gap-4 text-sm tabular-nums">
+                                        <span>
+                                            {{ getPumpTotalLiters(pump.nozzle_indices).toFixed(0) }} L × {{ pumpRate(pump.nozzle_indices) }} =
+                                            <MoneyText class="font-semibold" :amount="getPumpTotalAmount(pump.nozzle_indices)" :currency="currencyCode" :fraction-digits="0" />
+                                        </span>
+                                        <label class="flex items-center gap-1.5 text-xs" @click.stop>
+                                            <Checkbox
+                                                :model-value="pumpHasNoSale(pump.nozzle_indices)"
+                                                @update:model-value="(v) => setPumpNoSale(pump.nozzle_indices, v === true)"
+                                            />
+                                            No sale
+                                        </label>
                                     </div>
                                 </div>
 
                                 <!-- Automatic Readings Row - Both nozzles in one row -->
-                                <div class="px-5 py-4">
+                                <div v-if="isPumpOpen(pump.pump_id)" class="px-5 py-4">
                                     <!-- Header Row -->
                                     <div
                                         class="mb-3 grid grid-cols-[3.5rem_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_4rem] gap-3 text-xs font-medium text-muted-foreground"
@@ -3856,10 +3915,6 @@ const cashFlowOut = computed(() => [
                                                     step="1"
                                                     class="h-9 text-right font-semibold"
                                                 />
-                                                <p class="mt-1 text-xs text-muted-foreground">
-                                                    Type litres or the closing meter — the
-                                                    other fills in.
-                                                </p>
                                                 <!-- Fuel run through the pump for a calibration test and poured
                                                      straight back into the tank. Net zero for stock and money -
                                                      only the meter moved - so it must not read as a sale. -->
@@ -3965,6 +4020,7 @@ const cashFlowOut = computed(() => [
 
                                     <!-- Manual Readings (optional) -->
                                     <div
+                                        v-if="showManualReadings"
                                         class="mt-4 border-t border-dashed pt-4"
                                     >
                                         <div
@@ -4506,27 +4562,6 @@ const cashFlowOut = computed(() => [
                             </div>
                         </div>
 
-                        <!-- Footer with Submit -->
-                        <div class="flex justify-end">
-                            <Button
-                                @click="saveSales"
-                                :variant="
-                                    tabsSaved.sales ? 'outline' : 'default'
-                                "
-                                class="min-w-32"
-                            >
-                                <CheckCircle
-                                    v-if="tabsSaved.sales"
-                                    class="mr-2 h-4 w-4 text-status-success"
-                                />
-                                <Save v-else class="mr-2 h-4 w-4" />
-                                {{
-                                    tabsSaved.sales
-                                        ? 'Saved'
-                                        : 'Save Fuel Sales'
-                                }}
-                            </Button>
-                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -5062,27 +5097,6 @@ const cashFlowOut = computed(() => [
 
                             <Separator />
 
-                            <!-- Submit Button -->
-                            <div class="flex justify-end">
-                                <Button
-                                    @click="saveTanks"
-                                    :variant="
-                                        tabsSaved.tanks ? 'outline' : 'default'
-                                    "
-                                    class="min-w-32"
-                                >
-                                    <CheckCircle
-                                        v-if="tabsSaved.tanks"
-                                        class="mr-2 h-4 w-4 text-status-success"
-                                    />
-                                    <Save v-else class="mr-2 h-4 w-4" />
-                                    {{
-                                        tabsSaved.tanks
-                                            ? 'Saved'
-                                            : 'Save Tank Dip'
-                                    }}
-                                </Button>
-                            </div>
                         </template>
                     </CardContent>
                 </Card>
@@ -5099,34 +5113,18 @@ const cashFlowOut = computed(() => [
                         >
                     </CardHeader>
                     <CardContent class="flex flex-col gap-6">
-                        <!-- Opening Cash -->
-                        <div class="rounded-lg bg-muted/50 p-4" style="order: -3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <Label>Opening Cash Balance</Label>
-                                    <p class="text-xs text-muted-foreground">
-                                        Carried forward from previous day
-                                    </p>
-                                </div>
-                                <div class="w-48">
-                                    <Input
-                                        v-model.number="form.opening_cash" data-testid="opening-cash" aria-label="Opening cash balance"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                        class="text-right text-lg font-semibold"
-                                    />
-                                    <InputError
-                                        :message="form.errors.opening_cash"
-                                    />
-                                </div>
-                            </div>
-                        </div>
 
                         <div class="flex flex-wrap items-center gap-2" style="order: -2">
-                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
+                            <Select :model-value="picker.in.kind" @update:model-value="(v) => pickKind('in', String(v))">
+                                <SelectTrigger class="h-9 w-60"><SelectValue placeholder="+ Add cash in…" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="option in entryOptions.in" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select v-if="picker.in.kind" :model-value="''" @update:model-value="(v) => pickParty('in', String(v))">
+                                <SelectTrigger class="h-9 w-60"><SelectValue placeholder="Choose…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="o in partyOf[picker.in.kind]?.options ?? []" :key="o.id" :value="o.id">{{ o.name }}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -5158,548 +5156,89 @@ const cashFlowOut = computed(() => [
                             :payment-accounts="(props as any).paymentAccounts ?? []"
                             :currency="currencyCode"
                         />
-                        <div class="rounded-lg border p-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <Label>Meter & lubricant sales</Label>
-                                    <p class="text-xs text-muted-foreground">
-                                        Fuel + other sales, including card /
-                                        bank sales (moved to Money Out)
-                                    </p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.fuelSales }}
-                                    </p>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-lg font-semibold">
-                                        <MoneyText
-                                            :amount="totalSales"
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- Partner Deposits (only if partners feature enabled) -->
                         <template
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                            <div v-if="isExpanded('partner_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-medium">
-                                            Partner Deposits
-                                        </h4>
-                                        <p
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{ accountingHints.partnerDeposit }}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        @click="addPartnerDeposit"
-                                    >
-                                        <Plus class="mr-1 h-4 w-4" /> Add
-                                    </Button>
-                                </div>
-
-                                <Input
-                                    v-model="partnerSearch"
-                                    placeholder="Search partners by name"
-                                    class="max-w-sm"
-                                />
-
-                                <div
-                                    v-for="(
-                                        deposit, index
-                                    ) in form.partner_deposits"
-                                    :key="rowKey(deposit)"
-                                    class="flex items-end gap-4"
-                                >
-                                    <div class="flex-1">
-                                        <Label class="text-xs">Partner</Label>
-                                        <Select
-                                            v-model="deposit.partner_id"
-                                            @update:model-value="
-                                                setPartnerName(
-                                                    index,
-                                                    'deposits',
-                                                )
-                                            "
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue
-                                                    placeholder="Select partner"
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="p in filteredPartners"
-                                                    :key="p.id"
-                                                    :value="p.id"
-                                                >
-                                                    {{ p.name }} · Capital
-                                                    <MoneyText
-                                                        :amount="p.net_capital"
-                                                        :currency="currencyCode"
-                                                        :fraction-digits="0"
-                                                    />
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p
-                                            v-if="
-                                                getPartner(deposit.partner_id)
-                                            "
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            Current capital:
-                                            <MoneyText
-                                                :amount="
-                                                    getPartner(
-                                                        deposit.partner_id,
-                                                    )?.net_capital || 0
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                        </p>
-                                        <InputError
-                                            :message="
-                                                partnerDepositError(
-                                                    index,
-                                                    'partner_id',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <div class="w-32">
-                                        <Label class="text-xs">Amount</Label>
-                                        <Input
-                                            v-model.number="deposit.amount"
-                                            type="number"
-                                            @focus="selectZeroValue"
-                                        />
-                                        <InputError
-                                            :message="
-                                                partnerDepositError(
-                                                    index,
-                                                    'amount',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="removePartnerDeposit(index)"
-                                    >
-                                        <Trash2
-                                            class="h-4 w-4 text-destructive"
-                                        />
-                                    </Button>
-                                </div>
+                        <div v-if="isExpanded('partner_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Partner deposits</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['partner_deposits']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
+                            <CloseEntryList
+                                v-model="form.partner_deposits"
+                                :party="{ key: 'partner_id', nameKey: 'partner_name', label: 'Partner', options: partnerOptions }"
+                                errors-prefix="partner_deposits"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('partner_deposits')">+ Add another</button>
+                        </div>
+
                         </template>
 
 
                         <template v-if="features.has_amanat">
-                            <div v-if="isExpanded('amanat_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-medium">
-                                            Amanat Deposits
-                                        </h4>
-                                        <p
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{ accountingHints.amanatDeposit }}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        :disabled="
-                                            props.amanatHolders.length === 0
-                                        "
-                                        @click="addAmanatDeposit"
-                                    >
-                                        <Plus class="mr-1 h-4 w-4" /> Add
-                                    </Button>
-                                </div>
-
-                                <div
-                                    v-if="props.amanatHolders.length === 0"
-                                    class="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
-                                >
-                                    <div
-                                        class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <span
-                                            >No Amanat depositors are available
-                                            for deposits yet.</span
-                                        >
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            as-child
-                                        >
-                                            <Link
-                                                :href="`/${company.slug}/fuel/amanat`"
-                                                >Add Amanat depositor</Link
-                                            >
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div
-                                    v-for="(
-                                        deposit, index
-                                    ) in form.amanat_deposits"
-                                    :key="rowKey(deposit)"
-                                    class="grid grid-cols-12 items-end gap-3"
-                                >
-                                    <div class="col-span-5">
-                                        <Label class="text-xs">Depositor</Label>
-                                        <Select
-                                            v-model="deposit.customer_id"
-                                            :disabled="
-                                                props.amanatHolders.length === 0
-                                            "
-                                            @update:model-value="
-                                                setAmanatDepositCustomer(index)
-                                            "
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue
-                                                    placeholder="Select depositor"
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="holder in props.amanatHolders"
-                                                    :key="holder.id"
-                                                    :value="holder.id"
-                                                >
-                                                    {{ holder.name }} · Balance
-                                                    <MoneyText
-                                                        :amount="
-                                                            holder.amanat_balance
-                                                        "
-                                                        :currency="currencyCode"
-                                                        :fraction-digits="0"
-                                                    />
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError
-                                            :message="
-                                                amanatDepositError(
-                                                    index,
-                                                    'customer_id',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <div class="col-span-3">
-                                        <Label class="text-xs">Receive into</Label>
-                                        <Select v-model="deposit.payment_account_id">
-                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
-                                            <SelectContent>
-                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
-                                                    {{ account.code }} - {{ account.name }}
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError :message="amanatDepositError(index, 'payment_account_id')" />
-                                    </div>
-                                    <div class="col-span-3">
-                                        <Label class="text-xs">Reference</Label>
-                                        <Input
-                                            v-model="deposit.reference"
-                                            placeholder="Optional"
-                                        />
-                                        <InputError
-                                            :message="
-                                                amanatDepositError(
-                                                    index,
-                                                    'reference',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <div class="col-span-3">
-                                        <Label class="text-xs">Amount</Label>
-                                        <Input
-                                            v-model.number="deposit.amount"
-                                            type="number"
-                                            @focus="selectZeroValue"
-                                        />
-                                        <InputError
-                                            :message="
-                                                amanatDepositError(
-                                                    index,
-                                                    'amount',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="removeAmanatDeposit(index)"
-                                    >
-                                        <Trash2
-                                            class="h-4 w-4 text-destructive"
-                                        />
-                                    </Button>
-                                </div>
+                        <div v-if="isExpanded('amanat_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Amanat deposits</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['amanat_deposits']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
+                            <CloseEntryList
+                                v-model="form.amanat_deposits"
+                                :party="{ key: 'customer_id', nameKey: 'customer_name', label: 'Depositor', options: holderOptions }"
+                                :extra="{ key: 'payment_account_id', label: 'Into', placeholder: 'Cash on Hand', options: paymentAccountOptions }"
+                                :text="{ key: 'reference', label: 'Reference' }"
+                                :on-party="holderBalance"
+                                :hint="(row: any) => row.customer_id ? `Balance ${formatMoneyText(Number(row.available_balance ?? 0), currencyCode)}` : null"
+                                errors-prefix="amanat_deposits"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('amanat_deposits')">+ Add another</button>
+                        </div>
+
 
                         </template>
 
-                        <div v-if="isExpanded('other_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">Other Cash In</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.otherDeposit }}
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addOtherDeposit"
-                                >
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
+                        <div v-if="isExpanded('other_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Other cash in</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['other_deposits']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
-
-                            <div
-                                v-for="(deposit, index) in form.other_deposits"
-                                :key="rowKey(deposit)"
-                                class="grid grid-cols-12 items-end gap-3"
-                            >
-                                <div class="col-span-3">
-                                    <Label class="text-xs">Type</Label>
-                                    <Select v-model="deposit.deposit_type">
-                                        <SelectTrigger>
-                                            <SelectValue
-                                                placeholder="Select type"
-                                            />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="type in otherDepositTypes"
-                                                :key="type.value"
-                                                :value="type.value"
-                                            >
-                                                {{ type.label }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        :message="
-                                            otherDepositError(
-                                                index,
-                                                'deposit_type',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div class="col-span-4">
-                                    <Label class="text-xs">Account</Label>
-                                    <Select
-                                        v-model="deposit.account_id"
-                                        :disabled="
-                                            deposit.deposit_type ===
-                                            'loss_compensation'
-                                        "
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue
-                                                :placeholder="
-                                                    deposit.deposit_type ===
-                                                    'loss_compensation'
-                                                        ? 'Cash Over/Short'
-                                                        : 'Select account'
-                                                "
-                                            />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="account in props.otherDepositAccounts"
-                                                :key="account.id"
-                                                :value="account.id"
-                                            >
-                                                {{ account.code }} —
-                                                {{ account.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        :message="
-                                            otherDepositError(
-                                                index,
-                                                'account_id',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div class="col-span-3">
-                                    <Label class="text-xs">Description</Label>
-                                    <Input
-                                        v-model="deposit.description"
-                                        :placeholder="
-                                            getOtherDepositTypeLabel(
-                                                deposit.deposit_type,
-                                            )
-                                        "
-                                    />
-                                    <InputError
-                                        :message="
-                                            otherDepositError(
-                                                index,
-                                                'description',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div class="col-span-1">
-                                    <Label class="text-xs">Amount</Label>
-                                    <Input
-                                        v-model.number="deposit.amount"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                    />
-                                    <InputError
-                                        :message="
-                                            otherDepositError(index, 'amount')
-                                        "
-                                    />
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    @click="removeOtherDeposit(index)"
-                                >
-                                    <Trash2 class="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
+                            <CloseEntryList
+                                v-model="form.other_deposits"
+                                :party="{ key: 'deposit_type', label: 'Type', options: otherTypeOptions }"
+                                :extra="{ key: 'account_id', label: 'Account', placeholder: 'Account', options: otherAccountOptions, disabled: (row: any) => row.deposit_type === 'loss_compensation' }"
+                                :text="{ key: 'description', label: 'Description' }"
+                                errors-prefix="other_deposits"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('other_deposits')">+ Add another</button>
                         </div>
 
 
-                        <div v-if="isExpanded('bank_withdrawals')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">Cash Withdrawn from Bank</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        Cash collected from your bank and added to the station drawer.
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addBankWithdrawal"
-                                >
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
-                            </div>
 
-                            <div
-                                v-for="(deposit, index) in form.bank_withdrawals"
-                                :key="rowKey(deposit)"
-                                class="grid grid-cols-5 items-end gap-4"
-                            >
-                                <div>
-                                    <Label class="text-xs">Bank Account</Label>
-                                    <Select v-model="deposit.bank_account_id">
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="b in bankAccounts"
-                                                :key="b.id"
-                                                :value="b.id"
-                                                >{{ b.name }}</SelectItem
-                                            >
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        :message="
-                                            bankWithdrawalError(
-                                                index,
-                                                'bank_account_id',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <p
-                                    v-if="deposit.bank_account_id"
-                                    class="order-last col-span-5 -mt-2 text-xs text-muted-foreground"
-                                >
-                                    Balance
-                                    <MoneyText :amount="bankAccounts.find((b) => b.id === deposit.bank_account_id)?.balance ?? 0" :currency="currencyCode" :fraction-digits="0" />
-                                    → after this close
-                                    <MoneyText
-                                        :amount="bankBalanceAfterClose(deposit.bank_account_id)"
-                                        :currency="currencyCode"
-                                        :fraction-digits="0"
-                                        :class="bankBalanceAfterClose(deposit.bank_account_id) < 0 ? 'text-status-critical' : ''"
-                                    />
-                                </p>
-                                <div>
-                                    <Label class="text-xs">Amount</Label>
-                                    <Input
-                                        v-model.number="deposit.amount"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankWithdrawalError(index, 'amount')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Reference</Label>
-                                    <Input
-                                        v-model="deposit.reference"
-                                        placeholder="Slip #"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankWithdrawalError(index, 'reference')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Purpose</Label>
-                                    <Input
-                                        v-model="deposit.purpose"
-                                        placeholder="e.g., cash for station expenses"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankWithdrawalError(index, 'purpose')
-                                        "
-                                    />
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    @click="removeBankWithdrawal(index)"
-                                >
-                                    <Trash2 class="h-4 w-4 text-destructive" />
-                                </Button>
+                        <div v-if="isExpanded('bank_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Cash withdrawn from bank</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['bank_withdrawals']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
+                            <CloseEntryList
+                                v-model="form.bank_withdrawals"
+                                :party="{ key: 'bank_account_id', label: 'Bank', options: bankOptions }"
+                                :text="{ key: 'reference', label: 'Reference' }"
+                                :hint="(row: any) => row.bank_account_id ? `Balance ${formatMoneyText(Number(bankAccounts.find((b) => b.id === row.bank_account_id)?.balance ?? 0), currencyCode)} → ${formatMoneyText(bankBalanceAfterClose(row.bank_account_id), currencyCode)}` : null"
+                                errors-prefix="bank_withdrawals"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('bank_withdrawals')">+ Add another</button>
                         </div>
+
 
                         <div v-if="totalBankWithdrawals" class="flex justify-between text-sm"><span>Cash Withdrawn from Bank</span><MoneyText :amount="totalBankWithdrawals" :currency="currencyCode" /></div>
 
@@ -5710,15 +5249,19 @@ const cashFlowOut = computed(() => [
                                 Money In Summary
                             </h4>
                             <div class="space-y-2">
-                                <div class="flex justify-between text-sm">
-                                    <span>Opening Cash</span>
-                                    <span class="font-medium"
-                                        ><MoneyText
-                                            :amount="form.opening_cash"
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                    /></span>
+                                <div class="flex items-center justify-between text-sm">
+                                    <Label for="opening-cash">Opening cash</Label>
+                                    <Input
+                                        id="opening-cash"
+                                        v-model.number="form.opening_cash"
+                                        data-testid="opening-cash"
+                                        aria-label="Opening cash balance"
+                                        type="number"
+                                        class="h-8 w-36 text-right font-medium"
+                                        @focus="selectZeroValue"
+                                    />
                                 </div>
+                                <InputError :message="form.errors.opening_cash" />
                                 <div
                                     v-if="totalPartnerDeposits > 0"
                                     class="flex justify-between text-sm"
@@ -5815,25 +5358,6 @@ const cashFlowOut = computed(() => [
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
-                        <div class="flex justify-end pt-2">
-                            <Button
-                                @click="saveMoneyIn"
-                                :variant="
-                                    tabsSaved.moneyIn ? 'outline' : 'default'
-                                "
-                                class="min-w-32"
-                            >
-                                <CheckCircle
-                                    v-if="tabsSaved.moneyIn"
-                                    class="mr-2 h-4 w-4 text-status-success"
-                                />
-                                <Save v-else class="mr-2 h-4 w-4" />
-                                {{
-                                    tabsSaved.moneyIn ? 'Saved' : 'Save Cash In'
-                                }}
-                            </Button>
-                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -5850,10 +5374,16 @@ const cashFlowOut = computed(() => [
                     </CardHeader>
                     <CardContent class="flex flex-col gap-6">
                         <div class="flex flex-wrap items-center gap-2" style="order: -2">
-                            <Select :model-value="''" @update:model-value="(v) => openSection(String(v))">
-                                <SelectTrigger class="h-9 w-64"><SelectValue placeholder="+ Add cash out…" /></SelectTrigger>
+                            <Select :model-value="picker.out.kind" @update:model-value="(v) => pickKind('out', String(v))">
+                                <SelectTrigger class="h-9 w-60"><SelectValue placeholder="+ Add cash out…" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="option in entryOptions.out" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select v-if="picker.out.kind" :model-value="''" @update:model-value="(v) => pickParty('out', String(v))">
+                                <SelectTrigger class="h-9 w-60"><SelectValue placeholder="Choose…" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="o in partyOf[picker.out.kind]?.options ?? []" :key="o.id" :value="o.id">{{ o.name }}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -5876,635 +5406,88 @@ const cashFlowOut = computed(() => [
                         </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
                         <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
-                        <div v-if="isExpanded('channels')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div>
-                                <h4 class="text-sm font-semibold">
-                                    Sales that went to bank / card accounts
-                                </h4>
-                                <p class="text-xs text-muted-foreground">
-                                    Card swipes, transfers and fuel-card sales
-                                    are already inside meter sales. Enter them
-                                    here so they are taken out of expected cash.
-                                </p>
-                            </div>
-                            <p v-if="!enabledChannels.some((ch) => ch.type !== 'cash')" class="text-sm text-muted-foreground">
-                                No card or wallet channels.
-                                <Link :href="`/${props.company.slug}/fuel/settings`" class="underline underline-offset-2">Set up</Link>
-                            </p>
-                            <template
-                                v-for="channel in enabledChannels"
-                                :key="channel.code"
-                            >
-                                <div
-                                    v-if="channel.type !== 'cash'"
-                                    class="space-y-4"
-                                >
-                                    <div
-                                        class="flex items-center justify-between"
-                                    >
-                                        <div>
-                                            <h4 class="font-medium">
-                                                {{ channel.label }}
-                                            </h4>
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                {{
-                                                    channel.type ===
-                                                    'bank_transfer'
-                                                        ? 'Bank transfer payments received'
-                                                        : ''
-                                                }}
-                                                {{
-                                                    channel.type === 'card_pos'
-                                                        ? 'Credit/debit card swipes'
-                                                        : ''
-                                                }}
-                                                {{
-                                                    channel.type === 'fuel_card'
-                                                        ? `${fuelCardLabel} sales (goes to clearing)`
-                                                        : ''
-                                                }}
-                                                {{
-                                                    channel.type ===
-                                                    'mobile_wallet'
-                                                        ? 'Mobile wallet payments'
-                                                        : ''
-                                                }}
-                                            </p>
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                {{
-                                                    accountingHints.nonCashReceipt
-                                                }}
-                                            </p>
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            @click="
-                                                addPaymentEntry(channel.code)
-                                            "
-                                        >
-                                            <Plus class="mr-1 h-4 w-4" /> Add
-                                        </Button>
-                                    </div>
-
-                                    <p v-if="channelFeePercent(channel) > 0" class="text-xs text-muted-foreground">
-                                        Bank charge {{ channelFeePercent(channel) }}% =
-                                        <MoneyText :amount="channelFee(channel)" :currency="currencyCode" :fraction-digits="0" />
-                                    </p>
-
-                                    <div
-                                        v-for="(entry, index) in form
-                                            .payment_receipts[channel.code]
-                                            ?.entries || []"
-                                        :key="rowKey(entry)"
-                                        class="flex items-end gap-4"
-                                    >
-                                        <!-- Reference field varies by type -->
-                                        <div
-                                            v-if="channel.type === 'card_pos'"
-                                            class="w-32"
-                                        >
-                                            <Label class="text-xs"
-                                                >Last 4 Digits</Label
-                                            >
-                                            <Input
-                                                v-model="entry.last_four"
-                                                maxlength="4"
-                                                placeholder="1234"
-                                            />
-                                            <InputError
-                                                :message="
-                                                    paymentReceiptError(
-                                                        channel.code,
-                                                        index,
-                                                        'last_four',
-                                                    )
-                                                "
-                                            />
-                                        </div>
-                                        <div v-else class="flex-1">
-                                            <Label class="text-xs">{{
-                                                channel.type === 'bank_transfer'
-                                                    ? 'Customer / Reference'
-                                                    : 'Card / Reference'
-                                            }}</Label>
-                                            <Input
-                                                v-model="entry.reference"
-                                                :placeholder="
-                                                    channel.type ===
-                                                    'bank_transfer'
-                                                        ? 'Customer name or slip #'
-                                                        : 'Card #'
-                                                "
-                                            />
-                                            <InputError
-                                                :message="
-                                                    paymentReceiptError(
-                                                        channel.code,
-                                                        index,
-                                                        'reference',
-                                                    )
-                                                "
-                                            />
-                                        </div>
-                                        <div class="w-32">
-                                            <Label class="text-xs"
-                                                >Amount</Label
-                                            >
-                                            <Input
-                                                v-model.number="entry.amount"
-                                                type="number"
-                                                @focus="selectZeroValue"
-                                            />
-                                            <InputError
-                                                :message="
-                                                    paymentReceiptError(
-                                                        channel.code,
-                                                        index,
-                                                        'amount',
-                                                    )
-                                                "
-                                            />
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            @click="
-                                                removePaymentEntry(
-                                                    channel.code,
-                                                    index,
-                                                )
-                                            "
-                                        >
-                                            <Trash2
-                                                class="h-4 w-4 text-destructive"
-                                            />
-                                        </Button>
-                                    </div>
-
-                                    <!-- Channel subtotal -->
-                                    <div
-                                        v-if="
-                                            (form.payment_receipts[channel.code]
-                                                ?.entries?.length || 0) > 0
-                                        "
-                                        class="text-right text-sm text-muted-foreground"
-                                    >
-                                        Subtotal:
-                                        <MoneyText
-                                            :amount="
-                                                getChannelTotal(channel.code)
-                                            "
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                        />
-                                    </div>
+                        <template v-for="channel in cardChannels" :key="channel.code">
+                            <div v-if="isExpanded(channelKey(channel.code)) && form.payment_receipts[channel.code]" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                                <div class="flex items-baseline justify-between">
+                                    <h4 class="font-medium">{{ channel.label }}</h4>
+                                    <MoneyText class="text-sm font-medium" :amount="channelSum(channel.code)" :currency="currencyCode" :fraction-digits="0" />
                                 </div>
-                            </template>
-                        </div>
+                                <p v-if="channelFeePercent(channel) > 0" class="text-xs text-muted-foreground">
+                                    Bank charge {{ channelFeePercent(channel) }}% = <MoneyText :amount="channelFee(channel)" :currency="currencyCode" :fraction-digits="0" />
+                                </p>
+                                <CloseEntryList
+                                    v-model="form.payment_receipts[channel.code].entries"
+                                    :text="channel.type === 'card_pos' ? { key: 'last_four', label: 'Last 4 digits' } : { key: 'reference', label: 'Reference' }"
+                                    :errors-prefix="`payment_receipts.${channel.code}.entries`"
+                                    :errors="form.errors as Record<string, string>"
+                                    :disabled="submitting || form.processing"
+                                />
+                                <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection(channelKey(channel.code))">+ Add another</button>
+                            </div>
+                        </template>
+
 
 
                         <!-- Bank Deposits -->
-                        <div v-if="isExpanded('bank_deposits')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">Bank Deposits</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.bankDeposit }}
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addBankDeposit"
-                                >
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
+                        <div v-if="isExpanded('bank_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Bank deposits</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['bank_deposits']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
-
-                            <div
-                                v-for="(deposit, index) in form.bank_deposits"
-                                :key="deposit.uid ?? `deposit-${index}`"
-                                class="grid grid-cols-5 items-end gap-4"
-                            >
-                                <div>
-                                    <Label class="text-xs">Bank Account</Label>
-                                    <Select v-model="deposit.bank_account_id">
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="b in bankAccounts"
-                                                :key="b.id"
-                                                :value="b.id"
-                                                >{{ b.name }}</SelectItem
-                                            >
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        :message="
-                                            bankDepositError(
-                                                index,
-                                                'bank_account_id',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <p
-                                    v-if="deposit.bank_account_id"
-                                    class="order-last col-span-5 -mt-2 text-xs text-muted-foreground"
-                                >
-                                    Balance
-                                    <MoneyText :amount="bankAccounts.find((b) => b.id === deposit.bank_account_id)?.balance ?? 0" :currency="currencyCode" :fraction-digits="0" />
-                                    → after this close
-                                    <MoneyText
-                                        :amount="bankBalanceAfterClose(deposit.bank_account_id)"
-                                        :currency="currencyCode"
-                                        :fraction-digits="0"
-                                        :class="bankBalanceAfterClose(deposit.bank_account_id) < 0 ? 'text-status-critical' : ''"
-                                    />
-                                </p>
-                                <div>
-                                    <Label class="text-xs">Amount</Label>
-                                    <Input
-                                        v-model.number="deposit.amount"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankDepositError(index, 'amount')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Reference</Label>
-                                    <Input
-                                        v-model="deposit.reference"
-                                        placeholder="Slip #"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankDepositError(index, 'reference')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Purpose</Label>
-                                    <Input
-                                        v-model="deposit.purpose"
-                                        placeholder="e.g., vendor card payment"
-                                    />
-                                    <InputError
-                                        :message="
-                                            bankDepositError(index, 'purpose')
-                                        "
-                                    />
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    @click="removeBankDeposit(index)"
-                                >
-                                    <Trash2 class="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
+                            <CloseEntryList
+                                v-model="form.bank_deposits"
+                                :party="{ key: 'bank_account_id', label: 'Bank', options: bankOptions }"
+                                :text="{ key: 'reference', label: 'Reference' }"
+                                :hint="(row: any) => row.bank_account_id ? `Balance ${formatMoneyText(Number(bankAccounts.find((b) => b.id === row.bank_account_id)?.balance ?? 0), currencyCode)} → ${formatMoneyText(bankBalanceAfterClose(row.bank_account_id), currencyCode)}` : null"
+                                errors-prefix="bank_deposits"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('bank_deposits')">+ Add another</button>
                         </div>
+
 
                         <!-- Partner Withdrawals (only if partners feature enabled) -->
                         <template
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                            <div v-if="isExpanded('partner_withdrawals')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-medium">
-                                            Partner Withdrawals
-                                        </h4>
-                                        <p
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{
-                                                accountingHints.partnerWithdrawal
-                                            }}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        @click="addPartnerWithdrawal"
-                                    >
-                                        <Plus class="mr-1 h-4 w-4" /> Add
-                                    </Button>
-                                </div>
-
-                                <Input
-                                    v-model="partnerSearch"
-                                    placeholder="Search partners by name"
-                                    class="max-w-sm"
-                                />
-
-                                <div
-                                    v-for="(
-                                        withdrawal, index
-                                    ) in form.partner_withdrawals"
-                                    :key="rowKey(withdrawal)"
-                                    class="flex items-end gap-4"
-                                >
-                                    <div class="flex-1">
-                                        <Label class="text-xs">Partner</Label>
-                                        <Select
-                                            v-model="withdrawal.partner_id"
-                                            @update:model-value="
-                                                setPartnerName(
-                                                    index,
-                                                    'withdrawals',
-                                                )
-                                            "
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue
-                                                    placeholder="Select partner"
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="p in filteredPartners"
-                                                    :key="p.id"
-                                                    :value="p.id"
-                                                >
-                                                    {{ p.name }}
-                                                    ·
-                                                    <template
-                                                        v-if="
-                                                            p.remaining_drawing_limit ===
-                                                            null
-                                                        "
-                                                        >No drawing
-                                                        limit</template
-                                                    ><template v-else
-                                                        ><MoneyText
-                                                            :amount="
-                                                                p.remaining_drawing_limit
-                                                            "
-                                                            :currency="
-                                                                currencyCode
-                                                            "
-                                                            :fraction-digits="0"
-                                                        />
-                                                        left</template
-                                                    >
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p
-                                            v-if="
-                                                getPartner(
-                                                    withdrawal.partner_id,
-                                                )
-                                            "
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            Capital
-                                            <MoneyText
-                                                :amount="
-                                                    getPartner(
-                                                        withdrawal.partner_id,
-                                                    )?.net_capital || 0
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                            · Withdrawn this period
-                                            <MoneyText
-                                                :amount="
-                                                    getPartner(
-                                                        withdrawal.partner_id,
-                                                    )
-                                                        ?.current_period_withdrawn ||
-                                                    0
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                        </p>
-                                        <InputError
-                                            :message="
-                                                partnerWithdrawalError(
-                                                    index,
-                                                    'partner_id',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <div class="w-48">
-                                        <Label class="text-xs">Pay from</Label>
-                                        <Select v-model="amanat.payment_account_id">
-                                            <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
-                                            <SelectContent>
-                                        <SelectItem v-for="account in props.paymentAccounts" :key="account.id" :value="account.id">
-                                                    {{ account.code }} - {{ account.name }}
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <InputError :message="amanatDisbursementError(index, 'payment_account_id')" />
-                                    </div>
-                                    <div class="w-32">
-                                        <Label class="text-xs">Amount</Label>
-                                        <Input
-                                            v-model.number="withdrawal.amount"
-                                            type="number"
-                                            @focus="selectZeroValue"
-                                        />
-                                        <InputError
-                                            :message="
-                                                partnerWithdrawalError(
-                                                    index,
-                                                    'amount',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="removePartnerWithdrawal(index)"
-                                    >
-                                        <Trash2
-                                            class="h-4 w-4 text-destructive"
-                                        />
-                                    </Button>
-                                </div>
+                        <div v-if="isExpanded('partner_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Partner withdrawals</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['partner_withdrawals']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
+                            <CloseEntryList
+                                v-model="form.partner_withdrawals"
+                                :party="{ key: 'partner_id', nameKey: 'partner_name', label: 'Partner', options: partnerOptions }"
+                                errors-prefix="partner_withdrawals"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('partner_withdrawals')">+ Add another</button>
+                        </div>
+
                         </template>
 
 
                         <!-- Employee Advances -->
-                        <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">
-                                        Employee Salary Advances
-                                    </h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.employeeAdvance }}
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    :disabled="props.employees.length === 0"
-                                    @click="addEmployeeAdvance"
-                                >
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
+                        <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Employee advances</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['employee_advances']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
-
-                            <div
-                                v-if="props.employees.length === 0"
-                                class="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
-                            >
-                                <div
-                                    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                    <span
-                                        >No active payroll employees are
-                                        available for salary advances.</span
-                                    >
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        as-child
-                                    >
-                                        <Link
-                                            :href="`/${company.slug}/employees/create`"
-                                            >Add employee</Link
-                                        >
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <div
-                                v-for="(
-                                    advance, index
-                                ) in form.employee_advances"
-                                :key="rowKey(advance)"
-                                :class="(advance as any).kept_advance_id ? 'text-sm' : 'grid grid-cols-4 items-end gap-4'"
-                            >
-                                <p v-if="(advance as any).kept_advance_id">
-                                    <span class="font-medium">Salary advance · {{ advance.employee_name }} · {{ advance.amount }}</span>
-                                    <span class="text-muted-foreground"> · kept (has repayments)</span>
-                                </p>
-                                <template v-else>
-                                <div>
-                                    <Label class="text-xs">Employee</Label>
-                                    <Select
-                                        v-model="advance.employee_id"
-                                        :disabled="props.employees.length === 0"
-                                        @update:model-value="
-                                            setEmployeeName(index)
-                                        "
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="e in props.employees"
-                                                :key="e.id"
-                                                :value="e.id"
-                                            >
-                                                {{
-                                                    e.full_name ||
-                                                    `${e.first_name} ${e.last_name}`
-                                                }}
-                                                · Salary unpaid
-                                                <MoneyText
-                                                    :amount="unpaidSalaryFor(e.id)"
-                                                    :currency="currencyCode"
-                                                    :fraction-digits="0"
-                                                />
-                                                · Advance owed
-                                                <MoneyText
-                                                    :amount="
-                                                        e.outstanding_advances
-                                                    "
-                                                    :currency="currencyCode"
-                                                    :fraction-digits="0"
-                                                />
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p
-                                        v-if="getEmployee(advance.employee_id)"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        Current advance balance:
-                                        <MoneyText
-                                            :amount="
-                                                getEmployee(advance.employee_id)
-                                                    ?.outstanding_advances || 0
-                                            "
-                                            :currency="currencyCode"
-                                            :fraction-digits="0"
-                                        />
-                                    </p>
-                                    <InputError
-                                        :message="
-                                            employeeAdvanceError(
-                                                index,
-                                                'employee_id',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Amount</Label>
-                                    <Input
-                                        v-model.number="advance.amount"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                    />
-                                    <InputError
-                                        :message="
-                                            employeeAdvanceError(
-                                                index,
-                                                'amount',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Reason</Label>
-                                    <Input
-                                        v-model="advance.reason"
-                                        placeholder="Optional"
-                                    />
-                                    <InputError
-                                        :message="
-                                            employeeAdvanceError(
-                                                index,
-                                                'reason',
-                                            )
-                                        "
-                                    />
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    @click="removeEmployeeAdvance(index)"
-                                >
-                                    <Trash2 class="h-4 w-4 text-destructive" />
-                                </Button>
-                                </template>
-                            </div>
+                            <CloseEntryList
+                                v-model="form.employee_advances"
+                                :party="{ key: 'employee_id', nameKey: 'employee_name', label: 'Employee', options: employeeOptions }"
+                                :text="{ key: 'reason', label: 'Reason' }"
+                                :locked="(row: any) => row.kept_advance_id ? `${row.employee_name} · ${row.amount} · kept (has repayments)` : null"
+                                errors-prefix="employee_advances"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('employee_advances')">+ Add another</button>
                         </div>
+
 
                         <template v-if="form.payroll_payouts.length > 0">
 
@@ -6562,7 +5545,7 @@ const cashFlowOut = computed(() => [
                                             </p>
                                         </div>
                                         <span
-                                            class="font-semibold text-destructive"
+                                            class="font-semibold"
                                             ><MoneyText
                                                 :amount="payout.amount"
                                                 :currency="currencyCode"
@@ -6674,8 +5657,8 @@ const cashFlowOut = computed(() => [
                                             <span
                                                 :class="
                                                     payment.affects_cash_drawer
-                                                        ? 'text-destructive'
-                                                        : 'text-foreground'
+                                                        ? 'text-foreground'
+                                                        : 'text-muted-foreground'
                                                 "
                                                 class="font-semibold"
                                             >
@@ -6706,237 +5689,44 @@ const cashFlowOut = computed(() => [
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->
                         <template v-if="features.has_amanat">
 
-                            <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-medium">
-                                            Amanat Disbursements
-                                        </h4>
-                                        <p
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{
-                                                accountingHints.amanatDisbursement
-                                            }}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        :disabled="
-                                            props.amanatHolders.length === 0
-                                        "
-                                        @click="addAmanat"
-                                    >
-                                        <Plus class="mr-1 h-4 w-4" /> Add
-                                    </Button>
-                                </div>
-
-                                <div
-                                    v-if="props.amanatHolders.length === 0"
-                                    class="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
-                                >
-                                    <div
-                                        class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <span
-                                            >No Amanat depositors are available
-                                            for disbursement yet.</span
-                                        >
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            as-child
-                                        >
-                                            <Link
-                                                :href="`/${company.slug}/fuel/amanat`"
-                                                >Add Amanat depositor</Link
-                                            >
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div
-                                    v-for="(
-                                        amanat, index
-                                    ) in form.amanat_disbursements"
-                                    :key="rowKey(amanat)"
-                                    class="flex items-end gap-4"
-                                >
-                                    <div class="flex-1">
-                                        <Label class="text-xs">Depositor</Label>
-                                        <Select
-                                            v-model="amanat.customer_id"
-                                            :disabled="
-                                                props.amanatHolders.length === 0
-                                            "
-                                            @update:model-value="
-                                                setAmanatCustomer(index)
-                                            "
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue
-                                                    placeholder="Select depositor"
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="holder in props.amanatHolders"
-                                                    :key="holder.id"
-                                                    :value="holder.id"
-                                                >
-                                                    {{ holder.name }} · Balance
-                                                    <MoneyText
-                                                        :amount="
-                                                            holder.amanat_balance
-                                                        "
-                                                        :currency="currencyCode"
-                                                        :fraction-digits="0"
-                                                    />
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p
-                                            v-if="
-                                                getAmanatHolder(
-                                                    amanat.customer_id,
-                                                )
-                                            "
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            Available Amanat:
-                                            <MoneyText
-                                                :amount="
-                                                    getAmanatHolder(
-                                                        amanat.customer_id,
-                                                    )?.amanat_balance || 0
-                                                "
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                            />
-                                        </p>
-                                        <InputError
-                                            :message="
-                                                amanatDisbursementError(
-                                                    index,
-                                                    'customer_id',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <div class="w-32">
-                                        <Label class="text-xs">Amount</Label>
-                                        <Input
-                                            v-model.number="amanat.amount"
-                                            type="number"
-                                            @focus="selectZeroValue"
-                                        />
-                                        <InputError
-                                            :message="
-                                                amanatDisbursementError(
-                                                    index,
-                                                    'amount',
-                                                )
-                                            "
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="removeAmanat(index)"
-                                    >
-                                        <Trash2
-                                            class="h-4 w-4 text-destructive"
-                                        />
-                                    </Button>
-                                </div>
+                        <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Amanat withdrawals</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['amanat_disbursements']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
+                            <CloseEntryList
+                                v-model="form.amanat_disbursements"
+                                :party="{ key: 'customer_id', nameKey: 'customer_name', label: 'Depositor', options: holderOptions }"
+                                :extra="{ key: 'payment_account_id', label: 'Pay from', placeholder: 'Cash on Hand', options: paymentAccountOptions }"
+                                :on-party="holderBalance"
+                                :hint="(row: any) => row.customer_id ? `Balance ${formatMoneyText(Number(row.available_balance ?? 0), currencyCode)}` : null"
+                                errors-prefix="amanat_disbursements"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('amanat_disbursements')">+ Add another</button>
+                        </div>
+
                         </template>
 
 
                         <!-- Operating Expenses -->
-                        <div v-if="isExpanded('expenses')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium">
-                                        Operating Expenses
-                                    </h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.expense }}
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addExpense"
-                                >
-                                    <Plus class="mr-1 h-4 w-4" /> Add
-                                </Button>
+                        <div v-if="isExpanded('expenses')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div class="flex items-baseline justify-between">
+                                <h4 class="font-medium">Expenses</h4>
+                                <MoneyText class="text-sm font-medium" :amount="sectionTotal['expenses']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
-
-                            <div
-                                v-for="(expense, index) in form.expenses"
-                                :key="expense.uid ?? `expense-${index}`"
-                                class="grid grid-cols-4 items-end gap-4"
-                            >
-                                <div>
-                                    <Label class="text-xs">Category</Label>
-                                    <Select
-                                        v-model="expense.account_id"
-                                        @update:model-value="
-                                            setExpenseAccountName(index)
-                                        "
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="a in expenseAccounts"
-                                                :key="a.id"
-                                                :value="a.id"
-                                                >{{ a.name }}</SelectItem
-                                            >
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError
-                                        :message="
-                                            expenseError(index, 'account_id')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Description</Label>
-                                    <Input
-                                        v-model="expense.description"
-                                        placeholder="Details"
-                                    />
-                                    <InputError
-                                        :message="
-                                            expenseError(index, 'description')
-                                        "
-                                    />
-                                </div>
-                                <div>
-                                    <Label class="text-xs">Amount</Label>
-                                    <Input
-                                        v-model.number="expense.amount"
-                                        type="number"
-                                        @focus="selectZeroValue"
-                                    />
-                                    <InputError
-                                        :message="expenseError(index, 'amount')"
-                                    />
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    @click="removeExpense(index)"
-                                >
-                                    <Trash2 class="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
+                            <CloseEntryList
+                                v-model="form.expenses"
+                                :party="{ key: 'account_id', nameKey: 'account_name', label: 'Expense account', options: expenseOptions }"
+                                :text="{ key: 'description', label: 'Description' }"
+                                errors-prefix="expenses"
+                                :errors="form.errors as Record<string, string>"
+                                :disabled="submitting || form.processing"
+                            />
+                            <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('expenses')">+ Add another</button>
                         </div>
+
 
 
                         <!-- Money Out Summary -->
@@ -6952,7 +5742,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>{{ row.label }}</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="row.amount"
                                             :currency="currencyCode"
@@ -6972,7 +5762,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Bank Deposits (Vendor Payments)</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalBankDeposits"
                                             :currency="currencyCode"
@@ -6985,7 +5775,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Partner Withdrawals</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalPartnerWithdrawals"
                                             :currency="currencyCode"
@@ -6998,7 +5788,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Employee Salary Advances</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalEmployeeAdvances"
                                             :currency="currencyCode"
@@ -7010,7 +5800,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Approved Salaries</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalPayrollPayouts"
                                             :currency="currencyCode"
@@ -7025,7 +5815,7 @@ const cashFlowOut = computed(() => [
                                         >Supplier Bill Payments (station
                                         cash)</span
                                     >
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalCashBillPayments"
                                             :currency="currencyCode"
@@ -7065,7 +5855,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Pay Supplier (station cash)</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalCashPaySuppliers"
                                             :currency="currencyCode"
@@ -7090,7 +5880,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Amanat Disbursements</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalAmanatDisbursements"
                                             :currency="currencyCode"
@@ -7103,7 +5893,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-sm"
                                 >
                                     <span>Operating Expenses</span>
-                                    <span class="font-medium text-destructive"
+                                    <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalExpenses"
                                             :currency="currencyCode"
@@ -7145,7 +5935,7 @@ const cashFlowOut = computed(() => [
                                                 <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
                                             </TooltipContent>
                                         </Tooltip>
-                                        <span class="font-medium text-destructive"
+                                        <span class="font-medium"
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"
                                                 :currency="currencyCode"
@@ -7159,7 +5949,7 @@ const cashFlowOut = computed(() => [
                                     class="flex justify-between text-base font-semibold"
                                 >
                                     <span>Total Money Out</span>
-                                    <span class="text-destructive"
+                                    <span
                                         ><MoneyText
                                             :amount="shownMoneyOut"
                                             :currency="currencyCode"
@@ -7169,27 +5959,6 @@ const cashFlowOut = computed(() => [
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
-                        <div class="flex justify-end">
-                            <Button
-                                @click="saveMoneyOut"
-                                :variant="
-                                    tabsSaved.moneyOut ? 'outline' : 'default'
-                                "
-                                class="min-w-32"
-                            >
-                                <CheckCircle
-                                    v-if="tabsSaved.moneyOut"
-                                    class="mr-2 h-4 w-4 text-status-success"
-                                />
-                                <Save v-else class="mr-2 h-4 w-4" />
-                                {{
-                                    tabsSaved.moneyOut
-                                        ? 'Saved'
-                                        : 'Save Cash Out'
-                                }}
-                            </Button>
-                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -7423,5 +6192,31 @@ const cashFlowOut = computed(() => [
                 </Card>
             </TabsContent>
         </Tabs>
+
+        <!-- Always visible: where the cash stands, and the only save / post buttons. -->
+        <div class="h-16" aria-hidden="true" />
+        <div
+            class="fixed inset-x-0 bottom-0 z-30 border-t border-rule-default bg-background/95 backdrop-blur"
+            :style="{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }"
+        >
+            <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2 text-sm tabular-nums">
+                <span class="text-muted-foreground">Expected <MoneyText class="font-semibold text-foreground" :amount="expectedClosingCash" :currency="currencyCode" :fraction-digits="0" /></span>
+                <label class="flex items-center gap-2 text-muted-foreground">
+                    Counted
+                    <Input v-model.number="form.closing_cash" aria-label="Counted closing cash" type="number" class="h-8 w-36 text-right font-semibold text-foreground" @focus="selectZeroValue" />
+                </label>
+                <span v-if="!cashCounted" class="text-muted-foreground">Cash not counted</span>
+                <span v-else-if="cashVariance === 0" class="font-medium text-status-success">Balanced</span>
+                <span v-else class="font-semibold" :class="cashVariance < 0 ? 'text-status-critical' : 'text-status-attention'">
+                    {{ cashVariance < 0 ? 'Short' : 'Over' }} <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
+                </span>
+                <div class="ml-auto flex items-center gap-2">
+                    <Button v-if="!isAmendmentMode" variant="outline" size="sm" :disabled="submitting" @click="parkDailyClose">Park</Button>
+                    <Button size="sm" :disabled="submitting" @click="submitDailyClose">
+                        <Loader2 v-if="submitting" class="mr-1 h-4 w-4 animate-spin" />Post
+                    </Button>
+                </div>
+            </div>
+        </div>
     </PageShell>
 </template>

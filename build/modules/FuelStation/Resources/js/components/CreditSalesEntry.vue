@@ -163,8 +163,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
 <template>
   <section class="space-y-4">
     <div>
-      <h4 class="text-sm font-semibold">{{ t('meterCreditSales') }}</h4>
-      <p class="text-xs text-muted-foreground">{{ t('meterCreditHelp') }}</p>
+      <h4 class="font-medium">Sale</h4>
     </div>
     <InputError :message="errors.credit_sales" />
     <div v-for="(row, index) in rows" :key="index"

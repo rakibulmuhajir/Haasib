@@ -526,7 +526,7 @@ class DailyCloseController extends Controller
     /**
      * Show the daily close form - tabbed wizard matching their manual register.
      */
-    public function create(Request $request): Response
+    public function create(Request $request): Response|RedirectResponse
     {
         abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE), 403);
         /** @var Company $company */
@@ -549,6 +549,14 @@ class DailyCloseController extends Controller
             }
         }
         $date = $request->get('date', $defaultDate);
+
+        // A day that is already posted opens as its day sheet, not as a new, empty close.
+        $posted = Transaction::where('company_id', $companyId)->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')->whereNull('reversed_by_id')
+            ->whereDate('transaction_date', $date)->value('id');
+        if ($posted) {
+            return redirect()->route('fuel.daily-close.show', ['company' => $company->slug, 'transaction' => $posted]);
+        }
 
         // Get fuel items with current rates
         $priceColumns = DB::table('information_schema.columns')

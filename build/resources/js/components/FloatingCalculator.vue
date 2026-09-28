@@ -8,6 +8,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { Calculator, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 
+const props = withDefaults(defineProps<{ bottom?: string }>(), { bottom: '1rem' })
 const open = ref(false)
 const entry = ref('')
 const amounts = ref<number[]>([])
@@ -49,7 +50,7 @@ const targetLabel = computed(() => target.value?.getAttribute('aria-label') || t
 </script>
 
 <template>
-  <div class="fixed right-4 z-40" :style="{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }">
+  <div class="fixed right-4 z-40" :style="{ bottom: `calc(${props.bottom} + env(safe-area-inset-bottom, 0px))` }">
     <div v-if="open" ref="panel" class="mb-2 w-64 rounded-md border border-rule-default bg-background p-3 shadow-lg">
       <div class="mb-2 flex items-center justify-between">
         <span class="text-sm font-medium">Calculator</span>

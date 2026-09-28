@@ -146,7 +146,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
         <InputError :message="errors[`payments_received.${index}.amount`]" />
       </div>
       <div class="col-span-1 space-y-1">
-        <Label :for="`payment-reference-${index}`">Ref</Label>
+        <Label :for="`payment-reference-${index}`">Reference</Label>
         <Input :id="`payment-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
       </div>
       <Button type="button" variant="ghost" size="icon" aria-label="Remove payment" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>

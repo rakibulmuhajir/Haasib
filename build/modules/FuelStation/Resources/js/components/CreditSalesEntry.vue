@@ -161,93 +161,70 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
 </script>
 
 <template>
-  <section class="space-y-4">
-    <div>
+  <section class="space-y-2">
+    <div class="flex items-baseline justify-between">
       <h4 class="font-medium">Sale</h4>
+      <MoneyText class="text-sm font-medium" :amount="rows.reduce((t, r) => t + Number(r.amount || 0), 0)" :currency="currency ?? 'PKR'" :fraction-digits="0" />
     </div>
     <InputError :message="errors.credit_sales" />
-    <div v-for="(row, index) in rows" :key="index"
-      class="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] sm:items-end"
-      :class="isLocked(row) ? 'rounded-md bg-muted/50 p-3' : ''">
-      <div class="space-y-1">
-        <Label :id="`credit-customer-${index}`">Customer</Label>
-        <EntitySearch v-if="!isLocked(row)" v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
-          :company-slug="companySlug"
-          :exclude-ids="amanatHolderIds"
-          :aria-labelledby="`credit-customer-${index}`"
-          :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
-          @entity-selected="(entity) => onCustomerSelected(row, entity)"
-          @quick-add-click="(query) => openQuickAdd(index, query)" />
-        <div v-else class="flex h-9 items-center text-sm text-muted-foreground">{{ row.customer_name }}</div>
-        <InputError :message="errors[`credit_sales.${index}.customer_id`]" />
-        <!-- Blocking: a stop sign, distinct from the over-limit warning below. The
-             server refuses this outright (DailyCloseCreditSaleService::prepare); this
-             tells the user before they try. -->
-        <p v-if="!isLocked(row) && row.is_credit_blocked"
-          class="flex items-center gap-1 text-xs font-medium text-destructive">
-          <Ban class="h-3.5 w-3.5" />{{ row.customer_name || 'This buyer' }} is blocked from credit sales.
-        </p>
-      </div>
-      <div class="space-y-1">
-        <Label :for="`credit-fuel-${index}`">Fuel</Label>
-        <Select v-if="!isLocked(row)" v-model="row.item_id" :disabled="disabled" @update:model-value="onFuelChange(row)">
-          <SelectTrigger :id="`credit-fuel-${index}`"><SelectValue placeholder="None" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="item in fuelItems ?? []" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
-          </SelectContent>
-        </Select>
-        <InputError :message="errors[`credit_sales.${index}.item_id`]" />
-      </div>
-      <div class="space-y-1">
-        <Label :for="`credit-litres-${index}`">Litres</Label>
-        <Input v-if="!isLocked(row)" :id="`credit-litres-${index}`" :model-value="row.litres" type="number" min="0.01" step="0.01" :disabled="disabled" @update:model-value="(v) => onLitresInput(row, v)" />
-        <p v-if="!isLocked(row) && rateFor(row) > 0" class="text-xs text-muted-foreground">@ {{ rateFor(row) }} / L today</p>
-        <InputError :message="errors[`credit_sales.${index}.litres`]" />
-        <p v-if="!isLocked(row) && missingLitres(row)" class="flex items-start gap-1 text-xs text-status-attention">
-          <TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />Enter litres to apply this buyer's per-litre discount.
-        </p>
-      </div>
-      <div class="space-y-1">
-        <Label :for="`credit-amount-${index}`">Amount</Label>
-        <Input v-if="!isLocked(row)" :id="`credit-amount-${index}`" :model-value="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" @update:model-value="(v) => onAmountInput(row, v)" />
-        <div v-else :id="`credit-amount-${index}`" class="flex h-9 items-center text-sm text-muted-foreground">{{ row.amount }}</div>
-        <InputError :message="errors[`credit_sales.${index}.amount`]" />
-        <!-- Non-blocking: this amount is still allowed to post (warn-don't-block), it
-             just needs saying out loud before the buyer's balance moves. -->
-        <p v-if="!isLocked(row) && !row.is_credit_blocked && isOverLimit(row)"
-          class="flex items-start gap-1 text-xs text-status-attention">
-          <TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Over the <MoneyText :amount="row.credit_limit ?? 0" :currency="currency ?? 'PKR'" /> limit:
-            balance <MoneyText :amount="row.current_balance ?? 0" :currency="currency ?? 'PKR'" /> would become
-            <MoneyText :amount="resultingBalance(row)" :currency="currency ?? 'PKR'" />.
-          </span>
-        </p>
-        <p v-if="!isLocked(row) && discountFor(row) && !missingLitres(row)" class="text-xs text-status-success">
-          Discount <MoneyText :amount="discountAmount(row)" :currency="currency ?? 'PKR'" /> ·
-          Owes <MoneyText :amount="Math.max(0, Number(row.amount || 0) - discountAmount(row))" :currency="currency ?? 'PKR'" />
-        </p>
-      </div>
-      <div class="space-y-1">
-        <Label :for="`credit-reference-${index}`">{{ t('creditReference') }}</Label>
-        <Input v-if="!isLocked(row)" :id="`credit-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
-        <a v-else-if="(row.invoice_id || row.kept_invoice_id) && companySlug" :href="`/${companySlug}/invoices/${row.invoice_id || row.kept_invoice_id}`"
-          class="flex h-9 items-center gap-1 text-sm text-primary underline-offset-2 hover:underline">
-          <Lock class="h-3 w-3" />
-          <span v-if="row.pending_accounting_invoice">Invoiced in Accounting · {{ row.invoice_number ?? row.reference }} · {{ row.customer_name }}</span>
-          <span v-else>From invoice {{ row.invoice_number ?? row.reference }}</span>
+    <div v-for="(row, index) in rows" :key="index">
+      <!-- Pre-loaded from an invoice: read-only, links to it. -->
+      <p v-if="isLocked(row)" class="flex flex-wrap items-center gap-x-2 text-sm">
+        <Lock class="h-3 w-3 text-muted-foreground" />
+        <span class="font-medium">{{ row.customer_name }}</span>
+        <a v-if="(row.invoice_id || row.kept_invoice_id) && companySlug" :href="`/${companySlug}/invoices/${row.invoice_id || row.kept_invoice_id}`" class="text-primary underline-offset-2 hover:underline">
+          {{ row.invoice_number ?? row.reference }}
         </a>
-        <div v-else class="flex h-9 items-center gap-1 text-sm text-muted-foreground">
-          <Lock class="h-3 w-3" />From invoice {{ row.invoice_number ?? row.reference }}
+        <span v-else class="text-muted-foreground">{{ row.invoice_number ?? row.reference }}</span>
+        <MoneyText class="ml-auto font-medium" :amount="row.amount" :currency="currency ?? 'PKR'" :fraction-digits="0" />
+      </p>
+      <div v-else class="grid items-start gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem_9rem_minmax(0,1fr)_2.25rem]">
+        <div>
+          <EntitySearch v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
+            :company-slug="companySlug"
+            :exclude-ids="amanatHolderIds"
+            :aria-label="`Customer, row ${index + 1}`"
+            :initial-entity="row.customer_name ? { id: row.customer_id, name: row.customer_name } : null"
+            @entity-selected="(entity) => onCustomerSelected(row, entity)"
+            @quick-add-click="(query) => openQuickAdd(index, query)" />
+          <InputError :message="errors[`credit_sales.${index}.customer_id`]" />
+          <p v-if="row.is_credit_blocked" class="flex items-center gap-1 text-xs font-medium text-destructive">
+            <Ban class="h-3.5 w-3.5" />Credit blocked
+          </p>
         </div>
-        <InputError :message="errors[`credit_sales.${index}.reference`]" />
+        <div>
+          <Select v-model="row.item_id" :disabled="disabled" @update:model-value="onFuelChange(row)">
+            <SelectTrigger class="h-9" :aria-label="`Fuel, row ${index + 1}`"><SelectValue placeholder="Fuel" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="item in fuelItems ?? []" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+          <InputError :message="errors[`credit_sales.${index}.item_id`]" />
+        </div>
+        <div>
+          <Input class="h-9 text-right" :model-value="row.litres" type="number" min="0.01" step="0.01" placeholder="Litres" :aria-label="`Litres, row ${index + 1}`" :disabled="disabled" @update:model-value="(v) => onLitresInput(row, v)" />
+          <p v-if="rateFor(row) > 0" class="text-xs text-muted-foreground">@ {{ rateFor(row) }}</p>
+          <InputError :message="errors[`credit_sales.${index}.litres`]" />
+          <p v-if="missingLitres(row)" class="text-xs text-status-attention">Litres needed for discount</p>
+        </div>
+        <div>
+          <Input class="h-9 text-right" :model-value="row.amount" type="number" min="0.01" step="0.01" placeholder="Amount" :aria-label="`Amount, row ${index + 1}`" :disabled="disabled" @update:model-value="(v) => onAmountInput(row, v)" />
+          <InputError :message="errors[`credit_sales.${index}.amount`]" />
+          <p v-if="!row.is_credit_blocked && isOverLimit(row)" class="text-xs text-status-attention">
+            Over limit <MoneyText :amount="row.credit_limit ?? 0" :currency="currency ?? 'PKR'" :fraction-digits="0" />
+          </p>
+          <p v-if="discountFor(row) && !missingLitres(row)" class="text-xs text-status-success">
+            Discount <MoneyText :amount="discountAmount(row)" :currency="currency ?? 'PKR'" :fraction-digits="0" />
+          </p>
+        </div>
+        <div>
+          <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Reference" :aria-label="`Reference, row ${index + 1}`" :disabled="disabled" />
+          <InputError :message="errors[`credit_sales.${index}.reference`]" />
+        </div>
+        <Button type="button" variant="ghost" size="icon" class="h-9 w-9" aria-label="Remove sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
       </div>
-      <Button v-if="!isLocked(row)" type="button" variant="ghost" size="icon" aria-label="Remove credit sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
-      <div v-else class="h-9 w-9" aria-hidden="true" />
     </div>
-    <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', amount: 0, reference: '' })">
-      <Plus class="mr-2 h-4 w-4" />{{ t('addCreditCustomer') }}
-    </Button>
+    <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', amount: 0, reference: '' })">+ Add another</button>
     <QuickAddModal v-model:open="showQuickAdd" entity-type="customer" :initial-name="quickAddQuery" @created="onCustomerCreated" />
   </section>
 </template>

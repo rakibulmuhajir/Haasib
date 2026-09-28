@@ -87,7 +87,7 @@ const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(
         <InputError :message="errors[`pay_suppliers.${index}.amount`]" />
       </div>
       <div class="col-span-2 space-y-1">
-        <Label :for="`pay-supplier-reference-${index}`">Ref</Label>
+        <Label :for="`pay-supplier-reference-${index}`">Reference</Label>
         <Input :id="`pay-supplier-reference-${index}`" v-model="row.reference" maxlength="100" :disabled="disabled" />
       </div>
       <Button type="button" variant="ghost" size="icon" aria-label="Remove supplier payment row" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>

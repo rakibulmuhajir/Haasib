@@ -841,6 +841,8 @@ class DailyCloseController extends Controller
             'fuelItems' => $fuelItems,
             'rates' => $rates,
             'rateChangesToday' => $this->rateChangesOn($companyId, $date, $fuelItems),
+            // Customers for the Sale / Payment received "who" dropdown (not amanat holders).
+            'customerChoices' => $this->customerChoices($companyId),
             // Business dates with a parked draft, for the previous / next day buttons.
             'parkedDates' => DB::table('fuel.daily_close_drafts')->where('company_id', $companyId)
                 ->pluck('business_date')->map(fn ($d) => substr((string) $d, 0, 10))->values(),
@@ -998,6 +1000,26 @@ class DailyCloseController extends Controller
                 ]];
             })
             ->all();
+    }
+
+    /** Active customers (not amanat holders) with their credit context, for the close's dropdowns. */
+    private function customerChoices(string $companyId): array
+    {
+        $holders = CustomerProfile::where('company_id', $companyId)->where('is_amanat_holder', true)->pluck('customer_id');
+        $balances = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereNotIn('status', ['void', 'draft'])->where('balance', '>', 0)
+            ->selectRaw('customer_id, SUM(balance) as balance')->groupBy('customer_id')->pluck('balance', 'customer_id');
+
+        return \App\Modules\Accounting\Models\Customer::where('company_id', $companyId)
+            ->where('is_active', true)->whereNotIn('id', $holders)->orderBy('name')
+            ->get(['id', 'name', 'credit_limit', 'is_credit_blocked'])
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'credit_limit' => (float) ($c->credit_limit ?? 0),
+                'current_balance' => (float) ($balances[$c->id] ?? 0),
+                'is_credit_blocked' => (bool) $c->is_credit_blocked,
+            ])->values()->all();
     }
 
     /** Each tank's dip on the posted close before $date: that day's opening stock. */

@@ -354,6 +354,7 @@ const props = defineProps<{
     // Fuels whose sale rate changed on this day, with the change against the day before.
     rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
     parkedDates?: string[];
+    customerChoices?: Array<{ id: string; name: string; credit_limit: number; current_balance: number; is_credit_blocked: boolean }>;
     lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
     // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
     // CustomerFuelDiscountService (the single place this rate is priced).
@@ -1495,6 +1496,8 @@ const expenseOptions = computed(() => props.expenseAccounts.map((a) => ({ id: a.
 const otherTypeOptions = computed(() => otherDepositTypes.map((t) => ({ id: t.value, name: t.label })));
 const otherAccountOptions = computed(() => props.otherDepositAccounts.map((a) => ({ id: a.id, name: `${a.code} — ${a.name}` })));
 const vendorOptions = computed(() => (props.purchaseSuppliers ?? []).map((v) => ({ id: v.id, name: v.name })));
+const customerOptions = computed(() => (props.customerChoices ?? []).map((c) => ({ id: c.id, name: c.name })));
+const saleCustomerOptions = computed(() => (props.customerChoices ?? []).filter((c) => !c.is_credit_blocked).map((c) => ({ id: c.id, name: c.name })));
 
 /** The row field the second dropdown fills, per entry: [field, name field, options]. */
 const partyOf = computed<Record<string, { key: string; nameKey?: string; options: Array<{ id: string; name: string }> }>>(() => ({
@@ -1508,6 +1511,8 @@ const partyOf = computed<Record<string, { key: string; nameKey?: string; options
     amanat_disbursements: { key: 'customer_id', nameKey: 'customer_name', options: holderOptions.value },
     expenses: { key: 'account_id', nameKey: 'account_name', options: expenseOptions.value },
     pay_suppliers: { key: 'vendor_id', nameKey: 'vendor_name', options: vendorOptions.value },
+    credit_sales: { key: 'customer_id', nameKey: 'customer_name', options: saleCustomerOptions.value },
+    payments_received: { key: 'customer_id', nameKey: 'customer_name', options: customerOptions.value },
 }));
 const holderBalance = (row: any) => {
     const holder = props.amanatHolders.find((h) => h.id === row.customer_id);
@@ -1542,6 +1547,15 @@ const openSection = (key: string, partyId = '') => {
         row[party.key] = partyId;
         if (party.nameKey) row[party.nameKey] = party.options.find((o) => o.id === partyId)?.name ?? '';
         if (key === 'amanat_deposits' || key === 'amanat_disbursements') holderBalance(row);
+        if (key === 'credit_sales') {
+            // Credit context for the over-limit warning, as picking in the row itself gives.
+            const customer = props.customerChoices?.find((c) => c.id === partyId);
+            Object.assign(row, {
+                credit_limit: customer?.credit_limit ?? 0,
+                current_balance: customer?.current_balance ?? 0,
+                is_credit_blocked: customer?.is_credit_blocked ?? false,
+            });
+        }
     }
     if (tabOf(key)) expandSection(key);
 };
@@ -5427,7 +5441,7 @@ const cashFlowOut = computed(() => [
                                 </p>
                                 <CloseEntryList
                                     v-model="form.payment_receipts[channel.code].entries"
-                                    :text="channel.type === 'card_pos' ? { key: 'last_four', label: 'Last 4 digits' } : { key: 'reference', label: 'Reference' }"
+                                    :text="['card_pos', 'fuel_card'].includes(channel.type) ? { key: 'last_four', label: 'Last 4 digits (optional)' } : { key: 'reference', label: 'Reference' }"
                                     :errors-prefix="`payment_receipts.${channel.code}.entries`"
                                     :errors="form.errors as Record<string, string>"
                                     :disabled="submitting || form.processing"

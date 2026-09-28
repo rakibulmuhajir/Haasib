@@ -111,6 +111,7 @@ class DailyCloseCostCorrectionService
             $posted = $transaction->transaction_number;
         });
         $summary['posted'] = $posted;
+        $this->fold($close->fresh());
 
         return $summary;
     }
@@ -123,6 +124,12 @@ class DailyCloseCostCorrectionService
      */
     public function adjusted(array $metadata, array $corrections): array
     {
+        if (empty($corrections)) {
+            return $metadata;
+        }
+        // Corrections already written into the close's own figures (fold()) are not added again.
+        $folded = collect($metadata['cost_corrections'] ?? [])->pluck('transaction_id')->all();
+        $corrections = array_filter($corrections, fn ($c) => ! in_array($c['transaction_id'] ?? null, $folded, true));
         if (empty($corrections)) {
             return $metadata;
         }
@@ -165,9 +172,9 @@ class DailyCloseCostCorrectionService
             ->whereIn('reference_id', $closeIds)
             ->whereIn('status', ['posted', 'locked'])
             ->whereNull('deleted_at')
-            ->get(['reference_id', 'metadata'])
+            ->get(['id', 'reference_id', 'metadata'])
             ->groupBy('reference_id')
-            ->map(fn ($rows) => $rows->map(fn ($t) => $t->metadata ?? [])->all())
+            ->map(fn ($rows) => $rows->map(fn ($t) => ['transaction_id' => $t->id, ...($t->metadata ?? [])])->all())
             ->all();
     }
 
@@ -185,5 +192,40 @@ class DailyCloseCostCorrectionService
                 $close->setAttribute('metadata', $this->adjusted($close->metadata ?? [], $corrections[$close->id]));
             }
         }
+    }
+
+    /**
+     * Writes posted corrections into the close's own figures, so every screen reads the corrected
+     * cost straight from the close. A posted close is guarded by fuel.protect_close_snapshot();
+     * this uses the same one-close, one-transaction bypass Edit day uses (app.reopening_close_id)
+     * and changes metadata only. Returns how many corrections were written in.
+     */
+    public function fold(Transaction $close): int
+    {
+        $metadata = $close->metadata ?? [];
+        $folded = collect($metadata['cost_corrections'] ?? [])->pluck('transaction_id')->all();
+        $pending = array_values(array_filter(
+            $this->correctionsFor($close->company_id, [$close->id])[$close->id] ?? [],
+            fn ($c) => ! in_array($c['transaction_id'], $folded, true),
+        ));
+        if (empty($pending)) {
+            return 0;
+        }
+
+        $metadata = $this->adjusted($metadata, $pending);
+        foreach ($pending as $correction) {
+            $metadata['cost_corrections'][] = [
+                'transaction_id' => $correction['transaction_id'],
+                'lines' => $correction['lines'] ?? [],
+                'folded_at' => now()->toISOString(),
+            ];
+        }
+
+        DB::transaction(function () use ($close, $metadata) {
+            DB::select("SELECT set_config('app.reopening_close_id', ?, true)", [$close->id]);
+            DB::table('acct.transactions')->where('id', $close->id)->update(['metadata' => json_encode($metadata)]);
+        });
+
+        return count($pending);
     }
 }

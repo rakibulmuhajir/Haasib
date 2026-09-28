@@ -43,10 +43,12 @@ class RecostFuelCloses extends Command
         $total = 0.0;
         foreach ($closes as $close) {
             $result = $corrections->correct($close, $apply);
+            // Corrections posted before closes carried them in their own figures.
+            $folded = $apply ? $corrections->fold($close->fresh()) : 0;
             $total += $result['profit_effect'];
             $parts = collect($result['lines'])->map(fn ($l) => sprintf('%s %s->%s', $l['item'], $l['used'] ?? '-', $l['cost']))->implode(' | ');
             $this->line(sprintf('%s %s  profit %+.0f  %s%s', $result['date'], $result['close'], $result['profit_effect'], $parts,
-                $result['posted'] ? "  posted {$result['posted']}" : ''));
+                ($result['posted'] ? "  posted {$result['posted']}" : '').($folded ? "  summary updated ({$folded})" : '')));
         }
         $this->info(sprintf('Total profit effect: %+.0f', $total));
 

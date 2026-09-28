@@ -7,7 +7,6 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
-use App\Modules\FuelStation\Services\FuelVendorSyncService;
 use App\Modules\FuelStation\Services\StationAccountMapper;
 use App\Modules\Inventory\Models\Item;
 use App\Services\CurrentCompany;
@@ -110,13 +109,11 @@ class StationSettingsController extends Controller
         $company = app(CurrentCompany::class)->get();
 
         $validated = $request->validate([
-            'fuel_vendor' => 'required|string|in:' . implode(',', array_keys(StationSettings::VENDORS)),
             'has_partners' => 'boolean',
             'has_amanat' => 'boolean',
             'has_lubricant_sales' => 'boolean',
             'has_investors' => 'boolean',
             'dual_meter_readings' => 'boolean',
-            'track_attendant_handovers' => 'boolean',
             'payment_channels' => 'nullable|array',
             'payment_channels.*.code' => 'required|string',
             'payment_channels.*.label' => 'required|string',
@@ -158,7 +155,6 @@ class StationSettingsController extends Controller
         unset($validated['fuel_products']);
 
         $settings->update($validated);
-        app(FuelVendorSyncService::class)->ensureVendorForStationSetting($company, $settings->fuel_vendor);
         app(StationAccountMapper::class)->ensureMappings($settings->fresh(), optional($request->user())->id);
         $this->updateFuelProductMappings($company->id, $fuelProducts);
 

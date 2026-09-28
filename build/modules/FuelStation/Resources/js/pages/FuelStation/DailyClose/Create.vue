@@ -3739,7 +3739,7 @@ const cashFlowOut = computed(() => [
                     <CardHeader>
                         <div class="flex items-center justify-between gap-3">
                             <CardTitle>Fuel Sales</CardTitle>
-                            <Button variant="outline" size="sm" @click="showManualReadings = !showManualReadings">
+                            <Button v-if="features.dual_meter_readings" variant="outline" size="sm" @click="showManualReadings = !showManualReadings">
                                 {{ showManualReadings ? 'Hide manual readings' : 'Show manual readings' }}
                             </Button>
                         </div>
@@ -4050,7 +4050,7 @@ const cashFlowOut = computed(() => [
 
                                     <!-- Manual Readings (optional) -->
                                     <div
-                                        v-if="showManualReadings"
+                                        v-if="features.dual_meter_readings && showManualReadings"
                                         class="mt-4 border-t border-dashed pt-4"
                                     >
                                         <div

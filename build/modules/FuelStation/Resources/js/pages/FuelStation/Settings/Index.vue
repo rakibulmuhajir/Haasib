@@ -98,13 +98,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const form = useForm({
-  fuel_vendor: props.settings.fuel_vendor,
   has_partners: props.settings.has_partners,
   has_amanat: props.settings.has_amanat,
   has_lubricant_sales: props.settings.has_lubricant_sales,
   has_investors: props.settings.has_investors,
   dual_meter_readings: props.settings.dual_meter_readings,
-  track_attendant_handovers: props.settings.track_attendant_handovers,
   payment_channels: props.settings.payment_channels,
   cash_account_id: props.settings.cash_account_id,
   fuel_sales_account_id: props.settings.fuel_sales_account_id,
@@ -142,20 +140,9 @@ const fuelCardLabel = computed(() => {
     byco: 'Byco Card',
     go: 'GO Card',
   }
-  return labels[form.fuel_vendor] || 'Fuel Card'
+  return labels[props.settings.fuel_vendor] || 'Fuel Card'
 })
 
-// Update fuel card label when vendor changes
-const onVendorChange = (vendor: string) => {
-  form.fuel_vendor = vendor
-  // Update fuel card label in payment channels
-  const channels = [...form.payment_channels]
-  const fuelCardIdx = channels.findIndex(ch => ch.code === 'fuel_card')
-  if (fuelCardIdx !== -1) {
-    channels[fuelCardIdx] = { ...channels[fuelCardIdx], label: fuelCardLabel.value }
-    form.payment_channels = channels
-  }
-}
 
 // Toggle payment channel
 const toggleChannel = (code: string, enabled: boolean) => {
@@ -280,7 +267,6 @@ const featureExplanations = {
   has_lubricant_sales: 'Turn on if you sell engine oil or other lubricants and want them included in station sales.',
   has_investors: 'Turn on only if outside investors fund fuel lots and need separate lot/entitlement tracking.',
   dual_meter_readings: 'Turn on when staff record both electronic and manual readings for extra verification.',
-  track_attendant_handovers: 'Turn on when shifts hand cash from one attendant or cashier to another.',
 }
 
 const paymentChannelHelp = (channel: PaymentChannel) => {
@@ -342,27 +328,6 @@ const formatFuelCategory = (category: string | null) => {
           <CardDescription>Choose the station behavior you actually use. Disabled features stay out of daily forms.</CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <!-- Fuel Vendor -->
-          <div class="grid grid-cols-2 gap-6">
-            <div class="space-y-2">
-              <div class="text-sm font-medium">Default Fuel Supplier Brand</div>
-              <Select :model-value="form.fuel_vendor" @update:model-value="onVendorChange">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select supplier brand" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="(label, code) in vendors" :key="code" :value="code">
-                    {{ label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p class="text-xs text-muted-foreground">Choose the supplier brand used most often. Haasib also keeps a matching AP vendor available for Bills; add other suppliers from Vendors.</p>
-              <InputError :message="form.errors.fuel_vendor" />
-            </div>
-          </div>
-
-          <Separator />
-
           <!-- Feature Toggles -->
           <div class="space-y-4">
             <h4 class="font-medium">Features</h4>
@@ -413,14 +378,6 @@ const formatFuelCategory = (category: string | null) => {
                 <InputError :message="form.errors.dual_meter_readings" />
               </div>
 
-              <div class="flex items-center justify-between p-3 rounded-lg border">
-                <div>
-                  <div class="text-sm font-medium">Attendant Handovers</div>
-                  <p class="text-xs text-muted-foreground">{{ featureExplanations.track_attendant_handovers }}</p>
-                </div>
-                <Switch v-model:checked="form.track_attendant_handovers" />
-                <InputError :message="form.errors.track_attendant_handovers" />
-              </div>
             </div>
           </div>
         </CardContent>

@@ -126,9 +126,9 @@ const quickLinks = computed(() => {
       tone: 'Price',
     },
     {
-      title: 'Sales Report',
-      description: 'Check daily totals by sale type and payment channel.',
-      href: `/${slug}/fuel/reports/sales`,
+      title: 'Daily Summary',
+      description: 'Sales, profit and cash by day.',
+      href: `/${slug}/fuel/reports/performance`,
       icon: BarChart3,
       tone: 'Report',
     },

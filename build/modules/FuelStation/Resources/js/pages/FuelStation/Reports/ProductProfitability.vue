@@ -111,7 +111,7 @@ const product = ref(props.filters.product)
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
-  { title: 'Product Profitability', href: `/${props.company.slug}/fuel/reports/product-profitability` },
+  { title: 'Fuel Profit', href: `/${props.company.slug}/fuel/reports/product-profitability` },
 ])
 
 const qty = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
@@ -200,10 +200,10 @@ const rateChangeColumns = [
 </script>
 
 <template>
-  <Head title="Product Profitability" />
+  <Head title="Fuel Profit" />
 
   <PageShell
-    title="Product Profitability"
+    title="Fuel Profit"
     description="Product-wise sales, cost, margin, stock variance, and rate-change snapshot impact."
     :icon="Package"
     :breadcrumbs="breadcrumbs"

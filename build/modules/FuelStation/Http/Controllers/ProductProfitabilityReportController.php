@@ -46,16 +46,6 @@ class ProductProfitabilityReportController extends Controller
         ]);
     }
 
-    public function legacyRedirect(Request $request): RedirectResponse
-    {
-        $company = app(CurrentCompany::class)->get();
-
-        return redirect()->route('fuel.reports.product-profitability', [
-            'company' => $company->slug,
-            ...$request->query(),
-        ]);
-    }
-
     private function date(mixed $value, Carbon $fallback): Carbon
     {
         if (!is_string($value) || trim($value) === '') {

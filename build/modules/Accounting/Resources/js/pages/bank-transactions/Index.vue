@@ -109,6 +109,10 @@ const goToJournal = (row: any) => router.get(`/${companySlug.value}/journals/${r
   <Head title="Bank Transactions" />
   <PageShell title="Bank Transactions" description="Manual deposits, withdrawals, transfers and bank charges." :icon="Landmark" :breadcrumbs="breadcrumbs">
     <template #actions>
+      <!-- The running-balance view of an account lives on Statements; this page is for entering. -->
+      <Button variant="outline" as-child>
+        <Link :href="`/${companySlug}/reports/statements`" :data="accountId !== 'all' ? { kind: 'bank', id: accountId } : { kind: 'bank' }">Statement</Link>
+      </Button>
       <Button as-child>
         <Link :href="`/${companySlug}/banking/transactions/create`"><Plus class="mr-2 h-4 w-4" />New Transaction</Link>
       </Button>

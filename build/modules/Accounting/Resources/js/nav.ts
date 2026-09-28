@@ -37,7 +37,8 @@ export const accountingNav: ModuleNavConfig = {
           { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
           { title: 'Trial Balance', href: `/${slug}/reports/trial-balance`, icon: Scale },
           { title: 'Balance Sheet', href: `/${slug}/reports/balance-sheet`, icon: Scale },
-          { title: 'Receivables Aging', href: `/${slug}/reports/receivables-aging`, icon: Clock },
+          { title: 'Who Owes Us', href: `/${slug}/reports/receivables-aging`, icon: Clock },
+          { title: 'What We Owe', href: `/${slug}/reports/payables-aging`, icon: Clock },
           { title: 'Statements', href: `/${slug}/reports/statements`, icon: ScrollText },
           {
             title: 'Setup',

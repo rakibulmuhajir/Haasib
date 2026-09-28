@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
-import { Banknote, BarChart3, CalendarDays, ClipboardCheck, Droplets, Fuel, ReceiptText, WalletCards } from 'lucide-vue-next'
+import { Banknote, BarChart3, ClipboardCheck, Droplets, Fuel, ReceiptText, WalletCards } from 'lucide-vue-next'
 
 interface Company {
   id: string
@@ -39,6 +39,7 @@ interface Totals {
   expenses: number
   payroll_payouts: number
   net_station_profit: number
+  other: number
   cash_variance: number
   stock_loss: number
   stock_gain: number
@@ -59,6 +60,7 @@ interface ReportRow {
   expenses: number
   payroll_payouts: number
   net_station_profit: number
+  other: number
   cash_variance: number
   stock_loss: number
   stock_gain: number
@@ -132,7 +134,7 @@ const product = ref(props.filters.product)
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
-  { title: 'Station Performance', href: `/${props.company.slug}/fuel/reports/performance` },
+  { title: 'Daily Summary', href: `/${props.company.slug}/fuel/reports/performance` },
 ])
 
 const number = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
@@ -211,6 +213,7 @@ const performanceColumns = [
   { key: 'cogs', label: 'COGS', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
   { key: 'expenses', label: 'Expenses', kind: 'amount' as const },
+  { key: 'other', label: 'Other', kind: 'amount' as const },
   { key: 'net_station_profit', label: 'Net', kind: 'amount' as const },
   { key: 'cash_variance', label: 'Cash variance', kind: 'amount' as const },
 ]
@@ -238,11 +241,11 @@ const movementCards = computed(() => [
 </script>
 
 <template>
-  <Head title="Station Performance" />
+  <Head title="Daily Summary" />
 
   <PageShell
-    title="Station Performance"
-    description="Daily Close based sales, profit, cash, and station movement summary."
+    title="Daily Summary"
+    description="Sales, profit and cash from each daily close."
     :icon="BarChart3"
     :breadcrumbs="breadcrumbs"
   >
@@ -331,12 +334,12 @@ const movementCards = computed(() => [
 
         <Card>
           <CardHeader class="pb-2">
-            <CardDescription>Net station profit</CardDescription>
+            <CardDescription>Net profit</CardDescription>
             <CardTitle class="text-2xl"><MoneyText :amount="totals.net_station_profit" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <ReceiptText class="h-4 w-4 text-status-info" />
-            After expenses and payroll paid
+            Same as Profit &amp; Loss
           </CardContent>
         </Card>
 
@@ -354,11 +357,14 @@ const movementCards = computed(() => [
         </Card>
       </div>
 
-      <div class="grid gap-5 xl:grid-cols-3">
-        <Card class="xl:col-span-2">
+      <div class="grid gap-5">
+        <Card>
           <CardHeader>
             <CardTitle class="text-base">Performance by {{ groupBy }}</CardTitle>
-            <CardDescription>Revenue, cost, profit, and control figures from posted Daily Close records.</CardDescription>
+            <CardDescription>
+              Net is the ledger's profit for the day. Other = tank gains/losses, discounts, card charges, other income.
+              <Link :href="`/${company.slug}/fuel/reports/product-profitability`" class="text-primary underline-offset-4 hover:underline">Profit by fuel</Link>
+            </CardDescription>
           </CardHeader>
           <CardContent class="p-0">
             <LedgerRegister :data="rows" :columns="performanceColumns">
@@ -386,6 +392,7 @@ const movementCards = computed(() => [
                 <div class="text-xs text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
               </template>
               <template #cell-expenses="{ row }"><MoneyText :amount="row.expenses" :currency="company.base_currency" /></template>
+              <template #cell-other="{ row }"><MoneyText :amount="row.other" :currency="company.base_currency" /></template>
               <template #cell-net_station_profit="{ row }"><MoneyText :amount="row.net_station_profit" :currency="company.base_currency" /></template>
               <template #cell-cash_variance="{ row }">
                 <span :class="varianceTone(row.cash_variance)"><MoneyText :amount="row.cash_variance" :currency="company.base_currency" /></span>
@@ -394,41 +401,6 @@ const movementCards = computed(() => [
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">Product Profitability</CardTitle>
-            <CardDescription>Fuel sales and margin for the selected range.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div v-if="productRows.length === 0" class="py-8 text-center text-muted-foreground">
-              No product sales in this range.
-            </div>
-            <div v-else class="space-y-3">
-              <div v-for="row in productRows" :key="row.key" class="rounded-md border p-3">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="font-medium">{{ row.name }}</div>
-                    <div class="text-sm text-muted-foreground">{{ number(row.liters) }} L</div>
-                  </div>
-                  <div class="text-right">
-                    <div class="font-medium"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></div>
-                    <div class="text-sm text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
-                  </div>
-                </div>
-                <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <div class="text-muted-foreground">Revenue</div>
-                    <div><MoneyText :amount="row.revenue" :currency="company.base_currency" /></div>
-                  </div>
-                  <div>
-                    <div class="text-muted-foreground">Margin/L</div>
-                    <div><MoneyText :amount="row.margin_per_liter" :currency="company.base_currency" /></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <div class="grid gap-5 xl:grid-cols-2">
@@ -492,20 +464,6 @@ const movementCards = computed(() => [
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div class="flex items-center gap-2">
-            <CalendarDays class="h-4 w-4 text-muted-foreground" />
-            <CardTitle class="text-base">What This Report Uses</CardTitle>
-          </div>
-          <CardDescription>
-            Only posted Daily Close records are included. Reversed Daily Close records are excluded so amended days are not counted twice.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="text-sm text-muted-foreground">
-          Profit here is station operating profit for the selected range: revenue minus fuel cost, station expenses, and payroll paid through Daily Close. The accountant Profit and Loss report remains the official GL view.
-        </CardContent>
-      </Card>
     </div>
   </PageShell>
 </template>

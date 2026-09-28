@@ -51,15 +51,15 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('investors', 'Investors', '/fuel/investors', UsersRound, fuelNavigation?.hasInvestors === true),
       ] },
       { label: t('reports'), items: [
-        ...item('reports', 'Station Performance', '/fuel/reports/performance', BarChart3),
-        ...item('reports', 'Product Profitability', '/fuel/reports/product-profitability', Package),
+        ...item('reports', 'Daily Summary', '/fuel/reports/performance', BarChart3),
+        ...item('reports', 'Fuel Profit', '/fuel/reports/product-profitability', Package),
         ...item('reports', 'Expenses', '/fuel/reports/expenses', ReceiptText),
         ...item('reports', t('profitAndLoss'), '/reports/profit-loss', BarChart3),
-        ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
         ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
-        ...item('reports', 'Receivables Aging', '/reports/receivables-aging', Clock),
+        ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),
+        ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
-        ...item('reports', 'Stock Variance & Claims', '/fuel/reports/stock-variance', TrendingUp),
+        ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },
       { label: 'Banking', items: [
@@ -75,6 +75,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('settings', 'Setup Wizard', '/fuel/onboarding', Settings),
         { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: BookOpen },
         ...item('journals', 'Advanced Accounting · Journal Entries', '/journals', BookOpen),
+        ...item('reports', 'Advanced Accounting · Trial Balance', '/reports/trial-balance', Scale),
         ...item('accounts', t('chartOfAccounts'), '/accounts', BookOpen),
         ...item('accountSettings', 'Default Accounts', '/accounting/default-accounts', Settings),
         // Where cash, banks, what buyers owed, what was owed to suppliers and amanat held on the

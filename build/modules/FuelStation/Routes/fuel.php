@@ -147,10 +147,6 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('reports/product-profitability', [ProductProfitabilityReportController::class, 'index'])->name('fuel.reports.product-profitability');
     Route::get('reports/expenses', [ExpenseReportController::class, 'index'])->name('fuel.reports.expenses');
     Route::get('reports/stock-variance', [StockVarianceReportController::class, 'index'])->name('fuel.reports.stock-variance');
-    Route::get('reports/sales', [ProductProfitabilityReportController::class, 'legacyRedirect'])->name('fuel.reports.sales');
-    Route::get('reports/sales/export', [ProductProfitabilityReportController::class, 'legacyRedirect'])->name('fuel.reports.sales.export');
-    Route::get('reports/shrinkage', [StockVarianceReportController::class, 'legacyRedirect'])->name('fuel.reports.shrinkage');
-    Route::get('reports/shrinkage/export', [StockVarianceReportController::class, 'legacyRedirect'])->name('fuel.reports.shrinkage.export');
 
     // Credit Customers
     Route::get('credit-customers', [CreditCustomerController::class, 'index'])->name('fuel.credit-customers.index');

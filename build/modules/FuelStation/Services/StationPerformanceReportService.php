@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Services;
 
 use App\Modules\Accounting\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+
 class StationPerformanceReportService
 {
     /**
@@ -29,6 +31,12 @@ class StationPerformanceReportService
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->orderBy('transaction_date')
             ->get(['id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked']);
+
+        // Net profit is the ledger's, the same figure the Profit & Loss shows for these days: it
+        // also carries tank gains and losses, discounts, card charges, other income and
+        // anything booked outside the close. Worked out here as gross minus expenses minus
+        // payroll paid out, it disagreed with the P&L every day.
+        $ledgerNet = $product === 'all' ? $this->ledgerNetByDate($companyId, $startDate, $endDate) : [];
 
         $periods = [];
         $products = [];
@@ -62,7 +70,9 @@ class StationPerformanceReportService
             $expenses = (float) ($metadata['expenses'] ?? 0);
             $cashBillPayments = (float) ($metadata['cash_bill_payments'] ?? 0);
             $payrollPayouts = (float) ($metadata['payroll_payouts'] ?? 0);
-            $netStationProfit = $grossProfit - $expenses - $payrollPayouts;
+            $netStationProfit = $product === 'all'
+                ? (float) ($ledgerNet[$date->toDateString()] ?? 0)
+                : $grossProfit;
 
             $periodKey = $this->periodKey($date, $groupBy);
             if (!isset($periods[$periodKey])) {
@@ -81,6 +91,7 @@ class StationPerformanceReportService
             $periods[$periodKey]['expenses'] += $expenses;
             $periods[$periodKey]['payroll_payouts'] += $payrollPayouts;
             $periods[$periodKey]['net_station_profit'] += $netStationProfit;
+            $periods[$periodKey]['other'] += $netStationProfit - ($grossProfit - $expenses);
             $periods[$periodKey]['cash_variance'] += (float) ($metadata['variance'] ?? 0);
             $periods[$periodKey]['stock_loss'] += (float) ($metadata['total_shrinkage'] ?? 0);
             $periods[$periodKey]['stock_gain'] += (float) ($metadata['total_gain'] ?? 0);
@@ -164,6 +175,28 @@ class StationPerformanceReportService
     }
 
     /**
+     * Profit per business date from the ledger: income less costs on every posted journal.
+     *
+     * @return array<string,float>
+     */
+    private function ledgerNetByDate(string $companyId, string $startDate, string $endDate): array
+    {
+        return DB::table('acct.journal_entries as je')
+            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
+            ->where('t.company_id', $companyId)
+            ->where('t.status', 'posted')
+            ->whereNull('t.deleted_at')
+            ->whereBetween('t.transaction_date', [$startDate, $endDate])
+            ->whereIn('a.type', ['revenue', 'other_income', 'expense', 'cogs', 'other_expense'])
+            ->groupBy(DB::raw('t.transaction_date::date'))
+            ->selectRaw('t.transaction_date::date AS d, SUM(je.credit_amount) - SUM(je.debit_amount) AS net')
+            ->pluck('net', 'd')
+            ->mapWithKeys(fn ($net, $d) => [substr((string) $d, 0, 10) => (float) $net])
+            ->all();
+    }
+
+    /**
      * @param mixed $metadata
      * @return array<string,mixed>
      */
@@ -240,6 +273,7 @@ class StationPerformanceReportService
             'expenses' => 0.0,
             'payroll_payouts' => 0.0,
             'net_station_profit' => 0.0,
+            'other' => 0.0,
             'cash_variance' => 0.0,
             'stock_loss' => 0.0,
             'stock_gain' => 0.0,
@@ -267,6 +301,7 @@ class StationPerformanceReportService
             'expenses' => array_sum(array_column($rows, 'expenses')),
             'payroll_payouts' => array_sum(array_column($rows, 'payroll_payouts')),
             'net_station_profit' => array_sum(array_column($rows, 'net_station_profit')),
+            'other' => array_sum(array_column($rows, 'other')),
             'cash_variance' => array_sum(array_column($rows, 'cash_variance')),
             'stock_loss' => array_sum(array_column($rows, 'stock_loss')),
             'stock_gain' => array_sum(array_column($rows, 'stock_gain')),

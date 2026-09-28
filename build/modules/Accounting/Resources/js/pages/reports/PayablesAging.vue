@@ -12,9 +12,9 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 
 type Row = {
-  customer_id: string
-  customer_name: string
-  customer_number: string | null
+  vendor_id: string
+  vendor_name: string
+  vendor_number: string | null
   current: number
   d1_30: number
   d31_60: number
@@ -29,17 +29,17 @@ const props = defineProps<{
   filters: { as_of: string }
   report: {
     as_of: string
-    buckets: Array<{ key: string; label: string }>
+    buckets?: Array<{ key: string; label: string }>
     rows: Row[]
     totals: { current: number; d1_30: number; d31_60: number; d61_90: number; d90_plus: number; total: number }
-    customer_count: number
+    vendor_count: number
   }
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
   { title: props.company.name, href: `/${props.company.slug}` },
-  { title: 'Who Owes Us' },
+  { title: 'What We Owe' },
 ])
 
 const asOf = ref(props.filters.as_of)
@@ -49,22 +49,22 @@ const currency = computed(() => props.company.base_currency || 'PKR')
 const moneyLocale = computed(() => (currency.value === 'PKR' ? 'en-PK' : 'en-US'))
 
 const apply = () => {
-  router.get(`/${props.company.slug}/reports/receivables-aging`, { as_of: asOf.value }, { preserveScroll: true })
+  router.get(`/${props.company.slug}/reports/payables-aging`, { as_of: asOf.value }, { preserveScroll: true })
 }
 
-const openCustomer = (row: Row) => {
-  if (row.customer_id === 'unassigned') return
-  router.get(`/${props.company.slug}/customers/${row.customer_id}`)
+const openVendor = (row: Row) => {
+  if (row.vendor_id === 'unassigned') return
+  router.get(`/${props.company.slug}/reports/statements`, { kind: 'supplier', id: row.vendor_id })
 }
 
 const columns: RegisterColumn<Row>[] = [
-  { key: 'customer_name', label: 'Buyer', kind: 'text' },
+  { key: 'vendor_name', label: 'Supplier', kind: 'text' },
   { key: 'current', label: 'Not yet due', kind: 'amount' },
   { key: 'd1_30', label: '1–30 days', kind: 'amount' },
   { key: 'd31_60', label: '31–60 days', kind: 'amount' },
   { key: 'd61_90', label: '61–90 days', kind: 'amount' },
   { key: 'd90_plus', label: 'Over 90 days', kind: 'amount' },
-  { key: 'total', label: 'Total owed', kind: 'amount' },
+  { key: 'total', label: 'We owe', kind: 'amount' },
 ]
 
 const totals = computed(() => ({
@@ -76,19 +76,18 @@ const totals = computed(() => ({
   total: props.report.totals.total,
 }))
 
-// What is genuinely adverse, as opposed to merely outstanding: an invoice inside its
-// terms is the ordinary state of a credit account, not a problem.
+// Past due is what needs paying now; a bill inside its terms is ordinary.
 const overdueTotal = computed(() =>
   props.report.totals.d1_30 + props.report.totals.d31_60 + props.report.totals.d61_90 + props.report.totals.d90_plus
 )
 </script>
 
 <template>
-  <Head title="Who Owes Us" />
+  <Head title="What We Owe" />
 
   <PageShell
-    title="Who Owes Us"
-    description="Who owes money, and how long they have owed it."
+    title="What We Owe"
+    description="Unpaid supplier bills, and how long they have been due."
     :breadcrumbs="breadcrumbs"
   >
     <div class="mx-auto w-full max-w-6xl space-y-6">
@@ -107,7 +106,7 @@ const overdueTotal = computed(() =>
 
       <div class="grid gap-4 md:grid-cols-3">
         <Card variant="figure">
-          <CardHeader><CardTitle>Total owed</CardTitle></CardHeader>
+          <CardHeader><CardTitle>We owe</CardTitle></CardHeader>
           <CardContent>
             <CardFigure><MoneyText :amount="report.totals.total" :currency="currency" :locale="moneyLocale" /></CardFigure>
           </CardContent>
@@ -119,9 +118,9 @@ const overdueTotal = computed(() =>
           </CardContent>
         </Card>
         <Card variant="figure">
-          <CardHeader><CardTitle>Buyers with a balance</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Suppliers unpaid</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure>{{ report.customer_count }}</CardFigure>
+            <CardFigure>{{ report.vendor_count }}</CardFigure>
           </CardContent>
         </Card>
       </div>
@@ -129,19 +128,19 @@ const overdueTotal = computed(() =>
       <LedgerRegister
         :data="report.rows"
         :columns="columns"
-        key-field="customer_id"
+        key-field="vendor_id"
         clickable
         title="Balances by age"
-        description="Aged from the due date, worst first. Click a buyer for their statement."
+        description="Aged from the due date, worst first. Click a supplier for their statement."
         :totals="totals"
         totals-label="Total"
-        @row-click="openCustomer"
+        @row-click="openVendor"
       >
-        <template #empty>Nobody owes anything as at this date.</template>
+        <template #empty>Nothing owed to suppliers at this date.</template>
 
-        <template #cell-customer_name="{ row }">
-          <span>{{ row.customer_name }}</span>
-          <span v-if="row.customer_number" class="ml-2 text-text-metadata">{{ row.customer_number }}</span>
+        <template #cell-vendor_name="{ row }">
+          <span>{{ row.vendor_name }}</span>
+          <span v-if="row.vendor_number" class="ml-2 text-text-metadata">{{ row.vendor_number }}</span>
         </template>
 
         <template v-for="key in ['current', 'd1_30', 'd31_60', 'd61_90', 'd90_plus', 'total']" :key="key" #[`cell-${key}`]="{ row }">

@@ -108,7 +108,7 @@ const claimStatus = ref(props.filters.claim_status)
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
-  { title: 'Stock Variance & Claims', href: `/${props.company.slug}/fuel/reports/stock-variance` },
+  { title: 'Tank Gains & Losses', href: `/${props.company.slug}/fuel/reports/stock-variance` },
 ])
 
 const qty = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
@@ -192,10 +192,10 @@ const claimColumns = [
 </script>
 
 <template>
-  <Head title="Stock Variance & Claims" />
+  <Head title="Tank Gains & Losses" />
 
   <PageShell
-    title="Stock Variance & Claims"
+    title="Tank Gains & Losses"
     description="Physical tank dip variance, delivery shortages, final losses, and supplier claims."
     :icon="TrendingUp"
     :breadcrumbs="breadcrumbs"

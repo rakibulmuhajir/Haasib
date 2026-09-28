@@ -3201,6 +3201,42 @@ const tabs = [
 const completedWorkflowSteps = computed(() => {
     return Object.values(tabsSaved.value).filter(Boolean).length;
 });
+
+// What is actually filled in -- read from the form, so a reloaded draft shows it too (the
+// per-tab "Saved" flags are only clicks in this browser session).
+const cashCounted = computed(() => Number(form.closing_cash) > 0);
+const readiness = computed(() => [
+    { label: 'Meters', done: form.nozzle_readings.some((r: any) => Number(r.liters_sold) > 0) || Boolean(form.zero_sales_confirmed) },
+    { label: 'Dips', done: form.tank_readings.length > 0 && form.tank_readings.every((t: any) => Number(t.liters) > 0 || Number(t.stick_reading) > 0) },
+    { label: 'Cash counted', done: cashCounted.value },
+]);
+
+// The Summary tab's cash flow, one line per kind of money: each list adds up to its total and
+// expected closing = money in - money out.
+const sumOf = (rows: any[]) => rows.reduce((t: number, r: any) => t + Number(r?.amount || 0), 0);
+const cashFlowIn = computed(() => [
+    { label: 'Opening cash', amount: Number(form.opening_cash || 0) },
+    { label: 'Meter sales', amount: totalFuelSales.value },
+    { label: 'Lubricant & other sales', amount: totalOtherSales.value },
+    { label: 'Direct sales (cash)', amount: formDirectSalesCash.value + directSalesCash.value },
+    { label: 'Payments received (cash)', amount: totalPaymentsReceivedCash.value },
+    { label: 'Cash withdrawn from bank', amount: totalBankWithdrawals.value },
+    { label: 'Partner deposits', amount: totalPartnerDeposits.value },
+    { label: 'Amanat deposits', amount: totalAmanatDeposits.value },
+    { label: 'Other cash in', amount: totalOtherDeposits.value },
+].filter((l, i) => i === 0 || Math.abs(l.amount) >= 0.5));
+const cashFlowOut = computed(() => [
+    { label: 'Card / bank / wallet sales (not in the drawer)', amount: totalNonCashReceipts.value },
+    { label: 'Credit sales', amount: totalCreditSales.value },
+    { label: 'Bank deposits', amount: sumOf(form.bank_deposits) },
+    { label: 'Supplier payments', amount: totalCashBillPayments.value + totalCashPaySuppliers.value },
+    { label: 'Purchases paid now', amount: paidNowPurchasesTotal.value },
+    { label: 'Expenses', amount: sumOf(form.expenses) },
+    { label: 'Salaries paid', amount: sumOf(form.payroll_payouts) },
+    { label: 'Salary advances', amount: sumOf(form.employee_advances) },
+    { label: 'Partner withdrawals', amount: sumOf(form.partner_withdrawals) },
+    { label: 'Amanat withdrawals', amount: sumOf(form.amanat_disbursements) },
+].filter((l) => Math.abs(l.amount) >= 0.5));
 </script>
 
 <template>
@@ -3251,8 +3287,13 @@ const completedWorkflowSteps = computed(() => {
                 <span v-if="props.openingsFromParked" class="text-status-attention">
                     Openings from {{ props.openingsFromParked }} (parked) — post it first
                 </span>
-                <Badge variant="secondary">{{ completedWorkflowSteps }}/4 sections saved</Badge>
-                <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
+                <span class="flex items-center gap-2 text-xs">
+                    <span v-for="step in readiness" :key="step.label" :class="step.done ? 'text-foreground' : 'text-muted-foreground'">
+                        {{ step.label }} {{ step.done ? '✓' : '·' }}
+                    </span>
+                </span>
+                <Badge v-if="!cashCounted" variant="outline">Enter counted cash to see over / short</Badge>
+                <Badge v-else-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
                     {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
                 </Badge>
@@ -4360,7 +4401,7 @@ const completedWorkflowSteps = computed(() => {
                                 <div
                                     class="flex justify-between text-base font-semibold"
                                 >
-                                    <span>Total Sales</span>
+                                    <span>Total sales</span>
                                     <span
                                         ><MoneyText
                                             :amount="totalSales + directSalesTotal + formDirectSalesTotal"
@@ -5031,7 +5072,7 @@ const completedWorkflowSteps = computed(() => {
                         <div class="rounded-lg border p-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <Label>Total Sales</Label>
+                                    <Label>Meter & lubricant sales</Label>
                                     <p class="text-xs text-muted-foreground">
                                         Fuel + other sales, including card /
                                         bank sales (moved to Money Out)
@@ -5626,7 +5667,7 @@ const completedWorkflowSteps = computed(() => {
                                     /></span>
                                 </div>
                                 <div class="flex justify-between text-sm">
-                                    <span>Total Sales</span>
+                                    <span>Sales (meters, lubricants, direct cash)</span>
                                     <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalSales + directSalesCash + formDirectSalesCash"
@@ -5753,7 +5794,7 @@ const completedWorkflowSteps = computed(() => {
                                 </h4>
                                 <p class="text-xs text-muted-foreground">
                                     Card swipes, transfers and fuel-card sales
-                                    are already inside Total Sales. Enter them
+                                    are already inside meter sales. Enter them
                                     here so they are taken out of expected cash.
                                 </p>
                             </div>
@@ -7071,164 +7112,41 @@ const completedWorkflowSteps = computed(() => {
                             <!-- Left: Cash Flow -->
                             <div class="space-y-4">
                                 <h4 class="font-semibold">Cash Flow</h4>
-                                <div class="space-y-2 text-sm">
-                                    <div class="flex justify-between">
-                                        <span>Opening Cash</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="form.opening_cash"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                <div class="space-y-1.5 text-sm tabular-nums">
+                                    <p class="text-xs font-medium text-muted-foreground">Money in</p>
+                                    <div v-for="line in cashFlowIn" :key="'in-' + line.label" class="flex justify-between">
+                                        <span>{{ line.label }}</span>
+                                        <MoneyText :amount="line.amount" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <div
-                                        v-if="totalPartnerDeposits > 0"
-                                        class="flex justify-between"
-                                    >
-                                        <span>+ Partner Deposits</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="totalPartnerDeposits"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                    <div v-for="row in recordedMoneyIn" :key="'cf-in-' + row.key" class="flex justify-between">
+                                        <span>{{ row.label }} <span class="text-xs text-muted-foreground">· recorded on another screen</span></span>
+                                        <MoneyText :amount="row.amount" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <div
-                                        v-if="totalAmanatDeposits > 0"
-                                        class="flex justify-between"
-                                    >
-                                        <span>+ Amanat Deposits</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="totalAmanatDeposits"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                    <div class="flex justify-between border-t pt-1.5 font-medium">
+                                        <span>Total money in</span>
+                                        <MoneyText :amount="shownMoneyIn" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <div
-                                        v-if="totalOtherDeposits > 0"
-                                        class="flex justify-between"
-                                    >
-                                        <span>+ Other Cash In</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="totalOtherDeposits"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+
+                                    <p class="pt-2 text-xs font-medium text-muted-foreground">Money out</p>
+                                    <div v-for="line in cashFlowOut" :key="'out-' + line.label" class="flex justify-between">
+                                        <span>{{ line.label }}</span>
+                                        <MoneyText :amount="line.amount" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <div class="flex justify-between">
-                                        <span>+ Total Sales</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="totalSales + directSalesCash + formDirectSalesCash"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                    <div v-for="row in recordedMoneyOut" :key="'cf-out-' + row.key" class="flex justify-between">
+                                        <span>{{ row.label }} <span class="text-xs text-muted-foreground">· recorded on another screen</span></span>
+                                        <MoneyText :amount="Math.abs(row.amount)" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <div
-                                        v-for="row in recordedMoneyIn"
-                                        :key="'cf-in-' + row.key"
-                                        class="flex justify-between"
-                                    >
-                                        <Tooltip>
-                                            <TooltipTrigger as-child>
-                                                <span class="inline-flex cursor-help items-center gap-1"
-                                                    >+ {{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
-                                                /></span>
-                                            </TooltipTrigger>
-                                            <TooltipContent class="max-w-sm space-y-1">
-                                                <p class="font-medium">Recorded on another screen this day</p>
-                                                <div
-                                                    v-for="src in row.sources"
-                                                    :key="src.id"
-                                                    class="flex justify-between gap-4 text-xs"
-                                                >
-                                                    <span>{{ src.type }} · {{ src.reference }}</span>
-                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
-                                                </div>
-                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                        <span
-                                            ><MoneyText
-                                                :amount="row.amount"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+                                    <div class="flex justify-between border-t pt-1.5 font-medium">
+                                        <span>Total money out</span>
+                                        <MoneyText :amount="shownMoneyOut" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
-                                    <Separator />
-                                    <div
-                                        class="flex justify-between font-medium"
-                                    >
-                                        <span>Total Money In</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="shownMoneyIn"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
-                                    </div>
-                                    <div
-                                        class="flex justify-between text-destructive"
-                                    >
-                                        <span
-                                            >− Money Out (incl. card / bank
-                                            sales)</span
-                                        >
-                                        <span
-                                            ><MoneyText
-                                                :amount="totalMoneyOut"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
-                                    </div>
-                                    <div
-                                        v-for="row in recordedMoneyOut"
-                                        :key="'cf-out-' + row.key"
-                                        class="flex justify-between text-destructive"
-                                    >
-                                        <Tooltip>
-                                            <TooltipTrigger as-child>
-                                                <span class="inline-flex cursor-help items-center gap-1"
-                                                    >− {{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
-                                                /></span>
-                                            </TooltipTrigger>
-                                            <TooltipContent class="max-w-sm space-y-1">
-                                                <p class="font-medium">Recorded on another screen this day</p>
-                                                <div
-                                                    v-for="src in row.sources"
-                                                    :key="src.id"
-                                                    class="flex justify-between gap-4 text-xs"
-                                                >
-                                                    <span>{{ src.type }} · {{ src.reference }}</span>
-                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
-                                                </div>
-                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                        <span
-                                            ><MoneyText
-                                                :amount="Math.abs(row.amount)"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
-                                    </div>
-                                    <Separator />
-                                    <div
-                                        class="flex justify-between text-lg font-semibold"
-                                    >
-                                        <span>Expected Closing</span>
-                                        <span
-                                            ><MoneyText
-                                                :amount="expectedClosingCash"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
+
+                                    <div class="flex justify-between border-t pt-2 text-lg font-semibold">
+                                        <span>Expected closing cash <span class="text-xs font-normal text-muted-foreground">(in − out)</span></span>
+                                        <MoneyText :amount="expectedClosingCash" :currency="currencyCode" :fraction-digits="0" />
                                     </div>
                                 </div>
                             </div>
-
                             <!-- Right: Sales Summary (by Pump) -->
                             <div class="space-y-4">
                                 <h4 class="font-semibold">Sales Summary</h4>
@@ -7261,7 +7179,7 @@ const completedWorkflowSteps = computed(() => {
                                         v-if="totalOtherSales > 0"
                                         class="flex justify-between"
                                     >
-                                        <span>Other Sales</span>
+                                        <span>Lubricant & other sales</span>
                                         <span
                                             ><MoneyText
                                                 :amount="totalOtherSales"
@@ -7269,14 +7187,18 @@ const completedWorkflowSteps = computed(() => {
                                                 :fraction-digits="0"
                                         /></span>
                                     </div>
+                                    <div v-if="directSalesTotal + formDirectSalesTotal > 0" class="flex justify-between">
+                                        <span>Direct sales</span>
+                                        <MoneyText :amount="directSalesTotal + formDirectSalesTotal" :currency="currencyCode" :fraction-digits="0" />
+                                    </div>
                                     <Separator />
                                     <div
                                         class="flex justify-between font-semibold"
                                     >
-                                        <span>Total Sales</span>
+                                        <span>Total sales</span>
                                         <span
                                             ><MoneyText
-                                                :amount="totalSales"
+                                                :amount="totalSales + directSalesTotal + formDirectSalesTotal"
                                                 :currency="currencyCode"
                                                 :fraction-digits="0"
                                         /></span>

@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 class DailyCloseCostCorrectionService
 {
-    public const TYPE = 'fuel_daily_close_cost_correction';
+    public const TYPE = 'fuel_close_cost_fix'; // transaction_type is varchar(30)
 
     public function __construct(private readonly FuelCostService $costs) {}
 

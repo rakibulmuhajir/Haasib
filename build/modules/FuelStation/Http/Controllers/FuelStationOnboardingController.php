@@ -1384,6 +1384,9 @@ class FuelStationOnboardingController extends Controller
             }
         });
 
+        // Opening stock recorded above also belongs in the books (Dr stock / Cr opening equity).
+        app(\App\Modules\FuelStation\Services\OpeningStockLedgerService::class)->syncQuietly($company->id, $request->user()->id);
+
         if (empty($created) && empty($updated)) {
             return redirect()->back()->with('info', 'All lubricants already exist.');
         }
@@ -1510,6 +1513,9 @@ class FuelStationOnboardingController extends Controller
                 $recordedTanks[] = $tank->name;
             }
         });
+
+        // Opening stock recorded above also belongs in the books (Dr stock / Cr opening equity).
+        app(\App\Modules\FuelStation\Services\OpeningStockLedgerService::class)->syncQuietly($company->id, $request->user()->id);
 
         if (empty($recordedTanks)) {
             return redirect()->back()->with('error', 'No valid tanks found to record stock.');

@@ -309,6 +309,9 @@ class SetupAction implements PaletteAction
             }
         });
 
+        // Opening stock recorded above also belongs in the books (Dr stock / Cr opening equity).
+        app(\App\Modules\FuelStation\Services\OpeningStockLedgerService::class)->syncQuietly($company->id, $userId);
+
         return [
             'message' => 'Products saved successfully.',
             'data' => [

@@ -127,8 +127,8 @@ const tankRows = computed(() =>
 
 // ---------- money in ----------
 const moneyIn = computed<Line[]>(() => {
-  const lines: Line[] = [{ label: 'Opening cash', detail: 'carried from the previous day', amount: n(totals.value.opening_cash ?? m.value.opening_cash) }]
-  if (n(m.value.total_revenue)) lines.push({ label: 'Fuel sales (meters)', detail: 'incl. card and credit, taken out under money out', amount: n(m.value.total_revenue) })
+  const lines: Line[] = [{ label: 'Opening cash', amount: n(totals.value.opening_cash ?? m.value.opening_cash) }]
+  if (n(m.value.total_revenue)) lines.push({ label: 'Meter sales', amount: n(m.value.total_revenue) })
   if (n(m.value.other_sales)) lines.push({ label: 'Lubricants & other sales', amount: n(m.value.other_sales) })
   for (const [id, amt] of Object.entries(m.value.bank_withdrawals_by_account || {})) lines.push({ label: 'Cash withdrawn from bank', detail: accountName(id), amount: n(amt) })
   for (const p of (m.value.payments_received_details || []) as any[]) lines.push({ label: 'Payment received', detail: p.customer_name, amount: n(p.amount) })
@@ -140,7 +140,7 @@ const moneyIn = computed<Line[]>(() => {
     const paid = s.type === 'payment' ? props.paymentSources?.[s.id] : undefined
     if (paid?.direct) lines.push({ label: 'Direct sale cash', detail: paid.invoices, amount: n(s.money_in) })
     else if (paid?.invoices) lines.push({ label: 'Customer payment', detail: `${s.reference} for ${paid.invoices}`, amount: n(s.money_in) })
-    else lines.push({ label: sourceLabel(s), detail: 'recorded on another screen', amount: n(s.money_in) })
+    else lines.push({ label: sourceLabel(s), amount: n(s.money_in) })
   }
   return withRemainder(lines, n(totals.value.opening_cash ?? m.value.opening_cash) + n(totals.value.money_in), 'Other money in')
 })
@@ -173,7 +173,7 @@ const moneyOut = computed<Line[]>(() => {
   if (n(m.value.partner_withdrawals)) lines.push({ label: 'Partner withdrawals', amount: n(m.value.partner_withdrawals) })
   if (n(m.value.employee_advances)) lines.push({ label: 'Salary advances', amount: n(m.value.employee_advances) })
   for (const p of (m.value.payroll_payout_details || []) as any[]) lines.push({ label: 'Salary paid', detail: p.employee_name, amount: n(p.amount) })
-  for (const s of otherScreens.value.filter((x) => n(x.money_out) > 0)) lines.push({ label: sourceLabel(s), detail: 'recorded on another screen', amount: n(s.money_out) })
+  for (const s of otherScreens.value.filter((x) => n(x.money_out) > 0)) lines.push({ label: sourceLabel(s), amount: n(s.money_out) })
   return withRemainder(lines, n(totals.value.money_out), 'Other money out')
 })
 
@@ -263,7 +263,7 @@ const cash = computed(() => ({
             </tbody>
           </table>
         </div>
-        <p class="mt-2 text-xs text-muted-foreground">Litres. Opening is the previous day's dip; variance is dip − expected (+ gain, − loss).</p>
+        <p class="mt-2 text-xs text-muted-foreground">Litres · variance + gain, − loss</p>
       </section>
 
       <!-- Money in -->

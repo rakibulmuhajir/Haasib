@@ -373,11 +373,7 @@ const unlockTransaction = () => {
               <DialogHeader>
                 <DialogTitle>Edit this day?</DialogTitle>
                 <DialogDescription>
-                  The day opens again as a draft in the same form, with everything as it was
-                  entered. Re-post it when you are done and its entries are posted again. Nothing
-                  is lost: this posted version is kept permanently in the day's history with your
-                  name and the reason below, and invoices, bills or advances already settled on
-                  other screens are kept as they are and linked from the draft.
+                  Reopens as a draft. This version stays in the day's history.
                 </DialogDescription>
               </DialogHeader>
               <p v-if="editDayLaterDates?.length" class="rounded-md border border-status-attention/40 bg-status-attention/10 px-3 py-2 text-sm">

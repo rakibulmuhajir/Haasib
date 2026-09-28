@@ -3335,7 +3335,7 @@ const cashFlowOut = computed(() => [
                         {{ step.label }} {{ step.done ? '✓' : '·' }}
                     </span>
                 </span>
-                <Badge v-if="!cashCounted" variant="outline">Enter counted cash to see over / short</Badge>
+                <Badge v-if="!cashCounted" variant="outline">Cash not counted</Badge>
                 <Badge v-else-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
                     {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}:
                     <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
@@ -3495,7 +3495,7 @@ const cashFlowOut = computed(() => [
                         <div>
                             <CardTitle>Purchases / deliveries today</CardTitle>
                             <CardDescription>
-                                One supplier bill each, posted with this close. Litres going into a tank count in its expected stock straight away.
+                                One bill per supplier.
                             </CardDescription>
                         </div>
                         <Button variant="outline" size="sm" @click="addPurchaseRow"><Plus class="mr-1 h-4 w-4" /> Add supplier bill</Button>
@@ -3505,7 +3505,7 @@ const cashFlowOut = computed(() => [
                             <div v-for="(purchase, index) in form.purchases" :key="rowKey(purchase)" class="space-y-3 rounded-lg border p-3">
                                 <p v-if="purchase.kept_bill_id" class="text-sm">
                                     <Link :href="`/${props.company.slug}/bills/${purchase.kept_bill_id}`" class="font-medium underline underline-offset-2">Bill {{ purchase.kept_bill_number }}</Link>
-                                    <span class="text-muted-foreground"> · kept as it is (paid or received on another screen) and already in the books. Change it on the bill.</span>
+                                    <span class="text-muted-foreground"> · kept, edit on the bill</span>
                                 </p>
                                 <template v-else>
                                 <div class="flex flex-wrap items-end gap-3">
@@ -4131,7 +4131,7 @@ const cashFlowOut = computed(() => [
                                 <div>
                                     <h4 class="font-medium">Direct sales (not from pumps)</h4>
                                     <p class="text-xs text-muted-foreground">
-                                        Fuel from a delivery sold straight to a customer. Counted as a sale; cash ones in cash in.
+                                        Sold straight from the tanker.
                                     </p>
                                 </div>
                                 <Button variant="outline" size="sm" @click="addDirectSale()"><Plus class="mr-1 h-4 w-4" /> Add direct sale</Button>
@@ -4144,7 +4144,7 @@ const cashFlowOut = computed(() => [
                                     variant="secondary"
                                     @click="addDirectSale(sug.itemId, Math.round(sug.litres * 1000) / 1000)"
                                 >
-                                    + Record sale of {{ Math.round(sug.litres * 1000) / 1000 }} L {{ fuelItemName(sug.itemId) }} sold directly
+                                    + {{ fuelItemName(sug.itemId) }} {{ Math.round(sug.litres * 1000) / 1000 }} L sold directly
                                 </Button>
                             </div>
                             <div
@@ -4154,7 +4154,7 @@ const cashFlowOut = computed(() => [
                             >
                                 <p v-if="sale.kept_invoice_id">
                                     <Link :href="`/${props.company.slug}/invoices/${sale.kept_invoice_id}`" class="font-medium underline underline-offset-2">Direct sale {{ sale.kept_invoice_number }}</Link>
-                                    <span class="text-muted-foreground"> · kept as it is (paid on another screen) and already in the books. Change it on the invoice.</span>
+                                    <span class="text-muted-foreground"> · kept, edit on the invoice</span>
                                 </p>
                                 <template v-else>
                                 <div>
@@ -5840,8 +5840,8 @@ const cashFlowOut = computed(() => [
                                 </p>
                             </div>
                             <p v-if="!enabledChannels.some((ch) => ch.type !== 'cash')" class="text-sm text-muted-foreground">
-                                No card, bank transfer or wallet channels are set up for this station.
-                                <Link :href="`/${props.company.slug}/fuel/settings`" class="underline underline-offset-2">Set them up in Station settings</Link>.
+                                No card or wallet channels.
+                                <Link :href="`/${props.company.slug}/fuel/settings`" class="underline underline-offset-2">Set up</Link>
                             </p>
                             <template
                                 v-for="channel in enabledChannels"
@@ -6346,7 +6346,7 @@ const cashFlowOut = computed(() => [
                             >
                                 <p v-if="(advance as any).kept_advance_id">
                                     <span class="font-medium">Salary advance · {{ advance.employee_name }} · {{ advance.amount }}</span>
-                                    <span class="text-muted-foreground"> · has repayments, so it is kept; posting pays it out again and keeps its repayments.</span>
+                                    <span class="text-muted-foreground"> · kept (has repayments)</span>
                                 </p>
                                 <template v-else>
                                 <div>

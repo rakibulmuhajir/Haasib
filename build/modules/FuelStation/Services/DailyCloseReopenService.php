@@ -84,8 +84,7 @@ class DailyCloseReopenService
             $this->guardReadingCorrections($close);
             $warnings = [];
             if ($later = $this->laterPostedDates($companyId, $businessDate)) {
-                $warnings[] = 'Later days ('.implode(', ', $later).') opened from the closing cash, meters and dips. '
-                    .'If you change those, edit and re-post those days too.';
+                $warnings[] = 'Later days ('.implode(', ', $later).') use this day\'s closing figures.';
             }
 
             // metadata['purchase_details'] / ['expense_transaction_ids'] only exist on closes
@@ -345,7 +344,7 @@ class DailyCloseReopenService
                 // Paid on a later day (e.g. that day's Payments received): Edit day keeps the
                 // invoice and its payment, and the re-posted day uses it again -- see
                 // detachOrDeleteCreditSales() and DailyCloseCreditSaleService::prepare().
-                $warnings[] = "Invoice {$credit['invoice_number']} was paid later; it is kept and re-used when this day is posted again.";
+                $warnings[] = "{$credit['invoice_number']} paid later: kept.";
             }
         }
     }
@@ -378,7 +377,7 @@ class DailyCloseReopenService
                 ->sum('amount_allocated');
             if ($externalAllocated > 0.004) {
                 $kept[$bill->id] = $bill->bill_number;
-                $warnings[] = "Bill {$bill->bill_number} was paid on another screen; it is kept as it is. Change it on the bill.";
+                $warnings[] = "{$bill->bill_number} paid elsewhere: kept.";
                 continue;
             }
             $receivedElsewhere = (float) $bill->lineItems()->sum('quantity_received') > 0
@@ -389,7 +388,7 @@ class DailyCloseReopenService
                     ->exists();
             if ($receivedElsewhere) {
                 $kept[$bill->id] = $bill->bill_number;
-                $warnings[] = "Bill {$bill->bill_number} was received on a later date; it is kept as it is. Change it on the bill.";
+                $warnings[] = "{$bill->bill_number} received later: kept.";
             }
         }
 
@@ -409,7 +408,7 @@ class DailyCloseReopenService
         foreach (SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $advance) {
             if ((float) $advance->amount_recovered > 0) {
                 $kept[$advance->id] = ['employee_id' => $advance->employee_id, 'amount' => (float) $advance->amount];
-                $warnings[] = "A salary advance ({$advance->reason}) already has repayments; it is kept and paid out again when this day is posted.";
+                $warnings[] = "Advance ({$advance->reason}) has repayments: kept.";
             }
         }
 
@@ -549,7 +548,7 @@ class DailyCloseReopenService
             if ($foreign) {
                 $number = Invoice::where('company_id', $companyId)->whereKey($detail['invoice_id'])->value('invoice_number');
                 $kept[$detail['invoice_id']] = $number;
-                $warnings[] = "Direct sale {$number} has a payment from another screen; it is kept as it is. Change it on the invoice.";
+                $warnings[] = "{$number} paid elsewhere: kept.";
             }
         }
 

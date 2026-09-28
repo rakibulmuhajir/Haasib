@@ -108,6 +108,8 @@ class DailyCloseReconciliationService
             })->whereIn('status', ['posted', 'locked'])
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->where('transaction_type', '!=', 'fuel_daily_close')
+            // A cost correction re-values the close itself; it is not new activity on the day.
+            ->where('transaction_type', '!=', DailyCloseCostCorrectionService::TYPE)
             ->with('journalEntries')->orderBy('id')->get();
         $accountTypes = DB::table('acct.accounts')->where('company_id', $companyId)->pluck('type', 'id');
         $sources = [];

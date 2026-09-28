@@ -296,7 +296,7 @@ class InventoryService
         $deltaValue = $revaluedQuantity * ($newUnitPrice - $oldUnitPrice);
         $newAvgCost = ($currentTotalValue + $deltaValue) / $currentQty;
 
-        $item->update(['cost_price' => round($newAvgCost, 6)]);
+        $item->update(['cost_price' => round($newAvgCost, 6), 'avg_cost' => round($newAvgCost, 4)]);
     }
 
     /**
@@ -309,6 +309,8 @@ class InventoryService
         // opening and rate costs, cost_price can still be 0. Counting the new litres twice
         // against a zero cost turned a 338 delivery into a cost of 104. Same as
         // StockAdjustmentService::updateItemCost.
+        // avg_cost is written too: it is what the fuel daily close charges as cost of sales.
+        // Writing only cost_price left a fuel item's cost frozen at whatever was last typed.
         $currentQty = max(0.0, (float) $item->stockLevels()->sum('quantity') - $newQty);
         $currentCost = (float) ($item->avg_cost ?: $item->cost_price ?: $newUnitCost);
 
@@ -318,7 +320,7 @@ class InventoryService
             $totalValue = ($currentQty * $currentCost) + ($newQty * $newUnitCost);
             $newAvgCost = $totalValue / $totalQty;
 
-            $item->update(['cost_price' => round($newAvgCost, 6)]);
+            $item->update(['cost_price' => round($newAvgCost, 6), 'avg_cost' => round($newAvgCost, 4)]);
         }
     }
 }

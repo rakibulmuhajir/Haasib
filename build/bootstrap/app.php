@@ -49,6 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
         SyncPermissions::class,
         SyncRolePermissions::class,
         SyncCompanyUserRoles::class,
+        \App\Console\Commands\RecostFuelCloses::class,
     ])
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, Request $request) {

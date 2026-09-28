@@ -437,7 +437,7 @@ class DailyCloseService
                     ->first();
 
                 $saleRate = (float) $reading['sale_rate'];
-                $avgCost = (float) ($item?->avg_cost ?? 0);
+                $avgCost = $item ? app(FuelCostService::class)->costForDay($companyId, $item->id, $date, (float) ($item->avg_cost ?? 0)) : 0.0;
 
                 $rateSplit = $this->calculateRateChangeSplit($reading, $rateChangeSnapshots[$reading['item_id']] ?? null, $saleRate);
                 $revenue = $rateSplit['revenue'];
@@ -717,7 +717,7 @@ class DailyCloseService
 
                     // Get item for cost calculation
                     $item = Item::find($itemId);
-                    $avgCost = (float) ($item?->avg_cost ?? 0);
+                    $avgCost = $item ? app(FuelCostService::class)->costForDay($companyId, $item->id, $date, (float) ($item->avg_cost ?? 0)) : 0.0;
                     $varianceAmount = round(abs($varianceLiters) * $avgCost, 2);
 
                     // Track variances for GL posting. The inventory side is resolved

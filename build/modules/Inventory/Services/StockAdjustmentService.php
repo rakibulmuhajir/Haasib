@@ -184,6 +184,6 @@ class StockAdjustmentService
         }
 
         $newAvgCost = (($currentQty * $currentCost) + ($newQty * $newUnitCost)) / $totalQty;
-        $item->update(['cost_price' => round($newAvgCost, 6)]);
+        $item->update(['cost_price' => round($newAvgCost, 6), 'avg_cost' => round($newAvgCost, 4)]);
     }
 }

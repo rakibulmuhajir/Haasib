@@ -117,6 +117,7 @@ class DailyCloseReopenService
             ]);
 
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
+            $this->removeCostCorrections($companyId, $close->id);
 
             $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
             $this->reverseDirectSales($companyId, $metadata, $keptDirectSales);
@@ -450,6 +451,23 @@ class DailyCloseReopenService
                 throw new \RuntimeException("Tank {$tank['tank_name']} would go below zero ("
                     .number_format($after, 0)."L) without the stock this day added. Later days have already sold it; edit those days first.");
             }
+        }
+    }
+
+    /**
+     * A cost correction re-costed this close in place; the re-post carries its own day's cost,
+     * so the correction goes with the close instead of being counted a second time.
+     */
+    private function removeCostCorrections(string $companyId, string $closeId): void
+    {
+        $corrections = Transaction::where('company_id', $companyId)
+            ->where('transaction_type', DailyCloseCostCorrectionService::TYPE)
+            ->whereNull('deleted_at')
+            ->where('reference_id', $closeId)
+            ->get();
+        foreach ($corrections as $txn) {
+            JournalEntry::where('company_id', $companyId)->where('transaction_id', $txn->id)->delete();
+            $txn->delete();
         }
     }
 

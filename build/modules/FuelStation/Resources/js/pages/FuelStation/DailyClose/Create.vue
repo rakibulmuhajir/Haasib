@@ -931,16 +931,11 @@ const enabledChannels = computed(() => {
     return (props.paymentChannels || []).filter((ch) => ch.enabled);
 });
 
-// Bank charge on a card / wallet channel's sales: the day's figure, else the channel's setting.
+// Bank charge on a card / wallet channel's sales, as set up in Station settings.
 const channelSum = (code: string) =>
     ((form.payment_receipts as any)[code]?.entries || []).reduce((t: number, e: any) => t + Number(e.amount || 0), 0);
-const channelFeePercent = (channel: any) =>
-    Number((form.payment_receipts as any)[channel.code]?.fee_percent ?? channel.fee_percent ?? 0);
+const channelFeePercent = (channel: any) => Number(channel.fee_percent ?? 0);
 const channelFee = (channel: any) => Math.round(channelSum(channel.code) * channelFeePercent(channel)) / 100;
-const setChannelFee = (code: string, value: string | number) => {
-    const receipts = form.payment_receipts as any;
-    receipts[code] = { entries: [], ...(receipts[code] || {}), fee_percent: value === '' ? null : Number(value) };
-};
 
 const searchMatches = (
     value: string | null | undefined,
@@ -5956,20 +5951,10 @@ const cashFlowOut = computed(() => [
                                         </Button>
                                     </div>
 
-                                    <div v-if="channel.type !== 'fuel_card' || channelFeePercent(channel) > 0" class="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Label :for="`charge-${channel.code}`" class="text-xs">Bank charge</Label>
-                                        <Input
-                                            :id="`charge-${channel.code}`"
-                                            :model-value="channelFeePercent(channel)"
-                                            type="number"
-                                            min="0"
-                                            max="10"
-                                            step="0.01"
-                                            class="h-7 w-20"
-                                            @update:model-value="(v) => setChannelFee(channel.code, v)"
-                                        />
-                                        <span>% = <MoneyText :amount="channelFee(channel)" :currency="currencyCode" :fraction-digits="0" /></span>
-                                    </div>
+                                    <p v-if="channelFeePercent(channel) > 0" class="text-xs text-muted-foreground">
+                                        Bank charge {{ channelFeePercent(channel) }}% =
+                                        <MoneyText :amount="channelFee(channel)" :currency="currencyCode" :fraction-digits="0" />
+                                    </p>
 
                                     <div
                                         v-for="(entry, index) in form

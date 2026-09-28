@@ -112,8 +112,6 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'credit_sales.*.kept_invoice_id' => 'nullable|uuid',
             // Set by Edit day on rows whose documents were kept (settled on another screen).
             'purchases.*.kept_bill_id' => 'nullable|uuid',
-            // Bank charge % for a card / wallet channel on this day (defaults from station settings).
-            'payment_receipts.*.fee_percent' => 'nullable|numeric|min:0|max:10',
             'purchases.*.kept_bill_number' => 'nullable|string|max:50',
             'direct_sales.*.kept_invoice_id' => 'nullable|uuid',
             'direct_sales.*.kept_invoice_number' => 'nullable|string|max:50',

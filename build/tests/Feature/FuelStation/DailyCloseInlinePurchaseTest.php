@@ -379,7 +379,10 @@ test('a card channel bank charge goes to POS/Bank Charges and the rest to the ac
     ]);
     $f['payload']['credit_sales'] = [];
     $f['payload']['closing_cash'] = 31000;
-    $f['payload']['payment_receipts']['pos']['fee_percent'] = 1; // 1% of 9,000
+    $settings = \App\Modules\FuelStation\Models\StationSettings::where('company_id', $f['company']->id)->sole();
+    $channels = $settings->payment_channels;
+    $channels[0]['fee_percent'] = 1; // the POS channel: 1% of 9,000
+    $settings->update(['payment_channels' => $channels]);
 
     $posted = inlinePurchasePost($f);
 

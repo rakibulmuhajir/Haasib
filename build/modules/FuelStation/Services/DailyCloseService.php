@@ -1000,10 +1000,10 @@ class DailyCloseService
 
                     if ($channelType !== 'cash') {
                         $totalNonCashReceipts += $channelTotal;
-                        // The bank keeps a percentage of card / wallet sales: the day's own figure
-                        // if entered on the close, else the channel's setting. The sales stay
-                        // gross; the account receives the rest and the charge is an expense.
-                        $feePercent = (float) ($channelData['fee_percent'] ?? $channel['fee_percent'] ?? 0);
+                        // The bank keeps a percentage of card / wallet sales, set on the channel in
+                        // Station settings. The sales stay gross; the account receives the rest and
+                        // the charge is an expense.
+                        $feePercent = (float) ($channel['fee_percent'] ?? 0);
                         $paymentReceiptPostings[] = [
                             'channel_code' => $channelCode,
                             'channel_label' => $channel['label'] ?? $channelCode,

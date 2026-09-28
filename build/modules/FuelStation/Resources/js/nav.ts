@@ -60,6 +60,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
         ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
+        ...item('journals', 'Journal Entries', '/journals', BookOpen),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },
       { label: 'Banking', items: [
@@ -74,7 +75,6 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('pumps', 'Pumps & Nozzles', '/fuel/pumps', Gauge),
         ...item('settings', 'Setup Wizard', '/fuel/onboarding', Settings),
         { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: BookOpen },
-        ...item('journals', 'Advanced Accounting · Journal Entries', '/journals', BookOpen),
         ...item('reports', 'Advanced Accounting · Trial Balance', '/reports/trial-balance', Scale),
         ...item('accounts', t('chartOfAccounts'), '/accounts', BookOpen),
         ...item('accountSettings', 'Default Accounts', '/accounting/default-accounts', Settings),

@@ -20,7 +20,10 @@ class JournalController extends Controller
 
         $query = Transaction::where('company_id', $company->id)
             ->withCount('journalEntries')
-            ->orderByDesc('transaction_date');
+            // Many journals share a date: without a tie-break a row can show on two pages or none.
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
         if ($request->filled('type') && $request->type !== 'all') {
             $query->where('transaction_type', $request->type);

@@ -60,15 +60,16 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Journals', href: `/${props.company.slug}/journals` },
 ]
 
-const handleSearch = () => {
+const handleSearch = (page?: number) => {
   router.get(
     `/${props.company.slug}/journals`,
     {
       search: search.value,
       status: status.value === 'all' ? '' : status.value,
       type: type.value === 'all' ? '' : type.value,
+      ...(page && page > 1 ? { page } : {}),
     },
-    { preserveState: true }
+    { preserveState: true, preserveScroll: page !== undefined }
   )
 }
 
@@ -127,10 +128,10 @@ const tableData = computed(() =>
           v-model="search"
           placeholder="Search number or description..."
           class="pl-10"
-          @keyup.enter="handleSearch"
+          @keyup.enter="() => handleSearch()"
         />
       </div>
-      <Select v-model="type" @update:modelValue="handleSearch">
+      <Select v-model="type" @update:modelValue="() => handleSearch()">
         <SelectTrigger class="w-[220px]">
           <SelectValue placeholder="All types" />
         </SelectTrigger>
@@ -141,7 +142,7 @@ const tableData = computed(() =>
           </SelectItem>
         </SelectContent>
       </Select>
-      <Select v-model="status" @update:modelValue="handleSearch">
+      <Select v-model="status" @update:modelValue="() => handleSearch()">
         <SelectTrigger class="w-[180px]">
           <SelectValue placeholder="All status" />
         </SelectTrigger>
@@ -159,6 +160,7 @@ const tableData = computed(() =>
       :data="tableData"
       :pagination="journals"
       :clickable="true"
+      @page-change="(page: number) => handleSearch(page)"
       @row-click="(row: any) => router.get(`/${company.slug}/journals/${row.id}`)"
     >
       <template #cell-status="{ value }">

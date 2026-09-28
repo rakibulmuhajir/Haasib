@@ -1514,6 +1514,12 @@ const partyOf = computed<Record<string, { key: string; nameKey?: string; options
     credit_sales: { key: 'customer_id', nameKey: 'customer_name', options: saleCustomerOptions.value },
     payments_received: { key: 'customer_id', nameKey: 'customer_name', options: customerOptions.value },
 }));
+// Beside an advance: what the employee has already taken this month, and their salary.
+const employeeMonthHint = (employeeId: string) => {
+    const e: any = props.employees.find((x) => x.id === employeeId);
+    if (!e) return null;
+    return `This month ${formatMoneyText(Number(e.month_advances ?? 0), currencyCode.value)} · Salary ${formatMoneyText(Number(e.base_salary ?? 0), currencyCode.value)}`;
+};
 const holderBalance = (row: any) => {
     const holder = props.amanatHolders.find((h) => h.id === row.customer_id);
     if (holder) row.available_balance = holder.amanat_balance;
@@ -5172,7 +5178,7 @@ const cashFlowOut = computed(() => [
                         <!-- First in Cash In: customers paying what they owe, or leaving a deposit. -->
                         <PaymentsReceivedEntry
                             v-if="isExpanded('payments_received')" style="order: -1"
-                            class="space-y-4 border-t border-rule-default pt-4"
+                            class="space-y-4 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300"
                             v-model="form.payments_received"
                             :errors="form.errors as Record<string, string>"
                             :disabled="submitting || form.processing"
@@ -5186,7 +5192,7 @@ const cashFlowOut = computed(() => [
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                        <div v-if="isExpanded('partner_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('partner_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Partner deposits</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['partner_deposits']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5205,7 +5211,7 @@ const cashFlowOut = computed(() => [
 
 
                         <template v-if="features.has_amanat">
-                        <div v-if="isExpanded('amanat_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('amanat_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Amanat deposits</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['amanat_deposits']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5227,7 +5233,7 @@ const cashFlowOut = computed(() => [
 
                         </template>
 
-                        <div v-if="isExpanded('other_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('other_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Other cash in</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['other_deposits']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5246,7 +5252,7 @@ const cashFlowOut = computed(() => [
 
 
 
-                        <div v-if="isExpanded('bank_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('bank_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Cash withdrawn from bank</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['bank_withdrawals']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5429,9 +5435,9 @@ const cashFlowOut = computed(() => [
                             </button>
                         </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
+                        <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
                         <template v-for="channel in cardChannels" :key="channel.code">
-                            <div v-if="isExpanded(channelKey(channel.code)) && form.payment_receipts[channel.code]" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                            <div v-if="isExpanded(channelKey(channel.code)) && form.payment_receipts[channel.code]" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div class="flex items-baseline justify-between">
                                     <h4 class="font-medium">{{ channel.label }}</h4>
                                     <MoneyText class="text-sm font-medium" :amount="channelSum(channel.code)" :currency="currencyCode" :fraction-digits="0" />
@@ -5453,7 +5459,7 @@ const cashFlowOut = computed(() => [
 
 
                         <!-- Bank Deposits -->
-                        <div v-if="isExpanded('bank_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('bank_deposits')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Bank deposits</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['bank_deposits']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5476,7 +5482,7 @@ const cashFlowOut = computed(() => [
                             v-if="features.has_partners && partners.length > 0"
                         >
 
-                        <div v-if="isExpanded('partner_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('partner_withdrawals')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Partner withdrawals</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['partner_withdrawals']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5495,7 +5501,7 @@ const cashFlowOut = computed(() => [
 
 
                         <!-- Employee Advances -->
-                        <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Employee advances</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['employee_advances']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5504,6 +5510,7 @@ const cashFlowOut = computed(() => [
                                 v-model="form.employee_advances"
                                 :party="{ key: 'employee_id', nameKey: 'employee_name', label: 'Employee', options: employeeOptions }"
                                 :text="{ key: 'reason', label: 'Reason' }"
+                                :hint="(row: any) => employeeMonthHint(row.employee_id)"
                                 :locked="(row: any) => row.kept_advance_id ? `${row.employee_name} · ${row.amount} · kept (has repayments)` : null"
                                 errors-prefix="employee_advances"
                                 :errors="form.errors as Record<string, string>"
@@ -5701,7 +5708,7 @@ const cashFlowOut = computed(() => [
 
                         <PaySupplierEntry
                             v-if="isExpanded('pay_suppliers')" style="order: -1"
-                            class="space-y-4 border-t border-rule-default pt-4"
+                            class="space-y-4 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300"
                             v-model="form.pay_suppliers"
                             :errors="form.errors as Record<string, string>"
                             :disabled="submitting || form.processing"
@@ -5713,7 +5720,7 @@ const cashFlowOut = computed(() => [
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->
                         <template v-if="features.has_amanat">
 
-                        <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Amanat withdrawals</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['amanat_disbursements']()" :currency="currencyCode" :fraction-digits="0" />
@@ -5735,7 +5742,7 @@ const cashFlowOut = computed(() => [
 
 
                         <!-- Operating Expenses -->
-                        <div v-if="isExpanded('expenses')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4">
+                        <div v-if="isExpanded('expenses')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
                                 <h4 class="font-medium">Expenses</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['expenses']()" :currency="currencyCode" :fraction-digits="0" />

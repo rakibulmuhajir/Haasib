@@ -83,7 +83,7 @@ const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(
       </div>
       <div class="col-span-2 space-y-1">
         <Label :for="`pay-supplier-amount-${index}`">Amount</Label>
-        <Input :id="`pay-supplier-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <Input @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" :id="`pay-supplier-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
         <InputError :message="errors[`pay_suppliers.${index}.amount`]" />
       </div>
       <div class="col-span-2 space-y-1">

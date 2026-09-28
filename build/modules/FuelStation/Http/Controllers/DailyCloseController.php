@@ -54,7 +54,7 @@ class DailyCloseController extends Controller
      * is_active value. Treat employees as selectable unless they are
      * explicitly inactive/terminated or soft-deleted.
      */
-    private function getEmployeesForAdvances(string $companyId)
+    private function getEmployeesForAdvances(string $companyId, ?string $date = null)
     {
         $columns = ['id', 'first_name', 'last_name', 'position', 'base_salary'];
 
@@ -72,11 +72,18 @@ class DailyCloseController extends Controller
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get($columns)
-            ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
+            ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee, $date));
     }
 
-    private function formatEmployeeForDailyClose(string $companyId, object $employee): array
+    private function formatEmployeeForDailyClose(string $companyId, object $employee, ?string $date = null): array
     {
+        // Advances taken this month up to the close's date, shown beside the salary on the close.
+        $day = \Illuminate\Support\Carbon::parse($date ?? now()->toDateString());
+        $monthAdvances = SalaryAdvance::where('company_id', $companyId)
+            ->where('employee_id', $employee->id)
+            ->whereBetween('advance_date', [$day->copy()->startOfMonth()->toDateString(), $day->toDateString()])
+            ->sum('amount');
+
         $outstandingAdvances = SalaryAdvance::where('company_id', $companyId)
             ->where('employee_id', $employee->id)
             ->whereIn('status', ['pending', 'partially_recovered'])
@@ -90,6 +97,7 @@ class DailyCloseController extends Controller
             'position' => $employee->position,
             'base_salary' => (float) ($employee->base_salary ?? 0),
             'outstanding_advances' => (float) $outstandingAdvances,
+            'month_advances' => (float) $monthAdvances,
         ];
     }
 
@@ -709,7 +717,7 @@ class DailyCloseController extends Controller
         $investors = $this->getInvestorsForDailyClose($companyId);
 
         // Get employees for advances
-        $employees = $this->getEmployeesForAdvances($companyId);
+        $employees = $this->getEmployeesForAdvances($companyId, $date);
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
         $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
         $pendingFuelInvoices = $this->getPendingFuelInvoicesForDailyClose($companyId, $date);

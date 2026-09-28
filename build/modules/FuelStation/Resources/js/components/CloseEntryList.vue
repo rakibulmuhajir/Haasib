@@ -34,10 +34,11 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
+// Fixed widths, the same in every section, so a dropdown is never wider in one entry than another.
 const columns = computed(() => [
-  props.party ? 'minmax(0,1.3fr)' : null,
-  props.extra ? 'minmax(0,1fr)' : null,
-  props.text ? 'minmax(0,1.3fr)' : null,
+  props.party ? '16rem' : null,
+  props.extra ? '12rem' : null,
+  props.text ? 'minmax(0,18rem)' : null,
   '9rem',
   '2.25rem',
 ].filter(Boolean).join(' '))
@@ -81,7 +82,7 @@ const setParty = (row: any, value: unknown) => {
           <InputError :message="err(index, text.key)" />
         </div>
         <div>
-          <Input v-model.number="row.amount" class="h-9 text-right" type="number" min="0" step="0.01" aria-label="Amount" :disabled="disabled" />
+          <Input v-model.number="row.amount" class="h-9 text-right" type="number" min="0" step="0.01" aria-label="Amount" :disabled="disabled" @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" />
           <InputError :message="err(index, 'amount')" />
         </div>
         <Button variant="ghost" size="icon" class="h-9 w-9" aria-label="Remove" :disabled="disabled" @click="rows.splice(index, 1)">

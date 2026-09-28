@@ -178,7 +178,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
         <span v-else class="text-muted-foreground">{{ row.invoice_number ?? row.reference }}</span>
         <MoneyText class="ml-auto font-medium" :amount="row.amount" :currency="currency ?? 'PKR'" :fraction-digits="0" />
       </p>
-      <div v-else class="grid items-start gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_7rem_9rem_minmax(0,1fr)_2.25rem]">
+      <div v-else class="grid items-start gap-2 md:grid-cols-[16rem_12rem_7rem_9rem_minmax(0,18rem)_2.25rem]">
         <div>
           <EntitySearch v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
             :company-slug="companySlug"
@@ -202,13 +202,13 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
           <InputError :message="errors[`credit_sales.${index}.item_id`]" />
         </div>
         <div>
-          <Input class="h-9 text-right" :model-value="row.litres" type="number" min="0.01" step="0.01" placeholder="Litres" :aria-label="`Litres, row ${index + 1}`" :disabled="disabled" @update:model-value="(v) => onLitresInput(row, v)" />
+          <Input class="h-9 text-right" :model-value="row.litres" type="number" min="0.01" step="0.01" placeholder="Litres" :aria-label="`Litres, row ${index + 1}`" :disabled="disabled" @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" @update:model-value="(v) => onLitresInput(row, v)" />
           <p v-if="rateFor(row) > 0" class="text-xs text-muted-foreground">@ {{ rateFor(row) }}</p>
           <InputError :message="errors[`credit_sales.${index}.litres`]" />
           <p v-if="missingLitres(row)" class="text-xs text-status-attention">Litres needed for discount</p>
         </div>
         <div>
-          <Input class="h-9 text-right" :model-value="row.amount" type="number" min="0.01" step="0.01" placeholder="Amount" :aria-label="`Amount, row ${index + 1}`" :disabled="disabled" @update:model-value="(v) => onAmountInput(row, v)" />
+          <Input class="h-9 text-right" :model-value="row.amount" type="number" min="0.01" step="0.01" placeholder="Amount" :aria-label="`Amount, row ${index + 1}`" :disabled="disabled" @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" @update:model-value="(v) => onAmountInput(row, v)" />
           <InputError :message="errors[`credit_sales.${index}.amount`]" />
           <p v-if="!row.is_credit_blocked && isOverLimit(row)" class="text-xs text-status-attention">
             Over limit <MoneyText :amount="row.credit_limit ?? 0" :currency="currency ?? 'PKR'" :fraction-digits="0" />

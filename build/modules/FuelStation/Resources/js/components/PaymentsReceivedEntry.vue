@@ -142,7 +142,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
       </div>
       <div class="col-span-2 space-y-1">
         <Label :for="`payment-amount-${index}`">Amount</Label>
-        <Input :id="`payment-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
+        <Input @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" :id="`payment-amount-${index}`" v-model.number="row.amount" type="number" min="0.01" step="0.01" :disabled="disabled" />
         <InputError :message="errors[`payments_received.${index}.amount`]" />
       </div>
       <div class="col-span-1 space-y-1">

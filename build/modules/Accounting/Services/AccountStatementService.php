@@ -75,6 +75,9 @@ class AccountStatementService
             ->whereDate('t.transaction_date', '>=', $from)
             ->whereDate('t.transaction_date', '<=', $to)
             ->orderBy('t.transaction_date')
+            // Within a day, money in before money out: a same-day deposit and withdrawal never
+            // show the account dipping below zero just because of the order they were keyed in.
+            ->orderByRaw('CASE WHEN je.debit_amount > 0 THEN 0 ELSE 1 END')
             ->orderBy('t.created_at')
             ->orderBy('je.line_number')
             ->select([

@@ -74,6 +74,8 @@ class BankTransactionController extends Controller
                 ->whereIn('acct.transactions.status', ['posted', 'locked'])
                 ->where('acct.journal_entries.account_id', $accountId)
                 ->orderBy('acct.transactions.transaction_date')
+                // Within a day, money in before money out (see AccountStatementService).
+                ->orderByRaw('CASE WHEN acct.journal_entries.debit_amount > 0 THEN 0 ELSE 1 END')
                 ->orderBy('acct.transactions.created_at')
                 ->select('acct.transactions.id as transaction_id', 'acct.journal_entries.debit_amount', 'acct.journal_entries.credit_amount')
                 ->get();

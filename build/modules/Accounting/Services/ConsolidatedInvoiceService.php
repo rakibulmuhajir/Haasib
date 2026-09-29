@@ -266,11 +266,20 @@ class ConsolidatedInvoiceService
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
             // The headings it was sent with; older documents saved none, so they get today's defaults.
+            'file_name' => self::fileName(['title' => $doc->title, 'number' => $doc->number, 'date' => substr((string) $doc->created_at, 0, 10), 'customer_name' => $doc->customer_name]),
             'labels' => array_merge(self::labels($company), array_filter(
                 is_array($saved = json_decode((string) $doc->columns, true)) && ! array_is_list($saved) ? $saved : [],
                 fn ($v) => is_string($v) && $v !== '',
             )),
         ];
+    }
+
+    /** A file name that says what it is: Invoice-CI-00001-2026-09-29-Suthra-punjab. */
+    public static function fileName(array $document): string
+    {
+        $name = implode('-', array_filter([$document['title'] ?? 'Invoice', $document['number'] ?? '', $document['date'] ?? '', $document['customer_name'] ?? '']));
+
+        return trim(preg_replace('/-+/', '-', preg_replace('/[^A-Za-z0-9]+/', '-', $name)), '-') ?: 'invoice';
     }
 
     public function pdf(array $document): string

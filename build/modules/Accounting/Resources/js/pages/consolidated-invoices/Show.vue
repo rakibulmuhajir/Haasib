@@ -45,6 +45,7 @@ const props = defineProps<{
     show_reference?: boolean
     show_physical?: boolean
     labels: Record<string, string>
+    file_name: string
     issuer: DocumentIssuer
   }
 }>()
@@ -68,7 +69,8 @@ const print = () => window.print()
 </script>
 
 <template>
-  <Head :title="document.number" />
+  <!-- Print > Save as PDF suggests the page title as the file name. -->
+  <Head :title="document.file_name" />
 
   <PageShell :title="`${document.title} ${document.number}`" :description="document.customer_name" :breadcrumbs="breadcrumbs">
     <template #actions>

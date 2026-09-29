@@ -95,7 +95,7 @@ class ConsolidatedInvoiceController extends Controller
     {
         abort_unless($request->user()?->hasCompanyPermission(Permissions::INVOICE_VIEW), 403);
         $doc = $this->service->document(CompanyContext::getCompany(), $document);
-        $name = Str::slug("{$doc['number']} {$doc['customer_name']}").'.pdf';
+        $name = $doc['file_name'].'.pdf';
 
         return response($this->service->pdf($doc), 200, [
             'Content-Type' => 'application/pdf',

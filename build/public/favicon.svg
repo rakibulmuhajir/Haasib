@@ -1,4 +1,6 @@
-<svg width="166" height="166" viewBox="0 0 166 166" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="166" height="166" rx="32" fill="#111111"/>
-    <path d="M43 38H62V74H104V38H123V128H104V92H62V128H43V38Z" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>path, rect { fill: #1c1c1c } @media (prefers-color-scheme: dark) { rect { fill: #f4f4f4 } }</style>
+  <rect x="4" y="3" width="5" height="15.5" rx="1"/>
+  <rect x="4" y="13.5" width="24" height="5" rx="1"/>
+  <rect x="23" y="13.5" width="5" height="15.5" rx="1"/>
 </svg>

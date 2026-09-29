@@ -274,10 +274,12 @@ class ConsolidatedInvoiceService
         ];
     }
 
-    /** A file name that says what it is: Invoice-CI-00001-2026-09-29-Suthra-punjab. */
+    /** A file name that says what it is: INV-CI-00001-2026-09-29-Suthra-punjab ("Invoice" shortened to INV). */
     public static function fileName(array $document): string
     {
-        $name = implode('-', array_filter([$document['title'] ?? 'Invoice', $document['number'] ?? '', $document['date'] ?? '', $document['customer_name'] ?? '']));
+        $title = trim((string) ($document['title'] ?? '')) ?: 'Invoice';
+        $title = strcasecmp($title, 'Invoice') === 0 ? 'INV' : $title;
+        $name = implode('-', array_filter([$title, $document['number'] ?? '', $document['date'] ?? '', $document['customer_name'] ?? '']));
 
         return trim(preg_replace('/-+/', '-', preg_replace('/[^A-Za-z0-9]+/', '-', $name)), '-') ?: 'invoice';
     }

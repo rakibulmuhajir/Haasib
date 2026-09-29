@@ -282,7 +282,49 @@ class PaymentController extends Controller
                 'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'payment' => $paymentRecord,
+            // What part of this payment is still on account can go onto the customer's unpaid
+            // invoices from here (see apply()).
+            'openInvoices' => $paymentRecord->customer_id
+                ? \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)
+                    ->where('customer_id', $paymentRecord->customer_id)
+                    ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+                    ->where('balance', '>', 0.005)
+                    ->orderBy('invoice_date')->orderBy('invoice_number')
+                    ->get(['id', 'invoice_number', 'invoice_date', 'balance'])
+                : [],
+            'canApply' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_APPLY_CREDIT),
         ]);
+    }
+
+    /**
+     * Applies what a payment left on account to the customer's invoices, one line per invoice.
+     * No new money moves: payment.apply_credit only re-points the on-account allocation.
+     */
+    public function apply(\App\Modules\Accounting\Http\Requests\ApplyPaymentRequest $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+        $payment = Payment::where('company_id', $company->id)->with('paymentAllocations')->findOrFail($request->route('payment'));
+        $lines = $request->validated('lines');
+        $onAccount = round((float) $payment->paymentAllocations->whereNull('invoice_id')->sum('amount_allocated'), 2);
+        if (round(array_sum(array_column($lines, 'amount')), 2) - $onAccount > 0.005) {
+            return back()->withErrors(['lines' => 'More than this payment has left on account ('.number_format($onAccount, 2).').']);
+        }
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($lines, $payment, $request) {
+                foreach ($lines as $line) {
+                    app(CommandBus::class)->dispatch('payment.apply_credit', [
+                        'customer_id' => $payment->customer_id,
+                        'invoice_id' => $line['invoice_id'],
+                        'amount' => $line['amount'],
+                    ], $request->user());
+                }
+            });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+
+        return back()->with('success', 'Applied');
     }
 
     public function edit(Request $request): Response

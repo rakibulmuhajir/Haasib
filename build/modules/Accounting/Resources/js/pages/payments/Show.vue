@@ -35,9 +35,10 @@ import {
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import { formatMoneyText } from '@/lib/money';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { Input } from '@/components/ui/input';
 import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import {
     allocationDisplayAmount as computeAllocationDisplayAmount,
     appliedAllocations as computeAppliedAllocations,
@@ -91,6 +92,8 @@ interface CompanyRef {
 const props = defineProps<{
     company: CompanyRef;
     payment: Payment;
+    openInvoices?: Array<{ id: string; invoice_number: string; invoice_date: string; balance: number | string }>;
+    canApply?: boolean;
 }>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -180,6 +183,28 @@ const documentLines = computed<DocumentLine[]>(() => {
 
     return lines;
 });
+
+// What this payment still has on account, applied to the customer's unpaid invoices: amounts
+// start oldest-first up to what is left and can be changed. Nothing new is posted.
+const applyForm = useForm({ amounts: {} as Record<string, number> });
+watch([() => props.openInvoices, unapplied], () => {
+    let left = unapplied.value;
+    applyForm.amounts = Object.fromEntries((props.openInvoices ?? []).map((invoice) => {
+        const take = Math.max(0, Math.min(left, Number(invoice.balance)));
+        left = Math.round((left - take) * 100) / 100;
+        return [invoice.id, Math.round(take * 100) / 100];
+    }));
+}, { immediate: true });
+const applyTotal = computed(() => Object.values(applyForm.amounts).reduce((sum, a) => sum + Number(a || 0), 0));
+const applyToInvoices = () => {
+    applyForm
+        .transform((data) => ({
+            lines: Object.entries(data.amounts)
+                .filter(([, amount]) => Number(amount) > 0)
+                .map(([invoice_id, amount]) => ({ invoice_id, amount: Number(amount) })),
+        }))
+        .post(`/${props.company.slug}/payments/${props.payment.id}/apply`, { preserveScroll: true });
+};
 
 const summaryItems = computed(() => [
     { term: 'Method', value: methodLabel.value },
@@ -339,6 +364,52 @@ const summaryItems = computed(() => [
                 </Card>
             </div>
         </div>
+
+        <Card v-if="canApply && unapplied > 0.005 && openInvoices?.length" class="mt-6 print:hidden">
+            <CardHeader>
+                <CardTitle class="text-base">Apply to invoices</CardTitle>
+                <p class="text-sm text-muted-foreground">
+                    On account: {{ formatMoneyText(unapplied, payment.currency) }}
+                </p>
+            </CardHeader>
+            <CardContent class="space-y-3">
+                <table class="w-full text-sm">
+                    <thead class="text-left text-xs text-muted-foreground">
+                        <tr>
+                            <th class="py-1">Invoice</th>
+                            <th class="py-1">Date</th>
+                            <th class="py-1 text-right">Owed</th>
+                            <th class="py-1 text-right">Apply</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="invoice in openInvoices" :key="invoice.id" class="border-t">
+                            <td class="py-1.5">{{ invoice.invoice_number }}</td>
+                            <td class="py-1.5 tabular-nums">{{ String(invoice.invoice_date).slice(0, 10) }}</td>
+                            <td class="py-1.5 text-right tabular-nums">{{ formatMoneyText(Number(invoice.balance), payment.currency) }}</td>
+                            <td class="py-1 text-right">
+                                <Input
+                                    v-model.number="applyForm.amounts[invoice.id]"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="ml-auto h-8 w-36 text-right"
+                                    :aria-label="`Apply to ${invoice.invoice_number}`"
+                                    @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()"
+                                />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p v-if="applyForm.errors.lines" class="text-sm text-destructive">{{ applyForm.errors.lines }}</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm" :class="applyTotal - unapplied > 0.005 ? 'text-destructive' : 'text-muted-foreground'">
+                        Applying {{ formatMoneyText(applyTotal, payment.currency) }} of {{ formatMoneyText(unapplied, payment.currency) }}
+                    </span>
+                    <Button :disabled="applyForm.processing || applyTotal <= 0 || applyTotal - unapplied > 0.005" @click="applyToInvoices">Apply</Button>
+                </div>
+            </CardContent>
+        </Card>
 
         <RelatedActions
             screen="payment.show"

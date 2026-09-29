@@ -21,6 +21,8 @@
     .total { margin-top: 10px; width: 100%; }
     .total td { padding: 4px 5px; }
     .total .amount { font-size: 15px; font-weight: bold; text-align: right; border-top: 2px solid #1c1c1c; }
+    .billed-by { margin-top: 48px; width: 240px; }
+    .billed-by .sign { border-top: 1px solid #1c1c1c; padding-top: 4px; }
 </style>
 </head>
 <body>
@@ -89,5 +91,16 @@
             <td class="amount">{{ number_format($total, 2) }}</td>
         </tr>
     </table>
+
+    @if (!empty($billedBy))
+        <div class="billed-by">
+            <div class="sign">
+                <div class="label">Billed by</div>
+                @if (!empty($billedBy['name']))<div style="font-weight: bold">{{ $billedBy['name'] }}</div>@endif
+                @if (!empty($billedBy['designation']))<div class="muted">{{ $billedBy['designation'] }}</div>@endif
+                @if (!empty($billedBy['phone']))<div class="muted">{{ $billedBy['phone'] }}</div>@endif
+            </div>
+        </div>
+    @endif
 </body>
 </html>

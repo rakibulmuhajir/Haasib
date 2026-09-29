@@ -94,6 +94,7 @@ class StatementReportController extends Controller
             'invoiceRows' => $kind === 'customer' && $resolvedId ? $this->invoiceRows($company->id, $resolvedId, $from, $to) : [],
             'billTo' => $kind === 'customer' && $resolvedId ? $this->billTo($resolvedId) : null,
             'letterhead' => $kind === 'customer' ? app(CompanyLetterhead::class)->forCompany($company) : null,
+            'billedBy' => $kind === 'customer' ? $this->billedBy($company) : null,
         ]);
     }
 
@@ -227,11 +228,27 @@ class StatementReportController extends Controller
             ->filter(fn ($c) => $c['label'] !== '' || collect($rows)->contains(fn ($r) => trim($c['values'][$r['key']] ?? '') !== ''))
             ->values()->all();
         $title = mb_substr(trim((string) ($data['title'] ?? '')), 0, 60) ?: 'Invoice';
+        $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
+        // Bill to whoever the form says (a person or office at the customer), else the customer.
+        $customerParty = $this->billTo($customer->id);
+        $addressee = (array) ($data['bill_to'] ?? []);
+        $billTo = [
+            'name' => $text($addressee['name'] ?? '') ?: $customerParty['name'],
+            'lines' => array_values(array_filter([$text($addressee['attention'] ?? '')])) ?: $customerParty['lines'],
+            'phone' => $text($addressee['phone'] ?? '', 50) ?: $customerParty['phone'],
+        ];
+        $by = (array) ($data['billed_by'] ?? []);
+        $billedBy = array_filter([
+            'name' => $text($by['name'] ?? ''),
+            'designation' => $text($by['designation'] ?? ''),
+            'phone' => $text($by['phone'] ?? '', 50),
+        ]);
 
         $html = view()->file(base_path('modules/Accounting/Resources/views/statement-invoice.blade.php'), [
             'title' => $title,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
-            'billTo' => $this->billTo($customer->id),
+            'billTo' => $billTo,
+            'billedBy' => $billedBy,
             'from' => $from,
             'to' => $to,
             'today' => now()->toDateString(),
@@ -291,6 +308,18 @@ class StatementReportController extends Controller
         }
 
         return $rows;
+    }
+
+    /** Who signs invoices printed from a statement: set once in company settings. */
+    private function billedBy($company): array
+    {
+        $settings = is_array($company->settings) ? $company->settings : [];
+
+        return [
+            'name' => $settings['billed_by_name'] ?? '',
+            'designation' => $settings['billed_by_designation'] ?? '',
+            'phone' => $settings['billed_by_phone'] ?? '',
+        ];
     }
 
     private function billTo(string $customerId): ?array

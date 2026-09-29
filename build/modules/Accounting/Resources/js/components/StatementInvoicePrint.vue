@@ -40,7 +40,25 @@ const props = defineProps<{
   to: string
   companySlug: string
   customerId: string
+  billedBy: { name: string; designation: string; phone: string } | null
 }>()
+
+// Who the paper is addressed to (a person or office at the customer can be named) and who
+// signs it. Start from the customer and the company's settings; change them here per print.
+const billToForm = ref({ name: '', attention: '', phone: '' })
+const billedByForm = ref({ name: '', designation: '', phone: '' })
+watch(() => props.billTo, (party) => {
+  billToForm.value = { name: party?.name ?? '', attention: '', phone: party?.phone ?? '' }
+}, { immediate: true })
+watch(() => props.billedBy, (by) => {
+  billedByForm.value = { name: by?.name ?? '', designation: by?.designation ?? '', phone: by?.phone ?? '' }
+}, { immediate: true })
+const printedBillTo = computed<DocumentParty>(() => ({
+  name: billToForm.value.name || props.billTo?.name || '',
+  lines: billToForm.value.attention ? [billToForm.value.attention] : (props.billTo?.lines ?? []),
+  phone: billToForm.value.phone || undefined,
+}))
+const hasBilledBy = computed(() => Object.values(billedByForm.value).some((v) => v.trim()))
 
 const title = ref('Invoice')
 const picked = ref<Record<string, boolean>>({})
@@ -93,6 +111,8 @@ const downloadPdf = () => {
     keys: selected.value.map((r) => r.key),
     references: references.value,
     columns: customColumns.value.map((c) => ({ label: c.label, values: c.values })),
+    bill_to: billToForm.value,
+    billed_by: billedByForm.value,
   }))
   document.body.appendChild(form)
   form.submit()
@@ -130,7 +150,26 @@ const print = async () => {
         <Button size="sm" variant="ghost" @click="addColumn"><Plus class="mr-1 h-4 w-4" />Column</Button>
       </div>
 
-      <div class="max-h-[55vh] overflow-auto rounded-md border">
+      <div class="grid gap-3 md:grid-cols-2">
+        <fieldset class="space-y-1.5">
+          <legend class="mb-1 text-xs font-medium text-muted-foreground">Bill to</legend>
+          <Input v-model="billToForm.name" class="h-8" placeholder="Name" aria-label="Bill to name" />
+          <div class="flex gap-1.5">
+            <Input v-model="billToForm.attention" class="h-8" placeholder="Person / office (optional)" aria-label="Bill to person or office" />
+            <Input v-model="billToForm.phone" class="h-8 w-40" placeholder="Phone" aria-label="Bill to phone" />
+          </div>
+        </fieldset>
+        <fieldset class="space-y-1.5">
+          <legend class="mb-1 text-xs font-medium text-muted-foreground">Billed by</legend>
+          <Input v-model="billedByForm.name" class="h-8" placeholder="Name" aria-label="Billed by name" />
+          <div class="flex gap-1.5">
+            <Input v-model="billedByForm.designation" class="h-8" placeholder="Designation" aria-label="Billed by designation" />
+            <Input v-model="billedByForm.phone" class="h-8 w-40" placeholder="Phone" aria-label="Billed by phone" />
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="max-h-[45vh] overflow-auto rounded-md border">
         <table class="w-full text-sm">
           <thead class="sticky top-0 bg-background text-left text-xs text-muted-foreground">
             <tr class="border-b">
@@ -190,7 +229,7 @@ const print = async () => {
       <LedgerDocument
         :doc-type="title || 'Invoice'"
         :issuer="letterhead"
-        :bill-to="billTo ?? undefined"
+        :bill-to="printedBillTo"
         bill-to-label="Bill to"
         :dates="[{ label: 'Period', value: `${from} to ${to}` }, { label: 'Date', value: today }]"
         :lines="[]"
@@ -226,6 +265,14 @@ const print = async () => {
             </tbody>
           </table>
         </template>
+        <template v-if="hasBilledBy" #footer>
+          <div class="billed-by">
+            <div class="billed-by__label">Billed by</div>
+            <div v-if="billedByForm.name" class="billed-by__name">{{ billedByForm.name }}</div>
+            <div v-if="billedByForm.designation">{{ billedByForm.designation }}</div>
+            <div v-if="billedByForm.phone">{{ billedByForm.phone }}</div>
+          </div>
+        </template>
       </LedgerDocument>
     </div>
   </Teleport>
@@ -241,4 +288,7 @@ const print = async () => {
 .sheet-table th { text-align: left; font-weight: 600; border-bottom: 1px solid currentColor; padding: 4px 6px; }
 .sheet-table td { padding: 3px 6px; border-bottom: 1px solid rgb(0 0 0 / 0.12); vertical-align: top; }
 .sheet-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.billed-by { margin-top: 40px; width: 240px; border-top: 1px solid currentColor; padding-top: 4px; font-size: 11px; }
+.billed-by__label { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+.billed-by__name { font-weight: 600; }
 </style>

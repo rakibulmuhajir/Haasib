@@ -23,6 +23,10 @@ class UpdateCompanySettingsRequest extends BaseFormRequest
             'contact_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'website' => ['sometimes', 'nullable', 'url:http,https', 'max:500'],
+            // Printed as "Billed by" on invoices from a statement.
+            'billed_by_name' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'billed_by_designation' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'billed_by_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
 
             // The postal address printed on every document this company issues.
             // Same shape as acct.customers.billing_address so one renderer

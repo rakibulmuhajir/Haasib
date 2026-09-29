@@ -47,6 +47,7 @@ const props = defineProps<{
   invoiceRows?: InvoiceRow[]
   billTo?: DocumentParty | null
   letterhead?: DocumentIssuer | null
+  billedBy?: { name: string; designation: string; phone: string } | null
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -246,6 +247,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
       :to="statement.to"
       :company-slug="company.slug"
       :customer-id="partyId"
+      :billed-by="billedBy ?? null"
     />
   </PageShell>
 </template>

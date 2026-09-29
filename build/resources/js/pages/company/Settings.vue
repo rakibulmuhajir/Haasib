@@ -66,6 +66,9 @@ interface Company {
         modules?: Record<string, boolean>;
         contact_email?: string | null;
         contact_phone?: string | null;
+        billed_by_name?: string | null;
+        billed_by_designation?: string | null;
+        billed_by_phone?: string | null;
         website?: string | null;
     };
 }
@@ -230,6 +233,9 @@ const generalForm = useForm({
     contact_email: company.value.settings?.contact_email || '',
     contact_phone: company.value.settings?.contact_phone || '',
     website: company.value.settings?.website || '',
+    billed_by_name: company.value.settings?.billed_by_name || '',
+    billed_by_designation: company.value.settings?.billed_by_designation || '',
+    billed_by_phone: company.value.settings?.billed_by_phone || '',
     address: {
         line1: company.value.address?.line1 || '',
         line2: company.value.address?.line2 || '',
@@ -508,6 +514,33 @@ const createUser = () =>
                                                 generalForm.errors.contact_phone
                                             }}
                                         </p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="billed-by-name">Billed by — name</Label>
+                                        <Input
+                                            id="billed-by-name"
+                                            v-model="generalForm.billed_by_name"
+                                            :disabled="!company.can_manage_company"
+                                        />
+                                        <p v-if="generalForm.errors.billed_by_name" class="text-xs text-destructive">{{ generalForm.errors.billed_by_name }}</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="billed-by-designation">Billed by — designation</Label>
+                                        <Input
+                                            id="billed-by-designation"
+                                            v-model="generalForm.billed_by_designation"
+                                            :disabled="!company.can_manage_company"
+                                        />
+                                        <p v-if="generalForm.errors.billed_by_designation" class="text-xs text-destructive">{{ generalForm.errors.billed_by_designation }}</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="billed-by-phone">Billed by — phone</Label>
+                                        <Input
+                                            id="billed-by-phone"
+                                            v-model="generalForm.billed_by_phone"
+                                            :disabled="!company.can_manage_company"
+                                        />
+                                        <p v-if="generalForm.errors.billed_by_phone" class="text-xs text-destructive">{{ generalForm.errors.billed_by_phone }}</p>
                                     </div>
                                     <div class="space-y-2 md:col-span-2">
                                         <Label for="website">Website</Label>

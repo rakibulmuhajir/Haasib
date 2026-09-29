@@ -631,7 +631,7 @@ class CompanyController extends Controller
         $settings = $company->settings ?? [];
         $settingsUpdated = false;
 
-        foreach (['contact_email', 'contact_phone', 'website'] as $field) {
+        foreach (['contact_email', 'contact_phone', 'website', 'billed_by_name', 'billed_by_designation', 'billed_by_phone'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $settings[$field] = $validated[$field];
                 $settingsUpdated = true;

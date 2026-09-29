@@ -635,7 +635,10 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   close's Sale row) · Fuel (`item`) · Litres · Rate · Amount. No column choices, no custom columns.
   `consolidated_invoices.columns` / `hidden_columns` and `customers.invoice_layout` exist from a short-lived
   configurable layout and are no longer written or read.
-- Line `item`: the product, read from the line's income account (unique item on that account, else the account name).
+- `acct.invoice_line_items.item_id` uuid null (2026-09-29): the product the line sold. Set by `invoice.create`
+  when the caller passes `line_items.*.item_id` (daily close credit and direct sales do). Existing close invoices
+  were filled once from each close's recorded `credit_sale_details` / direct-sale rows. The consolidated invoice's
+  Fuel column reads only this; blank when the line has none.
 - `bill_to.address` / `billed_by.address`: one line joining street, line 2, city, state, postal code, country (empty parts dropped).
 - `billed_by` defaults come from company settings `billed_by_name` / `billed_by_designation` / `billed_by_phone`.
 

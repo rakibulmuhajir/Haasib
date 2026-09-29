@@ -49,20 +49,8 @@ class ConsolidatedInvoiceService
             ->get(['i.invoice_id', 'c.number', 'c.created_at'])
             ->keyBy('invoice_id'); // latest wins
 
-        // What each line sold: only what the daily close recorded for each credit sale (invoice ->
-        // fuel item). Nothing is guessed; a line with no record prints blank.
+        // What each line sold, as the invoice line records it; blank when it does not.
         $itemName = DB::table('inv.items')->where('company_id', $companyId)->pluck('name', 'id');
-        $closeItem = [];
-        DB::table('acct.transactions')->where('company_id', $companyId)->where('transaction_type', 'fuel_daily_close')
-            ->whereNull('deleted_at')->whereBetween('transaction_date', [$from, $to])->pluck('metadata')
-            ->each(function ($metadata) use (&$closeItem) {
-                foreach ((json_decode((string) $metadata, true)['credit_sale_details'] ?? []) as $sale) {
-                    if (! empty($sale['invoice_id']) && ! empty($sale['item_id'])) {
-                        $closeItem[$sale['invoice_id']] = $sale['item_id'];
-                    }
-                }
-            });
-        $itemFor = fn ($invoice) => (string) ($itemName[$closeItem[$invoice->id] ?? ''] ?? '');
 
         $rows = [];
         foreach ($invoices as $invoice) {
@@ -79,7 +67,7 @@ class ConsolidatedInvoiceService
                     'paid' => (float) $invoice->balance <= 0.005,
                     'balance' => round((float) $invoice->balance, 2),
                     'sent_in' => $last ? ['number' => $last->number, 'date' => substr((string) $last->created_at, 0, 10)] : null,
-                    'item' => $itemFor($invoice),
+                    'item' => (string) ($itemName[$line->item_id ?? ''] ?? ''),
                     'description' => (string) $line->description,
                     'quantity' => $line->quantity !== null ? round((float) $line->quantity, 2) : null,
                     'rate' => $line->unit_price !== null ? round((float) $line->unit_price, 2) : null,

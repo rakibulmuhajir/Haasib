@@ -29,6 +29,7 @@ class InvoiceLineItem extends Model
         'tax_amount',
         'total',
         'income_account_id',
+        'item_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];

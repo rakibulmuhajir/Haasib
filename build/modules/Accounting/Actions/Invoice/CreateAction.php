@@ -42,6 +42,7 @@ class CreateAction implements PaletteAction
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.line_number' => 'nullable|integer|min:1',
             'line_items.*.income_account_id' => 'nullable|uuid',
+            'line_items.*.item_id' => 'nullable|uuid',
         ];
     }
 
@@ -182,6 +183,8 @@ class CreateAction implements PaletteAction
                     'tax_amount' => $item['_tax_amount'],
                     'total' => $item['_total'],
                     'income_account_id' => $item['income_account_id'] ?? null,
+                    // The product this line sold, when the caller knows it (the daily close does).
+                    'item_id' => $item['item_id'] ?? null,
                     'created_by_user_id' => Auth::id(),
                 ]);
             }

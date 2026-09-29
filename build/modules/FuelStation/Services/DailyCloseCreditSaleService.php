@@ -175,7 +175,7 @@ class DailyCloseCreditSaleService
                 'customer' => $customer->id, 'currency' => $company->base_currency, 'date' => $date,
                 'draft' => true,
                 'notes' => "Credit portion of meter sales for {$date}. ".($row['reference'] ?? ''),
-                'line_items' => [['description' => "Meter sales on credit — {$date}", 'quantity' => $lineQuantity,
+                'line_items' => [['description' => "Meter sales on credit — {$date}", 'item_id' => $itemId, 'quantity' => $lineQuantity,
                     'unit_price' => $lineUnitPrice, 'tax_rate' => 0, 'discount_amount' => $discountAmount]],
             ], $user, true));
             $details[] = ['customer_id' => $customer->id, 'customer_name' => $customer->name,

@@ -50,6 +50,7 @@ class DailyCloseEntryService
                 'quantity' => $litres,
                 'unit_price' => (float) $row['rate'],
                 'income_account_id' => $item->income_account_id,
+                'item_id' => $item->id,
             ]],
         ], $user);
         $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)->findOrFail($result['data']['id']);

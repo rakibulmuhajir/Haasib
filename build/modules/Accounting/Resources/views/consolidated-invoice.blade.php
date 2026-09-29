@@ -24,7 +24,7 @@
     table.lines { width: 100%; border-collapse: collapse; }
     table.lines th { text-align: left; font-size: 9px; border-bottom: 1px solid #1c1c1c; padding: 4px 5px; }
     table.lines td { padding: 3px 5px; border-bottom: 1px solid #e3e3e3; vertical-align: top; }
-    .num { text-align: right; white-space: nowrap; }
+    .num, table.lines th.num { text-align: right; white-space: nowrap; }
     .total { margin-top: 10px; width: 100%; }
     .total td { padding: 4px 5px; }
     .total .amount { font-size: 15px; font-weight: bold; text-align: right; border-top: 2px solid #1c1c1c; }
@@ -69,28 +69,22 @@
     <table class="lines">
         <thead>
             <tr>
-                @if ($doc['shown']['date'])<th>Date</th>@endif
-                @if ($doc['shown']['invoice'])<th>Invoice</th>@endif
-                @if ($doc['shown']['reference'])<th>Reference</th>@endif
-                @if ($doc['shown']['item'])<th>Item</th>@endif
-                @if ($doc['shown']['description'])<th>Description</th>@endif
-                @if ($doc['shown']['quantity'])<th class="num">Qty</th>@endif
-                @if ($doc['shown']['rate'])<th class="num">Rate</th>@endif
-                @foreach ($doc['columns'] as $label)<th>{{ $label }}</th>@endforeach
+                <th>Date</th>
+                <th>Coupon no.</th>
+                <th>Fuel</th>
+                <th class="num">Litres</th>
+                <th class="num">Rate</th>
                 <th class="num">Amount</th>
             </tr>
         </thead>
         <tbody>
             @foreach ($doc['lines'] as $line)
                 <tr>
-                    @if ($doc['shown']['date'])<td>{{ $line['date'] }}</td>@endif
-                    @if ($doc['shown']['invoice'])<td>{{ $line['invoice_number'] }}</td>@endif
-                    @if ($doc['shown']['reference'])<td>{{ $line['reference'] }}</td>@endif
-                    @if ($doc['shown']['item'])<td>{{ $line['item'] ?? '' }}</td>@endif
-                    @if ($doc['shown']['description'])<td>{{ $line['description'] }}</td>@endif
-                    @if ($doc['shown']['quantity'])<td class="num">{{ $qty($line['quantity']) }}</td>@endif
-                    @if ($doc['shown']['rate'])<td class="num">{{ $qty($line['rate']) }}</td>@endif
-                    @foreach ($line['extra'] as $value)<td>{{ $value }}</td>@endforeach
+                    <td>{{ $line['date'] }}</td>
+                    <td>{{ $line['reference'] ?? '' }}</td>
+                    <td>{{ $line['item'] ?? '' }}</td>
+                    <td class="num">{{ $qty($line['quantity']) }}</td>
+                    <td class="num">{{ $qty($line['rate']) }}</td>
                     <td class="num">{{ number_format($line['amount'], 2) }}</td>
                 </tr>
             @endforeach

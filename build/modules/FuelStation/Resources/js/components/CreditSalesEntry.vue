@@ -218,7 +218,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
           </p>
         </div>
         <div>
-          <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Reference" :aria-label="`Reference, row ${index + 1}`" :disabled="disabled" />
+          <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Coupon no." :aria-label="`Coupon number, row ${index + 1}`" :disabled="disabled" />
           <InputError :message="errors[`credit_sales.${index}.reference`]" />
         </div>
         <Button type="button" variant="ghost" size="icon" class="h-9 w-9" aria-label="Remove sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>

@@ -15,28 +15,13 @@ use Illuminate\Validation\ValidationException;
  * month of daily-close credit sales. A record of what was sent: saved once and never changed,
  * no status. It bills nothing new -- the underlying invoices remain what the customer owes.
  *
- * The lines are the customer's invoice lines in the period (date, invoice, reference, what,
- * litres, rate, amount); the user picks which go on it, can add columns (vehicle, driver ...)
- * and fill them in, and can address it to a person or office and sign it. Everything is saved
- * exactly as sent, so a reprint is the same paper.
+ * One standard layout, what a fuel customer asks for: date, coupon no. (the station's own paper
+ * slip, typed on the close's Sale row), fuel, litres, rate, amount. The user picks which of the
+ * customer's invoice lines go on it, can fill in a missing coupon no., address it and sign it.
+ * Everything is saved exactly as sent, so a reprint is the same paper.
  */
 class ConsolidatedInvoiceService
 {
-    /** The standard columns a document can leave out (Amount always prints). */
-    public const COLUMNS = ['date', 'invoice', 'reference', 'item', 'description', 'quantity', 'rate'];
-
-    /** How this customer's last one was laid out, to start the next one the same way. */
-    public function layoutFor(Customer $customer): array
-    {
-        $layout = is_array($customer->invoice_layout) ? $customer->invoice_layout : (json_decode((string) $customer->invoice_layout, true) ?: []);
-
-        return [
-            'title' => (string) ($layout['title'] ?? 'Invoice'),
-            'hidden' => array_values(array_intersect((array) ($layout['hidden'] ?? []), self::COLUMNS)),
-            'columns' => array_values(array_map('strval', (array) ($layout['columns'] ?? []))),
-        ];
-    }
-
     /**
      * The customer's invoices dated in the range, one row per line. Line totals are already net
      * of any discount. Each row says which consolidated invoice last carried it, if any.
@@ -170,21 +155,10 @@ class ConsolidatedInvoiceService
         $references = $data['references'] ?? [];
         $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
 
-        $columns = array_values(array_map(fn ($c) => [
-            'label' => $text($c['label'] ?? '', 60),
-            'values' => array_map(fn ($v) => $text($v, 200), (array) ($c['values'] ?? [])),
-        ], $data['columns'] ?? []));
-
         $rows = array_values(array_filter($this->rowsFor($company->id, $customer->id, $data['from'], $data['to']), fn ($r) => isset($keys[$r['key']])));
         if (! $rows) {
             throw ValidationException::withMessages(['keys' => 'Pick at least one line.']);
         }
-        // Keep the columns someone named or filled in.
-        $columns = array_values(array_filter($columns, fn ($c) => $c['label'] !== ''
-            || collect($rows)->contains(fn ($r) => ($c['values'][$r['key']] ?? '') !== '')));
-
-        $hidden = array_values(array_intersect(array_map('strval', $data['hidden'] ?? []), self::COLUMNS));
-
         $lines = array_map(fn ($r) => [
             'invoice_id' => $r['invoice_id'],
             'invoice_number' => $r['invoice_number'],
@@ -195,7 +169,6 @@ class ConsolidatedInvoiceService
             'quantity' => $r['quantity'],
             'rate' => $r['rate'],
             'amount' => $r['amount'],
-            'extra' => array_map(fn ($c) => $c['values'][$r['key']] ?? '', $columns),
         ], $rows);
 
         $fallback = $this->billTo($customer);
@@ -212,7 +185,7 @@ class ConsolidatedInvoiceService
             'address' => $text($data['billed_by']['address'] ?? '', 300),
         ];
 
-        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $columns, $lines, $hidden, $userId) {
+        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $lines, $userId) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$company->id, 'consolidated_invoice_number']);
             $count = DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->count();
             $id = (string) Str::uuid();
@@ -226,8 +199,7 @@ class ConsolidatedInvoiceService
                 'title' => $text($data['title'] ?? '', 60) ?: 'Invoice',
                 'bill_to' => json_encode($billTo),
                 'billed_by' => json_encode($billedBy),
-                'columns' => json_encode(array_column($columns, 'label')),
-                'hidden_columns' => json_encode($hidden),
+                'columns' => json_encode([]),
                 'lines' => json_encode($lines),
                 'total' => round(array_sum(array_column($lines, 'amount')), 2),
                 'currency' => $company->base_currency ?: 'PKR',
@@ -237,13 +209,6 @@ class ConsolidatedInvoiceService
             DB::table('acct.consolidated_invoice_items')->insert(array_map(fn ($invoiceId) => [
                 'id' => (string) Str::uuid(), 'company_id' => $company->id, 'consolidated_invoice_id' => $id, 'invoice_id' => $invoiceId,
             ], array_values(array_unique(array_column($lines, 'invoice_id')))));
-
-            // The next one for this customer starts with the same title and columns.
-            DB::table('acct.customers')->where('id', $customer->id)->update(['invoice_layout' => json_encode([
-                'title' => $text($data['title'] ?? '', 60) ?: 'Invoice',
-                'hidden' => $hidden,
-                'columns' => array_values(array_filter(array_column($columns, 'label'), fn ($l) => $l !== '')),
-            ])]);
 
             return $id;
         });
@@ -273,25 +238,9 @@ class ConsolidatedInvoiceService
             'title' => $doc->title,
             'bill_to' => json_decode($doc->bill_to, true),
             'billed_by' => json_decode($doc->billed_by, true),
-            'columns' => json_decode($doc->columns, true),
             'lines' => $lines,
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
-            // A column prints unless it was left out, or nothing in it was filled in.
-            'shown' => (function () use ($doc, $lines) {
-                $hidden = json_decode((string) ($doc->hidden_columns ?? '[]'), true) ?: [];
-                $any = fn (string $key) => collect($lines)->contains(fn ($l) => ($l[$key] ?? null) !== null && ($l[$key] ?? '') !== '');
-
-                return [
-                    'date' => ! in_array('date', $hidden, true),
-                    'invoice' => ! in_array('invoice', $hidden, true),
-                    'reference' => ! in_array('reference', $hidden, true) && $any('reference'),
-                    'item' => ! in_array('item', $hidden, true) && $any('item'),
-                    'description' => ! in_array('description', $hidden, true),
-                    'quantity' => ! in_array('quantity', $hidden, true) && $any('quantity'),
-                    'rate' => ! in_array('rate', $hidden, true) && $any('rate'),
-                ];
-            })(),
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
         ];
     }

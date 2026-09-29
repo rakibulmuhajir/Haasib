@@ -23,11 +23,8 @@ class StoreConsolidatedInvoiceRequest extends BaseFormRequest
             'keys' => ['required', 'array', 'min:1'],
             'keys.*' => ['string'],
             'references' => ['nullable', 'array'],
-            'columns' => ['nullable', 'array', 'max:6'],
             'bill_to' => ['nullable', 'array'],
             'billed_by' => ['nullable', 'array'],
-            'hidden' => ['nullable', 'array'],
-            'hidden.*' => ['string', 'in:date,invoice,reference,item,description,quantity,rate'],
         ];
     }
 

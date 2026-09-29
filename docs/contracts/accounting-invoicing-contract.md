@@ -631,10 +631,10 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   `invoice_id` **no FK** — Edit day deletes and re-creates close invoices). Drives "sent in CI-…" in the picker.
 - Trigger `acct.consolidated_invoice_is_final()` refuses UPDATE and DELETE on both tables.
 - `acct.customers.billing_contact` varchar(150) null: the person/office documents are addressed to.
-- `acct.consolidated_invoices.hidden_columns` jsonb default `[]`: standard columns left off
-  (`date, invoice, reference, item, description, quantity, rate`; Amount always prints).
-- `acct.customers.invoice_layout` jsonb null {title, hidden[], columns[]}: the customer's last layout,
-  written on save, used to start the next one.
+- **One standard layout** (2026-09-29): Date · Coupon no. (`reference`, the station's paper slip, typed on the
+  close's Sale row) · Fuel (`item`) · Litres · Rate · Amount. No column choices, no custom columns.
+  `consolidated_invoices.columns` / `hidden_columns` and `customers.invoice_layout` exist from a short-lived
+  configurable layout and are no longer written or read.
 - Line `item`: the product, read from the line's income account (unique item on that account, else the account name).
 - `bill_to.address` / `billed_by.address`: one line joining street, line 2, city, state, postal code, country (empty parts dropped).
 - `billed_by` defaults come from company settings `billed_by_name` / `billed_by_designation` / `billed_by_phone`.

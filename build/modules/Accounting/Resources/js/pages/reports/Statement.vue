@@ -21,7 +21,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
 import ConsolidatedInvoiceForm from '../../components/ConsolidatedInvoiceForm.vue'
-import type { BillToDefaults, BilledByDefaults, InvoiceLayout, InvoiceRow } from '../../components/ConsolidatedInvoiceForm.vue'
+import type { BillToDefaults, BilledByDefaults, InvoiceRow } from '../../components/ConsolidatedInvoiceForm.vue'
 
 type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
 
@@ -46,7 +46,6 @@ const props = defineProps<{
   invoiceRows?: InvoiceRow[]
   billTo?: BillToDefaults | null
   billedBy?: BilledByDefaults | null
-  invoiceLayout?: InvoiceLayout | null
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -252,7 +251,6 @@ const statementTitle = computed(() => props.statement.account || props.statement
       :company-slug="company.slug"
       :customer-id="partyId"
       :billed-by="billedBy ?? null"
-      :layout="invoiceLayout ?? null"
     />
   </PageShell>
 </template>

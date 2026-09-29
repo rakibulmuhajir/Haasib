@@ -22,7 +22,6 @@ interface Line {
   quantity: number | null
   rate: number | null
   amount: number
-  extra: string[]
 }
 
 const props = defineProps<{
@@ -39,11 +38,9 @@ const props = defineProps<{
     title: string
     bill_to: { name: string; attention?: string; phone?: string; address?: string; lines?: string[] }
     billed_by: { name?: string; designation?: string; phone?: string; address?: string }
-    columns: string[]
     lines: Line[]
     total: number
     currency: string
-    shown: { date: boolean; invoice: boolean; reference: boolean; item: boolean; description: boolean; quantity: boolean; rate: boolean }
     issuer: DocumentIssuer
   }
 }>()
@@ -99,27 +96,21 @@ const print = () => window.print()
         <table class="ci-table">
           <thead>
             <tr>
-              <th v-if="document.shown.date">Date</th>
-              <th v-if="document.shown.invoice">Invoice</th>
-              <th v-if="document.shown.reference">Reference</th>
-              <th v-if="document.shown.item">Item</th>
-              <th v-if="document.shown.description">Description</th>
-              <th v-if="document.shown.quantity" class="num">Qty</th>
-              <th v-if="document.shown.rate" class="num">Rate</th>
-              <th v-for="label in document.columns" :key="label">{{ label }}</th>
+              <th>Date</th>
+              <th>Coupon no.</th>
+              <th>Fuel</th>
+              <th class="num">Litres</th>
+              <th class="num">Rate</th>
               <th class="num">Amount</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(line, i) in document.lines" :key="i">
-              <td v-if="document.shown.date">{{ line.date }}</td>
-              <td v-if="document.shown.invoice">{{ line.invoice_number }}</td>
-              <td v-if="document.shown.reference">{{ line.reference }}</td>
-              <td v-if="document.shown.item">{{ line.item }}</td>
-              <td v-if="document.shown.description">{{ line.description }}</td>
-              <td v-if="document.shown.quantity" class="num">{{ number(line.quantity) }}</td>
-              <td v-if="document.shown.rate" class="num">{{ number(line.rate) }}</td>
-              <td v-for="(value, c) in line.extra" :key="c">{{ value }}</td>
+              <td>{{ line.date }}</td>
+              <td>{{ line.reference }}</td>
+              <td>{{ line.item }}</td>
+              <td class="num">{{ number(line.quantity) }}</td>
+              <td class="num">{{ number(line.rate) }}</td>
               <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
             </tr>
           </tbody>

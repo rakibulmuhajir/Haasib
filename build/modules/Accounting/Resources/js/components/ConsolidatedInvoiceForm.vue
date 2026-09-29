@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * New consolidated invoice, from a customer's statement: pick which invoice lines go on it
- * (not every sale in the period is ready to bill), name it (Invoice, Reminder ...), address it,
- * add columns the customer asks for (vehicle no., driver, PO) and fill them in. Saving keeps it
- * exactly as sent -- see ConsolidatedInvoiceService -- and opens it for print / PDF.
+ * (not every sale in the period is ready to bill), name it (Invoice, Reminder ...) and address it.
+ * One standard layout -- date, coupon no., fuel, litres, rate, amount -- nothing to set up.
+ * Saving keeps it exactly as sent (ConsolidatedInvoiceService) and opens it for print / PDF.
  */
 import { computed, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, Save, X } from 'lucide-vue-next'
+import { Save } from 'lucide-vue-next'
 
 export interface InvoiceRow {
   key: string
@@ -32,7 +32,6 @@ export interface InvoiceRow {
 
 export interface BillToDefaults { name: string; attention: string; phone: string; address: string }
 export interface BilledByDefaults { name: string; designation: string; phone: string; address: string }
-export interface InvoiceLayout { title: string; hidden: string[]; columns: string[] }
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{
@@ -44,23 +43,7 @@ const props = defineProps<{
   to: string
   companySlug: string
   customerId: string
-  layout: InvoiceLayout | null
 }>()
-
-// The standard columns that can be left off the paper. Amount always prints.
-const standardColumns = [
-  { key: 'date', label: 'Date' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'reference', label: 'Reference' },
-  { key: 'item', label: 'Item' },
-  { key: 'description', label: 'Description' },
-  { key: 'quantity', label: 'Qty' },
-  { key: 'rate', label: 'Rate' },
-]
-const isHidden = (key: string) => form.hidden.includes(key)
-const toggleColumn = (key: string) => {
-  form.hidden = isHidden(key) ? form.hidden.filter((k) => k !== key) : [...form.hidden, key]
-}
 
 const form = useForm({
   customer_id: '',
@@ -69,19 +52,13 @@ const form = useForm({
   title: 'Invoice',
   keys: [] as string[],
   references: {} as Record<string, string>,
-  columns: [] as Array<{ label: string; values: Record<string, string> }>,
   bill_to: { name: '', attention: '', phone: '', address: '' },
   billed_by: { name: '', designation: '', phone: '', address: '' },
-  hidden: [] as string[],
 })
 const picked = ref<Record<string, boolean>>({})
 
-// Start from the customer, the company's signer, this customer's last layout (title, columns
-// left out, custom columns) and the unpaid lines, whenever the list changes.
-watch(() => [props.rows, props.billTo, props.billedBy, props.layout], () => {
-  form.title = props.layout?.title || 'Invoice'
-  form.hidden = [...(props.layout?.hidden ?? [])]
-  form.columns = (props.layout?.columns ?? []).map((label) => ({ label, values: {} }))
+// Start from the customer, the company's signer and the unpaid lines whenever the list changes.
+watch(() => [props.rows, props.billTo, props.billedBy], () => {
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, !r.paid]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
@@ -93,9 +70,6 @@ const total = computed(() => selected.value.reduce((sum, r) => sum + r.amount, 0
 const allPicked = computed(() => props.rows.length > 0 && props.rows.every((r) => picked.value[r.key]))
 const pickAll = (on: boolean) => props.rows.forEach((r) => { picked.value[r.key] = on })
 const pickUnpaid = () => props.rows.forEach((r) => { picked.value[r.key] = !r.paid })
-
-const addColumn = () => form.columns.push({ label: '', values: {} })
-const removeColumn = (index: number) => form.columns.splice(index, 1)
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
 
@@ -112,7 +86,7 @@ const save = () => {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="max-h-[92vh] overflow-hidden sm:max-w-6xl">
+    <DialogContent class="max-h-[92vh] overflow-hidden sm:max-w-5xl">
       <DialogHeader>
         <DialogTitle>Consolidated invoice</DialogTitle>
       </DialogHeader>
@@ -146,20 +120,8 @@ const save = () => {
         </fieldset>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div>
         <Button size="sm" variant="ghost" @click="pickUnpaid">Unpaid only</Button>
-        <Button size="sm" variant="ghost" :disabled="form.columns.length >= 6" @click="addColumn"><Plus class="mr-1 h-4 w-4" />Column</Button>
-        <span class="mx-1 h-5 w-px bg-border" />
-        <span class="text-xs text-muted-foreground">Print</span>
-        <button
-          v-for="col in standardColumns"
-          :key="col.key"
-          type="button"
-          class="rounded-full border px-2 py-0.5 text-xs transition-colors"
-          :class="isHidden(col.key) ? 'text-muted-foreground line-through' : 'border-primary/50 bg-primary/10'"
-          :aria-pressed="!isHidden(col.key)"
-          @click="toggleColumn(col.key)"
-        >{{ col.label }}</button>
       </div>
 
       <div class="max-h-[42vh] overflow-auto rounded-md border">
@@ -168,40 +130,31 @@ const save = () => {
             <tr class="border-b">
               <th class="w-10 px-3 py-2"><Checkbox :model-value="allPicked" aria-label="Pick all" @update:model-value="(v) => pickAll(v === true)" /></th>
               <th class="px-2 py-2">Date</th>
-              <th class="px-2 py-2">Invoice</th>
-              <th class="px-2 py-2">Reference</th>
-              <th class="px-2 py-2">Item</th>
-              <th class="px-2 py-2">Description</th>
-              <th class="px-2 py-2 text-right">Qty</th>
+              <th class="px-2 py-2">Coupon no.</th>
+              <th class="px-2 py-2">Fuel</th>
+              <th class="px-2 py-2 text-right">Litres</th>
               <th class="px-2 py-2 text-right">Rate</th>
-              <th class="px-2 py-2 text-right">Amount</th>
-              <th v-for="(col, c) in form.columns" :key="c" class="min-w-32 px-2 py-1">
-                <div class="flex items-center gap-1">
-                  <Input v-model="col.label" class="h-7 text-xs" placeholder="Column name" />
-                  <button type="button" class="text-muted-foreground hover:text-foreground" aria-label="Remove column" @click="removeColumn(c)"><X class="h-3.5 w-3.5" /></button>
-                </div>
-              </th>
+              <th class="px-3 py-2 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="row.key" class="border-b last:border-0" :class="picked[row.key] ? '' : 'text-muted-foreground'">
               <td class="px-3 py-1.5"><Checkbox v-model="picked[row.key]" :aria-label="`Include ${row.invoice_number}`" /></td>
-              <td class="whitespace-nowrap px-2 py-1.5 tabular-nums">{{ row.date }}</td>
               <td class="whitespace-nowrap px-2 py-1.5">
-                {{ row.invoice_number }}
-                <span v-if="row.paid" class="ml-1 text-xs text-status-success">paid</span>
-                <div v-if="row.sent_in" class="text-xs text-muted-foreground">sent in {{ row.sent_in.number }} · {{ row.sent_in.date }}</div>
+                <span class="tabular-nums">{{ row.date }}</span>
+                <div class="text-xs text-muted-foreground">
+                  {{ row.invoice_number }}<span v-if="row.paid" class="text-status-success"> · paid</span>
+                  <span v-if="row.sent_in"> · sent in {{ row.sent_in.number }}</span>
+                </div>
               </td>
-              <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" /></td>
+              <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Coupon number for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1.5">{{ row.item }}</td>
-              <td class="px-2 py-1.5">{{ row.description }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.quantity) }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.rate) }}</td>
-              <td class="px-2 py-1.5 text-right tabular-nums"><MoneyText :amount="row.amount" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
-              <td v-for="(col, c) in form.columns" :key="c" class="px-2 py-1"><Input v-model="col.values[row.key]" class="h-7 text-xs" /></td>
+              <td class="px-3 py-1.5 text-right tabular-nums"><MoneyText :amount="row.amount" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
             </tr>
             <tr v-if="!rows.length">
-              <td :colspan="9 + form.columns.length" class="px-3 py-6 text-center text-muted-foreground">No invoices in this period.</td>
+              <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">No invoices in this period.</td>
             </tr>
           </tbody>
         </table>

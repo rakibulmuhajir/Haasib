@@ -15,6 +15,10 @@ use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
 use App\Modules\Accounting\Models\Invoice;
 use App\Services\CompanyLetterhead;
+use App\Constants\Permissions;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -195,6 +199,54 @@ class StatementReportController extends Controller
             ['money_in' => 'Billed', 'money_out' => 'Paid', 'balance' => 'We owe'],
             $vendor->id,
         ];
+    }
+
+    /**
+     * The "Print invoice" document as a PDF file. The lines, references and custom columns come
+     * from the form; the rows themselves are re-read here, so only this customer's invoices print.
+     */
+    public function invoicePdf(Request $request)
+    {
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::REPORT_VIEW), 403);
+        $company = CompanyContext::getCompany();
+        $data = json_decode((string) $request->input('payload'), true) ?: [];
+        $customer = Customer::where('company_id', $company->id)->findOrFail($data['customer_id'] ?? null);
+        $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($data['from'] ?? '')) ? $data['from'] : now()->startOfMonth()->toDateString();
+        $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($data['to'] ?? '')) ? $data['to'] : now()->toDateString();
+
+        $keys = array_flip(array_map('strval', (array) ($data['keys'] ?? [])));
+        $references = (array) ($data['references'] ?? []);
+        $rows = array_values(array_filter($this->invoiceRows($company->id, $customer->id, $from, $to), fn ($r) => isset($keys[$r['key']])));
+        foreach ($rows as &$row) {
+            $row['reference'] = trim((string) ($references[$row['key']] ?? $row['reference'] ?? ''));
+        }
+        unset($row);
+
+        $columns = collect((array) ($data['columns'] ?? []))
+            ->map(fn ($c) => ['label' => mb_substr(trim((string) ($c['label'] ?? '')), 0, 60), 'values' => array_map(fn ($v) => mb_substr((string) $v, 0, 200), (array) ($c['values'] ?? []))])
+            ->filter(fn ($c) => $c['label'] !== '' || collect($rows)->contains(fn ($r) => trim($c['values'][$r['key']] ?? '') !== ''))
+            ->values()->all();
+        $title = mb_substr(trim((string) ($data['title'] ?? '')), 0, 60) ?: 'Invoice';
+
+        $html = view()->file(base_path('modules/Accounting/Resources/views/statement-invoice.blade.php'), [
+            'title' => $title,
+            'issuer' => app(CompanyLetterhead::class)->forCompany($company),
+            'billTo' => $this->billTo($customer->id),
+            'from' => $from,
+            'to' => $to,
+            'today' => now()->toDateString(),
+            'rows' => $rows,
+            'columns' => $columns,
+            'showReference' => collect($rows)->contains(fn ($r) => $r['reference'] !== ''),
+            'showQuantity' => collect($rows)->contains(fn ($r) => $r['quantity'] !== null),
+            'total' => round(array_sum(array_column($rows, 'amount')), 2),
+            'currency' => $company->base_currency ?: 'PKR',
+        ])->render();
+
+        $name = Str::slug("{$title} {$customer->name} {$from} {$to}").'.pdf';
+
+        // Only the characters used are embedded: the whole font made a one-page file ~900 KB.
+        return Pdf::loadHTML($html)->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->download($name);
     }
 
     /**

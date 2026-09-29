@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, Printer, X } from 'lucide-vue-next'
+import { Download, Plus, Printer, X } from 'lucide-vue-next'
 
 export interface InvoiceRow {
   key: string
@@ -38,6 +38,8 @@ const props = defineProps<{
   currency: string
   from: string
   to: string
+  companySlug: string
+  customerId: string
 }>()
 
 const title = ref('Invoice')
@@ -68,6 +70,34 @@ const printedColumns = computed(() => customColumns.value.filter((c) => c.label.
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
 const today = new Date().toISOString().slice(0, 10)
+
+// The same document as a PDF file from the server: a plain form post, so the browser saves
+// the file (an Inertia visit expects a page back, not a download).
+const downloadPdf = () => {
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = `/${props.companySlug}/reports/statements/invoice-pdf`
+  const field = (name: string, value: string) => {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = name
+    input.value = value
+    form.appendChild(input)
+  }
+  field('_token', document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '')
+  field('payload', JSON.stringify({
+    customer_id: props.customerId,
+    from: props.from,
+    to: props.to,
+    title: title.value,
+    keys: selected.value.map((r) => r.key),
+    references: references.value,
+    columns: customColumns.value.map((c) => ({ label: c.label, values: c.values })),
+  }))
+  document.body.appendChild(form)
+  form.submit()
+  form.remove()
+}
 
 const print = async () => {
   open.value = false
@@ -146,7 +176,10 @@ const print = async () => {
         <span class="text-sm">
           {{ selected.length }} line(s) · Total <MoneyText class="font-semibold" :amount="total" :currency="currency" :fraction-digits="0" />
         </span>
-        <Button :disabled="!selected.length" @click="print"><Printer class="mr-2 h-4 w-4" />Print</Button>
+        <div class="flex gap-2">
+          <Button variant="outline" :disabled="!selected.length" @click="print"><Printer class="mr-2 h-4 w-4" />Print</Button>
+          <Button :disabled="!selected.length" @click="downloadPdf"><Download class="mr-2 h-4 w-4" />Download PDF</Button>
+        </div>
       </DialogFooter>
     </DialogContent>
   </Dialog>

@@ -112,6 +112,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
         Route::get('/{company}/reports/payables-aging', [PayablesAgingReportController::class, 'index'])->name('reports.payables-aging');
         Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
+        Route::post('/{company}/reports/statements/invoice-pdf', [StatementReportController::class, 'invoicePdf'])->name('reports.statements.invoice-pdf');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {

@@ -244,6 +244,8 @@ const statementTitle = computed(() => props.statement.account || props.statement
       :currency="currency"
       :from="statement.from"
       :to="statement.to"
+      :company-slug="company.slug"
+      :customer-id="partyId"
     />
   </PageShell>
 </template>

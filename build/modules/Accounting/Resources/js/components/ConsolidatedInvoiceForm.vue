@@ -57,9 +57,9 @@ const form = useForm({
 })
 const picked = ref<Record<string, boolean>>({})
 
-// Start from the customer, the company's signer and the unpaid lines whenever the list changes.
+// Start from the customer, the company's signer and every line (all unpaid) whenever the list changes.
 watch(() => [props.rows, props.billTo, props.billedBy], () => {
-  picked.value = Object.fromEntries(props.rows.map((r) => [r.key, !r.paid]))
+  picked.value = Object.fromEntries(props.rows.map((r) => [r.key, true]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
   form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
@@ -69,7 +69,6 @@ const selected = computed(() => props.rows.filter((r) => picked.value[r.key]))
 const total = computed(() => selected.value.reduce((sum, r) => sum + r.amount, 0))
 const allPicked = computed(() => props.rows.length > 0 && props.rows.every((r) => picked.value[r.key]))
 const pickAll = (on: boolean) => props.rows.forEach((r) => { picked.value[r.key] = on })
-const pickUnpaid = () => props.rows.forEach((r) => { picked.value[r.key] = !r.paid })
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
 
@@ -120,10 +119,6 @@ const save = () => {
         </fieldset>
       </div>
 
-      <div>
-        <Button size="sm" variant="ghost" @click="pickUnpaid">Unpaid only</Button>
-      </div>
-
       <div class="max-h-[42vh] overflow-auto rounded-md border">
         <table class="w-full text-sm">
           <thead class="sticky top-0 z-10 bg-background text-left text-xs text-muted-foreground">
@@ -143,7 +138,7 @@ const save = () => {
               <td class="whitespace-nowrap px-2 py-1.5">
                 <span class="tabular-nums">{{ row.date }}</span>
                 <div class="text-xs text-muted-foreground">
-                  {{ row.invoice_number }}<span v-if="row.paid" class="text-status-success"> · paid</span>
+                  {{ row.invoice_number }}
                   <span v-if="row.sent_in"> · sent in {{ row.sent_in.number }}</span>
                 </div>
               </td>
@@ -154,7 +149,7 @@ const save = () => {
               <td class="px-3 py-1.5 text-right tabular-nums"><MoneyText :amount="row.amount" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">No invoices in this period.</td>
+              <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">No unpaid invoices in this period.</td>
             </tr>
           </tbody>
         </table>

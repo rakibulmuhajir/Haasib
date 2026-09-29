@@ -23,8 +23,9 @@ use Illuminate\Validation\ValidationException;
 class ConsolidatedInvoiceService
 {
     /**
-     * The customer's invoices dated in the range, one row per line. Line totals are already net
-     * of any discount. Each row says which consolidated invoice last carried it, if any.
+     * The customer's unpaid invoices dated in the range, one row per line -- a paid invoice has
+     * nothing left to bill. Line totals are already net of any discount. Each row says which
+     * consolidated invoice last carried it, if any.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -33,6 +34,7 @@ class ConsolidatedInvoiceService
         $invoices = Invoice::where('company_id', $companyId)
             ->where('customer_id', $customerId)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->where('balance', '>', 0.005)
             ->whereBetween('invoice_date', [$from, $to])
             ->with('lineItems')
             ->orderBy('invoice_date')

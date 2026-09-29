@@ -26,6 +26,7 @@
  * the old DataTable keep working untouched.
  */
 import { computed, getCurrentInstance, ref } from 'vue'
+import { router } from '@inertiajs/vue3'
 import type { Component } from 'vue'
 import { Button } from '@/components/ui/button'
 import { formatDateTimeForDisplay } from '@/lib/datetime'
@@ -270,10 +271,28 @@ const pageRange = computed(() => {
     return range
 })
 
+// A page that handles paging itself listens for page-change. Most list pages only hand over
+// the paginator and never did, so the page buttons did nothing; for those, the register loads
+// the requested page itself -- the current address with ?page= swapped, filters kept.
+const pagerInstance = getCurrentInstance()
 const goToPage = (target: number) => {
     if (!page.value) return
     if (target < 1 || target > totalPages.value) return
-    emit('page-change', target)
+    if (pagerInstance?.vnode.props?.onPageChange) {
+        emit('page-change', target)
+        return
+    }
+    // The paginator names its own page parameter (page, pending_page ...) in first_page_url.
+    let pageName = 'page'
+    const first = (props.pagination as any)?.first_page_url
+    if (first) {
+        for (const [key, value] of new URL(first, window.location.origin).searchParams) {
+            if (value === '1' && key.endsWith('page')) pageName = key
+        }
+    }
+    const url = new URL(window.location.href)
+    url.searchParams.set(pageName, String(target))
+    router.get(url.pathname + url.search, {}, { preserveState: true, preserveScroll: false })
 }
 
 const getCellValue = (row: T, column: RegisterColumn<T>) =>

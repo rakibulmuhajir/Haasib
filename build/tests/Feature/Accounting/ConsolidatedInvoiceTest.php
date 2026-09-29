@@ -18,7 +18,8 @@ test('a consolidated invoice saves the picked lines, marks them sent, and cannot
     $rows = $service->rowsFor($f['company']->id, $f['customer']->id, '2026-09-01', '2026-09-30');
     expect($rows)->not->toBeEmpty()
         ->and($rows[0]['sent_in'])->toBeNull()
-        ->and($rows[0]['item'])->toBe('Petrol'); // the close records its fuel on the invoice line
+        ->and($rows[0]['item'])->toBe('Petrol') // the close records its fuel on the invoice line
+        ->and($rows[0]['reference'])->toBe('Slip 42'); // ...and its reference on the invoice
 
     $id = $service->create($f['company'], [
         'customer_id' => $f['customer']->id, 'from' => '2026-09-01', 'to' => '2026-09-30', 'title' => 'Reminder',

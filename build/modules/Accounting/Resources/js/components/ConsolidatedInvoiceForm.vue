@@ -43,6 +43,7 @@ const props = defineProps<{
   to: string
   companySlug: string
   customerId: string
+  labels?: { item: string; quantity: string } | null
 }>()
 
 const form = useForm({
@@ -54,6 +55,8 @@ const form = useForm({
   references: {} as Record<string, string>,
   // The station's own physical invoice / coupon number per line, typed here (optional column).
   physical: {} as Record<string, string>,
+  // Cells the invoice left blank (fuel, litres, rate), filled in here.
+  fills: {} as Record<string, { item?: string; quantity?: number | null; rate?: number | null }>,
   bill_to: { name: '', attention: '', phone: '', address: '' },
   billed_by: { name: '', designation: '', phone: '', address: '' },
 })
@@ -64,6 +67,7 @@ watch(() => [props.rows, props.billTo, props.billedBy], () => {
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, true]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
+  form.fills = Object.fromEntries(props.rows.map((r) => [r.key, {}]))
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
   form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
 }, { immediate: true })
@@ -130,8 +134,8 @@ const save = () => {
               <th class="px-2 py-2">Date</th>
               <th class="px-2 py-2">Reference</th>
               <th class="px-2 py-2">Invoice no.</th>
-              <th class="px-2 py-2">Fuel</th>
-              <th class="px-2 py-2 text-right">Litres</th>
+              <th class="px-2 py-2">{{ labels?.item ?? 'Item' }}</th>
+              <th class="px-2 py-2 text-right">{{ labels?.quantity ?? 'Qty' }}</th>
               <th class="px-2 py-2 text-right">Rate</th>
               <th class="px-3 py-2 text-right">Amount</th>
             </tr>
@@ -148,9 +152,18 @@ const save = () => {
               </td>
               <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Reference for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1"><Input v-model="form.physical[row.key]" class="h-7 w-28 text-xs" placeholder="Optional" :aria-label="`Physical invoice number for ${row.invoice_number}`" /></td>
-              <td class="px-2 py-1.5">{{ row.item }}</td>
-              <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.quantity) }}</td>
-              <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.rate) }}</td>
+              <td class="px-2 py-1">
+                <span v-if="row.item">{{ row.item }}</span>
+                <Input v-else v-model="form.fills[row.key].item" class="h-7 w-24 text-xs" :aria-label="`${labels?.item ?? 'Item'} for ${row.invoice_number}`" />
+              </td>
+              <td class="px-2 py-1 text-right tabular-nums">
+                <span v-if="row.quantity !== null">{{ number(row.quantity) }}</span>
+                <Input v-else v-model.number="form.fills[row.key].quantity" type="number" min="0" step="0.01" class="ml-auto h-7 w-20 text-right text-xs" :aria-label="`${labels?.quantity ?? 'Qty'} for ${row.invoice_number}`" />
+              </td>
+              <td class="px-2 py-1 text-right tabular-nums">
+                <span v-if="row.rate !== null">{{ number(row.rate) }}</span>
+                <Input v-else v-model.number="form.fills[row.key].rate" type="number" min="0" step="0.01" class="ml-auto h-7 w-20 text-right text-xs" :aria-label="`Rate for ${row.invoice_number}`" />
+              </td>
               <td class="px-3 py-1.5 text-right tabular-nums"><MoneyText :amount="row.amount" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
             </tr>
             <tr v-if="!rows.length">

@@ -72,8 +72,8 @@
                 <th>Date</th>
                 @if ($doc['show_reference'])<th>Reference</th>@endif
                 @if ($doc['show_physical'])<th>Invoice no.</th>@endif
-                <th>Fuel</th>
-                <th class="num">Litres</th>
+                <th>{{ $doc['labels']['item'] ?? 'Item' }}</th>
+                <th class="num">{{ $doc['labels']['quantity'] ?? 'Qty' }}</th>
                 <th class="num">Rate</th>
                 <th class="num">Amount</th>
             </tr>

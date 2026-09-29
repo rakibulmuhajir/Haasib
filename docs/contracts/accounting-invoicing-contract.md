@@ -639,6 +639,12 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   when the caller passes `line_items.*.item_id` (daily close credit and direct sales do). Existing close invoices
   were filled once from each close's recorded `credit_sale_details` / direct-sale rows. The consolidated invoice's
   Fuel column reads only this; blank when the line has none.
+- `acct.invoices.reference` varchar(100) null (2026-09-29): the slip / order number a sale was made against. Set by
+  `invoice.create` (`reference`); daily close credit sales pass theirs. Existing close invoices filled once from each
+  close's `credit_sale_details.reference`. The consolidated invoice's Reference column reads only this.
+- Consolidated invoice column names come from `ConsolidatedInvoiceService::labels()`: Fuel / Litres for a company with
+  the fuel_station module, Item / Qty otherwise. Blank Item/Qty/Rate cells can be filled in on the form (`fills`);
+  values the invoice already has are never overridden.
 - `bill_to.address` / `billed_by.address`: one line joining street, line 2, city, state, postal code, country (empty parts dropped).
 - `billed_by` defaults come from company settings `billed_by_name` / `billed_by_designation` / `billed_by_phone`.
 

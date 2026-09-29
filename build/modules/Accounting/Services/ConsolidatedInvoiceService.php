@@ -54,8 +54,7 @@ class ConsolidatedInvoiceService
 
         $rows = [];
         foreach ($invoices as $invoice) {
-            // A daily close's credit sale keeps the slip number at the end of its notes.
-            $reference = preg_match('/^Credit portion of meter sales for [0-9-]+\.\s*(.+)$/', (string) $invoice->notes, $m) ? trim($m[1]) : null;
+            $reference = $invoice->reference;
             $last = $sent[$invoice->id] ?? null;
             foreach ($invoice->lineItems->sortBy('line_number') as $line) {
                 $rows[] = [
@@ -116,6 +115,14 @@ class ConsolidatedInvoiceService
         return implode(', ', array_filter(array_map(fn ($p) => is_string($p) ? trim($p) : '', $parts), fn ($p) => $p !== ''));
     }
 
+    /** Column names: a fuel station bills fuel in litres; anyone else, items in quantities. */
+    public static function labels(Company $company): array
+    {
+        return $company->isModuleEnabled('fuel_station')
+            ? ['item' => 'Fuel', 'quantity' => 'Litres']
+            : ['item' => 'Item', 'quantity' => 'Qty'];
+    }
+
     /** Bill to, from the customer record: name, billing contact, phone, billing address. */
     public function billTo(Customer $customer): array
     {
@@ -150,6 +157,9 @@ class ConsolidatedInvoiceService
         $keys = array_flip(array_map('strval', $data['keys'] ?? []));
         $references = $data['references'] ?? [];
         $physical = $data['physical'] ?? [];
+        // Blank cells the user filled in (fuel, litres, rate). A value the invoice has is kept.
+        $fills = $data['fills'] ?? [];
+        $fill = fn (array $r, string $field) => $fills[$r['key']][$field] ?? null;
         $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
 
         $rows = array_values(array_filter($this->rowsFor($company->id, $customer->id, $data['from'], $data['to']), fn ($r) => isset($keys[$r['key']])));
@@ -162,10 +172,10 @@ class ConsolidatedInvoiceService
             'date' => $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
             'physical_invoice' => $text($physical[$r['key']] ?? '', 60),
-            'item' => $r['item'],
+            'item' => $r['item'] !== '' ? $r['item'] : $text($fill($r, 'item') ?? '', 60),
             'description' => $r['description'],
-            'quantity' => $r['quantity'],
-            'rate' => $r['rate'],
+            'quantity' => $r['quantity'] ?? (is_numeric($fill($r, 'quantity')) ? round((float) $fill($r, 'quantity'), 2) : null),
+            'rate' => $r['rate'] ?? (is_numeric($fill($r, 'rate')) ? round((float) $fill($r, 'rate'), 2) : null),
             'amount' => $r['amount'],
         ], $rows);
 
@@ -243,6 +253,7 @@ class ConsolidatedInvoiceService
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
+            'labels' => self::labels($company),
         ];
     }
 

@@ -32,6 +32,8 @@ class CreateAction implements PaletteAction
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'description' => 'nullable|string|max:500',
             'notes' => 'nullable|string',
+            // The slip / order number the sale was made against.
+            'reference' => 'nullable|string|max:100',
             'internal_notes' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
@@ -164,6 +166,7 @@ class CreateAction implements PaletteAction
                 // `description` is the old single-field name kept working for
                 // the command palette, which still sends it.
                 'notes' => $params['notes'] ?? null,
+                'reference' => isset($params['reference']) && trim((string) $params['reference']) !== '' ? trim((string) $params['reference']) : null,
                 'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
                 'created_by_user_id' => Auth::id(),
             ]);

@@ -44,6 +44,7 @@ const props = defineProps<{
     currency: string
     show_reference?: boolean
     show_physical?: boolean
+    labels?: { item: string; quantity: string }
     issuer: DocumentIssuer
   }
 }>()
@@ -102,8 +103,8 @@ const print = () => window.print()
               <th>Date</th>
               <th v-if="document.show_reference">Reference</th>
               <th v-if="document.show_physical">Invoice no.</th>
-              <th>Fuel</th>
-              <th class="num">Litres</th>
+              <th>{{ document.labels?.item ?? 'Item' }}</th>
+              <th class="num">{{ document.labels?.quantity ?? 'Qty' }}</th>
               <th class="num">Rate</th>
               <th class="num">Amount</th>
             </tr>

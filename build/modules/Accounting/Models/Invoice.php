@@ -63,6 +63,7 @@ class Invoice extends Model
         'base_amount',
         'payment_terms',
         'notes',
+        'reference',
         'internal_notes',
         'sent_at',
         'viewed_at',

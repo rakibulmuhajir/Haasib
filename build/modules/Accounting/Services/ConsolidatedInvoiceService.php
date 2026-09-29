@@ -290,6 +290,11 @@ class ConsolidatedInvoiceService
         if (! is_dir($fontCache)) {
             @mkdir($fontCache, 0775, true);
         }
+        if (! is_writable($fontCache)) {
+            // A folder the web server cannot write to must not stop the download.
+            $fontCache = sys_get_temp_dir().'/haasib-pdf-fonts';
+            @mkdir($fontCache, 0775, true);
+        }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4')->setOption([
             'isFontSubsettingEnabled' => true,

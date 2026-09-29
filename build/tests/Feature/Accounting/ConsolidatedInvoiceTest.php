@@ -26,6 +26,7 @@ test('a consolidated invoice saves the picked lines, marks them sent, and cannot
         'columns' => [['label' => 'Vehicle', 'values' => [$rows[0]['key'] => 'LEA-1234']]],
         'bill_to' => ['name' => '', 'attention' => 'Accounts office', 'phone' => ''],
         'billed_by' => ['name' => 'Tariq', 'designation' => 'Manager', 'phone' => '0300'],
+        'hidden' => ['rate'],
     ], $f['user']->id);
 
     $doc = $service->document($f['company'], $id);
@@ -35,6 +36,11 @@ test('a consolidated invoice saves the picked lines, marks them sent, and cannot
         ->and($doc['lines'][0]['reference'])->toBe('Slip 42')
         ->and($doc['lines'][0]['extra'])->toBe(['LEA-1234'])
         ->and($doc['total'])->toBe((float) $rows[0]['amount']);
+
+    // Rate was left out; the customer's next one starts with the same title and columns.
+    expect($doc['shown']['rate'])->toBeFalse()
+        ->and($doc['shown']['date'])->toBeTrue()
+        ->and($service->layoutFor($f['customer']->fresh()))->toBe(['title' => 'Reminder', 'hidden' => ['rate'], 'columns' => ['Vehicle']]);
 
     // Next time, the same invoice says where it was sent.
     $again = $service->rowsFor($f['company']->id, $f['customer']->id, '2026-09-01', '2026-09-30');

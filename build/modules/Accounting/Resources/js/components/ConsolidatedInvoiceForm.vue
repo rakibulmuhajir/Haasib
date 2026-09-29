@@ -23,14 +23,16 @@ export interface InvoiceRow {
   paid: boolean
   balance: number
   sent_in: { number: string; date: string } | null
+  item: string
   description: string
   quantity: number | null
   rate: number | null
   amount: number
 }
 
-export interface BillToDefaults { name: string; attention: string; phone: string }
-export interface BilledByDefaults { name: string; designation: string; phone: string }
+export interface BillToDefaults { name: string; attention: string; phone: string; address: string }
+export interface BilledByDefaults { name: string; designation: string; phone: string; address: string }
+export interface InvoiceLayout { title: string; hidden: string[]; columns: string[] }
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{
@@ -42,7 +44,23 @@ const props = defineProps<{
   to: string
   companySlug: string
   customerId: string
+  layout: InvoiceLayout | null
 }>()
+
+// The standard columns that can be left off the paper. Amount always prints.
+const standardColumns = [
+  { key: 'date', label: 'Date' },
+  { key: 'invoice', label: 'Invoice' },
+  { key: 'reference', label: 'Reference' },
+  { key: 'item', label: 'Item' },
+  { key: 'description', label: 'Description' },
+  { key: 'quantity', label: 'Qty' },
+  { key: 'rate', label: 'Rate' },
+]
+const isHidden = (key: string) => form.hidden.includes(key)
+const toggleColumn = (key: string) => {
+  form.hidden = isHidden(key) ? form.hidden.filter((k) => k !== key) : [...form.hidden, key]
+}
 
 const form = useForm({
   customer_id: '',
@@ -52,17 +70,22 @@ const form = useForm({
   keys: [] as string[],
   references: {} as Record<string, string>,
   columns: [] as Array<{ label: string; values: Record<string, string> }>,
-  bill_to: { name: '', attention: '', phone: '' },
-  billed_by: { name: '', designation: '', phone: '' },
+  bill_to: { name: '', attention: '', phone: '', address: '' },
+  billed_by: { name: '', designation: '', phone: '', address: '' },
+  hidden: [] as string[],
 })
 const picked = ref<Record<string, boolean>>({})
 
-// Start from the customer, the company's signer and the unpaid lines whenever the list changes.
-watch(() => [props.rows, props.billTo, props.billedBy], () => {
+// Start from the customer, the company's signer, this customer's last layout (title, columns
+// left out, custom columns) and the unpaid lines, whenever the list changes.
+watch(() => [props.rows, props.billTo, props.billedBy, props.layout], () => {
+  form.title = props.layout?.title || 'Invoice'
+  form.hidden = [...(props.layout?.hidden ?? [])]
+  form.columns = (props.layout?.columns ?? []).map((label) => ({ label, values: {} }))
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, !r.paid]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
-  form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '' }
-  form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '' }
+  form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
+  form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
 }, { immediate: true })
 
 const selected = computed(() => props.rows.filter((r) => picked.value[r.key]))
@@ -110,6 +133,7 @@ const save = () => {
             <Input v-model="form.bill_to.attention" class="h-8" placeholder="Person / office" aria-label="Bill to person or office" />
             <Input v-model="form.bill_to.phone" class="h-8 w-36" placeholder="Phone" aria-label="Bill to phone" />
           </div>
+          <Input v-model="form.bill_to.address" class="h-8" placeholder="Address" aria-label="Bill to address" />
         </fieldset>
         <fieldset class="space-y-1.5">
           <legend class="mb-1 text-xs font-medium text-muted-foreground">Billed by</legend>
@@ -118,12 +142,24 @@ const save = () => {
             <Input v-model="form.billed_by.designation" class="h-8" placeholder="Designation" aria-label="Billed by designation" />
             <Input v-model="form.billed_by.phone" class="h-8 w-36" placeholder="Phone" aria-label="Billed by phone" />
           </div>
+          <Input v-model="form.billed_by.address" class="h-8" placeholder="Address" aria-label="Billed by address" />
         </fieldset>
       </div>
 
       <div class="flex items-center gap-2">
         <Button size="sm" variant="ghost" @click="pickUnpaid">Unpaid only</Button>
         <Button size="sm" variant="ghost" :disabled="form.columns.length >= 6" @click="addColumn"><Plus class="mr-1 h-4 w-4" />Column</Button>
+        <span class="mx-1 h-5 w-px bg-border" />
+        <span class="text-xs text-muted-foreground">Print</span>
+        <button
+          v-for="col in standardColumns"
+          :key="col.key"
+          type="button"
+          class="rounded-full border px-2 py-0.5 text-xs transition-colors"
+          :class="isHidden(col.key) ? 'text-muted-foreground line-through' : 'border-primary/50 bg-primary/10'"
+          :aria-pressed="!isHidden(col.key)"
+          @click="toggleColumn(col.key)"
+        >{{ col.label }}</button>
       </div>
 
       <div class="max-h-[42vh] overflow-auto rounded-md border">
@@ -134,6 +170,7 @@ const save = () => {
               <th class="px-2 py-2">Date</th>
               <th class="px-2 py-2">Invoice</th>
               <th class="px-2 py-2">Reference</th>
+              <th class="px-2 py-2">Item</th>
               <th class="px-2 py-2">Description</th>
               <th class="px-2 py-2 text-right">Qty</th>
               <th class="px-2 py-2 text-right">Rate</th>
@@ -156,6 +193,7 @@ const save = () => {
                 <div v-if="row.sent_in" class="text-xs text-muted-foreground">sent in {{ row.sent_in.number }} · {{ row.sent_in.date }}</div>
               </td>
               <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" /></td>
+              <td class="px-2 py-1.5">{{ row.item }}</td>
               <td class="px-2 py-1.5">{{ row.description }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.quantity) }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.rate) }}</td>
@@ -163,7 +201,7 @@ const save = () => {
               <td v-for="(col, c) in form.columns" :key="c" class="px-2 py-1"><Input v-model="col.values[row.key]" class="h-7 text-xs" /></td>
             </tr>
             <tr v-if="!rows.length">
-              <td :colspan="8 + form.columns.length" class="px-3 py-6 text-center text-muted-foreground">No invoices in this period.</td>
+              <td :colspan="9 + form.columns.length" class="px-3 py-6 text-center text-muted-foreground">No invoices in this period.</td>
             </tr>
           </tbody>
         </table>

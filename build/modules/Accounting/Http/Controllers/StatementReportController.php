@@ -206,6 +206,7 @@ class StatementReportController extends Controller
             'invoiceRows' => $service->rowsFor($company->id, $customerId, $from, $to),
             'billTo' => $service->billTo($customer),
             'billedBy' => $service->billedBy($company),
+            'invoiceLayout' => $service->layoutFor($customer),
         ];
     }
 }

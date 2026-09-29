@@ -56,12 +56,12 @@
                 <div class="label">Bill to</div>
                 <div style="font-weight: bold">{{ $billTo['name'] ?? '' }}</div>
                 @if (!empty($billTo['attention']))<div>{{ $billTo['attention'] }}</div>@endif
+                @if (!empty($billTo['address']))<div class="muted">{{ $billTo['address'] }}</div>@endif
                 @foreach (($billTo['lines'] ?? []) as $line)<div class="muted">{{ $line }}</div>@endforeach
                 @if (!empty($billTo['phone']))<div class="muted">{{ $billTo['phone'] }}</div>@endif
             </td>
             <td>
-                <div class="label">Period</div><div>{{ $doc['period_from'] }} to {{ $doc['period_to'] }}</div>
-                <div class="label" style="margin-top: 6px">Date</div><div>{{ $doc['date'] }}</div>
+                <div class="label">Date</div><div>{{ $doc['date'] }}</div>
             </td>
         </tr>
     </table>
@@ -69,11 +69,13 @@
     <table class="lines">
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Invoice</th>
-                @if ($doc['show_reference'])<th>Reference</th>@endif
-                <th>Description</th>
-                @if ($doc['show_quantity'])<th class="num">Qty</th><th class="num">Rate</th>@endif
+                @if ($doc['shown']['date'])<th>Date</th>@endif
+                @if ($doc['shown']['invoice'])<th>Invoice</th>@endif
+                @if ($doc['shown']['reference'])<th>Reference</th>@endif
+                @if ($doc['shown']['item'])<th>Item</th>@endif
+                @if ($doc['shown']['description'])<th>Description</th>@endif
+                @if ($doc['shown']['quantity'])<th class="num">Qty</th>@endif
+                @if ($doc['shown']['rate'])<th class="num">Rate</th>@endif
                 @foreach ($doc['columns'] as $label)<th>{{ $label }}</th>@endforeach
                 <th class="num">Amount</th>
             </tr>
@@ -81,14 +83,13 @@
         <tbody>
             @foreach ($doc['lines'] as $line)
                 <tr>
-                    <td>{{ $line['date'] }}</td>
-                    <td>{{ $line['invoice_number'] }}</td>
-                    @if ($doc['show_reference'])<td>{{ $line['reference'] }}</td>@endif
-                    <td>{{ $line['description'] }}</td>
-                    @if ($doc['show_quantity'])
-                        <td class="num">{{ $qty($line['quantity']) }}</td>
-                        <td class="num">{{ $qty($line['rate']) }}</td>
-                    @endif
+                    @if ($doc['shown']['date'])<td>{{ $line['date'] }}</td>@endif
+                    @if ($doc['shown']['invoice'])<td>{{ $line['invoice_number'] }}</td>@endif
+                    @if ($doc['shown']['reference'])<td>{{ $line['reference'] }}</td>@endif
+                    @if ($doc['shown']['item'])<td>{{ $line['item'] ?? '' }}</td>@endif
+                    @if ($doc['shown']['description'])<td>{{ $line['description'] }}</td>@endif
+                    @if ($doc['shown']['quantity'])<td class="num">{{ $qty($line['quantity']) }}</td>@endif
+                    @if ($doc['shown']['rate'])<td class="num">{{ $qty($line['rate']) }}</td>@endif
                     @foreach ($line['extra'] as $value)<td>{{ $value }}</td>@endforeach
                     <td class="num">{{ number_format($line['amount'], 2) }}</td>
                 </tr>
@@ -111,6 +112,7 @@
                 @if (!empty($billedBy['name']))<div style="font-weight: bold">{{ $billedBy['name'] }}</div>@endif
                 @if (!empty($billedBy['designation']))<div class="muted">{{ $billedBy['designation'] }}</div>@endif
                 @if (!empty($billedBy['phone']))<div class="muted">{{ $billedBy['phone'] }}</div>@endif
+                @if (!empty($billedBy['address']))<div class="muted">{{ $billedBy['address'] }}</div>@endif
             </div>
         </div>
     @endif

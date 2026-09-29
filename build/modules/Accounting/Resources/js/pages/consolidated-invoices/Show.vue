@@ -17,6 +17,7 @@ interface Line {
   invoice_number: string
   date: string
   reference: string
+  item?: string
   description: string
   quantity: number | null
   rate: number | null
@@ -36,14 +37,13 @@ const props = defineProps<{
     date: string
     created_by_name: string | null
     title: string
-    bill_to: { name: string; attention?: string; phone?: string; lines?: string[] }
-    billed_by: { name?: string; designation?: string; phone?: string }
+    bill_to: { name: string; attention?: string; phone?: string; address?: string; lines?: string[] }
+    billed_by: { name?: string; designation?: string; phone?: string; address?: string }
     columns: string[]
     lines: Line[]
     total: number
     currency: string
-    show_reference: boolean
-    show_quantity: boolean
+    shown: { date: boolean; invoice: boolean; reference: boolean; item: boolean; description: boolean; quantity: boolean; rate: boolean }
     issuer: DocumentIssuer
   }
 }>()
@@ -56,7 +56,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const billTo = computed(() => ({
   name: props.document.bill_to.name,
-  lines: [props.document.bill_to.attention, ...(props.document.bill_to.lines ?? [])].filter(Boolean) as string[],
+  // Older documents kept the address as separate lines; newer ones as one line.
+  lines: [props.document.bill_to.attention, props.document.bill_to.address, ...(props.document.bill_to.lines ?? [])].filter(Boolean) as string[],
   phone: props.document.bill_to.phone || undefined,
 }))
 const billedBy = computed(() => props.document.billed_by ?? {})
@@ -68,7 +69,7 @@ const print = () => window.print()
 <template>
   <Head :title="document.number" />
 
-  <PageShell :title="`${document.title} ${document.number}`" :description="`${document.customer_name} · ${document.period_from} to ${document.period_to}`" :breadcrumbs="breadcrumbs">
+  <PageShell :title="`${document.title} ${document.number}`" :description="document.customer_name" :breadcrumbs="breadcrumbs">
     <template #actions>
       <Button variant="outline" @click="print"><Printer class="mr-2 h-4 w-4" />Print</Button>
       <Button as-child>
@@ -87,7 +88,7 @@ const print = () => window.print()
       :issuer="document.issuer"
       :bill-to="billTo"
       bill-to-label="Bill to"
-      :dates="[{ label: 'Period', value: `${document.period_from} to ${document.period_to}` }, { label: 'Date', value: document.date }]"
+      :dates="[{ label: 'Date', value: document.date }]"
       :lines="[]"
       grand-total-label="Total"
       :grand-total-amount="document.total"
@@ -98,24 +99,26 @@ const print = () => window.print()
         <table class="ci-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Invoice</th>
-              <th v-if="document.show_reference">Reference</th>
-              <th>Description</th>
-              <th v-if="document.show_quantity" class="num">Qty</th>
-              <th v-if="document.show_quantity" class="num">Rate</th>
+              <th v-if="document.shown.date">Date</th>
+              <th v-if="document.shown.invoice">Invoice</th>
+              <th v-if="document.shown.reference">Reference</th>
+              <th v-if="document.shown.item">Item</th>
+              <th v-if="document.shown.description">Description</th>
+              <th v-if="document.shown.quantity" class="num">Qty</th>
+              <th v-if="document.shown.rate" class="num">Rate</th>
               <th v-for="label in document.columns" :key="label">{{ label }}</th>
               <th class="num">Amount</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(line, i) in document.lines" :key="i">
-              <td>{{ line.date }}</td>
-              <td>{{ line.invoice_number }}</td>
-              <td v-if="document.show_reference">{{ line.reference }}</td>
-              <td>{{ line.description }}</td>
-              <td v-if="document.show_quantity" class="num">{{ number(line.quantity) }}</td>
-              <td v-if="document.show_quantity" class="num">{{ number(line.rate) }}</td>
+              <td v-if="document.shown.date">{{ line.date }}</td>
+              <td v-if="document.shown.invoice">{{ line.invoice_number }}</td>
+              <td v-if="document.shown.reference">{{ line.reference }}</td>
+              <td v-if="document.shown.item">{{ line.item }}</td>
+              <td v-if="document.shown.description">{{ line.description }}</td>
+              <td v-if="document.shown.quantity" class="num">{{ number(line.quantity) }}</td>
+              <td v-if="document.shown.rate" class="num">{{ number(line.rate) }}</td>
               <td v-for="(value, c) in line.extra" :key="c">{{ value }}</td>
               <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
             </tr>
@@ -128,6 +131,7 @@ const print = () => window.print()
           <div v-if="billedBy.name" class="ci-billed-by__name">{{ billedBy.name }}</div>
           <div v-if="billedBy.designation">{{ billedBy.designation }}</div>
           <div v-if="billedBy.phone">{{ billedBy.phone }}</div>
+          <div v-if="billedBy.address">{{ billedBy.address }}</div>
         </div>
       </template>
     </LedgerDocument>

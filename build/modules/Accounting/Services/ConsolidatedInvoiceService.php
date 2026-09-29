@@ -22,6 +22,21 @@ use Illuminate\Validation\ValidationException;
  */
 class ConsolidatedInvoiceService
 {
+    /** The standard columns a document can leave out (Amount always prints). */
+    public const COLUMNS = ['date', 'invoice', 'reference', 'item', 'description', 'quantity', 'rate'];
+
+    /** How this customer's last one was laid out, to start the next one the same way. */
+    public function layoutFor(Customer $customer): array
+    {
+        $layout = is_array($customer->invoice_layout) ? $customer->invoice_layout : (json_decode((string) $customer->invoice_layout, true) ?: []);
+
+        return [
+            'title' => (string) ($layout['title'] ?? 'Invoice'),
+            'hidden' => array_values(array_intersect((array) ($layout['hidden'] ?? []), self::COLUMNS)),
+            'columns' => array_values(array_map('strval', (array) ($layout['columns'] ?? []))),
+        ];
+    }
+
     /**
      * The customer's invoices dated in the range, one row per line. Line totals are already net
      * of any discount. Each row says which consolidated invoice last carried it, if any.
@@ -47,6 +62,15 @@ class ConsolidatedInvoiceService
             ->get(['i.invoice_id', 'c.number', 'c.created_at'])
             ->keyBy('invoice_id'); // latest wins
 
+        // What each line sold. Invoice lines keep no product, but each posts to the product's own
+        // sales account (Fuel Sales - Diesel ...); an account several products share gives its name.
+        $itemNames = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')->whereNotNull('income_account_id')
+            ->get(['income_account_id', 'name'])->groupBy('income_account_id')
+            ->map(fn ($items) => $items->count() === 1 ? $items->first()->name : null);
+        $accountNames = DB::table('acct.accounts')->where('company_id', $companyId)
+            ->whereIn('id', $invoices->flatMap(fn ($i) => $i->lineItems->pluck('income_account_id'))->filter()->unique())
+            ->pluck('name', 'id');
+
         $rows = [];
         foreach ($invoices as $invoice) {
             // A daily close's credit sale keeps the slip number at the end of its notes.
@@ -62,6 +86,7 @@ class ConsolidatedInvoiceService
                     'paid' => (float) $invoice->balance <= 0.005,
                     'balance' => round((float) $invoice->balance, 2),
                     'sent_in' => $last ? ['number' => $last->number, 'date' => substr((string) $last->created_at, 0, 10)] : null,
+                    'item' => (string) ($itemNames[$line->income_account_id] ?? $accountNames[$line->income_account_id] ?? ''),
                     'description' => (string) $line->description,
                     'quantity' => $line->quantity !== null ? round((float) $line->quantity, 2) : null,
                     'rate' => $line->unit_price !== null ? round((float) $line->unit_price, 2) : null,
@@ -90,20 +115,34 @@ class ConsolidatedInvoiceService
             ])->all();
     }
 
-    /** Bill to, from the customer record: name, billing contact, phone, address. */
+    /**
+     * An address on one line: street, line 2, city, state, postal code, country, the empty parts
+     * left out. Customer and company addresses name some parts differently (street / line1,
+     * zip / postal_code); both are read.
+     */
+    public static function addressLine(mixed $address): string
+    {
+        $address = is_array($address) ? $address : [];
+        $parts = [
+            $address['line1'] ?? $address['street'] ?? null,
+            $address['line2'] ?? null,
+            $address['city'] ?? null,
+            $address['state'] ?? null,
+            $address['postal_code'] ?? $address['zip'] ?? null,
+            $address['country'] ?? null,
+        ];
+
+        return implode(', ', array_filter(array_map(fn ($p) => is_string($p) ? trim($p) : '', $parts), fn ($p) => $p !== ''));
+    }
+
+    /** Bill to, from the customer record: name, billing contact, phone, billing address. */
     public function billTo(Customer $customer): array
     {
-        $address = is_array($customer->billing_address) ? $customer->billing_address : [];
-
         return [
             'name' => $customer->name,
             'attention' => $customer->billing_contact ?? '',
             'phone' => $customer->phone ?? '',
-            'lines' => array_values(array_filter([
-                $address['line1'] ?? $address['street'] ?? null,
-                $address['line2'] ?? null,
-                trim(($address['city'] ?? '').' '.($address['postal_code'] ?? $address['zip'] ?? '')) ?: null,
-            ])),
+            'address' => self::addressLine($customer->billing_address),
         ];
     }
 
@@ -116,6 +155,7 @@ class ConsolidatedInvoiceService
             'name' => $settings['billed_by_name'] ?? '',
             'designation' => $settings['billed_by_designation'] ?? '',
             'phone' => $settings['billed_by_phone'] ?? '',
+            'address' => self::addressLine($company->address),
         ];
     }
 
@@ -143,11 +183,14 @@ class ConsolidatedInvoiceService
         $columns = array_values(array_filter($columns, fn ($c) => $c['label'] !== ''
             || collect($rows)->contains(fn ($r) => ($c['values'][$r['key']] ?? '') !== '')));
 
+        $hidden = array_values(array_intersect(array_map('strval', $data['hidden'] ?? []), self::COLUMNS));
+
         $lines = array_map(fn ($r) => [
             'invoice_id' => $r['invoice_id'],
             'invoice_number' => $r['invoice_number'],
             'date' => $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
+            'item' => $r['item'],
             'description' => $r['description'],
             'quantity' => $r['quantity'],
             'rate' => $r['rate'],
@@ -160,15 +203,16 @@ class ConsolidatedInvoiceService
             'name' => $text($data['bill_to']['name'] ?? '') ?: $fallback['name'],
             'attention' => $text($data['bill_to']['attention'] ?? ''),
             'phone' => $text($data['bill_to']['phone'] ?? '', 50),
-            'lines' => $fallback['lines'],
+            'address' => $text($data['bill_to']['address'] ?? '', 300),
         ];
         $billedBy = [
             'name' => $text($data['billed_by']['name'] ?? ''),
             'designation' => $text($data['billed_by']['designation'] ?? ''),
             'phone' => $text($data['billed_by']['phone'] ?? '', 50),
+            'address' => $text($data['billed_by']['address'] ?? '', 300),
         ];
 
-        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $columns, $lines, $userId) {
+        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $columns, $lines, $hidden, $userId) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$company->id, 'consolidated_invoice_number']);
             $count = DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->count();
             $id = (string) Str::uuid();
@@ -183,6 +227,7 @@ class ConsolidatedInvoiceService
                 'bill_to' => json_encode($billTo),
                 'billed_by' => json_encode($billedBy),
                 'columns' => json_encode(array_column($columns, 'label')),
+                'hidden_columns' => json_encode($hidden),
                 'lines' => json_encode($lines),
                 'total' => round(array_sum(array_column($lines, 'amount')), 2),
                 'currency' => $company->base_currency ?: 'PKR',
@@ -192,6 +237,13 @@ class ConsolidatedInvoiceService
             DB::table('acct.consolidated_invoice_items')->insert(array_map(fn ($invoiceId) => [
                 'id' => (string) Str::uuid(), 'company_id' => $company->id, 'consolidated_invoice_id' => $id, 'invoice_id' => $invoiceId,
             ], array_values(array_unique(array_column($lines, 'invoice_id')))));
+
+            // The next one for this customer starts with the same title and columns.
+            DB::table('acct.customers')->where('id', $customer->id)->update(['invoice_layout' => json_encode([
+                'title' => $text($data['title'] ?? '', 60) ?: 'Invoice',
+                'hidden' => $hidden,
+                'columns' => array_values(array_filter(array_column($columns, 'label'), fn ($l) => $l !== '')),
+            ])]);
 
             return $id;
         });
@@ -225,8 +277,21 @@ class ConsolidatedInvoiceService
             'lines' => $lines,
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
-            'show_reference' => collect($lines)->contains(fn ($l) => ($l['reference'] ?? '') !== ''),
-            'show_quantity' => collect($lines)->contains(fn ($l) => $l['quantity'] !== null),
+            // A column prints unless it was left out, or nothing in it was filled in.
+            'shown' => (function () use ($doc, $lines) {
+                $hidden = json_decode((string) ($doc->hidden_columns ?? '[]'), true) ?: [];
+                $any = fn (string $key) => collect($lines)->contains(fn ($l) => ($l[$key] ?? null) !== null && ($l[$key] ?? '') !== '');
+
+                return [
+                    'date' => ! in_array('date', $hidden, true),
+                    'invoice' => ! in_array('invoice', $hidden, true),
+                    'reference' => ! in_array('reference', $hidden, true) && $any('reference'),
+                    'item' => ! in_array('item', $hidden, true) && $any('item'),
+                    'description' => ! in_array('description', $hidden, true),
+                    'quantity' => ! in_array('quantity', $hidden, true) && $any('quantity'),
+                    'rate' => ! in_array('rate', $hidden, true) && $any('rate'),
+                ];
+            })(),
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
         ];
     }

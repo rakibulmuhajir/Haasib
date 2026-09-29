@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock, PiggyBank } from 'lucide-vue-next'
+import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock, PiggyBank, ScrollText } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
@@ -199,6 +199,13 @@ const goBack = () => {
       <!-- Contact details, address and credit limit live on the customer's detail form. -->
       <Button variant="outline" as-child>
         <Link :href="`/${companySlug}/customers/${customer.id}/edit`">Edit details</Link>
+      </Button>
+      <!-- Pick this customer's unpaid sales into one invoice to send or print. -->
+      <Button variant="outline" as-child>
+        <Link :href="`/${companySlug}/reports/statements?kind=customer&id=${customer.id}&consolidate=1`">
+          <ScrollText class="mr-2 h-4 w-4" />
+          Consolidated invoice
+        </Link>
       </Button>
       <Button variant="outline" @click="goBack">
         <ArrowLeft class="mr-2 h-4 w-4" />

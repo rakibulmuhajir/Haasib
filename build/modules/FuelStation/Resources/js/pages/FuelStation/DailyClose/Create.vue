@@ -56,6 +56,8 @@ import {
     Wallet,
     Info,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Tag,
 } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -1514,11 +1516,18 @@ const partyOf = computed<Record<string, { key: string; nameKey?: string; options
     credit_sales: { key: 'customer_id', nameKey: 'customer_name', options: saleCustomerOptions.value },
     payments_received: { key: 'customer_id', nameKey: 'customer_name', options: customerOptions.value },
 }));
-// Beside an advance: what the employee has already taken this month, and their salary.
+// Beside an advance: salary, what the employee has taken this month, and what is left of it.
+// "Taken" counts the posted advances plus the ones typed on this close (a kept row is already posted).
 const employeeMonthHint = (employeeId: string) => {
     const e: any = props.employees.find((x) => x.id === employeeId);
     if (!e) return null;
-    return `This month ${formatMoneyText(Number(e.month_advances ?? 0), currencyCode.value)} · Salary ${formatMoneyText(Number(e.base_salary ?? 0), currencyCode.value)}`;
+    const typed = form.employee_advances
+        .filter((row: any) => row.employee_id === employeeId && !row.kept_advance_id)
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+    const salary = Number(e.base_salary ?? 0);
+    const taken = Number(e.month_advances ?? 0) + typed;
+    const money = (n: number) => formatMoneyText(n, currencyCode.value);
+    return `Salary ${money(salary)} · Taken ${money(taken)} · Left ${money(salary - taken)}`;
 };
 const holderBalance = (row: any) => {
     const holder = props.amanatHolders.find((h) => h.id === row.customer_id);
@@ -3050,6 +3059,16 @@ const tabsSaved = ref({
 
 const tabSequence = ['rates', 'sales', 'tanks', 'money-in', 'money-out', 'summary'];
 
+const closeTop = ref<HTMLElement | null>(null);
+const tabIndex = computed(() => tabSequence.indexOf(activeTab.value));
+const stepTab = (step: number) => {
+    const next = tabSequence[tabIndex.value + step];
+    if (!next) return;
+    activeTab.value = next;
+    closeTop.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+const tabLabel = (id: string | undefined) => tabs.find((t) => t.id === id)?.label ?? '';
+
 const goToNextTab = (current: string) => {
     const index = tabSequence.indexOf(current);
     if (index >= 0 && index < tabSequence.length - 1) {
@@ -3575,6 +3594,7 @@ const cashFlowOut = computed(() => [
 
 
         <!-- Tabbed Content -->
+        <div ref="closeTop" class="scroll-mt-4" />
         <Tabs v-model="activeTab" class="space-y-6">
             <TabsList
                 class="grid h-auto w-full grid-cols-3 gap-1 md:grid-cols-6"
@@ -6222,6 +6242,15 @@ const cashFlowOut = computed(() => [
                     </CardContent>
                 </Card>
             </TabsContent>
+            <div class="flex items-center justify-between gap-3">
+                <Button v-if="tabIndex > 0" variant="outline" @click="stepTab(-1)">
+                    <ChevronLeft class="mr-1 h-4 w-4" />{{ tabLabel(tabSequence[tabIndex - 1]) }}
+                </Button>
+                <span v-else />
+                <Button v-if="tabIndex < tabSequence.length - 1" @click="stepTab(1)">
+                    {{ tabLabel(tabSequence[tabIndex + 1]) }}<ChevronRight class="ml-1 h-4 w-4" />
+                </Button>
+            </div>
         </Tabs>
 
         <!-- Always visible: where the cash stands, and the only save / post buttons. -->

@@ -36,6 +36,7 @@
     <table class="head">
         <tr>
             <td>
+                @if (!empty($doc['logo_data']))<img src="{{ $doc['logo_data'] }}" style="max-height: 44px; max-width: 160px; margin-bottom: 6px" alt="">@endif
                 <div class="issuer-name">{{ $issuer['name'] ?? '' }}</div>
                 @foreach (($issuer['lines'] ?? []) as $line)<div class="muted">{{ $line }}</div>@endforeach
                 @if (!empty($issuer['phone']))<div class="muted">{{ $issuer['phone'] }}</div>@endif

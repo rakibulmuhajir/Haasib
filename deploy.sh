@@ -203,6 +203,9 @@ php artisan optimize:clear
 log "Running database migrations"
 php artisan migrate --force
 
+# Uploaded files (company logos) are served from public/storage; make sure the link exists.
+[[ -L public/storage ]] || php artisan storage:link
+
 log "Synchronizing permissions"
 php artisan app:sync-permissions
 php artisan app:sync-role-permissions

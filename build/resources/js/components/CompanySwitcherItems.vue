@@ -27,8 +27,9 @@ const { companies, currentCompany, canCreateCompanies, switchCompany, createComp
         class="gap-2 p-2"
         @click="switchCompany(company.slug)"
     >
-        <div class="flex size-6 items-center justify-center rounded-sm border">
-            <Building2 class="size-4 shrink-0" />
+        <div class="flex size-6 items-center justify-center overflow-hidden rounded-sm border bg-white">
+            <img v-if="company.logo_url" :src="company.logo_url" :alt="company.name" class="size-full object-contain" />
+            <Building2 v-else class="size-4 shrink-0" />
         </div>
         <div class="flex-1">
             <div class="font-medium">{{ company.name }}</div>

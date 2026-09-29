@@ -183,7 +183,8 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                             variant="ghost"
                             class="hidden max-w-36 gap-2 px-2 sm:inline-flex"
                         >
-                            <Building2 class="size-4 shrink-0" />
+                            <img v-if="currentCompany?.logo_url" :src="currentCompany.logo_url" :alt="currentCompany.name" class="size-5 shrink-0 rounded-sm object-contain" />
+                            <Building2 v-else class="size-4 shrink-0" />
                             <span class="truncate">{{
                                 currentCompany?.name || 'Select company'
                             }}</span>

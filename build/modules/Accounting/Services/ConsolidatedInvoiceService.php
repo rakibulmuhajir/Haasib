@@ -233,6 +233,13 @@ class ConsolidatedInvoiceService
 
     public function pdf(array $document): string
     {
+        // The PDF renderer reads files, not addresses: embed an uploaded logo as data.
+        $logo = (string) parse_url((string) ($document['issuer']['logoUrl'] ?? ''), PHP_URL_PATH);
+        $path = str_starts_with($logo, '/storage/') ? storage_path('app/public/'.substr($logo, strlen('/storage/'))) : null;
+        $document['logo_data'] = $path && is_file($path)
+            ? 'data:'.(mime_content_type($path) ?: 'image/png').';base64,'.base64_encode((string) file_get_contents($path))
+            : null;
+
         $html = view()->file(base_path('modules/Accounting/Resources/views/consolidated-invoice.blade.php'), ['doc' => $document])->render();
 
         // Only the characters used are embedded: the whole font made a one-page file ~900 KB.

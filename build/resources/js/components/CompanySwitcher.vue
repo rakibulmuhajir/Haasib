@@ -26,6 +26,13 @@ const { currentCompany } = useCompanySwitcher();
                         class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                     >
                         <div
+                            v-if="currentCompany?.logo_url"
+                            class="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg border bg-white"
+                        >
+                            <img :src="currentCompany.logo_url" :alt="currentCompany.name" class="size-full object-contain" />
+                        </div>
+                        <div
+                            v-else
                             class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
                         >
                             <Building2 class="size-4" />

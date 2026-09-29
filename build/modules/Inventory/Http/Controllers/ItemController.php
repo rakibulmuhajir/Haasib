@@ -194,8 +194,8 @@ class ItemController extends Controller
                 ->where('items.track_inventory', true)
                 ->where('items.delivery_mode', 'requires_receiving')
                 ->where('li.item_id', $item->id)
-                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
-                ->selectRaw('COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.quantity_received, 0)) as pending_qty')
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
+                ->selectRaw('COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.direct_quantity, 0) - COALESCE(li.quantity_received, 0)) as pending_qty')
                 ->first();
 
             $pendingReceiptsCount = (int) ($pendingReceiptSummary?->pending_count ?? 0);

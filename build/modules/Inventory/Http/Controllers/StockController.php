@@ -77,9 +77,9 @@ class StockController extends Controller
                 ->whereNull('b.goods_received_at')
                 ->where('items.track_inventory', true)
                 ->where('items.delivery_mode', 'requires_receiving')
-                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
                 ->groupBy('li.item_id')
-                ->selectRaw('li.item_id, COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.quantity_received, 0)) as pending_qty')
+                ->selectRaw('li.item_id, COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.direct_quantity, 0) - COALESCE(li.quantity_received, 0)) as pending_qty')
                 ->get()
                 ->keyBy('item_id');
         }
@@ -119,11 +119,13 @@ class StockController extends Controller
                 ->whereNull('b.goods_received_at')
                 ->where('items.track_inventory', true)
                 ->where('items.delivery_mode', 'requires_receiving')
-                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
                 ->distinct('b.id')
                 ->count('b.id'),
         ];
 
+        // Litres a bill marks "sold directly" (off the tanker to a customer) never reach a tank, so
+        // they are never waiting to be received: every pending check below leaves them out.
         $pendingDeliveries = Bill::query()
             ->select('acct.bills.*')
             ->with('vendor:id,name,vendor_type')
@@ -140,7 +142,7 @@ class StockController extends Controller
                     ->whereNull('items.deleted_at')
                     ->where('items.track_inventory', true)
                     ->where('items.delivery_mode', 'requires_receiving')
-                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)');
             })
             ->addSelect([
                 'pending_lines' => DB::table('acct.bill_line_items as li')
@@ -151,7 +153,7 @@ class StockController extends Controller
                     ->whereNull('items.deleted_at')
                     ->where('items.track_inventory', true)
                     ->where('items.delivery_mode', 'requires_receiving')
-                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
                     ->selectRaw('COUNT(*)'),
                 'pending_quantity' => DB::table('acct.bill_line_items as li')
                     ->join('inv.items as items', 'items.id', '=', 'li.item_id')
@@ -161,8 +163,8 @@ class StockController extends Controller
                     ->whereNull('items.deleted_at')
                     ->where('items.track_inventory', true)
                     ->where('items.delivery_mode', 'requires_receiving')
-                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
-                    ->selectRaw('SUM(li.quantity - COALESCE(li.quantity_received, 0))'),
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
+                    ->selectRaw('SUM(li.quantity - COALESCE(li.direct_quantity, 0) - COALESCE(li.quantity_received, 0))'),
             ])
             ->orderByDesc('bill_date')
             ->limit(5)
@@ -307,7 +309,7 @@ class StockController extends Controller
                     ->whereNull('items.deleted_at')
                     ->where('items.track_inventory', true)
                     ->where('items.delivery_mode', 'requires_receiving')
-                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)');
             })
             ->addSelect([
                 'pending_lines' => DB::table('acct.bill_line_items as li')
@@ -318,7 +320,7 @@ class StockController extends Controller
                     ->whereNull('items.deleted_at')
                     ->where('items.track_inventory', true)
                     ->where('items.delivery_mode', 'requires_receiving')
-                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity - COALESCE(li.direct_quantity, 0)')
                     ->selectRaw('COUNT(*)'),
             ])
             ->orderByDesc('bill_date')

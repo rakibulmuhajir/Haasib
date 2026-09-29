@@ -24,6 +24,8 @@ import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock, P
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
+import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
+import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
 
 interface Customer {
   id: string
@@ -66,6 +68,7 @@ interface StatementRow {
 }
 
 const props = defineProps<{
+  consolidatedInvoices?: SentDocument[]
   customer: Customer
   statement: StatementRow[]
   openInvoices: OpenInvoice[]
@@ -365,6 +368,13 @@ const goBack = () => {
         </CardContent>
       </Card>
     </div>
+
+    <CustomerConsolidatedInvoices
+      :company-slug="companySlug"
+      :customer-id="customer.id"
+      :documents="consolidatedInvoices ?? []"
+      currency="PKR"
+    />
 
     <!-- Fuel Discounts -->
     <Card class="border-border/80">

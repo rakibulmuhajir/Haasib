@@ -314,6 +314,7 @@ class CustomerController extends Controller
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/customers/Show', [
+            'consolidatedInvoices' => app(\App\Modules\Accounting\Services\ConsolidatedInvoiceService::class)->forCustomer($company->id, $customer->id),
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,

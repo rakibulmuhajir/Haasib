@@ -146,6 +146,7 @@ class CreditCustomerController extends Controller
         })->values();
 
         return Inertia::render('FuelStation/CreditCustomers/Show', [
+            'consolidatedInvoices' => app(\App\Modules\Accounting\Services\ConsolidatedInvoiceService::class)->forCustomer($companyModel->id, $customerData->id),
             'customer' => [
                 'id' => $customerData->id,
                 'name' => $customerData->name,

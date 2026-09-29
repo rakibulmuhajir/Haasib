@@ -6,7 +6,7 @@
  * for how each `kind` builds its rows; this page only chooses which one and
  * shows what comes back.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -148,6 +148,12 @@ const printStatement = () => window.print()
 
 // Bill many of the customer's invoices on one saved document.
 const invoicePrintOpen = ref(false)
+// "New" on a customer's page lands here with ?consolidate=1: open the form straight away.
+onMounted(() => {
+  if (new URLSearchParams(window.location.search).get('consolidate') === '1' && kind.value === 'customer' && partyId.value) {
+    invoicePrintOpen.value = true
+  }
+})
 
 const statementTitle = computed(() => props.statement.account || props.statement.party || 'No account or party selected')
 </script>

@@ -73,6 +73,23 @@ class ConsolidatedInvoiceService
         return $rows;
     }
 
+    /** The consolidated invoices sent to a customer, newest first, for their page. */
+    public function forCustomer(string $companyId, string $customerId, int $limit = 10): array
+    {
+        return DB::table('acct.consolidated_invoices')
+            ->where('company_id', $companyId)
+            ->where('customer_id', $customerId)
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get(['id', 'number', 'title', 'created_at', 'period_from', 'period_to', 'total', DB::raw('jsonb_array_length(lines) as line_count')])
+            ->map(fn ($d) => [
+                'id' => $d->id, 'number' => $d->number, 'title' => $d->title,
+                'date' => substr((string) $d->created_at, 0, 10),
+                'period_from' => substr((string) $d->period_from, 0, 10), 'period_to' => substr((string) $d->period_to, 0, 10),
+                'total' => (float) $d->total, 'line_count' => (int) $d->line_count,
+            ])->all();
+    }
+
     /** Bill to, from the customer record: name, billing contact, phone, address. */
     public function billTo(Customer $customer): array
     {

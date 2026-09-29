@@ -44,6 +44,8 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { formatMoneyText } from '@/lib/money'
+import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
+import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
 
 interface CompanyRef {
   id: string
@@ -127,6 +129,7 @@ interface PaymentRef {
 }
 
 const props = defineProps<{
+  consolidatedInvoices?: SentDocument[]
   company: CompanyRef
   customer: CustomerRef
   summary: SummaryRef
@@ -575,6 +578,12 @@ const cancelShippingEdit = () => {
             </CardContent>
           </Card>
         </div>
+        <CustomerConsolidatedInvoices
+          :company-slug="company.slug"
+          :customer-id="customer.id"
+          :documents="consolidatedInvoices ?? []"
+          :currency="company.base_currency || 'PKR'"
+        />
       </TabsContent>
 
       <!-- Settings Tab -->

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
-import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp, Plus } from 'lucide-vue-next'
+import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp, Plus, ScrollText } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import QuickAddModal from '@/components/forms/QuickAddModal.vue'
@@ -222,9 +222,21 @@ const onCreated = (customer: { id: string }) => {
           </template>
 
           <template #cell-_actions="{ row }">
-            <Button variant="outline" size="sm" @click.stop="goToShow(row)">
-              <Eye class="h-4 w-4" />
-            </Button>
+            <div class="flex justify-end gap-1">
+              <!-- Straight to a new consolidated invoice for this customer (their statement, form open). -->
+              <Button
+                variant="outline"
+                size="sm"
+                title="Consolidated invoice"
+                aria-label="Consolidated invoice"
+                @click.stop="router.get(`/${companySlug}/reports/statements`, { kind: 'customer', id: row.id, consolidate: 1 })"
+              >
+                <ScrollText class="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" title="Open" aria-label="Open" @click.stop="goToShow(row)">
+                <Eye class="h-4 w-4" />
+              </Button>
+            </div>
           </template>
         </LedgerRegister>
       </CardContent>

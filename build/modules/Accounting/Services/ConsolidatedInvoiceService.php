@@ -115,12 +115,19 @@ class ConsolidatedInvoiceService
         return implode(', ', array_filter(array_map(fn ($p) => is_string($p) ? trim($p) : '', $parts), fn ($p) => $p !== ''));
     }
 
-    /** Column names: a fuel station bills fuel in litres; anyone else, items in quantities. */
+    /**
+     * Default column headings: a fuel station bills fuel in litres; anyone else, items in
+     * quantities. Each document can rename them; its own headings are saved with it.
+     */
     public static function labels(Company $company): array
     {
-        return $company->isModuleEnabled('fuel_station')
-            ? ['item' => 'Fuel', 'quantity' => 'Litres']
-            : ['item' => 'Item', 'quantity' => 'Qty'];
+        $fuel = $company->isModuleEnabled('fuel_station');
+
+        return [
+            'date' => 'Date', 'reference' => 'Reference', 'physical' => 'Invoice no.',
+            'item' => $fuel ? 'Fuel' : 'Item', 'quantity' => $fuel ? 'Litres' : 'Qty',
+            'rate' => 'Rate', 'amount' => 'Amount',
+        ];
     }
 
     /** Bill to, from the customer record: name, billing contact, phone, billing address. */
@@ -160,6 +167,11 @@ class ConsolidatedInvoiceService
         // Blank cells the user filled in (fuel, litres, rate). A value the invoice has is kept.
         $fills = $data['fills'] ?? [];
         $fill = fn (array $r, string $field) => $fills[$r['key']][$field] ?? null;
+        // Column headings as renamed on the form; a blank one keeps the default.
+        $headings = [];
+        foreach (self::labels($company) as $key => $default) {
+            $headings[$key] = $text($data['headings'][$key] ?? '', 40) ?: $default;
+        }
         $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
 
         $rows = array_values(array_filter($this->rowsFor($company->id, $customer->id, $data['from'], $data['to']), fn ($r) => isset($keys[$r['key']])));
@@ -193,7 +205,7 @@ class ConsolidatedInvoiceService
             'address' => $text($data['billed_by']['address'] ?? '', 300),
         ];
 
-        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $lines, $userId) {
+        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $lines, $headings, $userId) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$company->id, 'consolidated_invoice_number']);
             $count = DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->count();
             $id = (string) Str::uuid();
@@ -207,7 +219,7 @@ class ConsolidatedInvoiceService
                 'title' => $text($data['title'] ?? '', 60) ?: 'Invoice',
                 'bill_to' => json_encode($billTo),
                 'billed_by' => json_encode($billedBy),
-                'columns' => json_encode([]),
+                'columns' => json_encode($headings),
                 'lines' => json_encode($lines),
                 'total' => round(array_sum(array_column($lines, 'amount')), 2),
                 'currency' => $company->base_currency ?: 'PKR',
@@ -253,7 +265,11 @@ class ConsolidatedInvoiceService
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
-            'labels' => self::labels($company),
+            // The headings it was sent with; older documents saved none, so they get today's defaults.
+            'labels' => array_merge(self::labels($company), array_filter(
+                is_array($saved = json_decode((string) $doc->columns, true)) && ! array_is_list($saved) ? $saved : [],
+                fn ($v) => is_string($v) && $v !== '',
+            )),
         ];
     }
 
@@ -268,7 +284,18 @@ class ConsolidatedInvoiceService
 
         $html = view()->file(base_path('modules/Accounting/Resources/views/consolidated-invoice.blade.php'), ['doc' => $document])->render();
 
-        // Only the characters used are embedded: the whole font made a one-page file ~900 KB.
-        return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->output();
+        // The app's fonts (resources/fonts/pdf) are read from disk and cached in storage/fonts.
+        // Only the characters used are embedded: a whole font made a one-page file ~900 KB.
+        $fontCache = storage_path('fonts');
+        if (! is_dir($fontCache)) {
+            @mkdir($fontCache, 0775, true);
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4')->setOption([
+            'isFontSubsettingEnabled' => true,
+            'fontDir' => $fontCache,
+            'fontCache' => $fontCache,
+            'chroot' => base_path(),
+        ])->output();
     }
 }

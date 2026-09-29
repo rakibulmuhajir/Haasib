@@ -18,7 +18,7 @@ const props = defineProps<{
   rows: InvoiceRow[]
   billTo: BillToDefaults | null
   billedBy: BilledByDefaults | null
-  labels: { item: string; quantity: string }
+  labels: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [

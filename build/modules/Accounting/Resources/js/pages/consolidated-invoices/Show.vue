@@ -44,7 +44,7 @@ const props = defineProps<{
     currency: string
     show_reference?: boolean
     show_physical?: boolean
-    labels?: { item: string; quantity: string }
+    labels: Record<string, string>
     issuer: DocumentIssuer
   }
 }>()
@@ -100,13 +100,13 @@ const print = () => window.print()
         <table class="ci-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th v-if="document.show_reference">Reference</th>
-              <th v-if="document.show_physical">Invoice no.</th>
-              <th>{{ document.labels?.item ?? 'Item' }}</th>
-              <th class="num">{{ document.labels?.quantity ?? 'Qty' }}</th>
-              <th class="num">Rate</th>
-              <th class="num">Amount</th>
+              <th>{{ document.labels.date }}</th>
+              <th v-if="document.show_reference">{{ document.labels.reference }}</th>
+              <th v-if="document.show_physical">{{ document.labels.physical }}</th>
+              <th>{{ document.labels.item }}</th>
+              <th class="num">{{ document.labels.quantity }}</th>
+              <th class="num">{{ document.labels.rate }}</th>
+              <th class="num">{{ document.labels.amount }}</th>
             </tr>
           </thead>
           <tbody>

@@ -41,7 +41,7 @@ const props = defineProps<{
   to: string
   companySlug: string
   customerId: string
-  labels?: { item: string; quantity: string } | null
+  labels?: Record<string, string> | null
 }>()
 
 const form = useForm({
@@ -55,6 +55,8 @@ const form = useForm({
   physical: {} as Record<string, string>,
   // Cells the invoice left blank (fuel, litres, rate), filled in here.
   fills: {} as Record<string, { item?: string; quantity?: number | null; rate?: number | null }>,
+  // Column headings, renamable; they print as typed.
+  headings: {} as Record<string, string>,
   bill_to: { name: '', attention: '', phone: '', address: '' },
   billed_by: { name: '', designation: '', phone: '', address: '' },
 })
@@ -66,6 +68,7 @@ watch(() => [props.rows, props.billTo, props.billedBy], () => {
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
   form.fills = Object.fromEntries(props.rows.map((r) => [r.key, {}]))
+  form.headings = { ...(props.labels ?? {}) }
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
   form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
 }, { immediate: true })
@@ -74,6 +77,10 @@ const selected = computed(() => props.rows.filter((r) => picked.value[r.key]))
 const total = computed(() => selected.value.reduce((sum, r) => sum + r.amount, 0))
 const allPicked = computed(() => props.rows.length > 0 && props.rows.every((r) => picked.value[r.key]))
 const pickAll = (on: boolean) => props.rows.forEach((r) => { picked.value[r.key] = on })
+
+// Heading order on the paper; the numeric ones sit on the right.
+const headingKeys = ['date', 'reference', 'physical', 'item', 'quantity', 'rate', 'amount']
+const numeric = ['quantity', 'rate', 'amount']
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
 
@@ -123,13 +130,9 @@ const save = () => {
           <thead class="sticky top-0 z-10 bg-background text-left text-xs text-muted-foreground">
             <tr class="border-b">
               <th class="w-10 px-3 py-2"><Checkbox :model-value="allPicked" aria-label="Pick all" @update:model-value="(v) => pickAll(v === true)" /></th>
-              <th class="px-2 py-2">Date</th>
-              <th class="px-2 py-2">Reference</th>
-              <th class="px-2 py-2">Invoice no.</th>
-              <th class="px-2 py-2">{{ labels?.item ?? 'Item' }}</th>
-              <th class="px-2 py-2 text-right">{{ labels?.quantity ?? 'Qty' }}</th>
-              <th class="px-2 py-2 text-right">Rate</th>
-              <th class="px-3 py-2 text-right">Amount</th>
+              <th v-for="col in headingKeys" :key="col" class="px-1 py-1" :class="numeric.includes(col) ? 'text-right' : ''">
+                <Input v-model="form.headings[col]" class="h-7 min-w-16 border-dashed text-xs font-medium" :class="numeric.includes(col) ? 'text-right' : ''" :aria-label="`Heading for ${col}`" />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -146,11 +149,11 @@ const save = () => {
               <td class="px-2 py-1"><Input v-model="form.physical[row.key]" class="h-7 w-28 text-xs" placeholder="Optional" :aria-label="`Physical invoice number for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1">
                 <span v-if="row.item">{{ row.item }}</span>
-                <Input v-else v-model="form.fills[row.key].item" class="h-7 w-24 text-xs" :aria-label="`${labels?.item ?? 'Item'} for ${row.invoice_number}`" />
+                <Input v-else v-model="form.fills[row.key].item" class="h-7 w-24 text-xs" :aria-label="`${form.headings.item} for ${row.invoice_number}`" />
               </td>
               <td class="px-2 py-1 text-right tabular-nums">
                 <span v-if="row.quantity !== null">{{ number(row.quantity) }}</span>
-                <Input v-else v-model.number="form.fills[row.key].quantity" type="number" min="0" step="0.01" class="ml-auto h-7 w-20 text-right text-xs" :aria-label="`${labels?.quantity ?? 'Qty'} for ${row.invoice_number}`" />
+                <Input v-else v-model.number="form.fills[row.key].quantity" type="number" min="0" step="0.01" class="ml-auto h-7 w-20 text-right text-xs" :aria-label="`${form.headings.quantity} for ${row.invoice_number}`" />
               </td>
               <td class="px-2 py-1 text-right tabular-nums">
                 <span v-if="row.rate !== null">{{ number(row.rate) }}</span>

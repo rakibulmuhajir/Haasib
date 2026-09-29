@@ -13,7 +13,6 @@ use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
 use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
-use App\Modules\Accounting\Services\ConsolidatedInvoiceService;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -85,9 +84,6 @@ class StatementReportController extends Controller
             ],
             'columns' => $columns,
             'statement' => $statement,
-            // For "Consolidated invoice" on a customer statement: the period's invoice lines, and
-            // who it goes to and from (editable before saving).
-            ...($kind === 'customer' && $resolvedId ? $this->consolidatedInvoiceProps($company, $resolvedId, $from, $to) : []),
         ]);
     }
 
@@ -192,21 +188,6 @@ class StatementReportController extends Controller
             $statement,
             ['money_in' => 'Billed', 'money_out' => 'Paid', 'balance' => 'We owe'],
             $vendor->id,
-        ];
-    }
-    private function consolidatedInvoiceProps($company, string $customerId, string $from, string $to): array
-    {
-        $service = app(ConsolidatedInvoiceService::class);
-        $customer = Customer::where('company_id', $company->id)->find($customerId);
-        if (! $customer) {
-            return [];
-        }
-
-        return [
-            'invoiceRows' => $service->rowsFor($company->id, $customerId, $from, $to),
-            'billTo' => $service->billTo($customer),
-            'billedBy' => $service->billedBy($company),
-            'invoiceLabels' => ConsolidatedInvoiceService::labels($company),
         ];
     }
 }

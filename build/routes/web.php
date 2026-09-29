@@ -116,6 +116,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/payables-aging', [PayablesAgingReportController::class, 'index'])->name('reports.payables-aging');
         Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
         Route::get('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'index'])->name('consolidated-invoices.index');
+        Route::get('/{company}/consolidated-invoices/create', [ConsolidatedInvoiceController::class, 'create'])->name('consolidated-invoices.create');
         Route::post('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'store'])->name('consolidated-invoices.store');
         Route::get('/{company}/consolidated-invoices/{document}', [ConsolidatedInvoiceController::class, 'show'])->whereUuid('document')->name('consolidated-invoices.show');
         Route::get('/{company}/consolidated-invoices/{document}/pdf', [ConsolidatedInvoiceController::class, 'pdf'])->whereUuid('document')->name('consolidated-invoices.pdf');

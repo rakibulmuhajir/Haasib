@@ -29,7 +29,7 @@ defineProps<{
     <CardHeader class="flex flex-row items-center justify-between gap-3 space-y-0">
       <CardTitle class="text-base">Consolidated invoices</CardTitle>
       <Button size="sm" as-child>
-        <Link :href="`/${companySlug}/reports/statements?kind=customer&id=${customerId}&consolidate=1`">New</Link>
+        <Link :href="`/${companySlug}/consolidated-invoices/create?customer_id=${customerId}`">New</Link>
       </Button>
     </CardHeader>
     <CardContent class="p-0">

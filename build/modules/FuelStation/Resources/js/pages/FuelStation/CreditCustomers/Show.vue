@@ -202,7 +202,7 @@ const goBack = () => {
       </Button>
       <!-- Pick this customer's unpaid sales into one invoice to send or print. -->
       <Button variant="outline" as-child>
-        <Link :href="`/${companySlug}/reports/statements?kind=customer&id=${customer.id}&consolidate=1`">
+        <Link :href="`/${companySlug}/consolidated-invoices/create?customer_id=${customer.id}`">
           <ScrollText class="mr-2 h-4 w-4" />
           Consolidated invoice
         </Link>

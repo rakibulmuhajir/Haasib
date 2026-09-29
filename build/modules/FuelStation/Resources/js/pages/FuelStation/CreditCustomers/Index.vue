@@ -229,7 +229,7 @@ const onCreated = (customer: { id: string }) => {
                 size="sm"
                 title="Consolidated invoice"
                 aria-label="Consolidated invoice"
-                @click.stop="router.get(`/${companySlug}/reports/statements`, { kind: 'customer', id: row.id, consolidate: 1 })"
+                @click.stop="router.get(`/${companySlug}/consolidated-invoices/create`, { customer_id: row.id })"
               >
                 <ScrollText class="h-4 w-4" />
               </Button>

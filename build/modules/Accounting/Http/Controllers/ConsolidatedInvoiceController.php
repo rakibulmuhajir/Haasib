@@ -39,6 +39,36 @@ class ConsolidatedInvoiceController extends Controller
         ]);
     }
 
+    /**
+     * New consolidated invoice: pick the customer and dates, then the unpaid lines to bill.
+     * Dates default to the customer's oldest unpaid invoice through today.
+     */
+    public function create(Request $request): Response
+    {
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::INVOICE_CREATE), 403);
+        $company = CompanyContext::getCompany();
+        $customers = \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name', 'customer_number']);
+        $customer = $request->query('customer_id') ? $customers->firstWhere('id', $request->query('customer_id')) : null;
+        $customer = $customer ? \App\Modules\Accounting\Models\Customer::find($customer->id) : null;
+
+        $isDate = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
+        $oldestUnpaid = $customer ? DB::table('acct.invoices')->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->whereNotIn('status', ['draft', 'void', 'cancelled'])->where('balance', '>', 0.005)->min('invoice_date') : null;
+        $from = $isDate($request->query('from')) ? $request->query('from') : ($oldestUnpaid ? substr((string) $oldestUnpaid, 0, 10) : now()->startOfMonth()->toDateString());
+        $to = $isDate($request->query('to')) ? $request->query('to') : now()->toDateString();
+
+        return Inertia::render('accounting/consolidated-invoices/Create', [
+            'company' => ['id' => $company->id, 'name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'customers' => $customers,
+            'filters' => ['customer_id' => $customer?->id, 'from' => $from, 'to' => $to],
+            'rows' => $customer ? $this->service->rowsFor($company->id, $customer->id, $from, $to) : [],
+            'billTo' => $customer ? $this->service->billTo($customer) : null,
+            'billedBy' => $this->service->billedBy($company),
+            'labels' => ConsolidatedInvoiceService::labels($company),
+        ]);
+    }
+
     public function store(StoreConsolidatedInvoiceRequest $request): RedirectResponse
     {
         $company = CompanyContext::getCompany();

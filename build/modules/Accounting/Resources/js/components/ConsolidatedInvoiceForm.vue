@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * New consolidated invoice, from a customer's statement: pick which invoice lines go on it
+ * New consolidated invoice (its own page, consolidated-invoices/Create): pick which invoice lines go on it
  * (not every sale in the period is ready to bill), name it (Invoice, Reminder ...) and address it.
  * One standard layout -- date, coupon no., fuel, litres, rate, amount -- nothing to set up.
  * Saving keeps it exactly as sent (ConsolidatedInvoiceService) and opens it for print / PDF.
@@ -11,7 +11,6 @@ import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Save } from 'lucide-vue-next'
 
 export interface InvoiceRow {
@@ -33,7 +32,6 @@ export interface InvoiceRow {
 export interface BillToDefaults { name: string; attention: string; phone: string; address: string }
 export interface BilledByDefaults { name: string; designation: string; phone: string; address: string }
 
-const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{
   rows: InvoiceRow[]
   billTo: BillToDefaults | null
@@ -84,18 +82,12 @@ const save = () => {
   form.from = props.from
   form.to = props.to
   form.keys = selected.value.map((r) => r.key)
-  form.post(`/${props.companySlug}/consolidated-invoices`, {
-    onSuccess: () => { open.value = false },
-  })
+  form.post(`/${props.companySlug}/consolidated-invoices`)
 }
 </script>
 
 <template>
-  <Dialog v-model:open="open">
-    <DialogContent class="max-h-[92vh] overflow-hidden sm:max-w-5xl">
-      <DialogHeader>
-        <DialogTitle>Consolidated invoice</DialogTitle>
-      </DialogHeader>
+  <div class="space-y-4">
 
       <div class="grid gap-3 md:grid-cols-3">
         <fieldset class="space-y-1.5">
@@ -126,7 +118,7 @@ const save = () => {
         </fieldset>
       </div>
 
-      <div class="max-h-[42vh] overflow-auto rounded-md border">
+      <div class="overflow-auto rounded-md border">
         <table class="w-full text-sm">
           <thead class="sticky top-0 z-10 bg-background text-left text-xs text-muted-foreground">
             <tr class="border-b">
@@ -173,13 +165,12 @@ const save = () => {
         </table>
       </div>
 
-      <DialogFooter class="items-center gap-3 sm:justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <span class="text-sm">
           {{ selected.length }} line(s) · Total <MoneyText class="font-semibold" :amount="total" :currency="currency" :fraction-digits="0" />
           <span v-if="form.errors.keys" class="ml-2 text-destructive">{{ form.errors.keys }}</span>
         </span>
         <Button :disabled="!selected.length || form.processing" @click="save"><Save class="mr-2 h-4 w-4" />Save</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      </div>
+  </div>
 </template>

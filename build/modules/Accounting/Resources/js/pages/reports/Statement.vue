@@ -6,8 +6,8 @@
  * for how each `kind` builds its rows; this page only chooses which one and
  * shows what comes back.
  */
-import { computed, onMounted, ref, watch } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { computed, ref, watch } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,8 +20,6 @@ import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
-import ConsolidatedInvoiceForm from '../../components/ConsolidatedInvoiceForm.vue'
-import type { BillToDefaults, BilledByDefaults, InvoiceRow } from '../../components/ConsolidatedInvoiceForm.vue'
 
 type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
 
@@ -43,10 +41,6 @@ const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; from: string; to: string }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[] }
-  invoiceRows?: InvoiceRow[]
-  billTo?: BillToDefaults | null
-  billedBy?: BilledByDefaults | null
-  invoiceLabels?: { item: string; quantity: string } | null
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -147,14 +141,6 @@ const openRow = (row: Row) => {
 
 const printStatement = () => window.print()
 
-// Bill many of the customer's invoices on one saved document.
-const invoicePrintOpen = ref(false)
-// "New" on a customer's page lands here with ?consolidate=1: open the form straight away.
-onMounted(() => {
-  if (new URLSearchParams(window.location.search).get('consolidate') === '1' && kind.value === 'customer' && partyId.value) {
-    invoicePrintOpen.value = true
-  }
-})
 
 const statementTitle = computed(() => props.statement.account || props.statement.party || 'No account or party selected')
 </script>
@@ -212,9 +198,11 @@ const statementTitle = computed(() => props.statement.account || props.statement
               <Printer class="h-4 w-4" />
               Print
             </Button>
-            <Button v-if="kind === 'customer' && partyId" variant="outline" @click="invoicePrintOpen = true">
-              <FileText class="h-4 w-4" />
-              Consolidated invoice
+            <Button v-if="kind === 'customer' && partyId" variant="outline" as-child>
+              <Link :href="`/${company.slug}/consolidated-invoices/create?customer_id=${partyId}&from=${from}&to=${to}`">
+                <FileText class="h-4 w-4" />
+                Consolidated invoice
+              </Link>
             </Button>
           </div>
         </CardContent>
@@ -241,19 +229,6 @@ const statementTitle = computed(() => props.statement.account || props.statement
         </template>
       </LedgerRegister>
     </div>
-    <ConsolidatedInvoiceForm
-      v-if="kind === 'customer'"
-      v-model:open="invoicePrintOpen"
-      :rows="invoiceRows ?? []"
-      :bill-to="billTo ?? null"
-      :currency="currency"
-      :from="statement.from"
-      :to="statement.to"
-      :company-slug="company.slug"
-      :customer-id="partyId"
-      :billed-by="billedBy ?? null"
-      :labels="invoiceLabels ?? null"
-    />
   </PageShell>
 </template>
 

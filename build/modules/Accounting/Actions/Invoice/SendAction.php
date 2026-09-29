@@ -71,26 +71,10 @@ class SendAction implements PaletteAction
                 }
             }
 
-            // Send email if requested
+            // No email is sent: there is no email service yet. Saying "emailed" here told the user
+            // an invoice had gone out when nothing had. Print it and share the PDF instead.
             $emailSent = false;
-            if (($params['email'] ?? false) || !empty($params['to'])) {
-                $recipientEmail = $params['to'] ?? $invoice->customer->email;
-
-                if (!$recipientEmail) {
-                    throw new \Exception("No email address. Specify with --to=email@example.com");
-                }
-
-                // TODO: Dispatch email job when email service is implemented
-                // dispatch(new SendInvoiceEmail($invoice, $recipientEmail));
-                $emailSent = true;
-            }
-
             $message = "Invoice {$invoice->invoice_number} marked as sent";
-            if ($emailSent) {
-                $message .= isset($recipientEmail)
-                    ? " and emailed to {$recipientEmail}"
-                    : ' and emailed';
-            }
 
             return [
                 'message' => $message,

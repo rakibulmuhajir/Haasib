@@ -95,6 +95,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}', [CompanyController::class, 'show'])->name('company.show');
         Route::put('/{company}', [CompanyController::class, 'update'])->name('company.update');
         Route::get('/{company}/settings', [CompanyController::class, 'settings'])->name('company.settings');
+        // The one Settings page: company, station and accounting setup in one place.
+        Route::get('/{company}/setup', \App\Http\Controllers\SettingsHubController::class)->name('company.setup');
         Route::patch('/{company}/settings', [CompanyController::class, 'updateSettings'])->name('company.settings.update');
         Route::patch('/{company}/settings/modules', [CompanyModulesController::class, 'update'])->name('company.settings.modules.update');
         Route::post('/{company}/settings/currencies', [CompanyCurrencyController::class, 'store'])->name('company.settings.currencies.store');

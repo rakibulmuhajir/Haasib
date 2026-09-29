@@ -11,7 +11,6 @@ import {
   Settings,
   CircleDollarSign,
   BarChart3,
-  Calendar,
   Landmark,
   RefreshCcw,
   Wand2,
@@ -40,16 +39,7 @@ export const accountingNav: ModuleNavConfig = {
           { title: 'Who Owes Us', href: `/${slug}/reports/receivables-aging`, icon: Clock },
           { title: 'What We Owe', href: `/${slug}/reports/payables-aging`, icon: Clock },
           { title: 'Statements', href: `/${slug}/reports/statements`, icon: ScrollText },
-          {
-            title: 'Setup',
-            icon: Settings,
-            children: [
-              { title: 'Opening Balances', href: `/${slug}/accounting/opening-balances`, icon: Scale },
-              { title: 'Default Accounts', href: `/${slug}/accounting/default-accounts`, icon: Settings },
-              { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: Calendar },
-              { title: 'Posting Templates', href: `/${slug}/posting-templates`, icon: Settings },
-            ],
-          },
+          { title: 'Settings', href: `/${slug}/setup`, icon: Settings },
         ],
       },
       {

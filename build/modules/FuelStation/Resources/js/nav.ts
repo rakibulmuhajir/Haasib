@@ -1,6 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
-import { ClipboardCheck, CreditCard, Fuel, Droplets, Gauge, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText } from 'lucide-vue-next'
+import { ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -62,6 +62,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
         ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
         ...item('journals', 'Journal Entries', '/journals', BookOpen),
+        ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
         ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },
       { label: 'Banking', items: [
@@ -71,17 +72,8 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('bankReconciliation', 'Bank Reconciliation', '/banking/reconciliation', Scale),
       ] },
       { label: t('settings'), items: [
-        ...item('settings', 'Station Settings', '/fuel/settings', Settings),
-        ...item('warehouses', 'Tanks & Warehouses', '/warehouses', Warehouse, context.isInventoryEnabled),
-        ...item('pumps', 'Pumps & Nozzles', '/fuel/pumps', Gauge),
-        ...item('settings', 'Setup Wizard', '/fuel/onboarding', Settings),
-        { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: BookOpen },
-        ...item('reports', 'Advanced Accounting · Trial Balance', '/reports/trial-balance', Scale),
-        ...item('accounts', t('chartOfAccounts'), '/accounts', BookOpen),
-        ...item('accountSettings', 'Default Accounts', '/accounting/default-accounts', Settings),
-        // Where cash, banks, what buyers owed, what was owed to suppliers and amanat held on the
-        // start date are entered. It was reachable only by typing its address.
-        ...item('openingBalances', 'Opening Balances', '/accounting/opening-balances', Scale),
+        // Everything set up once -- company, station, accounts -- lives on the one Settings page.
+        { title: t('settings'), href: `/${slug}/setup`, icon: Settings },
       ] },
     ]
     return groups.filter(group => group.items.length > 0)

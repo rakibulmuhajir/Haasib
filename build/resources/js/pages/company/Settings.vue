@@ -227,6 +227,12 @@ const toggleUserPermissions = (userId: string) => {
     expandedUserId.value = expandedUserId.value === userId ? null : userId;
 };
 
+// Opened from the Settings page on a particular tab (?tab=users, ?tab=currencies ...).
+const initialTab = (() => {
+    const tab = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab');
+    return tab && ['general', 'users', 'currencies', 'modules', 'accounting'].includes(tab) ? tab : 'general';
+})();
+
 const generalForm = useForm({
     name: company.value.name,
     logo: null as File | null,
@@ -397,7 +403,7 @@ const createUser = () =>
                 </div>
             </section>
 
-            <Tabs default-value="general" class="space-y-6">
+            <Tabs :default-value="initialTab" class="space-y-6">
                 <TabsList
                     class="grid h-auto w-full grid-cols-2 gap-1 bg-muted/60 p-1 md:grid-cols-5"
                 >

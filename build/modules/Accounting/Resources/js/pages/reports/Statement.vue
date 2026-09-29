@@ -19,7 +19,10 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
-import { Printer } from 'lucide-vue-next'
+import { FileText, Printer } from 'lucide-vue-next'
+import StatementInvoicePrint from '../../components/StatementInvoicePrint.vue'
+import type { InvoiceRow } from '../../components/StatementInvoicePrint.vue'
+import type { DocumentIssuer, DocumentParty } from '@/components/LedgerDocument.vue'
 
 type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
 
@@ -41,6 +44,9 @@ const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; from: string; to: string }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[] }
+  invoiceRows?: InvoiceRow[]
+  billTo?: DocumentParty | null
+  letterhead?: DocumentIssuer | null
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -141,6 +147,9 @@ const openRow = (row: Row) => {
 
 const printStatement = () => window.print()
 
+// Pick which of the customer's invoices go on one printed invoice (or reminder).
+const invoicePrintOpen = ref(false)
+
 const statementTitle = computed(() => props.statement.account || props.statement.party || 'No account or party selected')
 </script>
 
@@ -197,6 +206,10 @@ const statementTitle = computed(() => props.statement.account || props.statement
               <Printer class="h-4 w-4" />
               Print
             </Button>
+            <Button v-if="kind === 'customer' && partyId" variant="outline" @click="invoicePrintOpen = true">
+              <FileText class="h-4 w-4" />
+              Print invoice
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -222,6 +235,16 @@ const statementTitle = computed(() => props.statement.account || props.statement
         </template>
       </LedgerRegister>
     </div>
+    <StatementInvoicePrint
+      v-if="kind === 'customer'"
+      v-model:open="invoicePrintOpen"
+      :rows="invoiceRows ?? []"
+      :bill-to="billTo ?? null"
+      :letterhead="letterhead ?? null"
+      :currency="currency"
+      :from="statement.from"
+      :to="statement.to"
+    />
   </PageShell>
 </template>
 

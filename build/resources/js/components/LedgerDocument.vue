@@ -225,6 +225,8 @@ const partyLines = (party: DocumentParty) =>
         </section>
 
         <section class="lines">
+            <!-- A document with its own columns (a statement's invoice list) brings its own table. -->
+            <slot name="lines">
             <LedgerRegister
                 :data="lines"
                 :columns="lineColumns"
@@ -267,6 +269,7 @@ const partyLines = (party: DocumentParty) =>
                     />
                 </template>
             </LedgerRegister>
+            </slot>
         </section>
 
         <section class="reckoning">

@@ -13,6 +13,8 @@ use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
 use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
+use App\Modules\Accounting\Models\Invoice;
+use App\Services\CompanyLetterhead;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -84,6 +86,10 @@ class StatementReportController extends Controller
             ],
             'columns' => $columns,
             'statement' => $statement,
+            // For "Print invoice" on a customer statement: the period's invoices, one row per line.
+            'invoiceRows' => $kind === 'customer' && $resolvedId ? $this->invoiceRows($company->id, $resolvedId, $from, $to) : [],
+            'billTo' => $kind === 'customer' && $resolvedId ? $this->billTo($resolvedId) : null,
+            'letterhead' => $kind === 'customer' ? app(CompanyLetterhead::class)->forCompany($company) : null,
         ]);
     }
 
@@ -188,6 +194,70 @@ class StatementReportController extends Controller
             $statement,
             ['money_in' => 'Billed', 'money_out' => 'Paid', 'balance' => 'We owe'],
             $vendor->id,
+        ];
+    }
+
+    /**
+     * The customer's invoices dated in the range, one row per line, for the pick-and-print
+     * invoice on the statement page. Line totals are already net of any discount.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function invoiceRows(string $companyId, string $customerId, string $from, string $to): array
+    {
+        $rows = [];
+        $invoices = Invoice::where('company_id', $companyId)
+            ->where('customer_id', $customerId)
+            ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->whereBetween('invoice_date', [$from, $to])
+            ->with('lineItems')
+            ->orderBy('invoice_date')
+            ->orderBy('invoice_number')
+            ->get();
+
+        foreach ($invoices as $invoice) {
+            $date = $invoice->invoice_date?->toDateString();
+            // A daily close's credit sale keeps the slip number at the end of its notes.
+            $reference = preg_match('/^Credit portion of meter sales for [0-9-]+\.\s*(.+)$/', (string) $invoice->notes, $m) ? trim($m[1]) : null;
+            $base = [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'date' => $date,
+                'reference' => $reference,
+                'paid' => (float) $invoice->balance <= 0.005,
+                'balance' => round((float) $invoice->balance, 2),
+            ];
+            foreach ($invoice->lineItems->sortBy('line_number') as $line) {
+                $rows[] = $base + [
+                    'key' => $line->id,
+                    'description' => (string) $line->description,
+                    'quantity' => $line->quantity !== null ? round((float) $line->quantity, 2) : null,
+                    'rate' => $line->unit_price !== null ? round((float) $line->unit_price, 2) : null,
+                    'amount' => round((float) $line->total, 2),
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    private function billTo(string $customerId): ?array
+    {
+        $customer = Customer::find($customerId);
+        if (! $customer) {
+            return null;
+        }
+        $address = is_array($customer->billing_address) ? $customer->billing_address : [];
+
+        return [
+            'name' => $customer->name,
+            'lines' => array_values(array_filter([
+                $address['line1'] ?? $address['street'] ?? null,
+                $address['line2'] ?? null,
+                trim(($address['city'] ?? '').' '.($address['postal_code'] ?? '')) ?: null,
+            ])),
+            'phone' => $customer->phone,
+            'email' => $customer->email,
         ];
     }
 }

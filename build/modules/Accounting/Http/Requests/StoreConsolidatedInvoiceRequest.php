@@ -23,6 +23,7 @@ class StoreConsolidatedInvoiceRequest extends BaseFormRequest
             'keys' => ['required', 'array', 'min:1'],
             'keys.*' => ['string'],
             'references' => ['nullable', 'array'],
+            'physical' => ['nullable', 'array'],
             'bill_to' => ['nullable', 'array'],
             'billed_by' => ['nullable', 'array'],
         ];

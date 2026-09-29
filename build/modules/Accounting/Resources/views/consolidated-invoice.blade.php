@@ -70,7 +70,8 @@
         <thead>
             <tr>
                 <th>Date</th>
-                <th>Coupon no.</th>
+                @if ($doc['show_reference'])<th>Reference</th>@endif
+                @if ($doc['show_physical'])<th>Invoice no.</th>@endif
                 <th>Fuel</th>
                 <th class="num">Litres</th>
                 <th class="num">Rate</th>
@@ -81,7 +82,8 @@
             @foreach ($doc['lines'] as $line)
                 <tr>
                     <td>{{ $line['date'] }}</td>
-                    <td>{{ $line['reference'] ?? '' }}</td>
+                    @if ($doc['show_reference'])<td>{{ $line['reference'] ?? '' }}</td>@endif
+                    @if ($doc['show_physical'])<td>{{ $line['physical_invoice'] ?? '' }}</td>@endif
                     <td>{{ $line['item'] ?? '' }}</td>
                     <td class="num">{{ $qty($line['quantity']) }}</td>
                     <td class="num">{{ $qty($line['rate']) }}</td>

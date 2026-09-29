@@ -15,10 +15,10 @@ use Illuminate\Validation\ValidationException;
  * month of daily-close credit sales. A record of what was sent: saved once and never changed,
  * no status. It bills nothing new -- the underlying invoices remain what the customer owes.
  *
- * One standard layout, what a fuel customer asks for: date, coupon no. (the station's own paper
- * slip, typed on the close's Sale row), fuel, litres, rate, amount. The user picks which of the
- * customer's invoice lines go on it, can fill in a missing coupon no., address it and sign it.
- * Everything is saved exactly as sent, so a reprint is the same paper.
+ * One standard layout: date, reference (from the close's Sale row), invoice no. (the station's
+ * own physical invoice / coupon, typed here when the customer wants it), fuel, litres, rate,
+ * amount. The user picks which of the customer's unpaid invoice lines go on it, addresses it and
+ * signs it. Everything is saved exactly as sent, so a reprint is the same paper.
  */
 class ConsolidatedInvoiceService
 {
@@ -49,14 +49,37 @@ class ConsolidatedInvoiceService
             ->get(['i.invoice_id', 'c.number', 'c.created_at'])
             ->keyBy('invoice_id'); // latest wins
 
-        // What each line sold. Invoice lines keep no product, but each posts to the product's own
-        // sales account (Fuel Sales - Diesel ...); an account several products share gives its name.
-        $itemNames = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')->whereNotNull('income_account_id')
-            ->get(['income_account_id', 'name'])->groupBy('income_account_id')
-            ->map(fn ($items) => $items->count() === 1 ? $items->first()->name : null);
-        $accountNames = DB::table('acct.accounts')->where('company_id', $companyId)
-            ->whereIn('id', $invoices->flatMap(fn ($i) => $i->lineItems->pluck('income_account_id'))->filter()->unique())
-            ->pluck('name', 'id');
+        // What each line sold. Invoice lines keep no product, so, in order: the daily close's own
+        // record of each credit sale (invoice -> fuel item); a fuel named in the line's description
+        // ("994 L Diesel - direct from tanker"); the product whose sales account the line posts to.
+        $items = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')
+            ->get(['id', 'name', 'fuel_category', 'income_account_id']);
+        $itemName = $items->pluck('name', 'id');
+        $closeItem = [];
+        DB::table('acct.transactions')->where('company_id', $companyId)->where('transaction_type', 'fuel_daily_close')
+            ->whereNull('deleted_at')->whereBetween('transaction_date', [$from, $to])->pluck('metadata')
+            ->each(function ($metadata) use (&$closeItem) {
+                foreach ((json_decode((string) $metadata, true)['credit_sale_details'] ?? []) as $sale) {
+                    if (! empty($sale['invoice_id']) && ! empty($sale['item_id'])) {
+                        $closeItem[$sale['invoice_id']] = $sale['item_id'];
+                    }
+                }
+            });
+        $fuelNames = $items->whereNotNull('fuel_category')->pluck('name')->sortByDesc(fn ($n) => mb_strlen($n))->values();
+        $byAccount = $items->whereNotNull('income_account_id')->groupBy('income_account_id')
+            ->map(fn ($group) => $group->count() === 1 ? $group->first()->name : null);
+        $itemFor = function ($invoice, $line) use ($closeItem, $itemName, $fuelNames, $byAccount): string {
+            if (isset($closeItem[$invoice->id], $itemName[$closeItem[$invoice->id]])) {
+                return $itemName[$closeItem[$invoice->id]];
+            }
+            foreach ($fuelNames as $name) {
+                if (mb_stripos((string) $line->description, $name) !== false) {
+                    return $name;
+                }
+            }
+
+            return (string) ($byAccount[$line->income_account_id] ?? '');
+        };
 
         $rows = [];
         foreach ($invoices as $invoice) {
@@ -73,7 +96,7 @@ class ConsolidatedInvoiceService
                     'paid' => (float) $invoice->balance <= 0.005,
                     'balance' => round((float) $invoice->balance, 2),
                     'sent_in' => $last ? ['number' => $last->number, 'date' => substr((string) $last->created_at, 0, 10)] : null,
-                    'item' => (string) ($itemNames[$line->income_account_id] ?? $accountNames[$line->income_account_id] ?? ''),
+                    'item' => $itemFor($invoice, $line),
                     'description' => (string) $line->description,
                     'quantity' => $line->quantity !== null ? round((float) $line->quantity, 2) : null,
                     'rate' => $line->unit_price !== null ? round((float) $line->unit_price, 2) : null,
@@ -155,6 +178,7 @@ class ConsolidatedInvoiceService
         $customer = Customer::where('company_id', $company->id)->findOrFail($data['customer_id']);
         $keys = array_flip(array_map('strval', $data['keys'] ?? []));
         $references = $data['references'] ?? [];
+        $physical = $data['physical'] ?? [];
         $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
 
         $rows = array_values(array_filter($this->rowsFor($company->id, $customer->id, $data['from'], $data['to']), fn ($r) => isset($keys[$r['key']])));
@@ -166,6 +190,7 @@ class ConsolidatedInvoiceService
             'invoice_number' => $r['invoice_number'],
             'date' => $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
+            'physical_invoice' => $text($physical[$r['key']] ?? '', 60),
             'item' => $r['item'],
             'description' => $r['description'],
             'quantity' => $r['quantity'],
@@ -241,6 +266,9 @@ class ConsolidatedInvoiceService
             'bill_to' => json_decode($doc->bill_to, true),
             'billed_by' => json_decode($doc->billed_by, true),
             'lines' => $lines,
+            // Reference and the station's invoice no. print only when something is in them.
+            'show_reference' => collect($lines)->contains(fn ($l) => ($l['reference'] ?? '') !== ''),
+            'show_physical' => collect($lines)->contains(fn ($l) => ($l['physical_invoice'] ?? '') !== ''),
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),

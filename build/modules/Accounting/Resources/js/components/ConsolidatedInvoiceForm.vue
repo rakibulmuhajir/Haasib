@@ -52,6 +52,8 @@ const form = useForm({
   title: 'Invoice',
   keys: [] as string[],
   references: {} as Record<string, string>,
+  // The station's own physical invoice / coupon number per line, typed here (optional column).
+  physical: {} as Record<string, string>,
   bill_to: { name: '', attention: '', phone: '', address: '' },
   billed_by: { name: '', designation: '', phone: '', address: '' },
 })
@@ -61,6 +63,7 @@ const picked = ref<Record<string, boolean>>({})
 watch(() => [props.rows, props.billTo, props.billedBy], () => {
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, true]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
+  form.physical = {}
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
   form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
 }, { immediate: true })
@@ -125,7 +128,8 @@ const save = () => {
             <tr class="border-b">
               <th class="w-10 px-3 py-2"><Checkbox :model-value="allPicked" aria-label="Pick all" @update:model-value="(v) => pickAll(v === true)" /></th>
               <th class="px-2 py-2">Date</th>
-              <th class="px-2 py-2">Coupon no.</th>
+              <th class="px-2 py-2">Reference</th>
+              <th class="px-2 py-2">Invoice no.</th>
               <th class="px-2 py-2">Fuel</th>
               <th class="px-2 py-2 text-right">Litres</th>
               <th class="px-2 py-2 text-right">Rate</th>
@@ -142,14 +146,15 @@ const save = () => {
                   <span v-if="row.sent_in"> · sent in {{ row.sent_in.number }}</span>
                 </div>
               </td>
-              <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Coupon number for ${row.invoice_number}`" /></td>
+              <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Reference for ${row.invoice_number}`" /></td>
+              <td class="px-2 py-1"><Input v-model="form.physical[row.key]" class="h-7 w-28 text-xs" placeholder="Optional" :aria-label="`Physical invoice number for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1.5">{{ row.item }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.quantity) }}</td>
               <td class="px-2 py-1.5 text-right tabular-nums">{{ number(row.rate) }}</td>
               <td class="px-3 py-1.5 text-right tabular-nums"><MoneyText :amount="row.amount" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">No unpaid invoices in this period.</td>
+              <td colspan="8" class="px-3 py-6 text-center text-muted-foreground">No unpaid invoices in this period.</td>
             </tr>
           </tbody>
         </table>

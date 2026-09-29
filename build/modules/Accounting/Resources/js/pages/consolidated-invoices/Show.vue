@@ -17,6 +17,7 @@ interface Line {
   invoice_number: string
   date: string
   reference: string
+  physical_invoice?: string
   item?: string
   description: string
   quantity: number | null
@@ -41,6 +42,8 @@ const props = defineProps<{
     lines: Line[]
     total: number
     currency: string
+    show_reference?: boolean
+    show_physical?: boolean
     issuer: DocumentIssuer
   }
 }>()
@@ -97,7 +100,8 @@ const print = () => window.print()
           <thead>
             <tr>
               <th>Date</th>
-              <th>Coupon no.</th>
+              <th v-if="document.show_reference">Reference</th>
+              <th v-if="document.show_physical">Invoice no.</th>
               <th>Fuel</th>
               <th class="num">Litres</th>
               <th class="num">Rate</th>
@@ -107,7 +111,8 @@ const print = () => window.print()
           <tbody>
             <tr v-for="(line, i) in document.lines" :key="i">
               <td>{{ line.date }}</td>
-              <td>{{ line.reference }}</td>
+              <td v-if="document.show_reference">{{ line.reference }}</td>
+              <td v-if="document.show_physical">{{ line.physical_invoice }}</td>
               <td>{{ line.item }}</td>
               <td class="num">{{ number(line.quantity) }}</td>
               <td class="num">{{ number(line.rate) }}</td>

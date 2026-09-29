@@ -56,6 +56,7 @@ export const accountingNav: ModuleNavConfig = {
         label: 'Sales',
         items: [
           { title: 'Invoices', href: `/${slug}/invoices`, icon: FileText },
+          { title: 'Consolidated Invoices', href: `/${slug}/consolidated-invoices`, icon: FileText },
           { title: t('customers'), href: `/${slug}/customers`, icon: Users },
           { title: 'Payments', href: `/${slug}/payments`, icon: DollarSign },
           { title: 'Credit Notes', href: `/${slug}/credit-notes`, icon: Receipt },

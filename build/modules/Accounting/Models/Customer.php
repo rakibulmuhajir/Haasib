@@ -41,6 +41,7 @@ class Customer extends Model
         'customer_type',
         'email',
         'phone',
+        'billing_contact',
         'billing_address',
         'shipping_address',
         'tax_id',

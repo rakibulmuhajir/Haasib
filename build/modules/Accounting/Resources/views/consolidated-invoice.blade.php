@@ -1,4 +1,10 @@
-{{-- "Print invoice" from a customer statement, as a PDF (dompdf). Same content as StatementInvoicePrint.vue. --}}
+{{-- A saved consolidated invoice as a PDF (dompdf). $doc comes from ConsolidatedInvoiceService::document(). --}}
+@php
+    $qty = fn ($n) => $n === null ? '' : rtrim(rtrim(number_format($n, 2), '0'), '.');
+    $issuer = $doc['issuer'];
+    $billTo = $doc['bill_to'];
+    $billedBy = array_filter($doc['billed_by'] ?? []);
+@endphp
 <!doctype html>
 <html>
 <head>
@@ -11,6 +17,7 @@
     .issuer-name { font-size: 15px; font-weight: bold; }
     .muted { color: #666; }
     .title { font-size: 22px; font-weight: bold; text-align: right; }
+    .number { text-align: right; font-family: DejaVu Sans Mono, monospace; color: #666; }
     .parties { width: 100%; margin-bottom: 14px; border-top: 1px solid #1c1c1c; border-bottom: 1px solid #ccc; }
     .parties td { padding: 8px 0; vertical-align: top; }
     .label { font-size: 8px; text-transform: uppercase; letter-spacing: .06em; color: #666; }
@@ -35,7 +42,10 @@
                 @if (!empty($issuer['email']))<div class="muted">{{ $issuer['email'] }}</div>@endif
                 @if (!empty($issuer['taxId']))<div class="muted">{{ $issuer['taxIdLabel'] ?? 'NTN' }}: {{ $issuer['taxId'] }}</div>@endif
             </td>
-            <td class="title">{{ $title }}</td>
+            <td>
+                <div class="title">{{ $doc['title'] }}</div>
+                <div class="number">{{ $doc['number'] }}</div>
+            </td>
         </tr>
     </table>
 
@@ -44,12 +54,13 @@
             <td style="width: 60%">
                 <div class="label">Bill to</div>
                 <div style="font-weight: bold">{{ $billTo['name'] ?? '' }}</div>
+                @if (!empty($billTo['attention']))<div>{{ $billTo['attention'] }}</div>@endif
                 @foreach (($billTo['lines'] ?? []) as $line)<div class="muted">{{ $line }}</div>@endforeach
                 @if (!empty($billTo['phone']))<div class="muted">{{ $billTo['phone'] }}</div>@endif
             </td>
             <td>
-                <div class="label">Period</div><div>{{ $from }} to {{ $to }}</div>
-                <div class="label" style="margin-top: 6px">Date</div><div>{{ $today }}</div>
+                <div class="label">Period</div><div>{{ $doc['period_from'] }} to {{ $doc['period_to'] }}</div>
+                <div class="label" style="margin-top: 6px">Date</div><div>{{ $doc['date'] }}</div>
             </td>
         </tr>
     </table>
@@ -59,26 +70,26 @@
             <tr>
                 <th>Date</th>
                 <th>Invoice</th>
-                @if ($showReference)<th>Reference</th>@endif
+                @if ($doc['show_reference'])<th>Reference</th>@endif
                 <th>Description</th>
-                @if ($showQuantity)<th class="num">Qty</th><th class="num">Rate</th>@endif
-                @foreach ($columns as $column)<th>{{ $column['label'] }}</th>@endforeach
+                @if ($doc['show_quantity'])<th class="num">Qty</th><th class="num">Rate</th>@endif
+                @foreach ($doc['columns'] as $label)<th>{{ $label }}</th>@endforeach
                 <th class="num">Amount</th>
             </tr>
         </thead>
         <tbody>
-            @foreach ($rows as $row)
+            @foreach ($doc['lines'] as $line)
                 <tr>
-                    <td>{{ $row['date'] }}</td>
-                    <td>{{ $row['invoice_number'] }}</td>
-                    @if ($showReference)<td>{{ $row['reference'] }}</td>@endif
-                    <td>{{ $row['description'] }}</td>
-                    @if ($showQuantity)
-                        <td class="num">{{ $row['quantity'] === null ? '' : rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</td>
-                        <td class="num">{{ $row['rate'] === null ? '' : rtrim(rtrim(number_format($row['rate'], 2), '0'), '.') }}</td>
+                    <td>{{ $line['date'] }}</td>
+                    <td>{{ $line['invoice_number'] }}</td>
+                    @if ($doc['show_reference'])<td>{{ $line['reference'] }}</td>@endif
+                    <td>{{ $line['description'] }}</td>
+                    @if ($doc['show_quantity'])
+                        <td class="num">{{ $qty($line['quantity']) }}</td>
+                        <td class="num">{{ $qty($line['rate']) }}</td>
                     @endif
-                    @foreach ($columns as $column)<td>{{ $column['values'][$row['key']] ?? '' }}</td>@endforeach
-                    <td class="num">{{ number_format($row['amount'], 2) }}</td>
+                    @foreach ($line['extra'] as $value)<td>{{ $value }}</td>@endforeach
+                    <td class="num">{{ number_format($line['amount'], 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -87,8 +98,8 @@
     <table class="total">
         <tr>
             <td style="width: 60%"></td>
-            <td class="label" style="text-align: right">Total ({{ $currency }})</td>
-            <td class="amount">{{ number_format($total, 2) }}</td>
+            <td class="label" style="text-align: right">Total ({{ $doc['currency'] }})</td>
+            <td class="amount">{{ number_format($doc['total'], 2) }}</td>
         </tr>
     </table>
 

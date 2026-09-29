@@ -18,6 +18,7 @@ class UpdateAction implements PaletteAction
             'customer_type' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(Customer::TYPES))],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
+            'billing_contact' => 'nullable|string|max:150',
             'base_currency' => 'nullable|string|size:3|uppercase',
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'tax_id' => 'nullable|string|max:100',
@@ -82,6 +83,12 @@ class UpdateAction implements PaletteAction
         if (isset($params['phone'])) {
             $updates['phone'] = $params['phone'] ?: null;
             $changes[] = "phone → " . ($params['phone'] ?: 'removed');
+        }
+
+        // Who invoices are addressed to at this customer (a person or an office); can be cleared.
+        if (array_key_exists('billing_contact', $params)) {
+            $updates['billing_contact'] = trim((string) $params['billing_contact']) ?: null;
+            $changes[] = 'billing contact → '.($updates['billing_contact'] ?? 'removed');
         }
 
         if (isset($params['base_currency'])) {

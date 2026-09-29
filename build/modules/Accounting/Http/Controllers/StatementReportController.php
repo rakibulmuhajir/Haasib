@@ -13,12 +13,7 @@ use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
 use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
-use App\Modules\Accounting\Models\Invoice;
-use App\Services\CompanyLetterhead;
-use App\Constants\Permissions;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use App\Modules\Accounting\Services\ConsolidatedInvoiceService;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -90,11 +85,9 @@ class StatementReportController extends Controller
             ],
             'columns' => $columns,
             'statement' => $statement,
-            // For "Print invoice" on a customer statement: the period's invoices, one row per line.
-            'invoiceRows' => $kind === 'customer' && $resolvedId ? $this->invoiceRows($company->id, $resolvedId, $from, $to) : [],
-            'billTo' => $kind === 'customer' && $resolvedId ? $this->billTo($resolvedId) : null,
-            'letterhead' => $kind === 'customer' ? app(CompanyLetterhead::class)->forCompany($company) : null,
-            'billedBy' => $kind === 'customer' ? $this->billedBy($company) : null,
+            // For "Consolidated invoice" on a customer statement: the period's invoice lines, and
+            // who it goes to and from (editable before saving).
+            ...($kind === 'customer' && $resolvedId ? $this->consolidatedInvoiceProps($company, $resolvedId, $from, $to) : []),
         ]);
     }
 
@@ -201,144 +194,18 @@ class StatementReportController extends Controller
             $vendor->id,
         ];
     }
-
-    /**
-     * The "Print invoice" document as a PDF file. The lines, references and custom columns come
-     * from the form; the rows themselves are re-read here, so only this customer's invoices print.
-     */
-    public function invoicePdf(Request $request)
+    private function consolidatedInvoiceProps($company, string $customerId, string $from, string $to): array
     {
-        abort_unless($request->user()?->hasCompanyPermission(Permissions::REPORT_VIEW), 403);
-        $company = CompanyContext::getCompany();
-        $data = json_decode((string) $request->input('payload'), true) ?: [];
-        $customer = Customer::where('company_id', $company->id)->findOrFail($data['customer_id'] ?? null);
-        $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($data['from'] ?? '')) ? $data['from'] : now()->startOfMonth()->toDateString();
-        $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($data['to'] ?? '')) ? $data['to'] : now()->toDateString();
-
-        $keys = array_flip(array_map('strval', (array) ($data['keys'] ?? [])));
-        $references = (array) ($data['references'] ?? []);
-        $rows = array_values(array_filter($this->invoiceRows($company->id, $customer->id, $from, $to), fn ($r) => isset($keys[$r['key']])));
-        foreach ($rows as &$row) {
-            $row['reference'] = trim((string) ($references[$row['key']] ?? $row['reference'] ?? ''));
-        }
-        unset($row);
-
-        $columns = collect((array) ($data['columns'] ?? []))
-            ->map(fn ($c) => ['label' => mb_substr(trim((string) ($c['label'] ?? '')), 0, 60), 'values' => array_map(fn ($v) => mb_substr((string) $v, 0, 200), (array) ($c['values'] ?? []))])
-            ->filter(fn ($c) => $c['label'] !== '' || collect($rows)->contains(fn ($r) => trim($c['values'][$r['key']] ?? '') !== ''))
-            ->values()->all();
-        $title = mb_substr(trim((string) ($data['title'] ?? '')), 0, 60) ?: 'Invoice';
-        $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
-        // Bill to whoever the form says (a person or office at the customer), else the customer.
-        $customerParty = $this->billTo($customer->id);
-        $addressee = (array) ($data['bill_to'] ?? []);
-        $billTo = [
-            'name' => $text($addressee['name'] ?? '') ?: $customerParty['name'],
-            'lines' => array_values(array_filter([$text($addressee['attention'] ?? '')])) ?: $customerParty['lines'],
-            'phone' => $text($addressee['phone'] ?? '', 50) ?: $customerParty['phone'],
-        ];
-        $by = (array) ($data['billed_by'] ?? []);
-        $billedBy = array_filter([
-            'name' => $text($by['name'] ?? ''),
-            'designation' => $text($by['designation'] ?? ''),
-            'phone' => $text($by['phone'] ?? '', 50),
-        ]);
-
-        $html = view()->file(base_path('modules/Accounting/Resources/views/statement-invoice.blade.php'), [
-            'title' => $title,
-            'issuer' => app(CompanyLetterhead::class)->forCompany($company),
-            'billTo' => $billTo,
-            'billedBy' => $billedBy,
-            'from' => $from,
-            'to' => $to,
-            'today' => now()->toDateString(),
-            'rows' => $rows,
-            'columns' => $columns,
-            'showReference' => collect($rows)->contains(fn ($r) => $r['reference'] !== ''),
-            'showQuantity' => collect($rows)->contains(fn ($r) => $r['quantity'] !== null),
-            'total' => round(array_sum(array_column($rows, 'amount')), 2),
-            'currency' => $company->base_currency ?: 'PKR',
-        ])->render();
-
-        $name = Str::slug("{$title} {$customer->name} {$from} {$to}").'.pdf';
-
-        // Only the characters used are embedded: the whole font made a one-page file ~900 KB.
-        return Pdf::loadHTML($html)->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->download($name);
-    }
-
-    /**
-     * The customer's invoices dated in the range, one row per line, for the pick-and-print
-     * invoice on the statement page. Line totals are already net of any discount.
-     *
-     * @return array<int,array<string,mixed>>
-     */
-    private function invoiceRows(string $companyId, string $customerId, string $from, string $to): array
-    {
-        $rows = [];
-        $invoices = Invoice::where('company_id', $companyId)
-            ->where('customer_id', $customerId)
-            ->whereNotIn('status', ['draft', 'void', 'cancelled'])
-            ->whereBetween('invoice_date', [$from, $to])
-            ->with('lineItems')
-            ->orderBy('invoice_date')
-            ->orderBy('invoice_number')
-            ->get();
-
-        foreach ($invoices as $invoice) {
-            $date = $invoice->invoice_date?->toDateString();
-            // A daily close's credit sale keeps the slip number at the end of its notes.
-            $reference = preg_match('/^Credit portion of meter sales for [0-9-]+\.\s*(.+)$/', (string) $invoice->notes, $m) ? trim($m[1]) : null;
-            $base = [
-                'invoice_id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'date' => $date,
-                'reference' => $reference,
-                'paid' => (float) $invoice->balance <= 0.005,
-                'balance' => round((float) $invoice->balance, 2),
-            ];
-            foreach ($invoice->lineItems->sortBy('line_number') as $line) {
-                $rows[] = $base + [
-                    'key' => $line->id,
-                    'description' => (string) $line->description,
-                    'quantity' => $line->quantity !== null ? round((float) $line->quantity, 2) : null,
-                    'rate' => $line->unit_price !== null ? round((float) $line->unit_price, 2) : null,
-                    'amount' => round((float) $line->total, 2),
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    /** Who signs invoices printed from a statement: set once in company settings. */
-    private function billedBy($company): array
-    {
-        $settings = is_array($company->settings) ? $company->settings : [];
-
-        return [
-            'name' => $settings['billed_by_name'] ?? '',
-            'designation' => $settings['billed_by_designation'] ?? '',
-            'phone' => $settings['billed_by_phone'] ?? '',
-        ];
-    }
-
-    private function billTo(string $customerId): ?array
-    {
-        $customer = Customer::find($customerId);
+        $service = app(ConsolidatedInvoiceService::class);
+        $customer = Customer::where('company_id', $company->id)->find($customerId);
         if (! $customer) {
-            return null;
+            return [];
         }
-        $address = is_array($customer->billing_address) ? $customer->billing_address : [];
 
         return [
-            'name' => $customer->name,
-            'lines' => array_values(array_filter([
-                $address['line1'] ?? $address['street'] ?? null,
-                $address['line2'] ?? null,
-                trim(($address['city'] ?? '').' '.($address['postal_code'] ?? '')) ?: null,
-            ])),
-            'phone' => $customer->phone,
-            'email' => $customer->email,
+            'invoiceRows' => $service->rowsFor($company->id, $customerId, $from, $to),
+            'billTo' => $service->billTo($customer),
+            'billedBy' => $service->billedBy($company),
         ];
     }
 }

@@ -615,6 +615,24 @@ DailyCloseCreditSaleService::pendingAccountingInvoiceDetails` and
 `line_total`; the close itself tracks no separate tax on meter revenue, so tax stays where
 the invoice booked it rather than being reversed too.
 
+## Consolidated invoices (2026-09-29)
+
+One document billing a customer for many invoices over a period (e.g. a month of daily-close
+credit sales). A **record of what was sent**: saved once, never changed, no status. It bills
+nothing new — the underlying invoices remain the receivable. Service: `ConsolidatedInvoiceService`.
+
+- `acct.consolidated_invoices`: `id` uuid PK, `company_id`, `number` varchar(30) (`CI-00001`, unique per
+  company), `customer_id` FK customers (RESTRICT), `period_from`/`period_to` date, `title` varchar(60),
+  `bill_to` jsonb {name, attention, phone, lines}, `billed_by` jsonb {name, designation, phone},
+  `columns` jsonb (custom column labels), `lines` jsonb (rows as sent: invoice_id, invoice_number, date,
+  reference, description, quantity, rate, amount, extra[]), `total` numeric(15,2), `currency` char(3),
+  `created_by_user_id`, `created_at`. RLS.
+- `acct.consolidated_invoice_items`: which invoices a document covered (`consolidated_invoice_id` CASCADE,
+  `invoice_id` **no FK** — Edit day deletes and re-creates close invoices). Drives "sent in CI-…" in the picker.
+- Trigger `acct.consolidated_invoice_is_final()` refuses UPDATE and DELETE on both tables.
+- `acct.customers.billing_contact` varchar(150) null: the person/office documents are addressed to.
+- `billed_by` defaults come from company settings `billed_by_name` / `billed_by_designation` / `billed_by_phone`.
+
 ## Extending
 - Fuel Daily Close may create a sent base-currency invoice for the unpaid portion
   of meter sales. Its `transaction_id` references the shared close journal; its

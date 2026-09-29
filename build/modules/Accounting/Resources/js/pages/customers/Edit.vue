@@ -35,6 +35,7 @@ interface CustomerRef {
   customer_type: string
   email: string | null
   phone: string | null
+  billing_contact?: string | null
   base_currency: string | null
   payment_terms: number | null
   tax_id: string | null
@@ -82,6 +83,7 @@ const form = useForm({
   customer_type: props.customer.customer_type ?? 'walk_in',
   email: props.customer.email ?? '',
   phone: props.customer.phone ?? '',
+  billing_contact: props.customer.billing_contact ?? '',
   base_currency: props.customer.base_currency ?? props.company.base_currency,
   payment_terms: props.customer.payment_terms ?? '',
   tax_id: props.customer.tax_id ?? '',
@@ -127,6 +129,7 @@ const handleSubmit = () => {
         customer_type: data.customer_type,
         email: data.email || null,
         phone: data.phone || null,
+        billing_contact: data.billing_contact || null,
         base_currency: data.base_currency || props.company.base_currency,
         payment_terms: data.payment_terms ? Number(data.payment_terms) : null,
         tax_id: data.tax_id || null,
@@ -179,6 +182,11 @@ const handleSubmit = () => {
           <Label for="phone">Phone</Label>
           <Input id="phone" v-model="form.phone" />
           <InputError :message="form.errors.phone" />
+        </div>
+        <div>
+          <Label for="billing_contact">Billing contact</Label>
+          <Input id="billing_contact" v-model="form.billing_contact" placeholder="Person or office invoices go to" />
+          <InputError :message="form.errors.billing_contact" />
         </div>
         <div>
           <Label for="base_currency">Currency</Label>

@@ -26,6 +26,7 @@ use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
 use App\Modules\Accounting\Http\Controllers\ReceivablesAgingReportController;
 use App\Modules\Accounting\Http\Controllers\PayablesAgingReportController;
+use App\Modules\Accounting\Http\Controllers\ConsolidatedInvoiceController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
 use App\Modules\Accounting\Http\Controllers\StatementReportController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
@@ -112,7 +113,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
         Route::get('/{company}/reports/payables-aging', [PayablesAgingReportController::class, 'index'])->name('reports.payables-aging');
         Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
-        Route::post('/{company}/reports/statements/invoice-pdf', [StatementReportController::class, 'invoicePdf'])->name('reports.statements.invoice-pdf');
+        Route::get('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'index'])->name('consolidated-invoices.index');
+        Route::post('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'store'])->name('consolidated-invoices.store');
+        Route::get('/{company}/consolidated-invoices/{document}', [ConsolidatedInvoiceController::class, 'show'])->whereUuid('document')->name('consolidated-invoices.show');
+        Route::get('/{company}/consolidated-invoices/{document}/pdf', [ConsolidatedInvoiceController::class, 'pdf'])->whereUuid('document')->name('consolidated-invoices.pdf');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {

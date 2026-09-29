@@ -23,6 +23,7 @@ class UpdateCustomerRequest extends BaseFormRequest
             'customer_type' => ['nullable', Rule::in(array_keys(Customer::TYPES))],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'billing_contact' => ['nullable', 'string', 'max:150'],
             'base_currency' => ['nullable', 'string', 'size:3', 'uppercase'],
             'payment_terms' => ['nullable', 'integer', 'min:0', 'max:365'],
             'tax_id' => ['nullable', 'string', 'max:100'],

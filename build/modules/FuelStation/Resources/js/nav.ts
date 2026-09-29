@@ -38,6 +38,7 @@ export const fuelStationNav: ModuleNavConfig = {
         // One customer list: balances, limits, discounts and statements, with Edit details
         // for contact fields. The accounting customer pages stay reachable from there.
         ...item('customers', 'Customers', '/fuel/credit-customers', Users),
+        ...item('customers', 'Consolidated Invoices', '/consolidated-invoices', ScrollText),
         ...item('fuelSale', 'Record Fuel Sale', '/fuel/sales/form', Fuel),
         ...item('customers', 'Amanat Depositors', '/fuel/amanat', HandCoins),
         ...item('payments', 'Payments Received', '/payments', HandCoins),

@@ -20,9 +20,8 @@ import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
-import StatementInvoicePrint from '../../components/StatementInvoicePrint.vue'
-import type { InvoiceRow } from '../../components/StatementInvoicePrint.vue'
-import type { DocumentIssuer, DocumentParty } from '@/components/LedgerDocument.vue'
+import ConsolidatedInvoiceForm from '../../components/ConsolidatedInvoiceForm.vue'
+import type { BillToDefaults, BilledByDefaults, InvoiceRow } from '../../components/ConsolidatedInvoiceForm.vue'
 
 type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
 
@@ -45,9 +44,8 @@ const props = defineProps<{
   filters: { kind: Kind; id: string | null; from: string; to: string }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[] }
   invoiceRows?: InvoiceRow[]
-  billTo?: DocumentParty | null
-  letterhead?: DocumentIssuer | null
-  billedBy?: { name: string; designation: string; phone: string } | null
+  billTo?: BillToDefaults | null
+  billedBy?: BilledByDefaults | null
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -148,7 +146,7 @@ const openRow = (row: Row) => {
 
 const printStatement = () => window.print()
 
-// Pick which of the customer's invoices go on one printed invoice (or reminder).
+// Bill many of the customer's invoices on one saved document.
 const invoicePrintOpen = ref(false)
 
 const statementTitle = computed(() => props.statement.account || props.statement.party || 'No account or party selected')
@@ -209,7 +207,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
             </Button>
             <Button v-if="kind === 'customer' && partyId" variant="outline" @click="invoicePrintOpen = true">
               <FileText class="h-4 w-4" />
-              Print invoice
+              Consolidated invoice
             </Button>
           </div>
         </CardContent>
@@ -236,12 +234,11 @@ const statementTitle = computed(() => props.statement.account || props.statement
         </template>
       </LedgerRegister>
     </div>
-    <StatementInvoicePrint
+    <ConsolidatedInvoiceForm
       v-if="kind === 'customer'"
       v-model:open="invoicePrintOpen"
       :rows="invoiceRows ?? []"
       :bill-to="billTo ?? null"
-      :letterhead="letterhead ?? null"
       :currency="currency"
       :from="statement.from"
       :to="statement.to"

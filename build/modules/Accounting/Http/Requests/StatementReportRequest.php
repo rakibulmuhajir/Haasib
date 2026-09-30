@@ -27,7 +27,8 @@ class StatementReportRequest extends BaseFormRequest
     {
         return [
             'kind' => ['required', Rule::in(['bank', 'customer', 'supplier', 'amanat', 'employee'])],
-            'id' => ['nullable', 'uuid'],
+            // One account or person, or 'all' for everyone of that kind.
+            'id' => ['nullable', 'regex:/^(all|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/'],
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
         ];

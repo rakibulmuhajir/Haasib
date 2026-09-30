@@ -32,6 +32,7 @@ type Row = {
   money_out: number
   balance: number
   link: string | null
+  party?: string
 }
 
 type BankOption = { id: string; code: string; name: string }
@@ -50,6 +51,8 @@ const props = defineProps<{
     to: string
     account?: string | null
     party?: string | null
+    // Everyone of the kind in one list ('all'): each row names its person.
+    combined?: boolean
     // Employee statements: the period's totals, for the summary above the rows.
     totals?: { salary: number; earned: number; advances: number; advance_count: number; repaid: number; deductions: number; paid: number }
   }
@@ -133,6 +136,7 @@ const partyLabel = computed(() => {
 
 const columns = computed<RegisterColumn<Row>[]>(() => [
   { key: 'date', label: 'Date', kind: 'date' },
+  ...(props.statement.combined ? [{ key: 'party', label: 'Name', kind: 'text' } as RegisterColumn<Row>] : []),
   { key: 'reference', label: 'Reference', kind: 'ref' },
   { key: 'description', label: 'Description', kind: 'text' },
   { key: 'money_in', label: props.columns.money_in, kind: 'in' },
@@ -148,7 +152,8 @@ const openRow = (row: Row) => {
 const printStatement = () => window.print()
 
 
-const statementTitle = computed(() => props.statement.account || props.statement.party || 'No account or party selected')
+const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', bank: '' })[kind.value])
+const statementTitle = computed(() => (props.statement.combined ? allLabel.value : props.statement.account || props.statement.party || 'No account or party selected'))
 </script>
 
 <template>
@@ -182,6 +187,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
                   <SelectValue :placeholder="`Select ${partyLabel.toLowerCase()}`" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem v-if="kind !== 'bank'" value="all">{{ allLabel }}</SelectItem>
                   <SelectItem v-for="opt in filteredOptions" :key="opt.id" :value="opt.id">
                     {{ opt.label }}<span v-if="opt.sublabel" class="text-text-tertiary"> · {{ opt.sublabel }}</span>
                   </SelectItem>
@@ -205,7 +211,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
               <Printer class="h-4 w-4" />
               Print
             </Button>
-            <Button v-if="kind === 'customer' && partyId" variant="outline" as-child>
+            <Button v-if="kind === 'customer' && partyId && partyId !== 'all'" variant="outline" as-child>
               <Link :href="`/${company.slug}/consolidated-invoices/create?customer_id=${partyId}&from=${from}&to=${to}`">
                 <FileText class="h-4 w-4" />
                 Consolidated invoice

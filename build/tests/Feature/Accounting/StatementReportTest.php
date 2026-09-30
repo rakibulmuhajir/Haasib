@@ -239,3 +239,36 @@ test('the statements report page renders with a 200, the right component, and th
         ->where('filters.kind', 'bank')
     );
 });
+
+test('a supplier statement with no one picked lists every supplier by date, named, with totals for all', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $second = Vendor::create(['company_id' => $f['company']->id, 'vendor_number' => 'V-9002', 'name' => 'Second Supplier', 'base_currency' => 'PKR', 'ap_account_id' => $f['ap']->id, 'is_active' => true, 'created_by_user_id' => $f['user']->id]);
+
+    $bill = fn ($vendor, $number, $date, $amount) => Bill::create([
+        'company_id' => $f['company']->id, 'vendor_id' => $vendor->id, 'bill_number' => $number,
+        'bill_date' => $date, 'due_date' => $date, 'status' => 'received',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'exchange_rate' => 1,
+        'subtotal' => $amount, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => $amount,
+        'paid_amount' => 0, 'balance' => $amount, 'base_amount' => $amount, 'created_by_user_id' => $f['user']->id,
+    ]);
+    $bill($f['vendor'], 'BILL-A1', '2026-08-10', 1000);
+    $bill($second, 'BILL-B1', '2026-09-03', 2000);
+    $bill($f['vendor'], 'BILL-A2', '2026-09-10', 500);
+
+    test()->actingAs($f['user'])
+        ->get("/{$f['company']->slug}/reports/statements?kind=supplier&from=2026-09-01&to=2026-09-24")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounting/reports/Statement', false)
+            ->where('filters.id', 'all')
+            ->where('statement.combined', true)
+            ->where('statement.opening_balance', 1000)
+            ->where('statement.closing_balance', 3500)
+            ->where('statement.rows.1.party', 'Second Supplier')
+            ->where('statement.rows.1.balance', 2000)
+            ->where('statement.rows.2.party', $f['vendor']->name)
+            ->where('statement.rows.2.balance', 1500)
+            ->has('statement.rows', 4)
+        );
+});

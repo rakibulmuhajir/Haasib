@@ -69,13 +69,24 @@ class StatementReportController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'vendor_number']);
 
-        [$statement, $columns, $resolvedId] = match ($kind) {
-            'customer' => $this->customerStatement($customers, $id, $from, $to),
-            'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
-            'amanat' => $this->amanatStatement($holders, $id, $from, $to),
-            'employee' => $this->employeeStatement($employees, $id, $from, $to),
-            default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
-        };
+        // A customer, supplier, holder or employee statement opens on everyone at once ('all'):
+        // each of their transactions by date, named, with that person's own running balance.
+        if ($kind !== 'bank' && ($id === null || $id === 'all')) {
+            [$statement, $columns, $resolvedId] = match ($kind) {
+                'customer' => $this->allParties($customers, fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to),
+                'supplier' => $this->allParties($vendors, fn ($pid) => $this->supplierStatement($vendors, $pid, $from, $to), $from, $to),
+                'amanat' => $this->allParties($holders, fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
+                'employee' => $this->allParties($employees, fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
+            };
+        } else {
+            [$statement, $columns, $resolvedId] = match ($kind) {
+                'customer' => $this->customerStatement($customers, $id, $from, $to),
+                'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
+                'amanat' => $this->amanatStatement($holders, $id, $from, $to),
+                'employee' => $this->employeeStatement($employees, $id, $from, $to),
+                default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
+            };
+        }
 
         return Inertia::render('accounting/reports/Statement', [
             'company' => [
@@ -95,6 +106,58 @@ class StatementReportController extends Controller
             'columns' => $columns,
             'statement' => $statement,
         ]);
+    }
+
+    /**
+     * Everyone's statement in one list: each person's rows (their own running balance kept),
+     * named and sorted by date, between one opening and one closing row that add up everyone.
+     * People with nothing in the range and nothing owing either way are left out.
+     */
+    private function allParties($parties, callable $one, string $from, string $to): array
+    {
+        $rows = [];
+        $opening = 0.0;
+        $closing = 0.0;
+        $columns = null;
+        foreach ($parties as $party) {
+            $partyId = is_array($party) ? $party['id'] : $party->id;
+            $name = is_array($party) ? $party['name'] : $party->name;
+            [$statement, $columns] = $one($partyId);
+            $moves = array_values(array_filter($statement['rows'], fn ($r) => ! in_array($r['type'], ['opening_balance', 'closing_balance'], true)));
+            if (! $moves && abs((float) $statement['opening_balance']) < 0.005 && abs((float) $statement['closing_balance']) < 0.005) {
+                continue;
+            }
+            $opening += (float) $statement['opening_balance'];
+            $closing += (float) $statement['closing_balance'];
+            foreach ($moves as $i => $row) {
+                $rows[] = [...$row, 'party' => $name, '_order' => [$row['date'] ?? '', $row['created_at'] ?? '', $name, $i]];
+            }
+        }
+        usort($rows, fn ($a, $b) => $a['_order'] <=> $b['_order']);
+        $rows = array_map(function ($row) {
+            unset($row['_order']);
+
+            return $row;
+        }, $rows);
+
+        $edge = fn (string $date, string $type, string $label, float $balance) => [
+            'date' => $date, 'type' => $type, 'reference' => null, 'description' => $label, 'party' => 'All',
+            'money_in' => 0.0, 'money_out' => 0.0, 'balance' => round($balance, 2), 'link' => null,
+        ];
+
+        return [
+            [
+                'rows' => [$edge($from, 'opening_balance', 'Opening balance', $opening), ...$rows, $edge($to, 'closing_balance', 'Closing balance', $closing)],
+                'opening_balance' => round($opening, 2),
+                'closing_balance' => round($closing, 2),
+                'from' => $from,
+                'to' => $to,
+                'party' => null,
+                'combined' => true,
+            ],
+            $columns ?? ['money_in' => 'In', 'money_out' => 'Out', 'balance' => 'Balance'],
+            'all',
+        ];
     }
 
     private function bankStatement($bankAccounts, string $companyId, ?string $id, string $from, string $to): array

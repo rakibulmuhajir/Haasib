@@ -526,3 +526,19 @@ test('a paid invoice splits only once its payments are taken off, and the money 
         ->and(owes($b))->toBe(400.0)
         ->and((float) DB::table('acct.payment_allocations')->whereNull('invoice_id')->sum('amount_allocated'))->toBe(1000.0);
 });
+
+test('moving an invoice from its page saves even when the dialog also sends its empty split rows', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $other = correctionCustomer($f, 'Page Buyer');
+    $invoice = correctionInvoice($f, $f['customer'], 1000);
+
+    test()->actingAs($f['user'])->post("/{$f['company']->slug}/invoices/{$invoice->id}/correct", [
+        'action' => 'change_customer',
+        'customer_id' => $other->id,
+        'shares' => [['customer_id' => '', 'amount' => 1000], ['customer_id' => '', 'amount' => null]],
+        'reason' => 'Wrong customer',
+    ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    expect($invoice->fresh()->customer_id)->toBe($other->id);
+});

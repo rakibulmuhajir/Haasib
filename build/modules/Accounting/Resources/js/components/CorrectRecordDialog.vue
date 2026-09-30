@@ -68,7 +68,17 @@ const canSave = computed(() => form.reason.trim().length >= 3 && (form.action ==
 const money = (n: number | string) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const hasPayments = computed(() => props.appliedPayments.length > 0)
 
-const save = () => form.post(props.url, { preserveScroll: true, onSuccess: () => { open.value = false } })
+// Only what the chosen correction needs goes to the server.
+const save = () => form
+  .transform((data) => (data.action === 'split'
+    ? { action: 'split', shares: data.shares, unapply_payments: data.unapply_payments, reason: data.reason }
+    : { action: 'change_customer', customer_id: data.customer_id, apply_oldest_first: data.apply_oldest_first, reason: data.reason }))
+  .post(props.url, { preserveScroll: true, onSuccess: () => { open.value = false } })
+
+// Any error the fields above do not show still shows, so a refused save never looks like nothing.
+const otherErrors = computed(() => Object.entries(form.errors)
+  .filter(([key]) => !['customer_id', 'shares', 'reason'].includes(key))
+  .map(([, message]) => message))
 </script>
 
 <template>
@@ -140,6 +150,8 @@ const save = () => form.post(props.url, { preserveScroll: true, onSuccess: () =>
           <InputError :message="form.errors.reason" />
         </div>
       </div>
+
+      <p v-for="(message, i) in otherErrors" :key="i" class="text-sm text-destructive">{{ message }}</p>
 
       <DialogFooter>
         <Button variant="outline" @click="open = false">Cancel</Button>

@@ -25,9 +25,9 @@ class StoreBillCorrectionRequest extends BaseFormRequest
         return [
             'action' => ['required', Rule::in($this->route('payment') ? ['change_customer'] : ['change_customer', 'split'])],
             'customer_id' => ['required_if:action,change_customer', 'nullable', 'uuid'],
-            'shares' => ['required_if:action,split', 'nullable', 'array', 'min:2'],
-            'shares.*.customer_id' => ['required', 'uuid'],
-            'shares.*.amount' => ['required', 'numeric', 'min:0.01'],
+            'shares' => ['exclude_unless:action,split', 'required', 'array', 'min:2'],
+            'shares.*.customer_id' => ['exclude_unless:action,split', 'required', 'uuid'],
+            'shares.*.amount' => ['exclude_unless:action,split', 'required', 'numeric', 'min:0.01'],
             'apply_oldest_first' => ['nullable', 'boolean'],
             'unapply_payments' => ['nullable', 'boolean'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],

@@ -162,6 +162,7 @@ class ConsolidatedInvoiceService
     {
         $customer = Customer::where('company_id', $company->id)->findOrFail($data['customer_id']);
         $keys = array_flip(array_map('strval', $data['keys'] ?? []));
+        $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
         $references = $data['references'] ?? [];
         $physical = $data['physical'] ?? [];
         // Blank cells the user filled in (fuel, litres, rate). A value the invoice has is kept.
@@ -172,8 +173,6 @@ class ConsolidatedInvoiceService
         foreach (self::labels($company) as $key => $default) {
             $headings[$key] = $text($data['headings'][$key] ?? '', 40) ?: $default;
         }
-        $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
-
         $rows = array_values(array_filter($this->rowsFor($company->id, $customer->id, $data['from'], $data['to']), fn ($r) => isset($keys[$r['key']])));
         if (! $rows) {
             throw ValidationException::withMessages(['keys' => 'Pick at least one line.']);

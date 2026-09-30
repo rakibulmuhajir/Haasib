@@ -172,6 +172,95 @@ class BillCorrectionService
 
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * Split a supplier payment between the suppliers it really paid. The money went out once and
+     * stays as posted; the payment keeps the first share (amount corrected down to it, before and
+     * after kept in the correction), each other share becomes a payment of its own for that
+     * supplier, posted by the correcting journal. Whatever it had paid comes off first; every
+     * share is left as that supplier's advance.
+     */
+    public function billPaymentSplit(BillPayment $payment, array $shares, string $reason): array
+    {
+        $total = round((float) $payment->amount, 2);
+        $shares = array_values(array_filter(array_map(fn ($s) => ['vendor_id' => (string) $s['vendor_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
+        if (count($shares) < 2) {
+            throw ValidationException::withMessages(['shares' => 'Split between at least two suppliers.']);
+        }
+        if (abs(array_sum(array_column($shares, 'amount')) - $total) > 0.005) {
+            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($total, 2).'.']);
+        }
+        foreach ($shares as $share) {
+            $this->vendor($payment->company_id, $share['vendor_id']);
+        }
+
+        return $this->run($payment->company_id, function () use ($payment, $shares, $reason, $total) {
+            $from = Vendor::find($payment->vendor_id);
+            $keeper = $this->vendor($payment->company_id, $shares[0]['vendor_id']);
+            $rate = (float) ($payment->exchange_rate ?: 1);
+            $unapplied = $this->unapplyBillPayment($payment);
+            DB::table('acct.bill_payments')->where('id', $payment->id)->update([
+                'vendor_id' => $keeper->id,
+                'amount' => $shares[0]['amount'],
+                'base_amount' => round($shares[0]['amount'] * $rate, 2),
+                'updated_at' => now(),
+            ]);
+
+            $ap = $this->billPaymentPayablesAccount($payment);
+            $lines = [];
+            $created = [];
+            foreach (array_slice($shares, 1) as $share) {
+                $vendor = $this->vendor($payment->company_id, $share['vendor_id']);
+                $new = BillPayment::create([
+                    'company_id' => $payment->company_id,
+                    'vendor_id' => $vendor->id,
+                    'payment_number' => $this->nextBillPaymentNumber($payment->company_id),
+                    'payment_date' => $payment->payment_date,
+                    'amount' => $share['amount'],
+                    'currency' => $payment->currency,
+                    'exchange_rate' => $payment->exchange_rate,
+                    'base_currency' => $payment->base_currency,
+                    'base_amount' => round($share['amount'] * $rate, 2),
+                    'transaction_charge' => 0,
+                    'base_transaction_charge' => 0,
+                    'payment_method' => $payment->payment_method,
+                    'payment_account_id' => $payment->payment_account_id,
+                    'reference_number' => $payment->reference_number,
+                    'notes' => "Split from {$payment->payment_number}",
+                    'created_by_user_id' => Auth::id(),
+                ]);
+                $lines[] = ['account_id' => $ap, 'type' => 'credit', 'amount' => $share['amount'], 'description' => "{$payment->payment_number} share off {$from?->name}"];
+                $lines[] = ['account_id' => $ap, 'type' => 'debit', 'amount' => $share['amount'], 'description' => "{$new->payment_number} to {$vendor->name}"];
+                $created[] = ['vendor' => $vendor->name, 'amount' => $share['amount'], 'payment' => $new->payment_number, 'payment_id' => $new->id];
+            }
+            if ($keeper->id !== ($from?->id)) {
+                $lines[] = ['account_id' => $ap, 'type' => 'credit', 'amount' => $shares[0]['amount'], 'description' => "{$payment->payment_number} from {$from?->name}"];
+                $lines[] = ['account_id' => $ap, 'type' => 'debit', 'amount' => $shares[0]['amount'], 'description' => "{$payment->payment_number} to {$keeper->name}"];
+            }
+
+            $journal = $this->journal($payment->company_id, $payment->currency ?? 'PKR', "Correction: {$payment->payment_number} split between suppliers", $lines);
+            DB::table('acct.bill_payments')->whereIn('id', array_column($created, 'payment_id'))->update(['transaction_id' => $journal]);
+
+            return $this->record($payment->company_id, 'bill_payment', $payment->id, 'split', $reason, [
+                'number' => $payment->payment_number,
+                'before' => ['vendor_id' => $from?->id, 'vendor' => $from?->name, 'amount' => $total],
+                'after' => ['vendor_id' => $keeper->id, 'vendor' => $keeper->name, 'amount' => $shares[0]['amount'], 'shares' => $created],
+                'unapplied_from' => $unapplied,
+            ], $journal);
+        });
+    }
+
+    /** Mirrors BillPayment\CreateAction::nextNumber(); this runs inside the correction's own lock. */
+    private function nextBillPaymentNumber(string $companyId): string
+    {
+        $last = BillPayment::withTrashed()->where('company_id', $companyId)
+            ->where('payment_number', '~', '^PMT-[0-9]+$')
+            ->orderByRaw("CAST(substring(payment_number from '[0-9]+$') AS bigint) DESC")
+            ->value('payment_number');
+        $seq = ($last && preg_match('/(\d+)$/', $last, $m)) ? ((int) $m[1]) + 1 : 1;
+
+        return 'PMT-'.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+    }
+
     private function vendor(string $companyId, string $id): Vendor
     {
         $vendor = Vendor::where('company_id', $companyId)->find($id);

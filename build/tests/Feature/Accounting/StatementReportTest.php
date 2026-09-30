@@ -542,3 +542,50 @@ test('moving an invoice from its page saves even when the dialog also sends its 
 
     expect($invoice->fresh()->customer_id)->toBe($other->id);
 });
+
+test('splitting a payment gives each customer their share on account, and the cash received is unchanged', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $b = correctionCustomer($f, 'Co-payer');
+    $invoice = correctionInvoice($f, $f['customer'], 1300);
+    $payment = correct($f, 'payment.create', [
+        'invoice' => $invoice->id, 'amount' => 1300, 'method' => 'cash', 'date' => '2026-09-21',
+        'deposit_account_id' => $f['cash']->id, 'ar_account_id' => $f['ar']->id,
+    ]);
+    $cashBefore = ledgerBalanceOf($f['cash']);
+
+    correct($f, 'correction.payment_split', ['payment_id' => $payment['data']['id'], 'reason' => 'Two paid together', 'shares' => [
+        ['customer_id' => $f['customer']->id, 'amount' => 1000],
+        ['customer_id' => $b->id, 'amount' => 300],
+    ]]);
+
+    $new = \App\Modules\Accounting\Models\Payment::where('customer_id', $b->id)->firstOrFail();
+    expect((float) \App\Modules\Accounting\Models\Payment::find($payment['data']['id'])->amount)->toBe(1000.0)
+        ->and((float) $new->amount)->toBe(300.0)
+        ->and($new->payment_date->toDateString())->toBe('2026-09-21')
+        ->and((float) $invoice->fresh()->balance)->toBe(1300.0)          // taken off; applied again by hand
+        ->and(owes($f['customer']))->toBe(300.0)
+        ->and(owes($b))->toBe(-300.0)
+        ->and(ledgerBalanceOf($f['cash']))->toBe($cashBefore);
+});
+
+test('splitting a supplier payment leaves each share as that supplier\'s advance', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $other = correctionVendor($f, 'Second Depot');
+    $payment = BillPayment::create([
+        'company_id' => $f['company']->id, 'vendor_id' => $f['vendor']->id, 'payment_number' => 'PMT-00001',
+        'payment_date' => '2026-09-12', 'amount' => 900, 'currency' => 'PKR', 'base_currency' => 'PKR', 'base_amount' => 900,
+        'payment_method' => 'cash', 'payment_account_id' => $f['cash']->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+
+    correct($f, 'correction.bill_payment_split', ['bill_payment_id' => $payment->id, 'reason' => 'Paid two depots', 'shares' => [
+        ['vendor_id' => $f['vendor']->id, 'amount' => 600],
+        ['vendor_id' => $other->id, 'amount' => 300],
+    ]]);
+
+    expect((float) $payment->fresh()->amount)->toBe(600.0)
+        ->and(owedTo($f['vendor']))->toBe(-600.0)
+        ->and(owedTo($other))->toBe(-300.0)
+        ->and(BillPayment::where('vendor_id', $other->id)->value('payment_number'))->toBe('PMT-00002');
+});

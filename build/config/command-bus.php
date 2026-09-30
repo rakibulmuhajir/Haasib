@@ -54,6 +54,8 @@ return [
     'correction.invoice_customer' => \App\Modules\Accounting\Actions\Correction\InvoiceCustomerAction::class,
     'correction.invoice_split' => \App\Modules\Accounting\Actions\Correction\InvoiceSplitAction::class,
     'correction.payment_customer' => \App\Modules\Accounting\Actions\Correction\PaymentCustomerAction::class,
+    'correction.payment_split' => \App\Modules\Accounting\Actions\Correction\PaymentSplitAction::class,
+    'correction.bill_payment_split' => \App\Modules\Accounting\Actions\Correction\BillPaymentSplitAction::class,
     'correction.bill_supplier' => \App\Modules\Accounting\Actions\Correction\BillSupplierAction::class,
     'correction.bill_split' => \App\Modules\Accounting\Actions\Correction\BillSplitAction::class,
     'correction.bill_payment_supplier' => \App\Modules\Accounting\Actions\Correction\BillPaymentSupplierAction::class,

@@ -19,7 +19,7 @@ class StoreCorrectionRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', Rule::in($this->route('payment') ? ['change_customer'] : ['change_customer', 'split'])],
+            'action' => ['required', Rule::in(['change_customer', 'split'])],
             'customer_id' => ['required_if:action,change_customer', 'nullable', 'uuid'],
             'shares' => ['exclude_unless:action,split', 'required', 'array', 'min:2'],
             'shares.*.customer_id' => ['exclude_unless:action,split', 'required', 'uuid'],

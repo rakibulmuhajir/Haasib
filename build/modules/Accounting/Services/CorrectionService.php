@@ -172,6 +172,89 @@ class CorrectionService
         return $result;
     }
 
+    /**
+     * Split a payment between the customers who paid it together. The cash came in once and stays
+     * as it was posted; only who it came from changes. The payment keeps the first share (its
+     * amount is corrected down to it, the before and after kept in the correction), each other share
+     * becomes a payment of its own for that customer, same date and account, posted by the
+     * correcting journal. Whatever the payment had paid off comes off first; every share is left on
+     * account for its customer to apply.
+     */
+    public function paymentSplit(Payment $payment, array $shares, string $reason): array
+    {
+        $total = round((float) $payment->amount, 2);
+        $shares = array_values(array_filter(array_map(fn ($s) => ['customer_id' => (string) $s['customer_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
+        if (count($shares) < 2) {
+            throw ValidationException::withMessages(['shares' => 'Split between at least two customers.']);
+        }
+        if (abs(array_sum(array_column($shares, 'amount')) - $total) > 0.005) {
+            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($total, 2).'.']);
+        }
+        foreach ($shares as $share) {
+            $this->customer($payment->company_id, $share['customer_id']);
+        }
+
+        return $this->run($payment->company_id, function () use ($payment, $shares, $reason, $total) {
+            $from = Customer::find($payment->customer_id);
+            $keeper = $this->customer($payment->company_id, $shares[0]['customer_id']);
+            $rate = (float) ($payment->exchange_rate ?: 1);
+            $unapplied = $this->unapplyPayment($payment);
+
+            // What it keeps, all on account.
+            PaymentAllocation::where('payment_id', $payment->id)->whereNull('invoice_id')->delete();
+            DB::table('acct.payments')->where('id', $payment->id)->update([
+                'customer_id' => $keeper->id,
+                'amount' => $shares[0]['amount'],
+                'base_amount' => round($shares[0]['amount'] * $rate, 2),
+                'updated_at' => now(),
+            ]);
+            $this->onAccount($payment, $payment->id, $shares[0]['amount'], $rate);
+
+            $ar = $this->paymentReceivablesAccount($payment);
+            $lines = [];
+            $created = [];
+            foreach (array_slice($shares, 1) as $share) {
+                $customer = $this->customer($payment->company_id, $share['customer_id']);
+                $new = Payment::create([
+                    'company_id' => $payment->company_id,
+                    'customer_id' => $customer->id,
+                    'payment_number' => Payment::generatePaymentNumber($payment->company_id),
+                    'payment_date' => $payment->payment_date,
+                    'amount' => $share['amount'],
+                    'currency' => $payment->currency,
+                    'exchange_rate' => $payment->exchange_rate,
+                    'base_currency' => $payment->base_currency,
+                    'base_amount' => round($share['amount'] * $rate, 2),
+                    'transaction_charge' => 0,
+                    'base_transaction_charge' => 0,
+                    'payment_method' => $payment->payment_method,
+                    'deposit_account_id' => $payment->deposit_account_id,
+                    'reference_number' => $payment->reference_number,
+                    'notes' => "Split from {$payment->payment_number}",
+                    'created_by_user_id' => Auth::id(),
+                ]);
+                $this->onAccount($payment, $new->id, $share['amount'], $rate);
+                $lines[] = ['account_id' => $ar, 'type' => 'debit', 'amount' => $share['amount'], 'description' => "{$payment->payment_number} share off {$from?->name}"];
+                $lines[] = ['account_id' => $ar, 'type' => 'credit', 'amount' => $share['amount'], 'description' => "{$new->payment_number} from {$customer->name}"];
+                $created[] = ['customer' => $customer->name, 'amount' => $share['amount'], 'payment' => $new->payment_number, 'payment_id' => $new->id];
+            }
+            if ($keeper->id !== ($from?->id)) {
+                $lines[] = ['account_id' => $ar, 'type' => 'debit', 'amount' => $shares[0]['amount'], 'description' => "{$payment->payment_number} from {$from?->name}"];
+                $lines[] = ['account_id' => $ar, 'type' => 'credit', 'amount' => $shares[0]['amount'], 'description' => "{$payment->payment_number} to {$keeper->name}"];
+            }
+
+            $journal = $this->journal($payment->company_id, $payment->currency, "Correction: {$payment->payment_number} split between customers", $lines);
+            DB::table('acct.payments')->whereIn('id', array_column($created, 'payment_id'))->update(['transaction_id' => $journal]);
+
+            return $this->record($payment->company_id, 'payment', $payment->id, 'split', $reason, [
+                'number' => $payment->payment_number,
+                'before' => ['customer_id' => $from?->id, 'customer' => $from?->name, 'amount' => $total],
+                'after' => ['customer_id' => $keeper->id, 'customer' => $keeper->name, 'amount' => $shares[0]['amount'], 'shares' => $created],
+                'unapplied_from' => $unapplied,
+            ], $journal);
+        });
+    }
+
     /** Every correction made to a record, newest first. */
     public function history(string $companyId, string $entityType, string $entityId): array
     {
@@ -245,6 +328,19 @@ class CorrectionService
             ]);
         }
         $allocation->update(['invoice_id' => null]);
+    }
+
+    /** A payment's unapplied money, as the null-invoice allocation row the app reads it from. */
+    private function onAccount(Payment $source, string $paymentId, float $amount, float $rate): void
+    {
+        PaymentAllocation::create([
+            'company_id' => $source->company_id,
+            'payment_id' => $paymentId,
+            'invoice_id' => null,
+            'amount_allocated' => $amount,
+            'base_amount_allocated' => round($amount * $rate, 2),
+            'applied_at' => now(),
+        ]);
     }
 
     private function applyOldestFirst(Payment $payment, Customer $customer): void

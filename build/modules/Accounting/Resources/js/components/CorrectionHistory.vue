@@ -14,7 +14,7 @@ export interface Correction {
   by: string | null
   changes: {
     before?: { customer?: string | null; vendor?: string | null; amount?: number }
-    after?: { customer?: string | null; vendor?: string | null; amount?: number; shares?: { customer?: string; vendor?: string; amount: number; invoice?: string; bill?: string; credit_note?: string; vendor_credit?: string }[] }
+    after?: { customer?: string | null; vendor?: string | null; amount?: number; shares?: { customer?: string; vendor?: string; amount: number; invoice?: string; bill?: string; payment?: string; credit_note?: string; vendor_credit?: string }[] }
     payments_unapplied?: { payment: string; amount: number }[]
     unapplied_from?: { invoice?: string; bill?: string; amount: number }[]
   }
@@ -24,7 +24,7 @@ defineProps<{ corrections: Correction[]; slug: string }>()
 
 const money = (n: number) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const party = (p?: { customer?: string | null; vendor?: string | null }) => p?.customer ?? p?.vendor ?? ''
-const doc = (s: { invoice?: string; bill?: string }) => s.invoice ?? s.bill ?? ''
+const doc = (s: { invoice?: string; bill?: string; payment?: string }) => s.invoice ?? s.bill ?? s.payment ?? ''
 </script>
 
 <template>

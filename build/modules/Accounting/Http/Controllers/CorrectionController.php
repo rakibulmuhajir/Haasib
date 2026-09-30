@@ -29,6 +29,12 @@ class CorrectionController extends Controller
     {
         $data = $request->validated();
 
+        if ($data['action'] === 'split') {
+            return $this->dispatch($request, ['correction.payment_split', [
+                'payment_id' => (string) $request->route('payment'), 'shares' => $data['shares'], 'reason' => $data['reason'],
+            ]]);
+        }
+
         return $this->dispatch($request, ['correction.payment_customer', [
             'payment_id' => (string) $request->route('payment'),
             'customer_id' => $data['customer_id'],
@@ -50,6 +56,14 @@ class CorrectionController extends Controller
     public function billPayment(StoreBillCorrectionRequest $request): RedirectResponse
     {
         $data = $request->validated();
+
+        if ($data['action'] === 'split') {
+            return $this->dispatch($request, ['correction.bill_payment_split', [
+                'bill_payment_id' => (string) $request->route('payment'),
+                'shares' => collect($data['shares'])->map(fn ($s) => ['vendor_id' => $s['customer_id'], 'amount' => $s['amount']])->all(),
+                'reason' => $data['reason'],
+            ]]);
+        }
 
         return $this->dispatch($request, ['correction.bill_payment_supplier', [
             'bill_payment_id' => (string) $request->route('payment'),

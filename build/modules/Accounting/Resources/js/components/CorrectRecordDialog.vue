@@ -51,7 +51,7 @@ const reset = () => {
 }
 watch(open, (value) => { if (value) reset() })
 
-const canSplit = computed(() => props.kind === 'invoice' || props.kind === 'bill')
+const canSplit = computed(() => true)
 const canApplyOldest = computed(() => props.kind === 'payment' || props.kind === 'bill_payment')
 const options = computed(() => props.parties.map((c) => ({ value: c.id, label: c.name })))
 const others = computed(() => options.value.filter((o) => o.value !== props.customerId))

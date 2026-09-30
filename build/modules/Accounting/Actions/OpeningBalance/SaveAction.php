@@ -197,7 +197,7 @@ class SaveAction implements PaletteAction
             $opening = $company->settings['opening_balances'] ?? [];
 
             $this->guardNotLocked($company);
-            if (empty($opening['journal_id']) || substr((string) ($opening['as_of_date'] ?? ''), 0, 10) !== substr($asOf, 0, 10)) {
+            if (empty($opening['as_of_date']) || substr((string) $opening['as_of_date'], 0, 10) !== substr($asOf, 0, 10)) {
                 throw ValidationException::withMessages(['as_of_date' => 'Opening balances must use the date already set ('.($opening['as_of_date'] ?? 'none').').']);
             }
 
@@ -385,7 +385,7 @@ class SaveAction implements PaletteAction
     {
         // The date is already set and in use: adding a customer's or supplier's opening balance
         // later keeps it, even though trading has started since. Only a new or moved date is checked.
-        if (! empty($opening['journal_id']) && substr((string) ($opening['as_of_date'] ?? ''), 0, 10) === $asOf) {
+        if (! empty($opening['as_of_date']) && substr((string) $opening['as_of_date'], 0, 10) === $asOf) {
             return;
         }
 

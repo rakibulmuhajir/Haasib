@@ -30,7 +30,7 @@ const props = defineProps<{
   nozzleNames?: Record<string, { name: string; tank_id: string | null }>
   previousTankDips?: Record<string, number>
   paymentSources?: Record<string, { direct: boolean; invoices: string }>
-  creditRows: Array<{ invoice_id: string; invoice_number: string; customer_name: string | null; amount: number; discount_amount: number; balance: number; source?: string }>
+  creditRows: Array<{ invoice_id: string; invoice_number: string; customer_name: string | null; amount: number; discount_amount: number; balance: number; source?: string; split_from?: string }>
   canApplyDiscount?: boolean
 }>()
 const emit = defineEmits<{ applyDiscount: [credit: any] }>()
@@ -151,10 +151,11 @@ const moneyOut = computed<Line[]>(() => {
   for (const c of props.creditRows) {
     lines.push({
       label: c.source === 'accounting_invoice' ? 'Invoiced in Accounting' : 'Credit sale',
-      detail: [c.customer_name, c.invoice_number, c.discount_amount ? `discount ${round0(c.discount_amount).toLocaleString()}` : null, `owes ${round0(c.balance).toLocaleString()}`].filter(Boolean).join(' · '),
+      detail: [c.customer_name, c.invoice_number, c.split_from ? `split from ${c.split_from}` : null, c.discount_amount ? `discount ${round0(c.discount_amount).toLocaleString()}` : null, `owes ${round0(c.balance).toLocaleString()}`].filter(Boolean).join(' · '),
       amount: n(c.amount),
       href: `/${props.companySlug}/invoices/${c.invoice_id}`,
-      credit: c,
+      // A share split off onto another invoice is not the close's own invoice: no close discount on it.
+      credit: c.split_from ? undefined : c,
     })
   }
   for (const r of (m.value.payment_receipt_postings || []) as any[]) {

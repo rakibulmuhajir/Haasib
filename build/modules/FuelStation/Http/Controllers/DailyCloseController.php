@@ -1380,23 +1380,54 @@ class DailyCloseController extends Controller
             return [];
         }
 
+        $invoiceIds = collect($details)->pluck('invoice_id')->filter()->unique()->values();
         $invoices = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
-            ->whereIn('id', collect($details)->pluck('invoice_id')->filter()->unique())
+            ->whereIn('id', $invoiceIds)->with('customer:id,name')
             ->get()->keyBy('id');
 
-        return collect($details)->map(function ($detail) use ($invoices) {
+        // Shares a correction split off a sale onto other customers' invoices: the day shows each
+        // owner's share on its own line (same total), not the whole sale on the first customer.
+        $splits = \Illuminate\Support\Facades\DB::table('acct.corrections')
+            ->where('company_id', $companyId)->where('entity_type', 'invoice')->where('action', 'split')
+            ->whereIn('entity_id', $invoiceIds)->orderBy('created_at')->get(['entity_id', 'changes'])
+            ->groupBy('entity_id')
+            ->map(fn ($rows) => $rows->flatMap(fn ($r) => json_decode($r->changes, true)['after']['shares'] ?? [])->values());
+        $shareInvoices = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)
+            ->whereIn('id', $splits->flatten(1)->pluck('invoice_id')->filter()->all())->with('customer:id,name')
+            ->get()->keyBy('id');
+
+        return collect($details)->flatMap(function ($detail) use ($invoices, $splits, $shareInvoices) {
             $invoice = $invoices->get($detail['invoice_id'] ?? null);
-            return [
+            $shares = $splits->get($detail['invoice_id'] ?? null, collect());
+            $movedOff = round((float) $shares->sum('amount'), 2);
+            $rows = [[
                 'invoice_id' => $detail['invoice_id'] ?? null,
                 'invoice_number' => $detail['invoice_number'] ?? null,
                 'customer_id' => $invoice?->customer_id,
-                'customer_name' => $detail['customer_name'] ?? null,
+                'customer_name' => $invoice?->customer?->name ?? $detail['customer_name'] ?? null,
                 'source' => $detail['source'] ?? null,
-                'amount' => $invoice ? round((float) $invoice->subtotal, 2) : (float) ($detail['amount'] ?? 0),
+                'amount' => round(($invoice ? (float) $invoice->subtotal : (float) ($detail['amount'] ?? 0)) - $movedOff, 2),
                 'discount_amount' => $invoice ? round((float) $invoice->discount_amount, 2) : (float) ($detail['discount_amount'] ?? 0),
-                'total_amount' => $invoice ? round((float) $invoice->total_amount, 2) : null,
+                'total_amount' => $invoice ? round((float) $invoice->total_amount - $movedOff, 2) : null,
                 'balance' => $invoice ? round((float) $invoice->balance, 2) : null,
-            ];
+            ]];
+            foreach ($shares as $share) {
+                $shareInvoice = $shareInvoices->get($share['invoice_id'] ?? null);
+                $rows[] = [
+                    'invoice_id' => $share['invoice_id'] ?? null,
+                    'invoice_number' => $share['invoice'] ?? null,
+                    'customer_id' => $shareInvoice?->customer_id,
+                    'customer_name' => $shareInvoice?->customer?->name ?? $share['customer'] ?? null,
+                    'source' => $detail['source'] ?? null,
+                    'amount' => round((float) $share['amount'], 2),
+                    'discount_amount' => 0.0,
+                    'total_amount' => round((float) $share['amount'], 2),
+                    'balance' => $shareInvoice ? round((float) $shareInvoice->balance, 2) : null,
+                    'split_from' => $detail['invoice_number'] ?? null,
+                ];
+            }
+
+            return $rows;
         })->values()->all();
     }
 

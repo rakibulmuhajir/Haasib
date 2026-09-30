@@ -110,6 +110,8 @@ const props = defineProps<{
     discount_amount: number
     total_amount: number | null
     balance: number | null
+    // A share a correction split off this sale onto another customer's invoice.
+    split_from?: string
   }>
   fuelItems?: Array<{ id: string; name: string }>
   customerFuelDiscounts?: Array<{ customer_id: string; item_id: string; discount_type: 'percent' | 'per_litre'; value: number }>
@@ -146,22 +148,36 @@ const editDay = () => {
 // close. Falls back to the snapshot's own figures for an older close rendered before
 // creditSaleInvoices existed.
 const creditRows = computed(() => {
-  const fresh = new Map((props.creditSaleInvoices ?? []).map((row) => [row.invoice_id, row]))
-  return (props.transaction.metadata.credit_sale_details || []).map((frozen) => {
+  const fresh = new Map((props.creditSaleInvoices ?? []).filter((row) => !row.split_from).map((row) => [row.invoice_id, row]))
+  const shares = (props.creditSaleInvoices ?? []).filter((row) => row.split_from)
+  return (props.transaction.metadata.credit_sale_details || []).flatMap((frozen) => {
     const current = fresh.get(frozen.invoice_id)
     const amount = current?.amount ?? frozen.amount
     const discountAmount = current?.discount_amount ?? frozen.discount_amount ?? 0
     const balance = current?.balance ?? current?.total_amount ?? frozen.net_amount ?? (frozen.amount - (frozen.discount_amount ?? 0))
-    return {
+    const row = {
       invoice_id: frozen.invoice_id,
       invoice_number: frozen.invoice_number,
       customer_id: current?.customer_id ?? null,
-      customer_name: frozen.customer_name,
+      customer_name: current?.customer_name ?? frozen.customer_name,
       source: frozen.source,
       amount,
       discount_amount: discountAmount,
       balance,
+      split_from: undefined as string | undefined,
     }
+    // Each share split off it follows, under its own customer and invoice.
+    return [row, ...shares.filter((share) => share.split_from === frozen.invoice_number).map((share) => ({
+      invoice_id: share.invoice_id,
+      invoice_number: share.invoice_number,
+      customer_id: share.customer_id,
+      customer_name: share.customer_name,
+      source: share.source,
+      amount: share.amount,
+      discount_amount: 0,
+      balance: share.balance ?? share.amount,
+      split_from: share.split_from,
+    }))]
   })
 })
 

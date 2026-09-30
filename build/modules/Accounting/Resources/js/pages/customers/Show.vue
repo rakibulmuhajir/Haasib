@@ -46,6 +46,8 @@ import { toast } from 'vue-sonner'
 import { formatMoneyText } from '@/lib/money'
 import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
 import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
+import CustomerUnitsCard from '@/components/CustomerUnitsCard.vue'
+import type { CustomerUnit } from '@/components/CustomerUnitsCard.vue'
 
 interface CompanyRef {
   id: string
@@ -130,6 +132,7 @@ interface PaymentRef {
 
 const props = defineProps<{
   consolidatedInvoices?: SentDocument[]
+  units?: CustomerUnit[]
   company: CompanyRef
   customer: CustomerRef
   summary: SummaryRef
@@ -584,6 +587,7 @@ const cancelShippingEdit = () => {
           :documents="consolidatedInvoices ?? []"
           :currency="company.base_currency || 'PKR'"
         />
+        <CustomerUnitsCard :company-slug="company.slug" :customer-id="customer.id" :units="units ?? []" />
       </TabsContent>
 
       <!-- Settings Tab -->

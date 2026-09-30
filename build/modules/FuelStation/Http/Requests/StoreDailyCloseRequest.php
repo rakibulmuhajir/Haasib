@@ -104,6 +104,8 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.customer_name' => 'nullable|string|max:255',
             'credit_sales.*.reference' => 'nullable|string|max:100',
+            // The customer's own vehicle/site this sale was for, when they use units.
+            'credit_sales.*.unit_id' => 'nullable|uuid',
             // Optional fuel + litres on a manual row, so a per-litre customer discount can be
             // priced (see DailyCloseCreditSaleService::prepare, which refuses a per_litre
             // discount without litres); a percent discount needs only the amount above.

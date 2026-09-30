@@ -322,6 +322,7 @@ class CustomerController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'customer' => $customer,
+            'units' => $customer->units()->orderBy('name')->get(['id', 'name', 'is_active']),
             'summary' => [
                 'open_balance' => (float) ($invoiceSummary->open_balance ?? 0),
                 'invoice_count' => (int) ($invoiceSummary->invoice_count ?? 0),

@@ -64,6 +64,7 @@ class Invoice extends Model
         'payment_terms',
         'notes',
         'reference',
+        'unit_id',
         'internal_notes',
         'sent_at',
         'viewed_at',
@@ -80,6 +81,7 @@ class Invoice extends Model
     protected $casts = [
         'company_id' => 'string',
         'customer_id' => 'string',
+        'unit_id' => 'string',
         'recurring_schedule_id' => 'string',
         'invoice_date' => 'date',
         'due_date' => 'date',
@@ -114,6 +116,11 @@ class Invoice extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function unit()
+    {
+        return $this->belongsTo(CustomerUnit::class, 'unit_id');
     }
 
     public function company()

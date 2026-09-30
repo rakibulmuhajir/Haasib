@@ -28,6 +28,7 @@ const rows = defineModel<Array<{
     customer_name: string
     amount: number
     reference: string
+    unit_id?: string
     item_id?: string
     litres?: number
     invoice_id?: string
@@ -54,7 +55,15 @@ const props = defineProps<{
     // The day's sale rate per fuel item (RateChange::getRateForDate), the same rate the
     // meters are priced at -- a row's amount is litres x this rate.
     rates?: Record<string, { sale_rate: number }>
+    // Each customer's active units, for the unit picker (DailyCloseController::customerChoices).
+    customerChoices?: Array<{ id: string; units?: Array<{ id: string; name: string }> }>
 }>()
+
+// This row's customer's active units, if they use them; empty for a customer with none, and
+// the reference stays free-text.
+const unitsFor = (row: { customer_id: string }): Array<{ id: string; name: string }> =>
+    props.customerChoices?.find((c) => c.id === row.customer_id)?.units ?? []
+
 const { t } = useLexicon()
 
 // The discount for a row's chosen customer + fuel item, purely for display -- the server
@@ -79,6 +88,13 @@ const discountAmount = (row: { amount: number; litres?: number; item_id?: string
 type Row = (typeof rows.value)[number]
 const rateFor = (row: Row): number => (row.item_id ? Number(props.rates?.[row.item_id]?.sale_rate ?? 0) : 0)
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+// Picking a unit fills the reference with its name, only when the row has none yet -- typing
+// one by hand still wins.
+const onUnitChange = (row: Row) => {
+    const unit = unitsFor(row).find((u) => u.id === row.unit_id)
+    if (unit && !row.reference) row.reference = unit.name
+}
 
 // Litres drive the amount at the day's rate; typing an amount instead works back to litres,
 // so either figure off the slip can be entered. With no fuel (or no rate) the amount is manual.
@@ -178,7 +194,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
         <span v-else class="text-muted-foreground">{{ row.invoice_number ?? row.reference }}</span>
         <MoneyText class="ml-auto font-medium" :amount="row.amount" :currency="currency ?? 'PKR'" :fraction-digits="0" />
       </p>
-      <div v-else class="grid items-start gap-2 md:grid-cols-[16rem_12rem_7rem_9rem_minmax(0,18rem)_2.25rem]">
+      <div v-else class="grid items-start gap-2 md:grid-cols-[16rem_12rem_7rem_9rem_minmax(0,12rem)_minmax(0,12rem)_2.25rem]">
         <div>
           <EntitySearch v-model="row.customer_id" entity-type="customer" :allow-quick-add="true" :disabled="disabled"
             :company-slug="companySlug"
@@ -217,6 +233,16 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
             Discount <MoneyText :amount="discountAmount(row)" :currency="currency ?? 'PKR'" :fraction-digits="0" />
           </p>
         </div>
+        <div v-if="unitsFor(row).length">
+          <Select v-model="row.unit_id" :disabled="disabled" @update:model-value="onUnitChange(row)">
+            <SelectTrigger class="h-9" :aria-label="`Unit, row ${index + 1}`"><SelectValue placeholder="Unit" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="unit in unitsFor(row)" :key="unit.id" :value="unit.id">{{ unit.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+          <InputError :message="errors[`credit_sales.${index}.unit_id`]" />
+        </div>
+        <div v-else />
         <div>
           <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Reference" :aria-label="`Reference, row ${index + 1}`" :disabled="disabled" />
           <InputError :message="errors[`credit_sales.${index}.reference`]" />

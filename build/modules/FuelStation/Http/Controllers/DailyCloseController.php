@@ -1023,6 +1023,7 @@ class DailyCloseController extends Controller
 
         return \App\Modules\Accounting\Models\Customer::where('company_id', $companyId)
             ->where('is_active', true)->whereNotIn('id', $holders)->orderBy('name')
+            ->with(['units' => fn ($q) => $q->where('is_active', true)->orderBy('name')])
             ->get(['id', 'name', 'credit_limit', 'is_credit_blocked'])
             ->map(fn ($c) => [
                 'id' => $c->id,
@@ -1030,6 +1031,7 @@ class DailyCloseController extends Controller
                 'credit_limit' => (float) ($c->credit_limit ?? 0),
                 'current_balance' => (float) ($balances[$c->id] ?? 0),
                 'is_credit_blocked' => (bool) $c->is_credit_blocked,
+                'units' => $c->units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all(),
             ])->values()->all();
     }
 

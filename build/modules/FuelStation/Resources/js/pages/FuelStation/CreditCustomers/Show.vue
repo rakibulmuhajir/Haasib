@@ -26,6 +26,8 @@ import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
 import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
 import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
+import CustomerUnitsCard from '@/components/CustomerUnitsCard.vue'
+import type { CustomerUnit } from '@/components/CustomerUnitsCard.vue'
 
 interface Customer {
   id: string
@@ -73,6 +75,7 @@ const props = defineProps<{
   statement: StatementRow[]
   openInvoices: OpenInvoice[]
   discounts: FuelDiscount[]
+  units?: CustomerUnit[]
   currency: string
 }>()
 
@@ -382,6 +385,8 @@ const goBack = () => {
       :documents="consolidatedInvoices ?? []"
       currency="PKR"
     />
+
+    <CustomerUnitsCard :company-slug="companySlug" :customer-id="customer.id" :units="units ?? []" />
 
     <!-- Fuel Discounts -->
     <Card class="border-border/80">

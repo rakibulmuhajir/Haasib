@@ -159,7 +159,7 @@ class InvoiceController extends Controller
         $invoiceId = $request->route('invoice');
 
         $invoiceRecord = Invoice::where('company_id', $company->id)
-            ->with(['customer', 'lineItems'])
+            ->with(['customer', 'lineItems', 'unit'])
             ->findOrFail($invoiceId);
 
         return Inertia::render('accounting/invoices/Show', [
@@ -191,7 +191,7 @@ class InvoiceController extends Controller
 
         $invoiceId = $request->route('invoice');
         $invoiceRecord = Invoice::where('company_id', $company->id)
-            ->with(['customer', 'lineItems'])
+            ->with(['customer', 'lineItems', 'unit'])
             ->findOrFail($invoiceId);
 
         $customers = Customer::where('company_id', $company->id)

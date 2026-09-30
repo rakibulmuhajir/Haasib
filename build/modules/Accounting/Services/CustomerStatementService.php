@@ -84,7 +84,8 @@ class CustomerStatementService
                         'date' => optional($creditNote->credit_date)->toDateString(),
                         'type' => 'credit_note',
                         'reference' => $creditNote->credit_note_number,
-                        'description' => 'Credit note ' . $creditNote->credit_note_number,
+                        // The reason says what it was for, e.g. a share moved to another customer's invoice.
+                        'description' => 'Credit note ' . $creditNote->credit_note_number . ($creditNote->reason ? " · {$creditNote->reason}" : ''),
                         'debit' => 0.0,
                         'credit' => (float) $creditNote->amount,
                         'source_id' => $creditNote->id,

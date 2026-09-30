@@ -11,6 +11,8 @@
     $billTo = $doc['bill_to'];
     $billedBy = array_filter($doc['billed_by'] ?? []);
     $label = $doc['labels'];
+    // Columns before Amount, for a subtotal row's colspan: Date, Reference?, Invoice no.?, Item, Qty, Rate.
+    $subtotalColspan = 3 + ($doc['show_reference'] ? 1 : 0) + ($doc['show_physical'] ? 1 : 0);
 @endphp
 <!doctype html>
 <html>
@@ -106,15 +108,22 @@
         </thead>
         <tbody>
             @foreach ($doc['lines'] as $line)
-                <tr>
-                    <td class="mono">{{ $line['date'] }}</td>
-                    @if ($doc['show_reference'])<td>{{ $line['reference'] ?? '' }}</td>@endif
-                    @if ($doc['show_physical'])<td>{{ $line['physical_invoice'] ?? '' }}</td>@endif
-                    <td>{{ $line['item'] ?? '' }}</td>
-                    <td class="num">{{ $qty($line['quantity']) }}</td>
-                    <td class="num">{{ $qty($line['rate']) }}</td>
-                    <td class="num">{{ number_format($line['amount'], 2) }}</td>
-                </tr>
+                @if ($line['is_subtotal'] ?? false)
+                    <tr>
+                        <td class="mono" colspan="{{ $subtotalColspan }}"><strong>{{ $line['unit'] ?: '—' }} subtotal</strong></td>
+                        <td class="num"><strong>{{ number_format($line['amount'], 2) }}</strong></td>
+                    </tr>
+                @else
+                    <tr>
+                        <td class="mono">{{ $line['date'] }}</td>
+                        @if ($doc['show_reference'])<td>{{ $line['reference'] ?? '' }}</td>@endif
+                        @if ($doc['show_physical'])<td>{{ $line['physical_invoice'] ?? '' }}</td>@endif
+                        <td>{{ $line['item'] ?? '' }}</td>
+                        <td class="num">{{ $qty($line['quantity']) }}</td>
+                        <td class="num">{{ $qty($line['rate']) }}</td>
+                        <td class="num">{{ number_format($line['amount'], 2) }}</td>
+                    </tr>
+                @endif
             @endforeach
         </tbody>
     </table>

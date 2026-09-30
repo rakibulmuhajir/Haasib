@@ -356,7 +356,7 @@ const props = defineProps<{
     // Fuels whose sale rate changed on this day, with the change against the day before.
     rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
     parkedDates?: string[];
-    customerChoices?: Array<{ id: string; name: string; credit_limit: number; current_balance: number; is_credit_blocked: boolean }>;
+    customerChoices?: Array<{ id: string; name: string; credit_limit: number; current_balance: number; is_credit_blocked: boolean; units?: Array<{ id: string; name: string }> }>;
     lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
     // Per-customer, per-fuel-item discount, for prefilling a manual credit-sale row. See
     // CustomerFuelDiscountService (the single place this rate is priced).
@@ -1185,7 +1185,7 @@ const form = useForm({
             invoice_number: invoice.invoice_number,
             pending_accounting_invoice: true,
         })),
-    ] as { customer_id: string; customer_name: string; amount: number; reference: string; item_id?: string; litres?: number; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }[],
+    ] as { customer_id: string; customer_name: string; amount: number; reference: string; unit_id?: string; item_id?: string; litres?: number; invoice_id?: string; invoice_number?: string; pending_fuel_invoice?: boolean; pending_accounting_invoice?: boolean }[],
     bank_withdrawals: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
     bank_deposits: [] as {
         bank_account_id: string;
@@ -5455,7 +5455,7 @@ const cashFlowOut = computed(() => [
                             </button>
                         </div>
                         <!-- Sales that went to bank / card accounts (Money Out: they never reached the drawer) -->
-                        <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" />
+                        <CreditSalesEntry v-if="isExpanded('credit_sales')" style="order: -1" class="space-y-4 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300" v-model="form.credit_sales" :errors="form.errors as Record<string, string>" :disabled="submitting || form.processing" :company-slug="props.company.slug" :currency="currencyCode" :fuel-items="props.fuelItems" :customer-fuel-discounts="props.customerFuelDiscounts ?? {}" :rates="props.rates" :customer-choices="props.customerChoices ?? []" />
                         <template v-for="channel in cardChannels" :key="channel.code">
                             <div v-if="isExpanded(channelKey(channel.code)) && form.payment_receipts[channel.code]" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div class="flex items-baseline justify-between">

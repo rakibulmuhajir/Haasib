@@ -34,6 +34,8 @@ class CreateAction implements PaletteAction
             'notes' => 'nullable|string',
             // The slip / order number the sale was made against.
             'reference' => 'nullable|string|max:100',
+            // The customer's own vehicle, site, room... this sale was for.
+            'unit_id' => 'nullable|uuid',
             'internal_notes' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
@@ -70,7 +72,19 @@ class CreateAction implements PaletteAction
             ]);
         }
 
-        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer) {
+        $customerUnit = null;
+        if (! empty($params['unit_id'])) {
+            $customerUnit = \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $company->id)
+                ->where('customer_id', $customer->id)
+                ->find($params['unit_id']);
+            if (! $customerUnit) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'unit_id' => 'Choose a unit belonging to this customer.',
+                ]);
+            }
+        }
+
+        return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer, $customerUnit) {
             // Calculate dates
             $invoiceDate = !empty($params['date'])
                 ? Carbon::parse($params['date'])
@@ -166,7 +180,10 @@ class CreateAction implements PaletteAction
                 // `description` is the old single-field name kept working for
                 // the command palette, which still sends it.
                 'notes' => $params['notes'] ?? null,
-                'reference' => isset($params['reference']) && trim((string) $params['reference']) !== '' ? trim((string) $params['reference']) : null,
+                'reference' => isset($params['reference']) && trim((string) $params['reference']) !== ''
+                    ? trim((string) $params['reference'])
+                    : ($customerUnit?->name ?? null),
+                'unit_id' => $customerUnit?->id,
                 'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
                 'created_by_user_id' => Auth::id(),
             ]);

@@ -36,7 +36,7 @@ class ConsolidatedInvoiceService
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
             ->where('balance', '>', 0.005)
             ->whereBetween('invoice_date', [$from, $to])
-            ->with('lineItems')
+            ->with(['lineItems', 'unit'])
             ->orderBy('invoice_date')
             ->orderBy('invoice_number')
             ->get();
@@ -55,6 +55,9 @@ class ConsolidatedInvoiceService
         $rows = [];
         foreach ($invoices as $invoice) {
             $reference = $invoice->reference;
+            // Which unit this sale was for, for grouping -- the unit's name when the invoice
+            // named one, else the free-hand reference (the old way of saying the same thing).
+            $unit = $invoice->unit?->name ?? $reference;
             $last = $sent[$invoice->id] ?? null;
             foreach ($invoice->lineItems->sortBy('line_number') as $line) {
                 $rows[] = [
@@ -63,6 +66,7 @@ class ConsolidatedInvoiceService
                     'invoice_number' => $invoice->invoice_number,
                     'date' => $invoice->invoice_date?->toDateString(),
                     'reference' => $reference,
+                    'unit' => $unit,
                     'paid' => (float) $invoice->balance <= 0.005,
                     'balance' => round((float) $invoice->balance, 2),
                     'sent_in' => $last ? ['number' => $last->number, 'date' => substr((string) $last->created_at, 0, 10)] : null,
@@ -182,6 +186,7 @@ class ConsolidatedInvoiceService
             'invoice_number' => $r['invoice_number'],
             'date' => $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
+            'unit' => $r['unit'] ?? null,
             'physical_invoice' => $text($physical[$r['key']] ?? '', 60),
             'item' => $r['item'] !== '' ? $r['item'] : $text($fill($r, 'item') ?? '', 60),
             'description' => $r['description'],
@@ -244,6 +249,30 @@ class ConsolidatedInvoiceService
             ->first(['c.*', 'cu.name as customer_name', 'u.name as created_by_name']);
         abort_unless($doc, 404);
         $lines = json_decode($doc->lines, true);
+
+        // When any line names a unit (a customer's vehicle, site...), group the printed
+        // document by unit -- sorted by unit then date -- with a subtotal after each one's
+        // rows. A document with no units named prints in its original date order, as before.
+        if (collect($lines)->contains(fn ($l) => ! empty($l['unit'] ?? null))) {
+            $lines = collect($lines)->sortBy([['unit', 'asc'], ['date', 'asc']])->values()->all();
+            $grouped = [];
+            $currentUnit = null;
+            $subtotal = 0.0;
+            foreach ($lines as $line) {
+                $unit = $line['unit'] ?? '';
+                if ($currentUnit !== null && $unit !== $currentUnit) {
+                    $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'amount' => round($subtotal, 2)];
+                    $subtotal = 0.0;
+                }
+                $currentUnit = $unit;
+                $subtotal += (float) $line['amount'];
+                $grouped[] = $line;
+            }
+            if ($currentUnit !== null) {
+                $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'amount' => round($subtotal, 2)];
+            }
+            $lines = $grouped;
+        }
 
         return [
             'id' => $doc->id,

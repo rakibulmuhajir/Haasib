@@ -162,6 +162,7 @@ class CreditCustomerController extends Controller
             'statement' => $statement['rows'],
             'openInvoices' => $openInvoices,
             'discounts' => $discounts,
+            'units' => $customerData->units()->orderBy('name')->get(['id', 'name', 'is_active']),
             'currency' => $companyModel->base_currency ?? 'PKR',
         ]);
     }

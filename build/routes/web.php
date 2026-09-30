@@ -172,6 +172,8 @@ Route::middleware(['auth'])->group(function () {
         // through - so registering PUT alone was what made every inline save return 405.
         Route::match(['put', 'patch'], '/{company}/customers/{customer}', [CustomerController::class, 'update'])->whereUuid('customer')->name('customers.update');
         Route::delete('/{company}/customers/{customer}', [CustomerController::class, 'destroy'])->whereUuid('customer')->name('customers.destroy');
+        Route::post('/{company}/customers/{customer}/units', [\App\Modules\Accounting\Http\Controllers\CustomerUnitController::class, 'store'])->whereUuid('customer')->name('customers.units.store');
+        Route::patch('/{company}/customers/{customer}/units/{unit}', [\App\Modules\Accounting\Http\Controllers\CustomerUnitController::class, 'update'])->whereUuid('customer')->whereUuid('unit')->name('customers.units.update');
 
         // Invoice routes (Accounting module)
         Route::get('/{company}/invoices', [InvoiceController::class, 'index'])->name('invoices.index');

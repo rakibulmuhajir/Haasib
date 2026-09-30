@@ -52,6 +52,7 @@ class DailyCloseCreditSaleService
             'credit_sales.*.customer_id' => 'required|uuid', // one customer may have several slips a day
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.reference' => 'nullable|string|max:100',
+            'credit_sales.*.unit_id' => 'nullable|uuid',
         ])->validate();
 
         $company = Company::whereKey($companyId)->firstOrFail();
@@ -176,6 +177,7 @@ class DailyCloseCreditSaleService
                 'draft' => true,
                 'notes' => "Credit portion of meter sales for {$date}. ".($row['reference'] ?? ''),
                 'reference' => $row['reference'] ?? null,
+                'unit_id' => $row['unit_id'] ?? null,
                 'line_items' => [['description' => "Meter sales on credit — {$date}", 'item_id' => $itemId, 'quantity' => $lineQuantity,
                     'unit_price' => $lineUnitPrice, 'tax_rate' => 0, 'discount_amount' => $discountAmount]],
             ], $user, true));

@@ -87,6 +87,7 @@ interface Invoice {
   due_date: string
   description?: string
   reference?: string
+  unit?: { id: string; name: string } | null
   payment_terms?: number
   notes?: string
   is_direct_delivery?: boolean
@@ -193,6 +194,7 @@ const documentDates = computed(() =>
       value: props.invoice.payment_terms ? `${props.invoice.payment_terms} days` : null,
     },
     { label: 'Reference', value: props.invoice.reference ?? null },
+    { label: 'Unit', value: props.invoice.unit?.name ?? null },
   ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
 )
 

@@ -184,6 +184,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
         Route::post('/{company}/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
         Route::post('/{company}/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
+        Route::post('/{company}/invoices/{invoice}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'invoice'])->name('invoices.correct');
 
         // Payment routes (Accounting module)
         Route::get('/{company}/payments', [PaymentController::class, 'index'])->name('payments.index');
@@ -191,6 +192,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/payments', [PaymentController::class, 'store'])->name('payments.store');
         Route::get('/{company}/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
         Route::post('/{company}/payments/{payment}/apply', [PaymentController::class, 'apply'])->name('payments.apply');
+        Route::post('/{company}/payments/{payment}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'payment'])->name('payments.correct');
         Route::get('/{company}/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
         Route::put('/{company}/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
         Route::delete('/{company}/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');

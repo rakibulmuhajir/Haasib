@@ -25,6 +25,9 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import DefinitionList from '@/components/DefinitionList.vue'
 import Explain from '@/components/Explain.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue'
+import CorrectionHistory from '../../components/CorrectionHistory.vue'
+import type { Correction } from '../../components/CorrectionHistory.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -42,6 +45,7 @@ import {
   Download,
   Edit,
   MoreHorizontal,
+  PencilLine,
   Send,
   Trash2,
 } from 'lucide-vue-next'
@@ -107,7 +111,12 @@ interface CompanyRef {
 const props = defineProps<{
   company: CompanyRef
   invoice: Invoice
+  canCorrect?: boolean
+  correctionCustomers?: { id: string; name: string }[]
+  corrections?: Correction[]
 }>()
+
+const correcting = ref(false)
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.company.name, href: `/${props.company.slug}` },
@@ -283,6 +292,10 @@ const voidInvoice = () => {
             <Edit class="mr-2 h-4 w-4" />
             Edit
           </DropdownMenuItem>
+          <DropdownMenuItem v-if="canCorrect && !['void', 'cancelled', 'reversed', 'draft'].includes(invoice.status)" @click="correcting = true">
+            <PencilLine class="mr-2 h-4 w-4" />
+            Correct
+          </DropdownMenuItem>
           <DropdownMenuItem @click="duplicateInvoice">
             <Copy class="mr-2 h-4 w-4" />
             Duplicate
@@ -385,6 +398,8 @@ const voidInvoice = () => {
           </CardContent>
         </Card>
 
+        <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
+
         <Card v-if="history.length" variant="detail">
           <CardHeader>
             <CardTitle>What happened when</CardTitle>
@@ -415,6 +430,17 @@ const voidInvoice = () => {
       cancel-text="Keep it"
       :loading="voiding"
       @confirm="voidInvoice"
+    />
+
+    <CorrectRecordDialog
+      v-if="canCorrect"
+      v-model:open="correcting"
+      kind="invoice"
+      :url="`/${company.slug}/invoices/${invoice.id}/correct`"
+      :number="invoice.invoice_number"
+      :total="Number(invoice.total_amount)"
+      :customer-id="invoice.customer?.id ?? null"
+      :customers="correctionCustomers ?? []"
     />
 
     <RelatedActions screen="invoice.show" :slug="company.slug" :subject="invoice" />

@@ -293,6 +293,11 @@ class PaymentController extends Controller
                     ->get(['id', 'invoice_number', 'invoice_date', 'balance'])
                 : [],
             'canApply' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_APPLY_CREDIT),
+            // Corrections: who it can be moved to, and what was corrected before.
+            'canCorrect' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_UPDATE),
+            'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'payment', $paymentRecord->id),
         ]);
     }
 

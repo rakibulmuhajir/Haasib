@@ -51,6 +51,9 @@ return [
     // Payment
     'payment.create' => \App\Modules\Accounting\Actions\Payment\CreateAction::class,
     'payment.apply_credit' => \App\Modules\Accounting\Actions\Payment\ApplyCreditAction::class,
+    'correction.invoice_customer' => \App\Modules\Accounting\Actions\Correction\InvoiceCustomerAction::class,
+    'correction.invoice_split' => \App\Modules\Accounting\Actions\Correction\InvoiceSplitAction::class,
+    'correction.payment_customer' => \App\Modules\Accounting\Actions\Correction\PaymentCustomerAction::class,
     'payment.list' => \App\Modules\Accounting\Actions\Payment\IndexAction::class,
     'payment.void' => \App\Modules\Accounting\Actions\Payment\VoidAction::class,
     'payment.update' => \App\Modules\Accounting\Actions\Payment\UpdateAction::class,

@@ -272,3 +272,113 @@ test('a supplier statement with no one picked lists every supplier by date, name
             ->has('statement.rows', 4)
         );
 });
+
+// ---- Corrections (CorrectionService): moving and splitting posted invoices and payments ----
+
+function correctionInvoice(array $f, $customer, float $amount, string $date = '2026-09-10'): Invoice
+{
+    $invoice = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('invoice.create', [
+        'customer' => $customer->id, 'currency' => 'PKR', 'date' => $date,
+        'line_items' => [['description' => 'Fuel', 'quantity' => 1, 'unit_price' => $amount, 'tax_rate' => 0]],
+    ], $f['user'], true));
+
+    return Invoice::findOrFail($invoice['data']['id']);
+}
+
+function correctionCustomer(array $f, string $name): Customer
+{
+    return Customer::create([
+        'company_id' => $f['company']->id, 'customer_number' => 'C-'.str()->random(6), 'name' => $name,
+        'base_currency' => 'PKR', 'ar_account_id' => $f['ar']->id, 'is_active' => true, 'created_by_user_id' => $f['user']->id,
+    ]);
+}
+
+function correct(array $f, string $command, array $params): array
+{
+    test()->actingAs($f['user']);
+
+    return app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch($command, $params, $f['user'], true));
+}
+
+function owes(Customer $customer): float
+{
+    $rows = app(CustomerStatementService::class)->statement($customer->fresh())['rows'];
+
+    return $rows ? round((float) end($rows)['balance'], 2) : 0.0;
+}
+
+test('moving an invoice to another customer takes the old customer\'s payment off it and leaves revenue alone', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $other = correctionCustomer($f, 'Real Buyer');
+    $invoice = correctionInvoice($f, $f['customer'], 1000);
+    correct($f, 'payment.create', [
+        'invoice' => $invoice->id, 'amount' => 400, 'method' => 'cash', 'date' => '2026-09-12',
+        'deposit_account_id' => $f['cash']->id, 'ar_account_id' => $f['ar']->id,
+    ]);
+    $revenueBefore = ledgerBalanceOf($f['revenue']);
+    $arBefore = ledgerBalanceOf($f['ar']);
+
+    $result = correct($f, 'correction.invoice_customer', ['invoice_id' => $invoice->id, 'customer_id' => $other->id, 'reason' => 'Wrong customer']);
+
+    expect($invoice->fresh()->customer_id)->toBe($other->id)
+        ->and((float) $invoice->fresh()->balance)->toBe(1000.0)
+        ->and(owes($other))->toBe(1000.0)
+        ->and(owes($f['customer']))->toBe(-400.0)          // their payment stays theirs, on account
+        ->and(ledgerBalanceOf($f['revenue']))->toBe($revenueBefore)
+        ->and(ledgerBalanceOf($f['ar']))->toBe($arBefore);
+    expect($result['data']['number'])->toBe('COR-00001');
+    expect(DB::table('acct.corrections')->where('company_id', $f['company']->id)->count())->toBe(1);
+});
+
+test('splitting an invoice gives each customer their share through a credit note and a new invoice', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $b = correctionCustomer($f, 'Second Trolley');
+    $invoice = correctionInvoice($f, $f['customer'], 1000);
+    $revenueBefore = ledgerBalanceOf($f['revenue']);
+
+    correct($f, 'correction.invoice_split', ['invoice_id' => $invoice->id, 'reason' => 'Two vehicles', 'shares' => [
+        ['customer_id' => $f['customer']->id, 'amount' => 700],
+        ['customer_id' => $b->id, 'amount' => 300],
+    ]]);
+
+    expect(owes($f['customer']))->toBe(700.0)
+        ->and(owes($b))->toBe(300.0)
+        ->and((float) $invoice->fresh()->total_amount)->toBe(1000.0)   // the original is never rewritten
+        ->and((float) $invoice->fresh()->balance)->toBe(700.0)
+        ->and(ledgerBalanceOf($f['revenue']))->toBe($revenueBefore);
+    $new = Invoice::where('customer_id', $b->id)->firstOrFail();
+    expect($new->invoice_date->toDateString())->toBe('2026-09-10');
+});
+
+test('moving a payment to the customer who paid it pays their oldest invoices, and a correction cannot be edited', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $payer = correctionCustomer($f, 'Actual Payer');
+    $mine = correctionInvoice($f, $f['customer'], 500);
+    $theirs1 = correctionInvoice($f, $payer, 300, '2026-09-05');
+    $theirs2 = correctionInvoice($f, $payer, 300, '2026-09-08');
+    $payment = correct($f, 'payment.create', [
+        'invoice' => $mine->id, 'amount' => 500, 'method' => 'cash', 'date' => '2026-09-12',
+        'deposit_account_id' => $f['cash']->id, 'ar_account_id' => $f['ar']->id,
+    ]);
+
+    correct($f, 'correction.payment_customer', ['payment_id' => $payment['data']['id'], 'customer_id' => $payer->id, 'reason' => 'Paid by the other one', 'apply_oldest_first' => true]);
+
+    expect((float) $mine->fresh()->balance)->toBe(500.0)
+        ->and((float) $theirs1->fresh()->balance)->toBe(0.0)
+        ->and((float) $theirs2->fresh()->balance)->toBe(100.0)
+        ->and(owes($payer))->toBe(100.0)
+        ->and(owes($f['customer']))->toBe(500.0);
+
+    expect(fn () => DB::table('acct.corrections')->update(['reason' => 'changed']))->toThrow(\Illuminate\Database\QueryException::class);
+});
+
+function ledgerBalanceOf(Account $account): float
+{
+    $row = DB::table('acct.journal_entries')->where('account_id', $account->id)
+        ->selectRaw('COALESCE(SUM(debit_amount),0) d, COALESCE(SUM(credit_amount),0) c')->first();
+
+    return round((float) $row->d - (float) $row->c, 2);
+}

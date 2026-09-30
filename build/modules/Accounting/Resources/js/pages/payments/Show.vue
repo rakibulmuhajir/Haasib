@@ -24,6 +24,9 @@ import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RelatedActions from '@/components/RelatedActions.vue';
+import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue';
+import CorrectionHistory from '../../components/CorrectionHistory.vue';
+import type { Correction } from '../../components/CorrectionHistory.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -37,8 +40,8 @@ import { formatMoneyText } from '@/lib/money';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { ArrowLeft, Edit, MoreHorizontal, PencilLine } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 import {
     allocationDisplayAmount as computeAllocationDisplayAmount,
     appliedAllocations as computeAppliedAllocations,
@@ -94,7 +97,12 @@ const props = defineProps<{
     payment: Payment;
     openInvoices?: Array<{ id: string; invoice_number: string; invoice_date: string; balance: number | string }>;
     canApply?: boolean;
+    canCorrect?: boolean;
+    correctionCustomers?: { id: string; name: string }[];
+    corrections?: Correction[];
 }>();
+
+const correcting = ref(false);
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     { title: 'Dashboard', href: '/dashboard' },
@@ -265,6 +273,10 @@ const summaryItems = computed(() => [
                         <Edit class="mr-2 h-4 w-4" />
                         Edit
                     </DropdownMenuItem>
+                    <DropdownMenuItem v-if="canCorrect" @click="correcting = true">
+                        <PencilLine class="mr-2 h-4 w-4" />
+                        Correct
+                    </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
         </template>
@@ -410,6 +422,21 @@ const summaryItems = computed(() => [
                 </div>
             </CardContent>
         </Card>
+
+        <div class="mt-6">
+            <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
+        </div>
+
+        <CorrectRecordDialog
+            v-if="canCorrect"
+            v-model:open="correcting"
+            kind="payment"
+            :url="`/${company.slug}/payments/${payment.id}/correct`"
+            :number="payment.payment_number"
+            :total="Number(payment.amount)"
+            :customer-id="payment.customer?.id ?? null"
+            :customers="correctionCustomers ?? []"
+        />
 
         <RelatedActions
             screen="payment.show"

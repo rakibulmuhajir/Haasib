@@ -172,6 +172,11 @@ class InvoiceController extends Controller
                 'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'invoice' => $invoiceRecord,
+            // Corrections: who it can be moved to, and what was corrected before.
+            'canCorrect' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::INVOICE_UPDATE),
+            'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'invoice', $invoiceRecord->id),
         ]);
     }
 

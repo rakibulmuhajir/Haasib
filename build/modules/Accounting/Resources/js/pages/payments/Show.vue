@@ -255,6 +255,11 @@ const summaryItems = computed(() => [
                 Back
             </Button>
 
+            <Button v-if="canCorrect" variant="outline" @click="correcting = true">
+                <PencilLine class="mr-2 h-4 w-4" />
+                Correct
+            </Button>
+
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline">
@@ -272,10 +277,6 @@ const summaryItems = computed(() => [
                     >
                         <Edit class="mr-2 h-4 w-4" />
                         Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem v-if="canCorrect" @click="correcting = true">
-                        <PencilLine class="mr-2 h-4 w-4" />
-                        Correct
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>

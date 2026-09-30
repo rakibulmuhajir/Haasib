@@ -343,7 +343,8 @@ const goBack = () => {
           </Button>
         </CardHeader>
         <CardContent class="p-0">
-          <LedgerRegister :data="tableData" :columns="columns">
+          <!-- Each row opens its invoice, payment or credit note (to view or correct it). -->
+          <LedgerRegister :data="tableData" :columns="columns" @row-click="(row) => row._raw.link && router.get(`/${companySlug}/${row._raw.link}`)">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
                 No activity yet

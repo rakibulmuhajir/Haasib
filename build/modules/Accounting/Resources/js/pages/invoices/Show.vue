@@ -295,6 +295,11 @@ const voidInvoice = () => {
         Back
       </Button>
 
+      <Button v-if="canCorrect && !['void', 'cancelled', 'reversed', 'draft'].includes(invoice.status)" variant="outline" @click="correcting = true">
+        <PencilLine class="mr-2 h-4 w-4" />
+        Correct
+      </Button>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline">
@@ -306,10 +311,6 @@ const voidInvoice = () => {
           <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${invoice.id}/edit`)">
             <Edit class="mr-2 h-4 w-4" />
             Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="canCorrect && !['void', 'cancelled', 'reversed', 'draft'].includes(invoice.status)" @click="correcting = true">
-            <PencilLine class="mr-2 h-4 w-4" />
-            Correct
           </DropdownMenuItem>
           <DropdownMenuItem @click="duplicateInvoice">
             <Copy class="mr-2 h-4 w-4" />

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import {
     ArrowLeft,
     Briefcase,
@@ -63,47 +64,28 @@ interface Employee {
 }
 
 interface Statement {
-    summary: {
-        salary_due: number;
-        salary_paid: number;
-        advance_given: number;
-        advance_recovered: number;
-        advance_outstanding: number;
-    };
-    payslips: Array<{
-        id: string;
-        date: string | null;
-        label: string;
-        gross_pay: number;
-        deductions: number;
-        net_pay: number;
-        status: string;
-        currency: string;
-    }>;
-    advances: Array<{
-        id: string;
-        date: string;
-        amount: number;
-        recovered: number;
-        outstanding: number;
-        status: string;
-        reason: string | null;
-        payment_method: string;
-    }>;
-    recoveries: Array<{
-        id: string;
-        date: string;
-        label: string;
-        amount: number;
-        recovery_type: string;
-    }>;
+    rows: Array<{ date: string; type: string; reference: string | null; description: string; money_in: number; money_out: number; balance: number; link: string | null }>;
+    opening_balance: number;
+    closing_balance: number;
+    from: string;
+    to: string;
+    totals: { salary: number; earned: number; advances: number; advance_count: number; repaid: number; deductions: number; paid: number };
 }
 
 const props = defineProps<{
     company: CompanyRef;
     employee: Employee;
     statement: Statement;
+    month: string;
 }>();
+
+const monthLabel = computed(() => new Date(`${props.month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
+const shiftMonth = (step: number) => {
+    const d = new Date(`${props.month}-01T00:00:00`);
+    d.setMonth(d.getMonth() + step);
+    router.get(`/${props.company.slug}/employees/${props.employee.id}`, { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }, { preserveScroll: true });
+};
+const statementCurrency = computed(() => props.employee.currency || props.company.base_currency || 'PKR');
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -337,189 +319,57 @@ const formatPayFrequency = (freq: string) => {
                     </CardContent>
                 </Card>
 
+                <!-- Their statement for the month: salary (expected until payroll runs) against advances and pay. -->
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Employee Statement</CardTitle>
+                    <CardHeader class="flex flex-row items-center justify-between gap-3 space-y-0">
+                        <CardTitle>Statement · {{ monthLabel }}</CardTitle>
+                        <div class="flex gap-1">
+                            <Button variant="outline" size="sm" aria-label="Previous month" @click="shiftMonth(-1)">‹</Button>
+                            <Button variant="outline" size="sm" aria-label="Next month" @click="shiftMonth(1)">›</Button>
+                        </div>
                     </CardHeader>
-                    <CardContent class="space-y-6">
-                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <CardContent class="space-y-4">
+                        <div class="grid gap-3 sm:grid-cols-4">
                             <div class="rounded-lg border p-3">
-                                <p class="text-xs text-muted-foreground">
-                                    Salary due
-                                </p>
-                                <p class="mt-1 font-semibold">
-                                    <MoneyText
-                                        :amount="statement.summary.salary_due"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
+                                <div class="text-xs text-muted-foreground">Salary</div>
+                                <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.salary" :currency="statementCurrency" :fraction-digits="0" /></div>
                             </div>
                             <div class="rounded-lg border p-3">
-                                <p class="text-xs text-muted-foreground">
-                                    Salary paid
-                                </p>
-                                <p class="mt-1 font-semibold">
-                                    <MoneyText
-                                        :amount="statement.summary.salary_paid"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
+                                <div class="text-xs text-muted-foreground">Advances · {{ statement.totals.advance_count }}</div>
+                                <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.advances - statement.totals.repaid" :currency="statementCurrency" :fraction-digits="0" /></div>
                             </div>
                             <div class="rounded-lg border p-3">
-                                <p class="text-xs text-muted-foreground">
-                                    Advances given
-                                </p>
-                                <p class="mt-1 font-semibold">
-                                    <MoneyText
-                                        :amount="statement.summary.advance_given"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
+                                <div class="text-xs text-muted-foreground">Salary paid</div>
+                                <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.paid" :currency="statementCurrency" :fraction-digits="0" /></div>
                             </div>
-                            <div class="rounded-lg border p-3">
-                                <p class="text-xs text-muted-foreground">
-                                    Recovered
-                                </p>
-                                <p class="mt-1 font-semibold">
-                                    <MoneyText
-                                        :amount="statement.summary.advance_recovered"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
-                            </div>
-                            <div class="rounded-lg border p-3">
-                                <p class="text-xs text-muted-foreground">
-                                    Advance balance
-                                </p>
-                                <p class="mt-1 font-semibold">
-                                    <MoneyText
-                                        :amount="statement.summary.advance_outstanding"
-                                        :currency="company.base_currency"
-                                    />
-                                </p>
+                            <div class="rounded-lg border p-3" :class="statement.closing_balance < 0 ? 'border-status-critical/40 bg-status-critical/10' : ''">
+                                <div class="text-xs text-muted-foreground">{{ statement.closing_balance < 0 ? 'They owe us' : 'We owe' }}</div>
+                                <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="Math.abs(statement.closing_balance)" :currency="statementCurrency" :fraction-digits="0" /></div>
                             </div>
                         </div>
-
-                        <div class="grid gap-6 lg:grid-cols-3">
-                            <div>
-                                <h3 class="mb-3 text-sm font-medium">
-                                    Recent Payslips
-                                </h3>
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="payslip in statement.payslips"
-                                        :key="payslip.id"
-                                        class="cursor-pointer rounded-lg border p-3 text-sm hover:bg-muted/50"
-                                        @click="
-                                            router.get(
-                                                `/${company.slug}/payslips/${payslip.id}`,
-                                            )
-                                        "
-                                    >
-                                        <div
-                                            class="flex items-center justify-between gap-3"
-                                        >
-                                            <span class="font-medium">{{
-                                                payslip.label
-                                            }}</span>
-                                            <StatusBadge :status="payslip.status" />
-                                        </div>
-                                        <div
-                                            class="mt-2 flex items-center justify-between text-muted-foreground"
-                                        >
-                                            <span>{{
-                                                formatDate(payslip.date)
-                                            }}</span>
-                                            <MoneyText
-                                                :amount="payslip.net_pay"
-                                                :currency="payslip.currency"
-                                            />
-                                        </div>
-                                    </div>
-                                    <p
-                                        v-if="statement.payslips.length === 0"
-                                        class="text-sm text-muted-foreground"
-                                    >
-                                        No payslips yet.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 class="mb-3 text-sm font-medium">
-                                    Salary Advances
-                                </h3>
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="advance in statement.advances"
-                                        :key="advance.id"
-                                        class="rounded-lg border p-3 text-sm"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between gap-3"
-                                        >
-                                            <span class="font-medium"><MoneyText
-                                                :amount="advance.amount"
-                                                :currency="company.base_currency"
-                                            /></span>
-                                            <StatusBadge :status="advance.status" />
-                                        </div>
-                                        <p class="mt-1 text-muted-foreground">
-                                            {{ formatDate(advance.date) }} ·
-                                            {{ advance.payment_method }}
-                                        </p>
-                                        <p class="mt-1 text-muted-foreground">
-                                            Remaining
-                                            <MoneyText
-                                                :amount="advance.outstanding"
-                                                :currency="company.base_currency"
-                                            />
-                                        </p>
-                                    </div>
-                                    <p
-                                        v-if="statement.advances.length === 0"
-                                        class="text-sm text-muted-foreground"
-                                    >
-                                        No advances yet.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 class="mb-3 text-sm font-medium">
-                                    Advance Recoveries
-                                </h3>
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="recovery in statement.recoveries"
-                                        :key="recovery.id"
-                                        class="rounded-lg border p-3 text-sm"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between gap-3"
-                                        >
-                                            <span class="font-medium">{{
-                                                recovery.label
-                                            }}</span>
-                                            <MoneyText
-                                                :amount="recovery.amount"
-                                                :currency="company.base_currency"
-                                            />
-                                        </div>
-                                        <p class="mt-1 text-muted-foreground">
-                                            {{ formatDate(recovery.date) }} ·
-                                            {{ recovery.recovery_type }}
-                                        </p>
-                                    </div>
-                                    <p
-                                        v-if="statement.recoveries.length === 0"
-                                        class="text-sm text-muted-foreground"
-                                    >
-                                        No recoveries yet.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                        <table class="w-full text-sm">
+                            <thead class="border-b text-left text-xs text-muted-foreground">
+                                <tr>
+                                    <th class="py-1.5">Date</th>
+                                    <th class="py-1.5">What</th>
+                                    <th class="py-1.5 text-right">Earned</th>
+                                    <th class="py-1.5 text-right">Taken / paid</th>
+                                    <th class="py-1.5 text-right">We owe</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, i) in statement.rows" :key="i" class="border-b last:border-0" :class="['opening_balance', 'closing_balance'].includes(row.type) ? 'font-medium' : ''">
+                                    <td class="py-1.5 tabular-nums">{{ formatDate(row.date) }}</td>
+                                    <td class="py-1.5">
+                                        <Link v-if="row.link" :href="`/${company.slug}/${row.link}`" class="text-primary underline-offset-2 hover:underline">{{ row.description }}</Link>
+                                        <span v-else>{{ row.description }}</span>
+                                    </td>
+                                    <td class="py-1.5 text-right tabular-nums"><MoneyText :amount="row.money_in" :currency="statementCurrency" :show-currency="false" :fraction-digits="0" dash-zero /></td>
+                                    <td class="py-1.5 text-right tabular-nums"><MoneyText :amount="row.money_out" :currency="statementCurrency" :show-currency="false" :fraction-digits="0" dash-zero /></td>
+                                    <td class="py-1.5 text-right tabular-nums"><MoneyText :amount="row.balance" :currency="statementCurrency" :show-currency="false" :fraction-digits="0" /></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </CardContent>
                 </Card>
 

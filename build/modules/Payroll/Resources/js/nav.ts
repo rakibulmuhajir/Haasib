@@ -1,12 +1,8 @@
 import type { ModuleNavConfig } from '@/navigation/types';
-import {
-    Calendar,
-    FileCheck,
-    LayoutDashboard,
-    UserCog,
-    WalletCards,
-} from 'lucide-vue-next';
+import { Banknote, UserCog, WalletCards } from 'lucide-vue-next';
 
+// Three places: the people, the month's pay, and advances. Payroll periods, the payslips list and
+// the salary report are all the Payroll page now; pay setup lives in Settings > Payroll.
 export const payrollNav: ModuleNavConfig = {
     id: 'payroll',
     label: 'Payroll',
@@ -19,31 +15,9 @@ export const payrollNav: ModuleNavConfig = {
             {
                 label: t('payroll'),
                 items: [
-                    {
-                        title: 'Payroll Overview',
-                        href: `/${slug}/payroll`,
-                        icon: LayoutDashboard,
-                    },
-                    {
-                        title: t('employees'),
-                        href: `/${slug}/employees`,
-                        icon: UserCog,
-                    },
-                    {
-                        title: t('payrollPeriods'),
-                        href: `/${slug}/payroll-periods`,
-                        icon: Calendar,
-                    },
-                    {
-                        title: t('payslips'),
-                        href: `/${slug}/payslips`,
-                        icon: FileCheck,
-                    },
-                    {
-                        title: 'Salary Advances',
-                        href: `/${slug}/salary-advances`,
-                        icon: WalletCards,
-                    },
+                    { title: t('employees'), href: `/${slug}/employees`, icon: UserCog },
+                    { title: t('payroll'), href: `/${slug}/payroll`, icon: Banknote },
+                    { title: 'Advances', href: `/${slug}/salary-advances`, icon: WalletCards },
                 ],
             },
         ];

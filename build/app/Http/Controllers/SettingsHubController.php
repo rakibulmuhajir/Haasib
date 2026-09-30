@@ -50,6 +50,12 @@ class SettingsHubController extends Controller
                 $item('Tax', 'Tax registration and rates', 'tax/settings', $can(Permissions::TAX_VIEW)),
                 $item('Posting templates', 'How documents post to the books', 'posting-templates', $can(Permissions::ACCOUNT_UPDATE)),
             ]),
+            $company->isModuleEnabled('payroll') ? $section('Payroll', [
+                $item('Earnings', 'Kinds of pay: overtime, bonus, allowances', 'earning-types', $can(Permissions::COMPANY_UPDATE)),
+                $item('Deductions', 'Kinds of deduction: tax, fines, loan recovery', 'deduction-types', $can(Permissions::COMPANY_UPDATE)),
+                $item('Leave types', 'Kinds of leave employees can take', 'leave-types', $can(Permissions::COMPANY_UPDATE)),
+                $item('Leave requests', 'Leave asked for and approved', 'leave-requests', $can(Permissions::COMPANY_UPDATE)),
+            ]) : null,
             $fuel ? $section('Help', [
                 $item('Help guide', 'How the station works in Haasib', 'fuel/guide'),
             ]) : null,

@@ -17,92 +17,73 @@ use Inertia\Response;
 
 class PayrollDashboardController extends Controller
 {
-    public function index(PayrollPostingService $postingService): Response
+    /**
+     * Payroll, one month on one page: every active employee with their salary, the advances they
+     * took that month, and that month's payslip (deductions, net, approved / paid), plus the
+     * month's actions -- run payroll, approve, pay. It replaced the payroll overview, the periods
+     * list, the payslips list and the salary report, which showed the same month four ways.
+     */
+    public function index(\Illuminate\Http\Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
-        $monthStart = now()->startOfMonth()->toDateString();
-        $monthEnd = now()->endOfMonth()->toDateString();
+        $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month')) ? $request->query('month') : now()->format('Y-m');
+        $start = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
+        $monthStart = $start->toDateString();
+        $monthEnd = $start->copy()->endOfMonth()->toDateString();
 
-        $currentPeriod = PayrollPeriod::where('company_id', $company->id)
-            ->whereDate('period_start', $monthStart)
-            ->whereDate('period_end', $monthEnd)
-            ->first();
+        $period = PayrollPeriod::where('company_id', $company->id)
+            ->whereDate('period_start', $monthStart)->whereDate('period_end', $monthEnd)->first();
+        $payslips = $period
+            ? Payslip::where('company_id', $company->id)->where('payroll_period_id', $period->id)
+                ->whereNotIn('status', ['voided', 'void', 'cancelled'])->get()->keyBy('employee_id')
+            : collect();
+        $advances = SalaryAdvance::where('company_id', $company->id)->where('status', '!=', 'cancelled')
+            ->whereBetween('advance_date', [$monthStart, $monthEnd])
+            ->selectRaw('employee_id, SUM(amount) as total, COUNT(*) as n')->groupBy('employee_id')->get()->keyBy('employee_id');
 
-        $currentPeriod ??= PayrollPeriod::where('company_id', $company->id)
-            ->whereIn('status', ['open', 'processing'])
-            ->orderByDesc('period_start')
-            ->first();
+        $employees = Employee::where('company_id', $company->id)
+            ->where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $payslips->keys()))
+            ->orderBy('first_name')->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'employee_number', 'base_salary', 'currency', 'is_active']);
 
-        $payslipBase = Payslip::where('company_id', $company->id);
-        $advanceBase = SalaryAdvance::where('company_id', $company->id);
+        $rows = $employees->map(function (Employee $employee) use ($payslips, $advances) {
+            $payslip = $payslips[$employee->id] ?? null;
 
-        $recentPayslips = Payslip::where('company_id', $company->id)
-            ->with([
-                'employee:id,first_name,last_name,employee_number',
-                'payrollPeriod:id,period_start,period_end',
-            ])
-            ->orderByDesc('created_at')
-            ->limit(8)
-            ->get()
-            ->map(fn (Payslip $payslip) => [
-                'id' => $payslip->id,
-                'payslip_number' => $payslip->payslip_number,
-                'employee_name' => trim($payslip->employee->first_name.' '.$payslip->employee->last_name),
-                'period' => [
-                    'start' => $payslip->payrollPeriod?->period_start,
-                    'end' => $payslip->payrollPeriod?->period_end,
-                ],
-                'net_pay' => (float) $payslip->net_pay,
-                'currency' => $payslip->currency,
-                'status' => $payslip->status,
-            ]);
-
-        $employeesWithAdvances = Employee::where('company_id', $company->id)
-            ->whereHas('salaryAdvances', fn ($query) => $query->whereIn('status', ['pending', 'partially_recovered']))
-            ->withSum(['salaryAdvances as outstanding_advances' => fn ($query) => $query->whereIn('status', ['pending', 'partially_recovered'])], 'amount_outstanding')
-            ->orderByDesc('outstanding_advances')
-            ->limit(8)
-            ->get(['id', 'first_name', 'last_name', 'employee_number'])
-            ->map(fn (Employee $employee) => [
+            return [
                 'id' => $employee->id,
                 'name' => trim($employee->first_name.' '.$employee->last_name),
                 'employee_number' => $employee->employee_number,
-                'outstanding_advances' => (float) $employee->outstanding_advances,
-            ]);
+                'salary' => (float) $employee->base_salary,
+                'advances' => round((float) ($advances[$employee->id]->total ?? 0), 2),
+                'advance_count' => (int) ($advances[$employee->id]->n ?? 0),
+                'payslip' => $payslip ? [
+                    'id' => $payslip->id,
+                    'number' => $payslip->payslip_number,
+                    'gross' => (float) $payslip->gross_pay,
+                    'deductions' => (float) $payslip->total_deductions,
+                    'net' => (float) $payslip->net_pay,
+                    'status' => $payslip->status,
+                    'paid_at' => $payslip->paid_at?->toDateString(),
+                ] : null,
+            ];
+        })->values();
+
+        $count = fn (string $status) => $payslips->where('status', $status)->count();
 
         return Inertia::render('Payroll/Dashboard/Index', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
+            'company' => ['id' => $company->id, 'name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'month' => $month,
+            'period' => $period ? ['id' => $period->id, 'status' => $period->status] : null,
+            'rows' => $rows,
+            'counts' => [
+                'employees' => $rows->count(),
+                'payslips' => $payslips->count(),
+                'draft' => $count('draft'),
+                'approved' => $count('approved'),
+                'paid' => $count('paid'),
             ],
-            'currentPeriod' => $currentPeriod ? [
-                'id' => $currentPeriod->id,
-                'period_start' => $currentPeriod->period_start,
-                'period_end' => $currentPeriod->period_end,
-                'payment_date' => $currentPeriod->payment_date,
-                'status' => $currentPeriod->status,
-            ] : null,
-            'summary' => [
-                'active_employees' => Employee::where('company_id', $company->id)->where('is_active', true)->where('employment_status', 'active')->count(),
-                'draft_payslips' => (clone $payslipBase)->where('status', 'draft')->count(),
-                'approved_unpaid_count' => (clone $payslipBase)->where('status', 'approved')->count(),
-                'approved_unpaid_amount' => (float) (clone $payslipBase)->where('status', 'approved')->sum('base_net_pay'),
-                'paid_this_month' => (float) (clone $payslipBase)->where('status', 'paid')->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('base_net_pay'),
-                'salary_expense_this_month' => (float) (clone $payslipBase)->whereIn('status', ['approved', 'paid'])->whereMonth('approved_at', now()->month)->whereYear('approved_at', now()->year)->sum('base_gross_pay'),
-                'outstanding_advances' => (float) (clone $advanceBase)->whereIn('status', ['pending', 'partially_recovered'])->sum('amount_outstanding'),
-                'recovered_this_month' => (float) DB::table('pay.salary_advance_recoveries')
-                    ->where('company_id', $company->id)
-                    ->whereMonth('recovery_date', now()->month)
-                    ->whereYear('recovery_date', now()->year)
-                    ->sum('amount'),
-            ],
-            'accounts' => $postingService->ensureDefaultPayrollAccounts($company->id),
-            'recentPayslips' => $recentPayslips,
-            'employeesWithAdvances' => $employeesWithAdvances,
         ]);
     }
 

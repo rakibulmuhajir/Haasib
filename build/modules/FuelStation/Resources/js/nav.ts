@@ -47,7 +47,7 @@ export const fuelStationNav: ModuleNavConfig = {
       { label: 'Team & Partners', items: [
         ...item('employees', 'Employees', '/employees', UserCog, context.isPayrollEnabled),
         ...item('payroll', 'Payroll', '/payroll', Banknote, context.isPayrollEnabled),
-        ...item('employees', 'Salary Advances', '/salary-advances', HandCoins, context.isPayrollEnabled),
+        ...item('employees', 'Advances', '/salary-advances', HandCoins, context.isPayrollEnabled),
         ...item('partners', 'Partners', '/partners', UsersRound),
         ...item('investors', 'Investors', '/fuel/investors', UsersRound, fuelNavigation?.hasInvestors === true),
       ] },
@@ -63,7 +63,6 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
         ...item('journals', 'Journal Entries', '/journals', BookOpen),
         ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
-        ...item('payroll', 'Salary Report', '/payroll/reports/salary', Banknote, context.isPayrollEnabled),
       ] },
       { label: 'Banking', items: [
         ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),

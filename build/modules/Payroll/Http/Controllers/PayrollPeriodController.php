@@ -12,37 +12,16 @@ use Inertia\Response;
 
 class PayrollPeriodController extends Controller
 {
-    public function index(): Response
+    /** Payroll months live on the Payroll page now. */
+    public function index(): \Illuminate\Http\RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
-
-        $periods = PayrollPeriod::where('company_id', $company->id)
-            ->withCount('payslips')
-            ->orderByDesc('period_start')
-            ->paginate(20);
-
-        return Inertia::render('Payroll/Periods/Index', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-            ],
-            'periods' => $periods,
-            'filters' => request()->only(['search', 'status']),
-        ]);
+        return redirect()->route('payroll.index', ['company' => app(\App\Services\CurrentCompany::class)->get()->slug]);
     }
 
-    public function create(): Response
+    /** A month is started with Run payroll on the Payroll page. */
+    public function create(): \Illuminate\Http\RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
-
-        return Inertia::render('Payroll/Periods/Create', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-            ],
-        ]);
+        return redirect()->route('payroll.index', ['company' => app(\App\Services\CurrentCompany::class)->get()->slug]);
     }
 
     public function store(StorePayrollPeriodRequest $request): RedirectResponse
@@ -59,30 +38,13 @@ class PayrollPeriodController extends Controller
             ->with('success', 'Payroll period created successfully.');
     }
 
-    public function show(string $companySlug, string $periodId): Response
+    /** A payroll month opens on the Payroll page at that month. */
+    public function show(string $companySlug, string $periodId): \Illuminate\Http\RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
+        $company = app(\App\Services\CurrentCompany::class)->get();
+        $period = PayrollPeriod::where('company_id', $company->id)->findOrFail($periodId);
 
-        $period = PayrollPeriod::where('company_id', $company->id)
-            ->with(['payslips' => function ($q) {
-                $q->with('employee:id,first_name,last_name,employee_number')
-                    ->orderBy('payslip_number');
-            }])
-            ->findOrFail($periodId);
-
-        $period->setAttribute('total_gross', round((float) $period->payslips->sum('base_gross_pay'), 2));
-        $period->setAttribute('total_net', round((float) $period->payslips->sum('base_net_pay'), 2));
-        $period->setAttribute('currency', $company->base_currency);
-
-        return Inertia::render('Payroll/Periods/Show', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
-            ],
-            'period' => $period,
-        ]);
+        return redirect()->route('payroll.index', ['company' => $company->slug, 'month' => $period->period_start->format('Y-m')]);
     }
 
     public function close(string $companySlug, string $periodId): RedirectResponse

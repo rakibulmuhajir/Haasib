@@ -107,7 +107,10 @@ const currency = computed(() => currencySymbol(props.currency));
 
 const search = ref('');
 const statusFilter = ref('all');
-const employeeFilter = ref('all');
+// ?employee_id= and ?month= preset the filters (the Payroll page links here that way).
+const urlParams = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
+const employeeFilter = ref(urlParams.get('employee_id') || 'all');
+const monthFilter = ref(urlParams.get('month') || '');
 
 const advanceForm = useForm({
     employee_id: '',
@@ -150,6 +153,10 @@ const filteredAdvances = computed(() => {
             employeeFilter.value !== 'all' &&
             adv.employee_id !== employeeFilter.value
         )
+            return false;
+
+        // Month filter
+        if (monthFilter.value && !adv.advance_date.startsWith(monthFilter.value))
             return false;
 
         // Search filter
@@ -528,6 +535,8 @@ const recoveryPercentage = computed(() => {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
+
+                        <Input v-model="monthFilter" type="month" class="w-full sm:w-[150px]" aria-label="Month" />
 
                         <Select v-model="statusFilter">
                             <SelectTrigger class="w-full sm:w-[150px]">

@@ -50,52 +50,10 @@ class PayslipController extends Controller
             ->toArray();
     }
 
-    public function index(Request $request): Response
+    /** Payslips are listed by month on the Payroll page. */
+    public function index(Request $request): \Illuminate\Http\RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
-        $this->setPayrollContext($company->id);
-
-        $payslips = Payslip::where('company_id', $company->id)
-            ->with([
-                'employee:id,first_name,last_name,employee_number',
-                'payrollPeriod:id,period_start,period_end',
-            ])
-            ->when($request->filled('employee_id'), fn ($query) => $query->where('employee_id', $request->query('employee_id')))
-            ->when($request->filled('status') && $request->query('status') !== 'all', fn ($query) => $query->where('status', $request->query('status')))
-            ->when($request->filled('period_id'), fn ($query) => $query->where('payroll_period_id', $request->query('period_id')))
-            ->when($request->filled('start_date'), function ($query) use ($request) {
-                $query->whereHas('payrollPeriod', fn ($periodQuery) => $periodQuery->whereDate('period_start', '>=', $request->query('start_date')));
-            })
-            ->when($request->filled('end_date'), function ($query) use ($request) {
-                $query->whereHas('payrollPeriod', fn ($periodQuery) => $periodQuery->whereDate('period_end', '<=', $request->query('end_date')));
-            })
-            ->when($request->filled('search'), function ($query) use ($request) {
-                $term = $request->query('search');
-                $query->where(function ($searchQuery) use ($term) {
-                    $searchQuery->where('payslip_number', 'ilike', "%{$term}%")
-                        ->orWhereHas('employee', function ($employeeQuery) use ($term) {
-                            $employeeQuery->where('first_name', 'ilike', "%{$term}%")
-                                ->orWhere('last_name', 'ilike', "%{$term}%")
-                                ->orWhere('employee_number', 'ilike', "%{$term}%");
-                        });
-                });
-            })
-            ->orderByDesc('created_at')
-            ->paginate(20)
-            ->withQueryString();
-
-        return Inertia::render('Payroll/Payslips/Index', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
-            ],
-            'payslips' => $payslips,
-            'filters' => $request->only(['search', 'status', 'period_id', 'employee_id', 'start_date', 'end_date']),
-            'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
-            'paymentAccounts' => $this->paymentAccountOptions($company->id),
-        ]);
+        return redirect()->route('payroll.index', ['company' => app(CurrentCompany::class)->get()->slug]);
     }
 
     public function create(): Response

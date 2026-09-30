@@ -6,9 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Http\Requests\StoreEmployeeRequest;
 use App\Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
 use App\Modules\Payroll\Models\Employee;
-use App\Modules\Payroll\Models\Payslip;
-use App\Modules\Payroll\Models\SalaryAdvance;
-use App\Modules\Payroll\Models\SalaryAdvanceRecovery;
 use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -121,57 +118,11 @@ class EmployeeController extends Controller
             ->with(['manager:id,first_name,last_name', 'directReports:id,first_name,last_name,employee_number,position'])
             ->findOrFail($employeeId);
 
-        $payslips = Payslip::where('company_id', $company->id)
-            ->where('employee_id', $employee->id)
-            ->with('payrollPeriod:id,period_start,period_end,payment_date')
-            ->orderByDesc('created_at')
-            ->limit(12)
-            ->get()
-            ->map(fn (Payslip $payslip) => [
-                'id' => $payslip->id,
-                // Earned at the end of its month; payment_date is internal and not a pay date.
-                'date' => $payslip->payrollPeriod?->period_end,
-                'label' => $payslip->payslip_number,
-                'type' => 'payslip',
-                'gross_pay' => (float) $payslip->gross_pay,
-                'deductions' => (float) $payslip->total_deductions,
-                'net_pay' => (float) $payslip->net_pay,
-                'status' => $payslip->status,
-                'currency' => $payslip->currency,
-            ]);
-
-        $advances = SalaryAdvance::where('company_id', $company->id)
-            ->where('employee_id', $employee->id)
-            ->orderByDesc('advance_date')
-            ->limit(12)
-            ->get()
-            ->map(fn (SalaryAdvance $advance) => [
-                'id' => $advance->id,
-                'date' => $advance->advance_date,
-                'label' => 'Advance',
-                'type' => 'advance',
-                'amount' => (float) $advance->amount,
-                'recovered' => (float) $advance->amount_recovered,
-                'outstanding' => (float) $advance->amount_outstanding,
-                'status' => $advance->status,
-                'reason' => $advance->reason,
-                'payment_method' => $advance->payment_method,
-            ]);
-
-        $recoveries = SalaryAdvanceRecovery::where('company_id', $company->id)
-            ->whereHas('salaryAdvance', fn ($query) => $query->where('employee_id', $employee->id))
-            ->with('payslip:id,payslip_number')
-            ->orderByDesc('recovery_date')
-            ->limit(12)
-            ->get()
-            ->map(fn (SalaryAdvanceRecovery $recovery) => [
-                'id' => $recovery->id,
-                'date' => $recovery->recovery_date,
-                'label' => $recovery->payslip?->payslip_number ?? 'Recovery',
-                'type' => 'recovery',
-                'amount' => (float) $recovery->amount,
-                'recovery_type' => $recovery->recovery_type,
-            ]);
+        // Their statement for a month: salary (expected until payroll runs), advances, payments.
+        $month = preg_match('/^\d{4}-\d{2}$/', (string) request()->query('month')) ? request()->query('month') : now()->format('Y-m');
+        $monthStart = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $month.'-01');
+        $statement = app(\App\Modules\Payroll\Services\EmployeeStatementService::class)
+            ->statement($employee, $monthStart->toDateString(), $monthStart->copy()->endOfMonth()->toDateString());
 
         return Inertia::render('Payroll/Employees/Show', [
             'company' => [
@@ -181,18 +132,8 @@ class EmployeeController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'employee' => $employee,
-            'statement' => [
-                'summary' => [
-                    'salary_due' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'approved')->sum('base_net_pay'),
-                    'salary_paid' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'paid')->sum('base_net_pay'),
-                    'advance_given' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->sum('amount'),
-                    'advance_recovered' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->sum('amount_recovered'),
-                    'advance_outstanding' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->whereIn('status', ['pending', 'partially_recovered'])->sum('amount_outstanding'),
-                ],
-                'payslips' => $payslips,
-                'advances' => $advances,
-                'recoveries' => $recoveries,
-            ],
+            'month' => $month,
+            'statement' => $statement,
         ]);
     }
 

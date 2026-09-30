@@ -21,7 +21,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
 
-type Kind = 'bank' | 'customer' | 'supplier' | 'amanat'
+type Kind = 'bank' | 'customer' | 'supplier' | 'amanat' | 'employee'
 
 type Row = {
   date: string | null
@@ -40,7 +40,7 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; from: string; to: string }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[] }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -50,6 +50,8 @@ const props = defineProps<{
     to: string
     account?: string | null
     party?: string | null
+    // Employee statements: the period's totals, for the summary above the rows.
+    totals?: { salary: number; earned: number; advances: number; advance_count: number; repaid: number; deductions: number; paid: number }
   }
 }>()
 
@@ -82,6 +84,9 @@ const currentOptions = computed<{ id: string; label: string; sublabel?: string }
   }
   if (kind.value === 'customer') {
     return props.options.customer.map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
+  }
+  if (kind.value === 'employee') {
+    return (props.options.employee ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number ?? undefined }))
   }
   if (kind.value === 'amanat') {
     return (props.options.amanat ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
@@ -122,6 +127,7 @@ const partyLabel = computed(() => {
   if (kind.value === 'bank') return 'Account'
   if (kind.value === 'customer') return 'Customer'
   if (kind.value === 'amanat') return 'Holder'
+  if (kind.value === 'employee') return 'Employee'
   return 'Supplier'
 })
 
@@ -163,6 +169,7 @@ const statementTitle = computed(() => props.statement.account || props.statement
               <TabsTrigger value="customer">Customer</TabsTrigger>
               <TabsTrigger value="supplier">Supplier</TabsTrigger>
               <TabsTrigger v-if="(options.amanat ?? []).length > 0" value="amanat">Amanat</TabsTrigger>
+              <TabsTrigger v-if="(options.employee ?? []).length > 0" value="employee">Employee</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -207,6 +214,29 @@ const statementTitle = computed(() => props.statement.account || props.statement
           </div>
         </CardContent>
       </Card>
+
+      <div v-if="kind === 'employee' && statement.totals" class="grid gap-3 sm:grid-cols-5">
+        <div class="rounded-lg border p-3">
+          <div class="text-xs text-muted-foreground">Monthly salary</div>
+          <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.salary" :currency="currency" :fraction-digits="0" /></div>
+        </div>
+        <div class="rounded-lg border p-3">
+          <div class="text-xs text-muted-foreground">Earned</div>
+          <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.earned - statement.totals.deductions" :currency="currency" :fraction-digits="0" /></div>
+        </div>
+        <div class="rounded-lg border p-3">
+          <div class="text-xs text-muted-foreground">Advances · {{ statement.totals.advance_count }}</div>
+          <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.advances - statement.totals.repaid" :currency="currency" :fraction-digits="0" /></div>
+        </div>
+        <div class="rounded-lg border p-3">
+          <div class="text-xs text-muted-foreground">Salary paid</div>
+          <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="statement.totals.paid" :currency="currency" :fraction-digits="0" /></div>
+        </div>
+        <div class="rounded-lg border p-3" :class="statement.closing_balance < 0 ? 'border-status-critical/40 bg-status-critical/10' : ''">
+          <div class="text-xs text-muted-foreground">{{ statement.closing_balance < 0 ? 'They owe us' : 'We owe' }}</div>
+          <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="Math.abs(statement.closing_balance)" :currency="currency" :fraction-digits="0" /></div>
+        </div>
+      </div>
 
       <LedgerRegister
         :data="statement.rows"

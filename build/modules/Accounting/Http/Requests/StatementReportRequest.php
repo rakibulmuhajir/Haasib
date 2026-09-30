@@ -26,7 +26,7 @@ class StatementReportRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'kind' => ['required', Rule::in(['bank', 'customer', 'supplier', 'amanat'])],
+            'kind' => ['required', Rule::in(['bank', 'customer', 'supplier', 'amanat', 'employee'])],
             'id' => ['nullable', 'uuid'],
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],

@@ -158,6 +158,13 @@ const formatPayFrequency = (freq: string) => {
         :breadcrumbs="breadcrumbs"
     >
         <template #actions>
+            <!-- Salary earned against advances taken and salary paid, with a running balance. -->
+            <Button
+                variant="outline"
+                @click="router.get(`/${company.slug}/reports/statements`, { kind: 'employee', id: employee.id })"
+            >
+                Statement
+            </Button>
             <Button
                 variant="outline"
                 @click="router.get(`/${company.slug}/employees`)"

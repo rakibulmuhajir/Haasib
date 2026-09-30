@@ -56,6 +56,14 @@ class StatementReportController extends Controller
             ->values();
         $holders = $allCustomers->filter(fn ($c) => $holderIds->has($c->id))->values();
 
+        // Employees, when payroll is on: salary earned against advances and salary paid.
+        $employees = $company->isModuleEnabled('payroll')
+            ? DB::table('pay.employees')->where('company_id', $company->id)->where('is_active', true)
+                ->orderBy('first_name')->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name', 'employee_number'])
+                ->map(fn ($e) => ['id' => $e->id, 'name' => trim($e->first_name.' '.$e->last_name), 'customer_number' => $e->employee_number])
+            : collect();
+
         $vendors = Vendor::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -65,6 +73,7 @@ class StatementReportController extends Controller
             'customer' => $this->customerStatement($customers, $id, $from, $to),
             'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
             'amanat' => $this->amanatStatement($holders, $id, $from, $to),
+            'employee' => $this->employeeStatement($employees, $id, $from, $to),
             default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
         };
 
@@ -81,6 +90,7 @@ class StatementReportController extends Controller
                 'customer' => $customers,
                 'supplier' => $vendors,
                 'amanat' => $holders,
+                'employee' => $employees->values(),
             ],
             'columns' => $columns,
             'statement' => $statement,
@@ -141,6 +151,20 @@ class StatementReportController extends Controller
             ['money_in' => 'Invoiced', 'money_out' => 'Received', 'balance' => 'Owes'],
             $customer->id,
         ];
+    }
+
+    private function employeeStatement($employees, ?string $id, string $from, string $to): array
+    {
+        $pick = $id ? $employees->firstWhere('id', $id) : null;
+        $pick ??= $employees->first();
+        $employee = $pick ? \App\Modules\Payroll\Models\Employee::find($pick['id']) : null;
+        $columns = ['money_in' => 'Earned', 'money_out' => 'Taken / paid', 'balance' => 'We owe'];
+
+        if (! $employee) {
+            return [['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null], $columns, null];
+        }
+
+        return [app(\App\Modules\Payroll\Services\EmployeeStatementService::class)->statement($employee, $from, $to), $columns, $employee->id];
     }
 
     private function amanatStatement($holders, ?string $id, string $from, string $to): array

@@ -258,8 +258,8 @@ class ConsolidatedInvoiceService
             'bill_to' => json_decode($doc->bill_to, true),
             'billed_by' => json_decode($doc->billed_by, true),
             'lines' => $lines,
-            // Reference and the station's invoice no. print only when something is in them.
-            'show_reference' => collect($lines)->contains(fn ($l) => ($l['reference'] ?? '') !== ''),
+            // Reference always prints; the station's invoice no. only when something is in it.
+            'show_reference' => true,
             'show_physical' => collect($lines)->contains(fn ($l) => ($l['physical_invoice'] ?? '') !== ''),
             'total' => (float) $doc->total,
             'currency' => $doc->currency,

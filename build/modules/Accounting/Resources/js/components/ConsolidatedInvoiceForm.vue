@@ -62,9 +62,9 @@ const form = useForm({
 })
 const picked = ref<Record<string, boolean>>({})
 
-// Start from the customer, the company's signer and every line (all unpaid) whenever the list changes.
+// Start from the customer and the company's signer, nothing ticked: the user picks what to bill.
 watch(() => [props.rows, props.billTo, props.billedBy], () => {
-  picked.value = Object.fromEntries(props.rows.map((r) => [r.key, true]))
+  picked.value = Object.fromEntries(props.rows.map((r) => [r.key, false]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
   form.fills = Object.fromEntries(props.rows.map((r) => [r.key, {}]))

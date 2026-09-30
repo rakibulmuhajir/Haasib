@@ -295,10 +295,11 @@ class DailyCloseCreditSaleService
      */
     private function keptInvoiceDetail(Company $company, int $index, array $row): array
     {
+        // Not matched on the row's customer: a correction (a move or a split) may have given the
+        // invoice to another customer while the day was open, and the invoice is the record.
         $invoice = Invoice::where('company_id', $company->id)
             ->whereKey($row['kept_invoice_id'])
             ->whereNull('transaction_id')
-            ->where('customer_id', $row['customer_id'] ?? null)
             ->with('customer')
             ->first();
         if (! $invoice) {

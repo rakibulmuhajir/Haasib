@@ -623,3 +623,20 @@ test('a customer can join a group one level deep, and a statement of chosen peop
             ->has('options.groups.0.member_ids', 3)
         );
 });
+
+test('a split invoice page lists the moved share as a credit note, not as paid', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $b = correctionCustomer($f, 'Share Owner');
+    $invoice = correctionInvoice($f, $f['customer'], 1000);
+    correct($f, 'correction.invoice_split', ['invoice_id' => $invoice->id, 'reason' => 'Two', 'shares' => [
+        ['customer_id' => $f['customer']->id, 'amount' => 700], ['customer_id' => $b->id, 'amount' => 300],
+    ]]);
+
+    test()->actingAs($f['user'])->get("/{$f['company']->slug}/invoices/{$invoice->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('appliedCredits', 1)
+            ->where('appliedCredits.0.amount', fn ($v) => (float) $v === 300.0)
+            ->has('appliedPayments', 0));
+});

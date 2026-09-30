@@ -177,6 +177,13 @@ class InvoiceController extends Controller
             'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
                 ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'invoice', $invoiceRecord->id),
+            // Credit notes that took an amount off this invoice (a return, or a share moved to
+            // another customer's invoice) -- not payments, so the page shows them apart.
+            'appliedCredits' => \Illuminate\Support\Facades\DB::table('acct.credit_note_applications as a')
+                ->join('acct.credit_notes as n', 'n.id', '=', 'a.credit_note_id')
+                ->where('a.invoice_id', $invoiceRecord->id)->whereNotIn('n.status', ['void', 'cancelled'])
+                ->orderBy('a.applied_at')
+                ->get(['n.credit_note_number as number', 'n.reason', 'a.amount_applied as amount']),
             'appliedPayments' => \Illuminate\Support\Facades\DB::table('acct.payment_allocations as a')
                 ->join('acct.payments as p', 'p.id', '=', 'a.payment_id')
                 ->leftJoin('acct.customers as c', 'c.id', '=', 'p.customer_id')

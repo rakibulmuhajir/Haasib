@@ -116,6 +116,7 @@ const props = defineProps<{
   correctionCustomers?: { id: string; name: string }[]
   corrections?: Correction[]
   appliedPayments?: { number: string; party: string | null; amount: number | string }[]
+  appliedCredits?: { number: string; reason: string | null; amount: number | string }[]
 }>()
 
 const correcting = ref(false)
@@ -148,9 +149,15 @@ const daysLate = computed(() => {
 /* The status the server stores and the status the reader needs are not always
    the same word. An invoice still marked `sent` six weeks past its due date is
    overdue to everyone except the database. */
-const displayStatus = computed(() =>
-  isOverdue.value && props.invoice.status === 'sent' ? 'overdue' : props.invoice.status,
-)
+// What real payments paid, apart from credit notes (which also count toward paid_amount).
+const paidByPayments = computed(() => Math.round((Number(props.invoice.paid_amount)
+  - (props.appliedCredits ?? []).reduce((sum, c) => sum + Number(c.amount), 0)) * 100) / 100)
+
+const displayStatus = computed(() => {
+  // Only credit notes against it and nothing paid: not "partly paid".
+  const status = props.invoice.status === 'partial' && paidByPayments.value <= 0 ? 'sent' : props.invoice.status
+  return isOverdue.value && status === 'sent' ? 'overdue' : status
+})
 
 /** Only worth showing when the invoice is not already in the company's money. */
 const isForeign = computed(
@@ -217,8 +224,13 @@ const documentTotals = computed<DocumentTotal[]>(() => {
   if (props.invoice.tax_amount > 0) {
     totals.push({ label: 'Sales tax', amount: props.invoice.tax_amount, sign: '+' })
   }
-  if (props.invoice.paid_amount > 0) {
-    totals.push({ label: 'Paid', amount: props.invoice.paid_amount, sign: '−', muted: true })
+  // Credit notes are not payments: each shows as itself, with what it was for.
+  for (const credit of props.appliedCredits ?? []) {
+    totals.push({ label: credit.reason ? `${credit.number} · ${credit.reason}` : `Credit note ${credit.number}`, amount: Number(credit.amount), sign: '−' })
+  }
+  const paid = paidByPayments.value
+  if (paid > 0) {
+    totals.push({ label: 'Paid', amount: paid, sign: '−', muted: true })
   }
   return totals
 })

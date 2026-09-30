@@ -377,6 +377,10 @@ class CustomerController extends Controller
             'currencies' => $currencies,
             'arAccounts' => $arAccounts,
             'customerTypes' => Customer::TYPES,
+            // Groups it can join: customers not part of a group themselves. None when it has members.
+            'groupOptions' => Customer::where('company_id', $company->id)->where('parent_customer_id', null)
+                ->where('id', '!=', $customer->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'hasMembers' => Customer::where('company_id', $company->id)->where('parent_customer_id', $customer->id)->exists(),
         ]);
     }
 

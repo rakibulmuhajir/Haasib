@@ -589,3 +589,37 @@ test('splitting a supplier payment leaves each share as that supplier\'s advance
         ->and(owedTo($other))->toBe(-300.0)
         ->and(BillPayment::where('vendor_id', $other->id)->value('payment_number'))->toBe('PMT-00002');
 });
+
+test('a customer can join a group one level deep, and a statement of chosen people shows only them', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $group = correctionCustomer($f, 'Trolley');
+    $a = correctionCustomer($f, 'GAL-1804');
+    $b = correctionCustomer($f, 'TLF-866');
+    $outsider = correctionCustomer($f, 'Someone Else');
+    correctionInvoice($f, $a, 300, '2026-09-05');
+    correctionInvoice($f, $b, 200, '2026-09-06');
+    correctionInvoice($f, $outsider, 999, '2026-09-07');
+
+    foreach ([$a, $b] as $member) {
+        correct($f, 'customer.update', ['id' => $member->id, 'parent_customer_id' => $group->id]);
+    }
+    expect($a->fresh()->parent_customer_id)->toBe($group->id);
+    // One level: a member cannot be a group, and a group cannot join another.
+    expect(fn () => correct($f, 'customer.update', ['id' => $outsider->id, 'parent_customer_id' => $a->id]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(fn () => correct($f, 'customer.update', ['id' => $group->id, 'parent_customer_id' => $outsider->id]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    test()->actingAs($f['user'])
+        ->get("/{$f['company']->slug}/reports/statements?kind=customer&ids={$a->id},{$b->id}&from=2026-09-01&to=2026-09-24")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.id', 'some')
+            ->where('statement.combined', true)
+            ->where('statement.closing_balance', 500)
+            ->has('statement.rows', 4)
+            ->where('options.groups.0.id', $group->id)
+            ->has('options.groups.0.member_ids', 3)
+        );
+});

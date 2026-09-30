@@ -32,6 +32,7 @@ class StatementReportController extends Controller
         $id = $request->validated('id');
         $from = $request->validated('from');
         $to = $request->validated('to');
+        $ids = array_values(array_filter(explode(',', (string) $request->validated('ids'))));
 
         $bankAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash'])
@@ -71,13 +72,18 @@ class StatementReportController extends Controller
 
         // A customer, supplier, holder or employee statement opens on everyone at once ('all'):
         // each of their transactions by date, named, with that person's own running balance.
-        if ($kind !== 'bank' && ($id === null || $id === 'all')) {
+        // With ids, only those people: a group, or any the user picked.
+        if ($kind !== 'bank' && ($id === null || $id === 'all' || $ids)) {
+            $pick = fn ($list) => $ids ? collect($list)->filter(fn ($p) => in_array(is_array($p) ? $p['id'] : $p->id, $ids, true))->values() : $list;
             [$statement, $columns, $resolvedId] = match ($kind) {
-                'customer' => $this->allParties($customers, fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to),
-                'supplier' => $this->allParties($vendors, fn ($pid) => $this->supplierStatement($vendors, $pid, $from, $to), $from, $to),
-                'amanat' => $this->allParties($holders, fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
-                'employee' => $this->allParties($employees, fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
+                'customer' => $this->allParties($pick($customers), fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to),
+                'supplier' => $this->allParties($pick($vendors), fn ($pid) => $this->supplierStatement($vendors, $pid, $from, $to), $from, $to),
+                'amanat' => $this->allParties($pick($holders), fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
+                'employee' => $this->allParties($pick($employees), fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
             };
+            if ($ids) {
+                $resolvedId = 'some';
+            }
         } else {
             [$statement, $columns, $resolvedId] = match ($kind) {
                 'customer' => $this->customerStatement($customers, $id, $from, $to),
@@ -95,13 +101,22 @@ class StatementReportController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
-            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'from' => $from, 'to' => $to],
+            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'from' => $from, 'to' => $to],
             'options' => [
                 'bank' => $bankAccounts,
                 'customer' => $customers,
                 'supplier' => $vendors,
                 'amanat' => $holders,
                 'employee' => $employees->values(),
+                // Customer groups: the group and its members, to pick in one go.
+                'groups' => Customer::where('company_id', $company->id)->whereNotNull('parent_customer_id')
+                    ->where('is_active', true)->get(['id', 'parent_customer_id'])
+                    ->groupBy('parent_customer_id')
+                    ->map(fn ($members, $parentId) => [
+                        'id' => $parentId,
+                        'name' => $allCustomers->firstWhere('id', $parentId)?->name ?? 'Group',
+                        'member_ids' => [$parentId, ...$members->pluck('id')->all()],
+                    ])->values(),
             ],
             'columns' => $columns,
             'statement' => $statement,

@@ -19,6 +19,7 @@ class UpdateAction implements PaletteAction
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'billing_contact' => 'nullable|string|max:150',
+            'parent_customer_id' => 'nullable|uuid',
             'base_currency' => 'nullable|string|size:3|uppercase',
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'tax_id' => 'nullable|string|max:100',
@@ -89,6 +90,25 @@ class UpdateAction implements PaletteAction
         if (array_key_exists('billing_contact', $params)) {
             $updates['billing_contact'] = trim((string) $params['billing_contact']) ?: null;
             $changes[] = 'billing contact → '.($updates['billing_contact'] ?? 'removed');
+        }
+
+        // Part of a group (one level: a group is not part of another, a member has no members).
+        if (array_key_exists('parent_customer_id', $params) && ($params['parent_customer_id'] ?: null) !== $customer->parent_customer_id) {
+            $parentId = $params['parent_customer_id'] ?: null;
+            if ($parentId) {
+                $parent = Customer::where('company_id', $company->id)->find($parentId);
+                if (! $parent || $parent->id === $customer->id) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id' => 'Choose another customer of this company.']);
+                }
+                if ($parent->parent_customer_id) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id' => "{$parent->name} is itself part of a group."]);
+                }
+                if (Customer::where('company_id', $company->id)->where('parent_customer_id', $customer->id)->exists()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id' => 'This customer has its own members.']);
+                }
+            }
+            $updates['parent_customer_id'] = $parentId;
+            $changes[] = 'group → '.($parentId ? $parent->name : 'none');
         }
 
         if (isset($params['base_currency'])) {

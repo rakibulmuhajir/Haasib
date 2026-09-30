@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -40,8 +41,8 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
-  filters: { kind: Kind; id: string | null; from: string; to: string }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[] }
+  filters: { kind: Kind; id: string | null; ids?: string[]; from: string; to: string }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -69,10 +70,15 @@ const partyId = ref(props.filters.id ?? '')
 const from = ref(props.filters.from)
 const to = ref(props.filters.to)
 const search = ref('')
+// Several people in one statement: a customer group, or any the user ticks.
+const picked = ref<string[]>(props.filters.ids ?? [])
+const picking = ref(false)
 
 watch(() => props.filters, (f) => {
   kind.value = f.kind
   partyId.value = f.id ?? ''
+  picked.value = f.ids ?? []
+  picking.value = false
   from.value = f.from
   to.value = f.to
   search.value = ''
@@ -108,7 +114,8 @@ const filteredOptions = computed(() => {
 const reload = () => {
   router.get(`/${props.company.slug}/reports/statements`, {
     kind: kind.value,
-    id: partyId.value || undefined,
+    id: partyId.value === 'some' ? undefined : partyId.value || undefined,
+    ids: partyId.value === 'some' && picked.value.length ? picked.value.join(',') : undefined,
     from: from.value,
     to: to.value,
   }, { preserveState: true, preserveScroll: true })
@@ -121,8 +128,30 @@ const changeKind = (value: Kind | string) => {
   reload()
 }
 
+const groups = computed(() => (kind.value === 'customer' ? props.options.groups ?? [] : []))
+
 const changeParty = (value: string) => {
+  if (value.startsWith('group:')) {
+    picked.value = groups.value.find((g) => `group:${g.id}` === value)?.member_ids ?? []
+    partyId.value = 'some'
+    reload()
+    return
+  }
+  if (value === 'some') {
+    partyId.value = 'some'
+    picking.value = true
+    return
+  }
   partyId.value = value
+  picked.value = []
+  reload()
+}
+
+const togglePick = (id: string, on: boolean) => {
+  picked.value = on ? [...new Set([...picked.value, id])] : picked.value.filter((p) => p !== id)
+}
+const showPicked = () => {
+  picking.value = false
   reload()
 }
 
@@ -153,7 +182,13 @@ const printStatement = () => window.print()
 
 
 const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', bank: '' })[kind.value])
-const statementTitle = computed(() => (props.statement.combined ? allLabel.value : props.statement.account || props.statement.party || 'No account or party selected'))
+const pickedLabel = computed(() => {
+  const group = (props.options.groups ?? []).find((g) => g.member_ids.length === picked.value.length && g.member_ids.every((id) => picked.value.includes(id)))
+  return group ? `${group.name} · group` : `${picked.value.length} ${partyLabel.value.toLowerCase()}${picked.value.length === 1 ? '' : 's'}`
+})
+const statementTitle = computed(() => (props.statement.combined
+  ? (props.filters.ids?.length ? pickedLabel.value : allLabel.value)
+  : props.statement.account || props.statement.party || 'No account or party selected'))
 </script>
 
 <template>
@@ -188,11 +223,24 @@ const statementTitle = computed(() => (props.statement.combined ? allLabel.value
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-if="kind !== 'bank'" value="all">{{ allLabel }}</SelectItem>
+                  <SelectItem v-if="kind !== 'bank'" value="some">{{ partyId === 'some' && picked.length ? pickedLabel : 'Choose several…' }}</SelectItem>
+                  <SelectItem v-for="g in groups" :key="g.id" :value="`group:${g.id}`">{{ g.name }} · group</SelectItem>
+                  <SelectSeparator v-if="kind !== 'bank'" />
                   <SelectItem v-for="opt in filteredOptions" :key="opt.id" :value="opt.id">
                     {{ opt.label }}<span v-if="opt.sublabel" class="text-text-tertiary"> · {{ opt.sublabel }}</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <div v-if="picking && kind !== 'bank'" class="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                <label v-for="opt in filteredOptions" :key="opt.id" class="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted">
+                  <Checkbox :model-value="picked.includes(opt.id)" @update:model-value="(v) => togglePick(opt.id, v === true)" />
+                  <span class="truncate">{{ opt.label }}</span>
+                </label>
+                <div class="sticky bottom-0 flex items-center justify-between gap-2 bg-background pt-2">
+                  <span class="text-xs text-muted-foreground">{{ picked.length }} chosen</span>
+                  <Button size="sm" :disabled="!picked.length" @click="showPicked">Show</Button>
+                </div>
+              </div>
             </div>
 
             <div class="space-y-2">
@@ -211,7 +259,7 @@ const statementTitle = computed(() => (props.statement.combined ? allLabel.value
               <Printer class="h-4 w-4" />
               Print
             </Button>
-            <Button v-if="kind === 'customer' && partyId && partyId !== 'all'" variant="outline" as-child>
+            <Button v-if="kind === 'customer' && partyId && !['all', 'some'].includes(partyId)" variant="outline" as-child>
               <Link :href="`/${company.slug}/consolidated-invoices/create?customer_id=${partyId}&from=${from}&to=${to}`">
                 <FileText class="h-4 w-4" />
                 Consolidated invoice

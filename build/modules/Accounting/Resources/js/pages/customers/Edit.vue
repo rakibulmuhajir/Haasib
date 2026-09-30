@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import InputError from '@/components/InputError.vue'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Save } from 'lucide-vue-next'
 
@@ -36,6 +37,7 @@ interface CustomerRef {
   email: string | null
   phone: string | null
   billing_contact?: string | null
+  parent_customer_id?: string | null
   base_currency: string | null
   payment_terms: number | null
   tax_id: string | null
@@ -65,6 +67,8 @@ const props = defineProps<{
   currencies: CurrencyOption[]
   arAccounts?: AccountOption[]
   customerTypes: Record<string, string>
+  groupOptions?: { id: string; name: string }[]
+  hasMembers?: boolean
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -78,12 +82,15 @@ const currencyOptions = computed(() =>
   props.currencies.length ? props.currencies : [{ currency_code: props.company.base_currency }]
 )
 
+const groupChoices = computed(() => [{ value: '', label: 'None' }, ...(props.groupOptions ?? []).map((c) => ({ value: c.id, label: c.name }))])
+
 const form = useForm({
   name: props.customer.name ?? '',
   customer_type: props.customer.customer_type ?? 'walk_in',
   email: props.customer.email ?? '',
   phone: props.customer.phone ?? '',
   billing_contact: props.customer.billing_contact ?? '',
+  parent_customer_id: props.customer.parent_customer_id ?? '',
   base_currency: props.customer.base_currency ?? props.company.base_currency,
   payment_terms: props.customer.payment_terms ?? '',
   tax_id: props.customer.tax_id ?? '',
@@ -130,6 +137,7 @@ const handleSubmit = () => {
         email: data.email || null,
         phone: data.phone || null,
         billing_contact: data.billing_contact || null,
+        parent_customer_id: data.parent_customer_id || null,
         base_currency: data.base_currency || props.company.base_currency,
         payment_terms: data.payment_terms ? Number(data.payment_terms) : null,
         tax_id: data.tax_id || null,
@@ -187,6 +195,11 @@ const handleSubmit = () => {
           <Label for="billing_contact">Billing contact</Label>
           <Input id="billing_contact" v-model="form.billing_contact" placeholder="Person or office invoices go to" />
           <InputError :message="form.errors.billing_contact" />
+        </div>
+        <div v-if="!hasMembers">
+          <Label>Part of group</Label>
+          <SearchableSelect v-model="form.parent_customer_id" :options="groupChoices" :show-value="false" placeholder="None" />
+          <InputError :message="form.errors.parent_customer_id" />
         </div>
         <div>
           <Label for="base_currency">Currency</Label>

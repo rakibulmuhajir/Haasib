@@ -21,7 +21,10 @@ import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { FileText, Pencil, Trash2, Package, PackageCheck, Ban } from 'lucide-vue-next'
+import { FileText, Pencil, Trash2, Package, PackageCheck, Ban, PencilLine } from 'lucide-vue-next'
+import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue'
+import CorrectionHistory from '../../components/CorrectionHistory.vue'
+import type { Correction } from '../../components/CorrectionHistory.vue'
 
 interface CompanyRef {
   id: string
@@ -139,7 +142,14 @@ const props = defineProps<{
   editLock?: string | null
   paidFromAdvances?: PaidFromAdvance[]
   vendorAdvanceAvailable?: number
+  canCorrect?: boolean
+  correctionSuppliers?: { id: string; name: string }[]
+  corrections?: Correction[]
+  appliedPayments?: { number: string; party: string | null; amount: number | string }[]
 }>()
+
+const correcting = ref(false)
+const canCorrectNow = computed(() => props.canCorrect && !['void', 'cancelled', 'draft'].includes(props.bill.status))
 
 const applyingAdvance = ref(false)
 const applyAdvance = () => {
@@ -500,6 +510,10 @@ const navigateToVendor = () => {
           <Ban class="mr-2 h-4 w-4" />
           {{ t('void') }}
         </Button>
+        <Button v-if="canCorrectNow" variant="outline" @click="correcting = true">
+          <PencilLine class="mr-2 h-4 w-4" />
+          Correct
+        </Button>
         <Button v-if="canDelete" variant="destructive" @click="handleDelete">
           <Trash2 class="mr-2 h-4 w-4" />
           {{ t('delete') }}
@@ -736,6 +750,10 @@ const navigateToVendor = () => {
           </CardContent>
         </Card>
       </div>
+    </div>
+
+    <div class="mt-6">
+      <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
     </div>
 
     <Dialog v-model:open="showReceiptDialog">
@@ -975,6 +993,19 @@ const navigateToVendor = () => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <CorrectRecordDialog
+      :applied-payments="appliedPayments ?? []"
+      v-if="canCorrect"
+      v-model:open="correcting"
+      kind="bill"
+      party="supplier"
+      :url="`/${company.slug}/bills/${bill.id}/correct`"
+      :number="bill.bill_number"
+      :total="Number(bill.total_amount)"
+      :customer-id="bill.vendor_id ?? null"
+      :parties="correctionSuppliers ?? []"
+    />
 
     <RelatedActions screen="bill.show" :slug="company.slug" :subject="bill" />
   </PageShell>

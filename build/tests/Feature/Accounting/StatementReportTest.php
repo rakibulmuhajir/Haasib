@@ -5,7 +5,9 @@ use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Models\BillPayment;
+use App\Modules\Accounting\Models\BillPaymentAllocation;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
@@ -375,6 +377,126 @@ test('moving a payment to the customer who paid it pays their oldest invoices, a
     expect(fn () => DB::table('acct.corrections')->update(['reason' => 'changed']))->toThrow(\Illuminate\Database\QueryException::class);
 });
 
+// ---- Corrections (BillCorrectionService): moving and splitting posted bills and bill payments ----
+
+function correctionBill(array $f, $vendor, float $amount, string $date = '2026-09-10'): Bill
+{
+    return Bill::create([
+        'company_id' => $f['company']->id, 'vendor_id' => $vendor->id, 'bill_number' => 'BILL-COR-'.str()->random(8),
+        'bill_date' => $date, 'due_date' => $date, 'status' => 'received',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'exchange_rate' => 1,
+        'subtotal' => $amount, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => $amount,
+        'paid_amount' => 0, 'balance' => $amount, 'base_amount' => $amount, 'created_by_user_id' => $f['user']->id,
+    ]);
+}
+
+function correctionVendor(array $f, string $name): Vendor
+{
+    return Vendor::create([
+        'company_id' => $f['company']->id, 'vendor_number' => 'V-'.str()->random(6), 'name' => $name,
+        'base_currency' => 'PKR', 'ap_account_id' => $f['ap']->id, 'is_active' => true, 'created_by_user_id' => $f['user']->id,
+    ]);
+}
+
+/** What is still owed to a supplier -- the payables mirror of owes(). */
+function owedTo(Vendor $vendor): float
+{
+    $rows = app(VendorStatementService::class)->statement($vendor->fresh())['rows'];
+
+    return $rows ? round((float) end($rows)['balance'], 2) : 0.0;
+}
+
+test('moving a bill to another supplier takes the old supplier\'s payment off it and leaves cost alone', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $other = correctionVendor($f, 'Real Supplier');
+    $bill = correctionBill($f, $f['vendor'], 1000);
+    $expense = Account::create(['company_id' => $f['company']->id, 'code' => '6100', 'name' => 'Purchases', 'type' => 'expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true]);
+    BillLineItem::create([
+        'company_id' => $f['company']->id, 'bill_id' => $bill->id, 'line_number' => 1, 'description' => 'Fuel',
+        'quantity' => 1, 'unit_price' => 1000, 'tax_rate' => 0, 'discount_rate' => 0, 'line_total' => 1000,
+        'tax_amount' => 0, 'total' => 1000, 'expense_account_id' => $expense->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+    $payment = BillPayment::create([
+        'company_id' => $f['company']->id, 'vendor_id' => $f['vendor']->id, 'payment_number' => 'BPAY-COR-1',
+        'payment_date' => '2026-09-12', 'amount' => 400, 'currency' => 'PKR', 'base_currency' => 'PKR', 'base_amount' => 400,
+        'payment_method' => 'cash', 'payment_account_id' => $f['cash']->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+    BillPaymentAllocation::create([
+        'company_id' => $f['company']->id, 'bill_payment_id' => $payment->id, 'bill_id' => $bill->id,
+        'amount_allocated' => 400, 'base_amount_allocated' => 400, 'applied_at' => now(),
+    ]);
+    $bill->update(['paid_amount' => 400, 'balance' => 600, 'status' => 'partial']);
+    $expenseBefore = ledgerBalanceOf($expense);
+
+    $result = correct($f, 'correction.bill_supplier', ['bill_id' => $bill->id, 'vendor_id' => $other->id, 'reason' => 'Wrong supplier']);
+
+    expect($bill->fresh()->vendor_id)->toBe($other->id)
+        ->and((float) $bill->fresh()->balance)->toBe(1000.0)
+        ->and(owedTo($other))->toBe(1000.0)
+        ->and(owedTo($f['vendor']))->toBe(-400.0)          // their payment stays theirs, as an advance
+        ->and(ledgerBalanceOf($expense))->toBe($expenseBefore);
+    expect($result['data']['number'])->toBe('COR-00001');
+    expect(DB::table('acct.corrections')->where('company_id', $f['company']->id)->where('entity_type', 'bill')->count())->toBe(1);
+});
+
+test('splitting a bill gives each supplier their share through a vendor credit and a new bill', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $b = correctionVendor($f, 'Second Depot');
+    $bill = correctionBill($f, $f['vendor'], 1000);
+    $expense = Account::create(['company_id' => $f['company']->id, 'code' => '6100', 'name' => 'Purchases', 'type' => 'expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true]);
+    BillLineItem::create([
+        'company_id' => $f['company']->id, 'bill_id' => $bill->id, 'line_number' => 1, 'description' => 'Fuel',
+        'quantity' => 1, 'unit_price' => 1000, 'tax_rate' => 0, 'discount_rate' => 0, 'line_total' => 1000,
+        'tax_amount' => 0, 'total' => 1000, 'expense_account_id' => $expense->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+    $expenseBefore = ledgerBalanceOf($expense);
+
+    correct($f, 'correction.bill_split', ['bill_id' => $bill->id, 'reason' => 'Two loads', 'shares' => [
+        ['vendor_id' => $f['vendor']->id, 'amount' => 700],
+        ['vendor_id' => $b->id, 'amount' => 300],
+    ]]);
+
+    expect(owedTo($f['vendor']))->toBe(700.0)
+        ->and(owedTo($b))->toBe(300.0)
+        ->and((float) $bill->fresh()->total_amount)->toBe(1000.0)   // the original is never rewritten
+        ->and((float) $bill->fresh()->balance)->toBe(700.0)
+        ->and(ledgerBalanceOf($expense))->toBe($expenseBefore);
+    $new = Bill::where('vendor_id', $b->id)->firstOrFail();
+    expect($new->bill_date->toDateString())->toBe('2026-09-10');
+});
+
+test('moving a bill payment to the supplier who was paid it pays their oldest bills, and a correction cannot be edited', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $payee = correctionVendor($f, 'Actual Supplier');
+    $mine = correctionBill($f, $f['vendor'], 500);
+    $theirs1 = correctionBill($f, $payee, 300, '2026-09-05');
+    $theirs2 = correctionBill($f, $payee, 300, '2026-09-08');
+
+    $payment = BillPayment::create([
+        'company_id' => $f['company']->id, 'vendor_id' => $f['vendor']->id, 'payment_number' => 'BPAY-COR-2',
+        'payment_date' => '2026-09-12', 'amount' => 500, 'currency' => 'PKR', 'base_currency' => 'PKR', 'base_amount' => 500,
+        'payment_method' => 'cash', 'payment_account_id' => $f['cash']->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+    BillPaymentAllocation::create([
+        'company_id' => $f['company']->id, 'bill_payment_id' => $payment->id, 'bill_id' => $mine->id,
+        'amount_allocated' => 500, 'base_amount_allocated' => 500, 'applied_at' => now(),
+    ]);
+    $mine->update(['paid_amount' => 500, 'balance' => 0, 'status' => 'paid']);
+
+    correct($f, 'correction.bill_payment_supplier', ['bill_payment_id' => $payment->id, 'vendor_id' => $payee->id, 'reason' => 'Paid the other supplier', 'apply_oldest_first' => true]);
+
+    expect((float) $mine->fresh()->balance)->toBe(500.0)
+        ->and((float) $theirs1->fresh()->balance)->toBe(0.0)
+        ->and((float) $theirs2->fresh()->balance)->toBe(100.0)
+        ->and(owedTo($payee))->toBe(100.0)
+        ->and(owedTo($f['vendor']))->toBe(500.0);
+
+    expect(fn () => DB::table('acct.corrections')->update(['reason' => 'changed']))->toThrow(\Illuminate\Database\QueryException::class);
+});
+
 function ledgerBalanceOf(Account $account): float
 {
     $row = DB::table('acct.journal_entries')->where('account_id', $account->id)
@@ -382,3 +504,25 @@ function ledgerBalanceOf(Account $account): float
 
     return round((float) $row->d - (float) $row->c, 2);
 }
+
+test('a paid invoice splits only once its payments are taken off, and the money stays with the payer on account', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $b = correctionCustomer($f, 'Other Trolley');
+    $invoice = correctionInvoice($f, $f['customer'], 1000);
+    correct($f, 'payment.create', [
+        'invoice' => $invoice->id, 'amount' => 1000, 'method' => 'cash', 'date' => '2026-09-12',
+        'deposit_account_id' => $f['cash']->id, 'ar_account_id' => $f['ar']->id,
+    ]);
+    $shares = [['customer_id' => $f['customer']->id, 'amount' => 600], ['customer_id' => $b->id, 'amount' => 400]];
+
+    expect(fn () => correct($f, 'correction.invoice_split', ['invoice_id' => $invoice->id, 'reason' => 'Two', 'shares' => $shares]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    correct($f, 'correction.invoice_split', ['invoice_id' => $invoice->id, 'reason' => 'Two', 'shares' => $shares, 'unapply_payments' => true]);
+
+    expect((float) $invoice->fresh()->balance)->toBe(600.0)
+        ->and(owes($f['customer']))->toBe(-400.0)   // 600 owed, 1000 paid: 400 credit left to apply
+        ->and(owes($b))->toBe(400.0)
+        ->and((float) DB::table('acct.payment_allocations')->whereNull('invoice_id')->sum('amount_allocated'))->toBe(1000.0);
+});

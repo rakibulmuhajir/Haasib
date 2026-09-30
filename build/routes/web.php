@@ -249,6 +249,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/bills/{bill}/supplier-claims/receive', [BillController::class, 'receiveSupplierClaim'])->name('bills.supplier-claims.receive');
         Route::post('/{company}/bills/{bill}/void', [BillController::class, 'void'])->name('bills.void');
         Route::post('/{company}/bills/{bill}/apply-advance', [BillController::class, 'applyAdvance'])->name('bills.apply-advance');
+        Route::post('/{company}/bills/{bill}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'bill'])->name('bills.correct');
 
         // Bill Payments
         Route::get('/{company}/bill-payments', [BillPaymentController::class, 'index'])->name('bill-payments.index');
@@ -258,6 +259,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/bill-payments/{payment}/edit', [BillPaymentController::class, 'edit'])->name('bill-payments.edit');
         Route::put('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'update'])->name('bill-payments.update');
         Route::delete('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'destroy'])->name('bill-payments.destroy');
+        Route::post('/{company}/bill-payments/{payment}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'billPayment'])->name('bill-payments.correct');
 
         // Vendor Credits
         Route::get('/{company}/vendor-credits', [VendorCreditController::class, 'index'])->name('vendor-credits.index');

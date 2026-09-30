@@ -454,6 +454,16 @@ class BillController extends Controller
             'editLock' => $editLock,
             'paidFromAdvances' => $paidFrom,
             'vendorAdvanceAvailable' => round($vendorAdvanceAvailable, 2),
+            // Corrections: who it can be moved to, and what was corrected before.
+            'canCorrect' => \Illuminate\Support\Facades\Auth::user()?->hasCompanyPermission(\App\Constants\Permissions::BILL_UPDATE) ?? false,
+            'correctionSuppliers' => \App\Modules\Accounting\Models\Vendor::where('company_id', $companyModel->id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($companyModel->id, 'bill', $record->id),
+            'appliedPayments' => \Illuminate\Support\Facades\DB::table('acct.bill_payment_allocations as a')
+                ->join('acct.bill_payments as p', 'p.id', '=', 'a.bill_payment_id')
+                ->leftJoin('acct.vendors as v', 'v.id', '=', 'p.vendor_id')
+                ->where('a.bill_id', $record->id)->whereNull('p.deleted_at')
+                ->get(['p.payment_number as number', 'v.name as party', 'a.amount_allocated as amount']),
         ]);
     }
 

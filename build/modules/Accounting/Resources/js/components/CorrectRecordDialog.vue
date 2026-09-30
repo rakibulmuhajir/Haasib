@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * Correct a posted invoice or payment: pick who it really belongs to, or (invoices) split it
- * between customers, and say why. It reads as editing the record; the server posts the change as
- * its own correction and keeps the original (CorrectionService).
+ * Correct a posted invoice, payment, bill or bill payment: pick who it really belongs to, or
+ * (invoices/bills) split it between parties, and say why. It reads as editing the record; the
+ * server posts the change as its own correction and keeps the original (CorrectionService /
+ * BillCorrectionService).
  */
 import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
@@ -17,21 +18,26 @@ import SearchableSelect from '@/components/SearchableSelect.vue'
 import InputError from '@/components/InputError.vue'
 import { Plus, Trash2 } from 'lucide-vue-next'
 
-const props = defineProps<{
-  kind: 'invoice' | 'payment'
+const props = withDefaults(defineProps<{
+  kind: 'invoice' | 'payment' | 'bill' | 'bill_payment'
+  party?: 'customer' | 'supplier'
   url: string
   number: string
   total: number
   customerId: string | null
-  customers: { id: string; name: string }[]
-}>()
+  parties: { id: string; name: string }[]
+  // Payments already applied to this invoice or bill, shown before a split.
+  appliedPayments?: { number: string; party: string | null; amount: number | string }[]
+}>(), { party: 'customer', appliedPayments: () => [] })
 const open = defineModel<boolean>('open', { default: false })
 
 const form = useForm({
   action: 'change_customer' as 'change_customer' | 'split',
   customer_id: '',
   shares: [] as { customer_id: string; amount: number | null }[],
-  apply_oldest_first: true,
+  // Money freed by a correction stays on account; applying it is left to the payment's page.
+  apply_oldest_first: false,
+  unapply_payments: true,
   reason: '',
 })
 
@@ -39,13 +45,15 @@ const reset = () => {
   form.reset()
   form.clearErrors()
   form.shares = [
-    { customer_id: props.customerId ?? '', amount: props.total },
+    { customer_id: '', amount: props.total },
     { customer_id: '', amount: null },
   ]
 }
 watch(open, (value) => { if (value) reset() })
 
-const options = computed(() => props.customers.map((c) => ({ value: c.id, label: c.name })))
+const canSplit = computed(() => props.kind === 'invoice' || props.kind === 'bill')
+const canApplyOldest = computed(() => props.kind === 'payment' || props.kind === 'bill_payment')
+const options = computed(() => props.parties.map((c) => ({ value: c.id, label: c.name })))
 const others = computed(() => options.value.filter((o) => o.value !== props.customerId))
 const shareTotal = computed(() => form.shares.reduce((sum, s) => sum + Number(s.amount || 0), 0))
 const remaining = computed(() => Math.round((props.total - shareTotal.value) * 100) / 100)
@@ -57,49 +65,70 @@ const canSave = computed(() => form.reason.trim().length >= 3 && (form.action ==
   ? !!form.customer_id
   : form.shares.length >= 2 && form.shares.every((s) => s.customer_id && Number(s.amount) > 0) && Math.abs(remaining.value) < 0.01))
 
+const money = (n: number | string) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
+const hasPayments = computed(() => props.appliedPayments.length > 0)
+
 const save = () => form.post(props.url, { preserveScroll: true, onSuccess: () => { open.value = false } })
 </script>
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="sm:max-w-lg">
+    <DialogContent class="sm:max-w-xl">
       <DialogHeader>
         <DialogTitle>Correct {{ number }}</DialogTitle>
         <DialogDescription>The original stays in the records.</DialogDescription>
       </DialogHeader>
 
-      <div class="space-y-4">
-        <Tabs v-if="kind === 'invoice'" v-model="form.action">
+      <div class="min-w-0 space-y-4">
+        <Tabs v-if="canSplit" v-model="form.action">
           <TabsList>
-            <TabsTrigger value="change_customer">Other customer</TabsTrigger>
+            <TabsTrigger value="change_customer">Other {{ party }}</TabsTrigger>
             <TabsTrigger value="split">Split</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <div v-if="form.action === 'change_customer'" class="space-y-2">
-          <Label>Belongs to</Label>
-          <SearchableSelect v-model="form.customer_id" :options="others" placeholder="Choose customer" />
-          <InputError :message="form.errors.customer_id" />
-          <label v-if="kind === 'payment'" class="flex items-center gap-2 text-sm">
-            <Checkbox v-model="form.apply_oldest_first" />
-            Pay their oldest unpaid invoices
+        <div v-if="hasPayments && canSplit" class="rounded-md border border-status-attention/40 bg-status-attention/10 p-3 text-sm">
+          <p class="font-medium">Payments applied</p>
+          <p v-for="p in appliedPayments" :key="p.number" class="flex justify-between gap-3 tabular-nums">
+            <span class="truncate">{{ p.number }}<template v-if="p.party"> · {{ p.party }}</template></span>
+            <span>{{ money(p.amount) }}</span>
+          </p>
+          <label v-if="form.action === 'split'" class="mt-2 flex items-center gap-2">
+            <Checkbox v-model="form.unapply_payments" />
+            Take payments off first
           </label>
         </div>
 
-        <div v-else class="space-y-2">
-          <div v-for="(share, i) in form.shares" :key="i" class="flex items-center gap-2">
-            <div class="min-w-0 flex-1">
-              <SearchableSelect v-model="share.customer_id" :options="options" placeholder="Customer" />
+        <div v-if="form.action === 'change_customer'" class="min-w-0 space-y-2">
+          <Label>Belongs to</Label>
+          <SearchableSelect v-model="form.customer_id" :options="others" :show-value="false" :placeholder="`Choose ${party}`" />
+          <InputError :message="form.errors.customer_id" />
+          <label v-if="canApplyOldest" class="flex items-center gap-2 text-sm">
+            <Checkbox v-model="form.apply_oldest_first" />
+            Pay their oldest unpaid {{ party === 'supplier' ? 'bills' : 'invoices' }}
+          </label>
+        </div>
+
+        <div v-else class="min-w-0 space-y-2">
+          <div class="grid grid-cols-[minmax(0,1fr)_8rem_2.25rem] gap-2 text-xs text-muted-foreground">
+            <span class="capitalize">{{ party }}</span>
+            <span class="text-right">Amount</span>
+            <span />
+          </div>
+          <div v-for="(share, i) in form.shares" :key="i" class="grid grid-cols-[minmax(0,1fr)_8rem_2.25rem] items-center gap-2">
+            <div class="min-w-0">
+              <SearchableSelect v-model="share.customer_id" :options="options" :show-value="false" :placeholder="i === 0 ? `Keeps ${number}` : `Choose ${party}`" />
             </div>
-            <Input v-model.number="share.amount" type="number" step="0.01" min="0" class="w-32 text-right tabular-nums" />
+            <Input v-model.number="share.amount" type="number" step="0.01" min="0" class="w-full text-right tabular-nums" />
             <Button v-if="form.shares.length > 2" type="button" variant="ghost" size="icon" aria-label="Remove" @click="removeShare(i)">
               <Trash2 class="h-4 w-4" />
             </Button>
+            <span v-else />
           </div>
           <div class="flex items-center justify-between text-sm">
             <Button type="button" variant="outline" size="sm" @click="addShare"><Plus class="mr-1 h-4 w-4" />Add</Button>
-            <span :class="Math.abs(remaining) < 0.01 ? 'text-muted-foreground' : 'text-status-critical'">
-              {{ Math.abs(remaining) < 0.01 ? 'Adds up' : `${remaining.toLocaleString()} left` }}
+            <span class="tabular-nums" :class="Math.abs(remaining) < 0.01 ? 'text-muted-foreground' : 'text-status-critical'">
+              {{ Math.abs(remaining) < 0.01 ? 'Adds up' : `${money(remaining)} left` }}
             </span>
           </div>
           <InputError :message="form.errors.shares" />
@@ -107,7 +136,7 @@ const save = () => form.post(props.url, { preserveScroll: true, onSuccess: () =>
 
         <div class="space-y-2">
           <Label for="correction-reason">Reason</Label>
-          <Textarea id="correction-reason" v-model="form.reason" rows="2" placeholder="What was wrong" />
+          <Textarea id="correction-reason" v-model="form.reason" rows="2" class="w-full" placeholder="What was wrong" />
           <InputError :message="form.errors.reason" />
         </div>
       </div>

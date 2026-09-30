@@ -435,7 +435,7 @@ const summaryItems = computed(() => [
             :number="payment.payment_number"
             :total="Number(payment.amount)"
             :customer-id="payment.customer?.id ?? null"
-            :customers="correctionCustomers ?? []"
+            :parties="correctionCustomers ?? []"
         />
 
         <RelatedActions

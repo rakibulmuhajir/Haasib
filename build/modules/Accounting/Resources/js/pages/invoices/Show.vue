@@ -114,6 +114,7 @@ const props = defineProps<{
   canCorrect?: boolean
   correctionCustomers?: { id: string; name: string }[]
   corrections?: Correction[]
+  appliedPayments?: { number: string; party: string | null; amount: number | string }[]
 }>()
 
 const correcting = ref(false)
@@ -433,6 +434,7 @@ const voidInvoice = () => {
     />
 
     <CorrectRecordDialog
+      :applied-payments="appliedPayments ?? []"
       v-if="canCorrect"
       v-model:open="correcting"
       kind="invoice"
@@ -440,7 +442,7 @@ const voidInvoice = () => {
       :number="invoice.invoice_number"
       :total="Number(invoice.total_amount)"
       :customer-id="invoice.customer?.id ?? null"
-      :customers="correctionCustomers ?? []"
+      :parties="correctionCustomers ?? []"
     />
 
     <RelatedActions screen="invoice.show" :slug="company.slug" :subject="invoice" />

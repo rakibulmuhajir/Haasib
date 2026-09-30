@@ -260,6 +260,11 @@ class BillPaymentController extends Controller
             'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,
             'editLock' => $editLock,
+            // Corrections: who it can be moved to, and what was corrected before.
+            'canCorrect' => \Illuminate\Support\Facades\Auth::user()?->hasCompanyPermission(\App\Constants\Permissions::BILL_PAY) ?? false,
+            'correctionSuppliers' => \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'bill_payment', $record->id),
         ]);
     }
 

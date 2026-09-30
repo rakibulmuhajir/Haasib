@@ -177,6 +177,11 @@ class InvoiceController extends Controller
             'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
                 ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'invoice', $invoiceRecord->id),
+            'appliedPayments' => \Illuminate\Support\Facades\DB::table('acct.payment_allocations as a')
+                ->join('acct.payments as p', 'p.id', '=', 'a.payment_id')
+                ->leftJoin('acct.customers as c', 'c.id', '=', 'p.customer_id')
+                ->where('a.invoice_id', $invoiceRecord->id)->whereNull('p.deleted_at')
+                ->get(['p.payment_number as number', 'c.name as party', 'a.amount_allocated as amount']),
         ]);
     }
 

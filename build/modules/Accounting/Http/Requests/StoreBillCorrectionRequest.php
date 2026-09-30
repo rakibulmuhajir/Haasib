@@ -6,12 +6,16 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use Illuminate\Validation\Rule;
 
-/** A correction to an invoice or a payment, from its page. See CorrectionService. */
-class StoreCorrectionRequest extends BaseFormRequest
+/**
+ * A correction to a bill or a bill payment, from its page. See BillCorrectionService. The
+ * party field stays `customer_id` in the payload (the dialog is shared with the AR side);
+ * the controller maps it to a vendor before dispatching.
+ */
+class StoreBillCorrectionRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        $permission = $this->route('payment') ? Permissions::PAYMENT_UPDATE : Permissions::INVOICE_UPDATE;
+        $permission = $this->route('payment') ? Permissions::BILL_PAY : Permissions::BILL_UPDATE;
 
         return $this->hasCompanyPermission($permission) && $this->validateRlsContext();
     }

@@ -9,8 +9,11 @@ import { formatMoneyText } from '@/lib/money';
 import { paymentMethodLabel } from '@/lib/payment-method';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { CreditCard } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { CreditCard, PencilLine } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue';
+import CorrectionHistory from '../../components/CorrectionHistory.vue';
+import type { Correction } from '../../components/CorrectionHistory.vue';
 
 interface CompanyRef {
     id: string;
@@ -54,7 +57,12 @@ const props = defineProps<{
     groupPayments?: PaymentRef[];
     journalTransactionId?: string | null;
     editLock?: string | null;
+    canCorrect?: boolean;
+    correctionSuppliers?: { id: string; name: string }[];
+    corrections?: Correction[];
 }>();
+
+const correcting = ref(false);
 
 const paymentTitle = computed(
     () => props.payment.payment_group_number || props.payment.payment_number,
@@ -175,6 +183,10 @@ const groupedCashMovement = computed(
             >
                 View Journal
             </Button>
+            <Button v-if="canCorrect" variant="outline" @click="correcting = true">
+                <PencilLine class="mr-2 h-4 w-4" />
+                Correct
+            </Button>
         </template>
 
         <div class="grid gap-4 md:grid-cols-3">
@@ -250,5 +262,21 @@ const groupedCashMovement = computed(
                 </template>
             </LedgerRegister>
         </div>
+
+        <div class="mt-6">
+            <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
+        </div>
+
+        <CorrectRecordDialog
+            v-if="canCorrect"
+            v-model:open="correcting"
+            kind="bill_payment"
+            party="supplier"
+            :url="`/${company.slug}/bill-payments/${payment.id}/correct`"
+            :number="payment.payment_number"
+            :total="Number(payment.amount)"
+            :customer-id="payment.vendor?.id ?? null"
+            :parties="correctionSuppliers ?? []"
+        />
     </PageShell>
 </template>

@@ -13,16 +13,18 @@ export interface Correction {
   created_at: string
   by: string | null
   changes: {
-    before?: { customer?: string | null; amount?: number }
-    after?: { customer?: string | null; amount?: number; shares?: { customer: string; amount: number; invoice: string; credit_note: string }[] }
+    before?: { customer?: string | null; vendor?: string | null; amount?: number }
+    after?: { customer?: string | null; vendor?: string | null; amount?: number; shares?: { customer?: string; vendor?: string; amount: number; invoice?: string; bill?: string; credit_note?: string; vendor_credit?: string }[] }
     payments_unapplied?: { payment: string; amount: number }[]
-    unapplied_from?: { invoice: string; amount: number }[]
+    unapplied_from?: { invoice?: string; bill?: string; amount: number }[]
   }
 }
 
 defineProps<{ corrections: Correction[]; slug: string }>()
 
 const money = (n: number) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
+const party = (p?: { customer?: string | null; vendor?: string | null }) => p?.customer ?? p?.vendor ?? ''
+const doc = (s: { invoice?: string; bill?: string }) => s.invoice ?? s.bill ?? ''
 </script>
 
 <template>
@@ -35,10 +37,10 @@ const money = (n: number) => Number(n).toLocaleString(undefined, { maximumFracti
           <span v-else class="font-medium">{{ c.correction_number }}</span>
           <span class="text-xs text-muted-foreground">{{ formatDateTime(c.created_at, { mode: 'date' }) }}<template v-if="c.by"> · {{ c.by }}</template></span>
         </div>
-        <p v-if="c.action === 'change_customer'">{{ c.changes.before?.customer }} → {{ c.changes.after?.customer }}</p>
+        <p v-if="c.action === 'change_customer' || c.action === 'change_supplier'">{{ party(c.changes.before) }} → {{ party(c.changes.after) }}</p>
         <template v-else-if="c.action === 'split'">
-          <p>{{ c.changes.after?.customer }} keeps {{ money(c.changes.after?.amount ?? 0) }}</p>
-          <p v-for="s in c.changes.after?.shares ?? []" :key="s.invoice">{{ s.customer }} {{ money(s.amount) }} · {{ s.invoice }}</p>
+          <p>{{ party(c.changes.after) }} keeps {{ money(c.changes.after?.amount ?? 0) }}</p>
+          <p v-for="s in c.changes.after?.shares ?? []" :key="doc(s)">{{ s.customer ?? s.vendor }} {{ money(s.amount) }} · {{ doc(s) }}</p>
         </template>
         <p class="text-muted-foreground" dir="auto">{{ c.reason }}</p>
       </div>

@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\PaymentAllocation;
+use App\Modules\Accounting\Services\Concerns\RecordsCorrections;
 use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,8 @@ use Illuminate\Validation\ValidationException;
  */
 class CorrectionService
 {
+    use RecordsCorrections;
+
     public function __construct(private readonly GlPostingService $posting) {}
 
     /** Move an invoice to the customer it really belongs to. */
@@ -68,7 +71,7 @@ class CorrectionService
      * Split an invoice between customers. $shares: [['customer_id' => ..., 'amount' => ...], ...]
      * adding up to the invoice total; the first share keeps the invoice itself.
      */
-    public function invoiceSplit(Invoice $invoice, array $shares, string $reason): array
+    public function invoiceSplit(Invoice $invoice, array $shares, string $reason, bool $unapplyPayments = false): array
     {
         $total = round((float) $invoice->total_amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['customer_id' => (string) $s['customer_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
@@ -82,19 +85,21 @@ class CorrectionService
             $this->customer($invoice->company_id, $share['customer_id']);
         }
 
-        return $this->run($invoice->company_id, function () use ($invoice, $shares, $reason, $total) {
+        return $this->run($invoice->company_id, function () use ($invoice, $shares, $reason, $total, $unapplyPayments) {
             $from = Customer::find($invoice->customer_id);
             $keeper = $this->customer($invoice->company_id, $shares[0]['customer_id']);
 
-            // Payments by anyone other than the one keeping it come off first: its shares must be open.
-            $unapplied = $this->unapplyForeignPayments($invoice, $keeper->id, force: true);
+            // Payments by anyone other than the one keeping it come off first: its shares must be
+            // open. With $unapplyPayments the keeper's own come off too; each stays with its payer
+            // as credit on account, to apply again from the payment's page.
+            $unapplied = $this->unapplyForeignPayments($invoice, $unapplyPayments ? '' : $keeper->id);
             if ($keeper->id !== $invoice->customer_id) {
                 DB::table('acct.invoices')->where('id', $invoice->id)->update(['customer_id' => $keeper->id, 'updated_at' => now()]);
             }
             $invoice->refresh();
             $movedOff = round(array_sum(array_column(array_slice($shares, 1), 'amount')), 2);
             if ((float) $invoice->balance + 0.005 < $movedOff) {
-                throw ValidationException::withMessages(['shares' => "{$keeper->name} has already paid part of this invoice; only ".number_format((float) $invoice->balance, 2).' can be split off.']);
+                throw ValidationException::withMessages(['shares' => 'Payments are applied to this invoice. Take them off first.']);
             }
 
             $ar = $this->receivablesAccount($invoice);
@@ -181,16 +186,6 @@ class CorrectionService
 
     // ------------------------------------------------------------------------------------------
 
-    private function run(string $companyId, callable $work): array
-    {
-        return \App\Services\AccountingWriteTransaction::run(function () use ($companyId, $work) {
-            DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['correction:'.$companyId]);
-            DB::select("SELECT set_config('app.correction_id', ?, true)", [(string) \Illuminate\Support\Str::uuid()]);
-
-            return $work();
-        });
-    }
-
     private function customer(string $companyId, string $id): Customer
     {
         $customer = Customer::where('company_id', $companyId)->find($id);
@@ -202,10 +197,10 @@ class CorrectionService
     }
 
     /**
-     * Takes other customers' payments off an invoice, back to their on-account credit. With
-     * $force, every payment comes off unless it is the keeper's own.
+     * Takes other customers' payments off an invoice, back to their on-account credit. An empty
+     * $keeperId takes every payment off.
      */
-    private function unapplyForeignPayments(Invoice $invoice, string $keeperId, bool $force = false): array
+    private function unapplyForeignPayments(Invoice $invoice, string $keeperId): array
     {
         $done = [];
         $allocations = PaymentAllocation::where('company_id', $invoice->company_id)->where('invoice_id', $invoice->id)->get();
@@ -214,7 +209,8 @@ class CorrectionService
             if (! $payment || $payment->customer_id === $keeperId) {
                 continue;
             }
-            $this->moveAllocationOnAccount($allocation, $invoice);
+            // Fresh each time: the previous allocation already moved paid_amount.
+            $this->moveAllocationOnAccount($allocation, Invoice::find($invoice->id));
             $done[] = ['payment' => $payment->payment_number, 'amount' => round((float) $allocation->amount_allocated, 2)];
         }
 
@@ -398,45 +394,4 @@ class CorrectionService
         return $id;
     }
 
-    private function journal(string $companyId, ?string $currency, string $description, array $lines): string
-    {
-        $currency = strtoupper((string) ($currency ?: 'PKR'));
-
-        return $this->posting->postBalancedTransaction([
-            'company_id' => $companyId,
-            'transaction_type' => 'correction',
-            'date' => now()->toDateString(),
-            'currency' => $currency,
-            'base_currency' => $currency,
-            'description' => $description,
-            'reference_type' => 'acct.corrections',
-            'reference_id' => null,
-        ], $lines)->id;
-    }
-
-    private function record(string $companyId, string $entityType, string $entityId, string $action, string $reason, array $changes, ?string $journalId): array
-    {
-        $last = (int) DB::table('acct.corrections')->where('company_id', $companyId)
-            ->selectRaw("max(nullif(regexp_replace(correction_number, '\D', '', 'g'), '')::int) as n")->value('n');
-        $number = 'COR-'.str_pad((string) ($last + 1), 5, '0', STR_PAD_LEFT);
-        $id = (string) \Illuminate\Support\Str::uuid();
-        DB::table('acct.corrections')->insert([
-            'id' => $id,
-            'company_id' => $companyId,
-            'correction_number' => $number,
-            'entity_type' => $entityType,
-            'entity_id' => $entityId,
-            'action' => $action,
-            'reason' => $reason,
-            'changes' => json_encode($changes),
-            'transaction_id' => $journalId,
-            'created_by_user_id' => Auth::id(),
-            'created_at' => now(),
-        ]);
-        if ($journalId) {
-            DB::table('acct.transactions')->where('id', $journalId)->update(['reference_id' => $id]);
-        }
-
-        return ['id' => $id, 'number' => $number, 'journal_id' => $journalId, 'changes' => $changes];
-    }
 }

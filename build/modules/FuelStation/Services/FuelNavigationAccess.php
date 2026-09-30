@@ -23,6 +23,7 @@ class FuelNavigationAccess
             'settlements' => Permissions::PAYMENT_CREATE,
             'customers' => Permissions::CUSTOMER_VIEW,
             'fuelSale' => Permissions::INVOICE_CREATE,
+            'invoices' => Permissions::INVOICE_VIEW,
             'payments' => Permissions::PAYMENT_VIEW,
             'expenses' => Permissions::EXPENSE_VIEW,
             'employees' => Permissions::EMPLOYEE_VIEW,

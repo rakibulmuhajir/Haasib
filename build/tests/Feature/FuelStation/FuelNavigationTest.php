@@ -55,7 +55,8 @@ test('a fuel-station owner sees the bank feed, bank reconciliation and credit no
 
     expect($allowed)->toContain('bankFeed')
         ->toContain('bankReconciliation')
-        ->toContain('creditNotes');
+        ->toContain('creditNotes')
+        ->toContain('invoices');
 });
 
 test('a user without the mapped permissions does not see bank feed, bank reconciliation or credit notes', function () {

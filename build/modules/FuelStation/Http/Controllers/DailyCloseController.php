@@ -598,11 +598,14 @@ class DailyCloseController extends Controller
                 $item->sale_price = $salePrice;
             });
 
+        // The supplier rate is the last bill's price up to this day; the one on the last rate change
+        // is only a copy of it and, re-applied from here, would carry a typo forward day after day.
+        $lastBills = app(\App\Modules\FuelStation\Services\RateChangeService::class)->lastPurchasePrices($companyId, $date);
         $rates = [];
         foreach ($fuelItems as $item) {
             $rate = RateChange::getRateForDate($companyId, $item->id, $date);
             $rates[$item->id] = [
-                'purchase_rate' => (float) ($rate?->purchase_rate ?? $item->avg_cost ?? 0),
+                'purchase_rate' => (float) ($lastBills[$item->id]['rate'] ?? $rate?->purchase_rate ?? $item->avg_cost ?? 0),
                 'sale_rate' => (float) ($rate?->sale_rate ?? $item->sale_price ?? 0),
             ];
         }

@@ -851,3 +851,31 @@ test('a line the page edited wins over a change made elsewhere, and a line it re
     expect(ledgerBalance($f['accounts']['bank']))->toBe(7000.0)
         ->and(ledgerBalance($f['accounts']['bank2']))->toBe(0.0);
 });
+
+test('once the opening date is in use, balances can still be added at that date after trading starts', function () {
+    $f = openingBalanceFixture();
+    dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 1]]);
+    $period = AccountingPeriod::where('company_id', $f['company']->id)->where('period_number', 8)->first()
+        ?? AccountingPeriod::where('company_id', $f['company']->id)->where('period_number', 9)->first();
+    Transaction::create([
+        'company_id' => $f['company']->id,
+        'transaction_number' => 'JE-0002',
+        'transaction_type' => 'journal',
+        'transaction_date' => '2026-08-31',
+        'posting_date' => '2026-08-31',
+        'fiscal_year_id' => $period->fiscal_year_id,
+        'period_id' => $period->id,
+        'currency' => 'PKR',
+        'base_currency' => 'PKR',
+        'exchange_rate' => 1,
+        'status' => 'posted',
+        'description' => 'trading on the opening date',
+    ]);
+
+    $again = dispatchOpeningBalance($f, ['as_of_date' => '2026-08-31', 'cash' => ['amount' => 2]]);
+    expect($again['data']['journal_id'])->not->toBeNull();
+
+    // Moving the date is still checked.
+    expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-01', 'cash' => ['amount' => 3]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+});

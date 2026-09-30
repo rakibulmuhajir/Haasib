@@ -323,6 +323,12 @@ class SaveAction implements PaletteAction
 
     private function guardDate(string $companyId, string $asOf, array $opening): void
     {
+        // The date is already set and in use: adding a customer's or supplier's opening balance
+        // later keeps it, even though trading has started since. Only a new or moved date is checked.
+        if (! empty($opening['journal_id']) && substr((string) ($opening['as_of_date'] ?? ''), 0, 10) === $asOf) {
+            return;
+        }
+
         $earliest = self::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
             ->min('transaction_date');

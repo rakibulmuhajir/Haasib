@@ -50,6 +50,9 @@ class SaveAction implements PaletteAction
     {
         return [
             'as_of_date' => 'required|date',
+            // Add these people's opening balances on their own, leaving everyone else's as they
+            // are (see appendOnly). Set by SetPartyAction for someone with no opening balance yet.
+            'append_only' => 'nullable|boolean',
             // The rows the caller's form was loaded with. The page sends them so a save can
             // tell its own edits from lines changed elsewhere since (see mergeWithCurrent).
             'loaded' => 'nullable|array',
@@ -93,6 +96,9 @@ class SaveAction implements PaletteAction
     {
         $contextCompany = CompanyContext::requireCompany();
         $asOf = $params['as_of_date'];
+        if (! empty($params['append_only'])) {
+            return $this->appendOnly($contextCompany, $params, $asOf);
+        }
 
         return \App\Services\AccountingWriteTransaction::run(function () use ($contextCompany, $params, $asOf) {
             // Lock order (do not invert): (1) advisory 'opening:'||company_id lock --
@@ -173,6 +179,60 @@ class SaveAction implements PaletteAction
         // (company row above, invoices/bills created below) after the exclusive advisory
         // lock; retry is a backstop against the narrow window described in the lock-order
         // comment in the protect_locked_openings migration.
+    }
+
+    /**
+     * Adds opening balances for people who have none yet, at the date already in use, without
+     * rebuilding the rest. A full save deletes and re-posts every opening document, so it refuses
+     * once any of them has been paid or drawn on -- which is always, a few days into trading.
+     * A new customer's or supplier's opening balance touches nobody else's, so it is posted on
+     * its own: an opening invoice or bill, or a small opening journal of its own whose id is kept
+     * in settings (extra_journal_ids) so the Opening Balances page and a later full save see it.
+     */
+    private function appendOnly(Company $contextCompany, array $params, string $asOf): array
+    {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($contextCompany, $params, $asOf) {
+            DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['opening:'.$contextCompany->id]);
+            $company = Company::whereKey($contextCompany->id)->lockForUpdate()->firstOrFail();
+            $opening = $company->settings['opening_balances'] ?? [];
+
+            $this->guardNotLocked($company);
+            if (empty($opening['journal_id']) || substr((string) ($opening['as_of_date'] ?? ''), 0, 10) !== substr($asOf, 0, 10)) {
+                throw ValidationException::withMessages(['as_of_date' => 'Opening balances must use the date already set ('.($opening['as_of_date'] ?? 'none').').']);
+            }
+
+            $accounts = $this->accounts->resolve($company->id);
+            $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
+
+            $lines = [];
+            $pending = [];
+            $this->addAmanatLines($company->id, $params, $accounts, $lines, $pending);
+            $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            $this->addSalariesOwedLines($company->id, $params, $currency, $asOf, $lines, $pending);
+            $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            [$journalId, $entryIdsByLine] = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
+            foreach ($pending as $create) {
+                $create($entryIdsByLine, $journalId);
+            }
+
+            $invoiceIds = $this->createOpeningInvoices($company, $params, $accounts, $asOf, $currency);
+            $billIds = $this->createOpeningBills($company, $params, $accounts, $asOf, $currency);
+
+            $settings = $company->settings ?? [];
+            $settings['opening_balances']['invoice_ids'] = array_values(array_merge($opening['invoice_ids'] ?? [], $invoiceIds));
+            $settings['opening_balances']['bill_ids'] = array_values(array_merge($opening['bill_ids'] ?? [], $billIds));
+            if ($journalId) {
+                $settings['opening_balances']['extra_journal_ids'] = array_values(array_merge($opening['extra_journal_ids'] ?? [], [$journalId]));
+            }
+            $company->settings = $settings;
+            $company->save();
+            $contextCompany->settings = $settings;
+
+            return [
+                'message' => 'Opening balance added as of '.$asOf,
+                'data' => ['journal_id' => $journalId, 'invoice_ids' => $invoiceIds, 'bill_ids' => $billIds],
+            ];
+        });
     }
 
     /**
@@ -410,6 +470,12 @@ class SaveAction implements PaletteAction
         // scanning for "any transaction_type = opening_balance row", which would also match
         // already-retired generations' journals.
         $journals = collect();
+        foreach ($opening['extra_journal_ids'] ?? [] as $extraId) {
+            $extra = Transaction::where('company_id', $companyId)->where('id', $extraId)->whereNull('reversed_by_id')->with('journalEntries')->first();
+            if ($extra) {
+                $journals->push($extra);
+            }
+        }
         if ($journalId) {
             $journal = Transaction::where('company_id', $companyId)->where('id', $journalId)->whereNull('reversed_by_id')->with('journalEntries')->first();
             if ($journal) {

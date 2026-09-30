@@ -190,3 +190,24 @@ test('a customer with no opening amounts is created as plain as before', functio
     $response->assertSessionHasNoErrors()->assertRedirect()->assertSessionMissing('error');
     expect(Customer::where('company_id', $f['company']->id)->where('name', 'Plain Customer')->exists())->toBeTrue();
 });
+
+test('a customer can still be quick-added with an opening balance after an earlier opening invoice has been paid', function () {
+    $f = openingBalanceHttpFixture();
+
+    test()->actingAs($f['user'])->post("/{$f['company']->slug}/customers/quick-store", [
+        'name' => 'First Buyer', 'opening_owed' => 50000, 'opening_date' => '2026-08-01',
+    ])->assertSessionHasNoErrors();
+
+    // The first buyer has paid part of their opening balance: a full rebuild is now refused.
+    $firstId = Customer::where('company_id', $f['company']->id)->where('name', 'First Buyer')->value('id');
+    DB::table('acct.invoices')->where('customer_id', $firstId)->update(['paid_amount' => 10000, 'balance' => 40000]);
+
+    test()->actingAs($f['user'])->post("/{$f['company']->slug}/customers/quick-store", [
+        'name' => 'Second Buyer', 'opening_owed' => 20000, 'opening_date' => '2026-08-01',
+    ])->assertSessionHasNoErrors()->assertSessionMissing('error');
+
+    $secondId = Customer::where('company_id', $f['company']->id)->where('name', 'Second Buyer')->value('id');
+    $rows = collect(openingView($f)['rows']['credit_customers']);
+    expect($rows->firstWhere('customer_id', $firstId)['amount'])->toBe(50000.0);
+    expect($rows->firstWhere('customer_id', $secondId)['amount'])->toBe(20000.0);
+});

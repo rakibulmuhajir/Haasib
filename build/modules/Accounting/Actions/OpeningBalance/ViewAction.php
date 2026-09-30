@@ -74,15 +74,18 @@ class ViewAction implements PaletteAction
             }
         }
 
-        $entryIds = $journal ? $journal->journalEntries->pluck('id')->all() : [];
-        $amanat = $journal ? AmanatTransaction::whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
+        // People added one at a time after trading began each have their own small journal
+        // (SaveAction::appendOnly); their lines belong to the opening position too.
+        $journalIds = array_values(array_filter([$journal?->id, ...($opening['extra_journal_ids'] ?? [])]));
+        $entryIds = $journalIds ? \Illuminate\Support\Facades\DB::table('acct.journal_entries')->whereIn('transaction_id', $journalIds)->pluck('id')->all() : [];
+        $amanat = $journalIds ? AmanatTransaction::whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
             ->map(fn ($t) => ['customer_id' => $t->customer_id, 'customer_name' => $t->customer?->name, 'amount' => (float) $t->amount])->values()->all() : [];
-        $employees = $journal ? SalaryAdvance::whereIn('journal_entry_id', $entryIds)->with('employee:id,first_name,last_name')->get()
+        $employees = $journalIds ? SalaryAdvance::whereIn('journal_entry_id', $entryIds)->with('employee:id,first_name,last_name')->get()
             ->map(fn ($a) => ['employee_id' => $a->employee_id, 'employee_name' => trim(($a->employee?->first_name ?? '').' '.($a->employee?->last_name ?? '')), 'amount' => (float) $a->amount, 'recovered' => (float) $a->amount_recovered])->values()->all() : [];
-        $partners = $journal ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
+        $partners = $journalIds ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
             ->map(fn ($p) => ['partner_id' => $p->partner_id, 'partner_name' => $p->partner?->name, 'amount' => (float) $p->amount])->values()->all() : [];
-        $salariesOwed = $journal ? Payslip::where('company_id', $companyId)
-            ->where('gl_transaction_id', $journal->id)
+        $salariesOwed = $journalIds ? Payslip::where('company_id', $companyId)
+            ->whereIn('gl_transaction_id', $journalIds)
             ->where('notes', SaveAction::MARK)
             ->with('employee:id,first_name,last_name')
             ->get()

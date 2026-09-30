@@ -89,6 +89,22 @@ class SetPartyAction implements PaletteAction
             ]);
         }
 
+        // Someone with no opening balance yet, at the date already in use: add theirs on its own.
+        // Rebuilding everyone's (below) is refused once any opening balance has been paid or used.
+        $hasOne = collect($view['rows'][$section] ?? [])->contains(fn ($row) => ($row[$key] ?? null) === $party->id && (float) ($row['amount'] ?? 0) > 0);
+        if (! $hasOne && $amount > 0 && ! empty($view['as_of_date']) && substr((string) $view['as_of_date'], 0, 10) === substr((string) $asOfDate, 0, 10)) {
+            $result = $bus->dispatch('opening_balance.save', [
+                'as_of_date' => $asOfDate,
+                'append_only' => true,
+                $section => [[$key => $party->id, 'amount' => $amount]],
+            ], $user);
+
+            return [
+                'message' => 'Opening balance set for '.$party->name,
+                'data' => $result['data'] ?? [],
+            ];
+        }
+
         $payload = OpeningSet::payloadFromView($view);
         $payload['as_of_date'] = $asOfDate;
         $payload[$section] = collect($payload[$section])

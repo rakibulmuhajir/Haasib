@@ -127,7 +127,7 @@ const otherErrors = computed(() => Object.entries(form.errors)
           </div>
           <div v-for="(share, i) in form.shares" :key="i" class="grid grid-cols-[minmax(0,1fr)_8rem_2.25rem] items-center gap-2">
             <div class="min-w-0">
-              <SearchableSelect v-model="share.customer_id" :options="options" :show-value="false" :placeholder="i === 0 ? `Keeps ${number}` : `Choose ${party}`" />
+              <SearchableSelect v-model="share.customer_id" :options="options" :show-value="false" :placeholder="`Choose ${party}`" />
             </div>
             <Input v-model.number="share.amount" type="number" step="0.01" min="0" class="w-full text-right tabular-nums" />
             <Button v-if="form.shares.length > 2" type="button" variant="ghost" size="icon" aria-label="Remove" @click="removeShare(i)">

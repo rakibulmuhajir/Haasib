@@ -68,55 +68,46 @@ class CorrectionService
     }
 
     /**
-     * Split an invoice between customers. $shares: [['customer_id' => ..., 'amount' => ...], ...]
-     * adding up to the invoice total; the first share keeps the invoice itself.
+     * Split an invoice between the customers it really belongs to. The invoice stays with the
+     * customer it was billed to and is cancelled there by a credit note for each share; each share
+     * becomes a new invoice of its own for its customer, same date and reference. So each buyer
+     * sees only their own sale, and the correction sits on the record of whoever was billed wrongly.
+     * Revenue is untouched: only who owes it moves. Payments on the invoice come off first
+     * ($unapplyPayments), each staying with its payer as credit on account.
      */
     public function invoiceSplit(Invoice $invoice, array $shares, string $reason, bool $unapplyPayments = false): array
     {
-        $total = round((float) $invoice->total_amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['customer_id' => (string) $s['customer_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {
             throw ValidationException::withMessages(['shares' => 'Split between at least two customers.']);
         }
-        if (abs(array_sum(array_column($shares, 'amount')) - $total) > 0.005) {
-            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($total, 2).'.']);
+        // What is still on it: its total less anything a credit note already took off.
+        $credited = (float) DB::table('acct.credit_note_applications')->where('invoice_id', $invoice->id)->sum('amount_applied');
+        $open = round((float) $invoice->total_amount - $credited, 2);
+        if (abs(array_sum(array_column($shares, 'amount')) - $open) > 0.005) {
+            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($open, 2).'.']);
         }
         foreach ($shares as $share) {
             $this->customer($invoice->company_id, $share['customer_id']);
         }
+        if (! $unapplyPayments && PaymentAllocation::where('invoice_id', $invoice->id)->exists()) {
+            throw ValidationException::withMessages(['shares' => 'Payments are applied to this invoice. Take them off first.']);
+        }
 
-        return $this->run($invoice->company_id, function () use ($invoice, $shares, $reason, $total, $unapplyPayments) {
+        return $this->run($invoice->company_id, function () use ($invoice, $shares, $reason, $open) {
             $from = Customer::find($invoice->customer_id);
-            $keeper = $this->customer($invoice->company_id, $shares[0]['customer_id']);
-
-            // Payments by anyone other than the one keeping it come off first: its shares must be
-            // open. With $unapplyPayments the keeper's own come off too; each stays with its payer
-            // as credit on account, to apply again from the payment's page.
-            $unapplied = $this->unapplyForeignPayments($invoice, $unapplyPayments ? '' : $keeper->id);
-            if ($keeper->id !== $invoice->customer_id) {
-                DB::table('acct.invoices')->where('id', $invoice->id)->update(['customer_id' => $keeper->id, 'updated_at' => now()]);
-            }
-            $invoice->refresh();
-            $movedOff = round(array_sum(array_column(array_slice($shares, 1), 'amount')), 2);
-            if ((float) $invoice->balance + 0.005 < $movedOff) {
-                throw ValidationException::withMessages(['shares' => 'Payments are applied to this invoice. Take them off first.']);
-            }
+            $unapplied = $this->unapplyForeignPayments($invoice, '');
 
             $ar = $this->receivablesAccount($invoice);
             $lines = [];
             $created = [];
-            foreach (array_slice($shares, 1) as $share) {
+            foreach ($shares as $share) {
                 $customer = $this->customer($invoice->company_id, $share['customer_id']);
                 $new = $this->splitInvoice($invoice, $customer, $share['amount']);
-                $credit = $this->splitCredit($invoice, $keeper, $share['amount'], $new->invoice_number);
+                $credit = $this->splitCredit($invoice->fresh(), $from, $share['amount'], "{$new->invoice_number} · {$customer->name}");
                 $lines[] = ['account_id' => $ar, 'type' => 'debit', 'amount' => $share['amount'], 'description' => "{$new->invoice_number} to {$customer->name} (from {$invoice->invoice_number})"];
                 $lines[] = ['account_id' => $ar, 'type' => 'credit', 'amount' => $share['amount'], 'description' => "{$credit->credit_note_number} off {$invoice->invoice_number}"];
                 $created[] = ['customer' => $customer->name, 'amount' => $share['amount'], 'invoice' => $new->invoice_number, 'invoice_id' => $new->id, 'credit_note' => $credit->credit_note_number, 'credit_note_id' => $credit->id];
-            }
-            if ($keeper->id !== ($from?->id)) {
-                $keep = round($total, 2);
-                $lines[] = ['account_id' => $ar, 'type' => 'debit', 'amount' => $keep, 'description' => "{$invoice->invoice_number} to {$keeper->name}"];
-                $lines[] = ['account_id' => $ar, 'type' => 'credit', 'amount' => $keep, 'description' => "{$invoice->invoice_number} from {$from?->name}"];
             }
 
             $journal = $this->journal($invoice->company_id, $invoice->currency, "Correction: {$invoice->invoice_number} split between customers", $lines);
@@ -127,8 +118,8 @@ class CorrectionService
 
             return $this->record($invoice->company_id, 'invoice', $invoice->id, 'split', $reason, [
                 'number' => $invoice->invoice_number,
-                'before' => ['customer_id' => $from?->id, 'customer' => $from?->name, 'amount' => $total],
-                'after' => ['customer_id' => $keeper->id, 'customer' => $keeper->name, 'amount' => round($total - array_sum(array_column($created, 'amount')), 2), 'shares' => $created],
+                'before' => ['customer_id' => $from?->id, 'customer' => $from?->name, 'amount' => $open],
+                'after' => ['customer_id' => $from?->id, 'customer' => $from?->name, 'amount' => 0, 'shares' => $created],
                 'payments_unapplied' => $unapplied,
             ], $journal);
         });
@@ -420,7 +411,7 @@ class CorrectionService
             'currency' => $original->currency,
             'base_currency' => $original->base_currency,
             'base_amount' => $amount,
-            'reason' => "Share moved to {$newNumber}",
+            'reason' => "Moved to {$newNumber}",
             'status' => 'applied',
             'posted_at' => now(),
             'created_by_user_id' => Auth::id(),

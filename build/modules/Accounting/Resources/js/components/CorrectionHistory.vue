@@ -39,7 +39,8 @@ const doc = (s: { invoice?: string; bill?: string; payment?: string }) => s.invo
         </div>
         <p v-if="c.action === 'change_customer' || c.action === 'change_supplier'">{{ party(c.changes.before) }} → {{ party(c.changes.after) }}</p>
         <template v-else-if="c.action === 'split'">
-          <p>{{ party(c.changes.after) }} keeps {{ money(c.changes.after?.amount ?? 0) }}</p>
+          <p v-if="(c.changes.after?.amount ?? 0) > 0">{{ party(c.changes.after) }} keeps {{ money(c.changes.after?.amount ?? 0) }}</p>
+          <p v-else>Cancelled for {{ party(c.changes.before) }}, split to:</p>
           <p v-for="s in c.changes.after?.shares ?? []" :key="doc(s)">{{ s.customer ?? s.vendor }} {{ money(s.amount) }} · {{ doc(s) }}</p>
         </template>
         <p class="text-muted-foreground" dir="auto">{{ c.reason }}</p>

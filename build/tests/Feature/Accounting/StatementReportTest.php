@@ -348,7 +348,8 @@ test('splitting an invoice gives each customer their share through a credit note
     expect(owes($f['customer']))->toBe(700.0)
         ->and(owes($b))->toBe(300.0)
         ->and((float) $invoice->fresh()->total_amount)->toBe(1000.0)   // the original is never rewritten
-        ->and((float) $invoice->fresh()->balance)->toBe(700.0)
+        ->and((float) $invoice->fresh()->balance)->toBe(0.0)           // ...it is cancelled where it was billed
+        ->and((float) Invoice::where('customer_id', $f['customer']->id)->where('id', '!=', $invoice->id)->value('total_amount'))->toBe(700.0)
         ->and(ledgerBalanceOf($f['revenue']))->toBe($revenueBefore);
     $new = Invoice::where('customer_id', $b->id)->firstOrFail();
     expect($new->invoice_date->toDateString())->toBe('2026-09-10');
@@ -461,7 +462,7 @@ test('splitting a bill gives each supplier their share through a vendor credit a
     expect(owedTo($f['vendor']))->toBe(700.0)
         ->and(owedTo($b))->toBe(300.0)
         ->and((float) $bill->fresh()->total_amount)->toBe(1000.0)   // the original is never rewritten
-        ->and((float) $bill->fresh()->balance)->toBe(700.0)
+        ->and((float) $bill->fresh()->balance)->toBe(0.0)            // ...it is cancelled where it was recorded
         ->and(ledgerBalanceOf($expense))->toBe($expenseBefore);
     $new = Bill::where('vendor_id', $b->id)->firstOrFail();
     expect($new->bill_date->toDateString())->toBe('2026-09-10');
@@ -521,7 +522,7 @@ test('a paid invoice splits only once its payments are taken off, and the money 
 
     correct($f, 'correction.invoice_split', ['invoice_id' => $invoice->id, 'reason' => 'Two', 'shares' => $shares, 'unapply_payments' => true]);
 
-    expect((float) $invoice->fresh()->balance)->toBe(600.0)
+    expect((float) $invoice->fresh()->balance)->toBe(0.0)
         ->and(owes($f['customer']))->toBe(-400.0)   // 600 owed, 1000 paid: 400 credit left to apply
         ->and(owes($b))->toBe(400.0)
         ->and((float) DB::table('acct.payment_allocations')->whereNull('invoice_id')->sum('amount_allocated'))->toBe(1000.0);
@@ -636,7 +637,7 @@ test('a split invoice page lists the moved share as a credit note, not as paid',
     test()->actingAs($f['user'])->get("/{$f['company']->slug}/invoices/{$invoice->id}")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('appliedCredits', 1)
-            ->where('appliedCredits.0.amount', fn ($v) => (float) $v === 300.0)
+            ->has('appliedCredits', 2)   // one per share, each naming the invoice it moved to
+            ->where('appliedCredits.1.amount', fn ($v) => (float) $v === 300.0)
             ->has('appliedPayments', 0));
 });

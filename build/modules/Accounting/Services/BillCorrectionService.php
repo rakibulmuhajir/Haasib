@@ -66,54 +66,44 @@ class BillCorrectionService
     }
 
     /**
-     * Split a bill between suppliers. $shares: [['vendor_id' => ..., 'amount' => ...], ...]
-     * adding up to the bill total; the first share keeps the bill itself.
+     * Split a bill between the suppliers it really came from. The bill stays with the supplier it
+     * was recorded against and is cancelled there by a vendor credit for each share; each share
+     * becomes a new bill of its own for its supplier, same date and supplier invoice number. Cost
+     * accounts are untouched: only who is owed moves. Payments on the bill come off first
+     * ($unapplyPayments), each back to being its supplier's advance.
      */
     public function billSplit(Bill $bill, array $shares, string $reason, bool $unapplyPayments = false): array
     {
-        $total = round((float) $bill->total_amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['vendor_id' => (string) $s['vendor_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {
             throw ValidationException::withMessages(['shares' => 'Split between at least two suppliers.']);
         }
-        if (abs(array_sum(array_column($shares, 'amount')) - $total) > 0.005) {
-            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($total, 2).'.']);
+        $credited = (float) DB::table('acct.vendor_credit_applications')->where('bill_id', $bill->id)->sum('amount_applied');
+        $open = round((float) $bill->total_amount - $credited, 2);
+        if (abs(array_sum(array_column($shares, 'amount')) - $open) > 0.005) {
+            throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($open, 2).'.']);
         }
         foreach ($shares as $share) {
             $this->vendor($bill->company_id, $share['vendor_id']);
         }
+        if (! $unapplyPayments && BillPaymentAllocation::where('bill_id', $bill->id)->exists()) {
+            throw ValidationException::withMessages(['shares' => 'Payments are applied to this bill. Take them off first.']);
+        }
 
-        return $this->run($bill->company_id, function () use ($bill, $shares, $reason, $total, $unapplyPayments) {
+        return $this->run($bill->company_id, function () use ($bill, $shares, $reason, $open) {
             $from = Vendor::find($bill->vendor_id);
-            $keeper = $this->vendor($bill->company_id, $shares[0]['vendor_id']);
-
-            // Payments by anyone other than the one keeping it come off first: its shares must be open.
-            // With $unapplyPayments the keeper's own payments come off too, back to being advances.
-            $unapplied = $this->unapplyForeignBillPayments($bill, $unapplyPayments ? '' : $keeper->id);
-            if ($keeper->id !== $bill->vendor_id) {
-                DB::table('acct.bills')->where('id', $bill->id)->update(['vendor_id' => $keeper->id, 'updated_at' => now()]);
-            }
-            $bill->refresh();
-            $movedOff = round(array_sum(array_column(array_slice($shares, 1), 'amount')), 2);
-            if ((float) $bill->balance + 0.005 < $movedOff) {
-                throw ValidationException::withMessages(['shares' => 'Payments are applied to this bill. Take them off first.']);
-            }
+            $unapplied = $this->unapplyForeignBillPayments($bill, '');
 
             $ap = $this->payablesAccount($bill);
             $lines = [];
             $created = [];
-            foreach (array_slice($shares, 1) as $share) {
+            foreach ($shares as $share) {
                 $vendor = $this->vendor($bill->company_id, $share['vendor_id']);
                 $new = $this->splitBill($bill, $vendor, $share['amount']);
-                $credit = $this->splitVendorCredit($bill, $keeper, $share['amount'], $new->bill_number);
+                $credit = $this->splitVendorCredit($bill->fresh(), $from, $share['amount'], "{$new->bill_number} · {$vendor->name}");
                 $lines[] = ['account_id' => $ap, 'type' => 'debit', 'amount' => $share['amount'], 'description' => "{$credit->credit_number} off {$bill->bill_number}"];
                 $lines[] = ['account_id' => $ap, 'type' => 'credit', 'amount' => $share['amount'], 'description' => "{$new->bill_number} to {$vendor->name} (from {$bill->bill_number})"];
                 $created[] = ['vendor' => $vendor->name, 'amount' => $share['amount'], 'bill' => $new->bill_number, 'bill_id' => $new->id, 'vendor_credit' => $credit->credit_number, 'vendor_credit_id' => $credit->id];
-            }
-            if ($keeper->id !== ($from?->id)) {
-                $keep = round($total, 2);
-                $lines[] = ['account_id' => $ap, 'type' => 'debit', 'amount' => $keep, 'description' => "{$bill->bill_number} from {$from?->name}"];
-                $lines[] = ['account_id' => $ap, 'type' => 'credit', 'amount' => $keep, 'description' => "{$bill->bill_number} to {$keeper->name}"];
             }
 
             $journal = $this->journal($bill->company_id, $bill->currency, "Correction: {$bill->bill_number} split between suppliers", $lines);
@@ -124,8 +114,8 @@ class BillCorrectionService
 
             return $this->record($bill->company_id, 'bill', $bill->id, 'split', $reason, [
                 'number' => $bill->bill_number,
-                'before' => ['vendor_id' => $from?->id, 'vendor' => $from?->name, 'amount' => $total],
-                'after' => ['vendor_id' => $keeper->id, 'vendor' => $keeper->name, 'amount' => round($total - array_sum(array_column($created, 'amount')), 2), 'shares' => $created],
+                'before' => ['vendor_id' => $from?->id, 'vendor' => $from?->name, 'amount' => $open],
+                'after' => ['vendor_id' => $from?->id, 'vendor' => $from?->name, 'amount' => 0, 'shares' => $created],
                 'payments_unapplied' => $unapplied,
             ], $journal);
         });
@@ -404,7 +394,7 @@ class BillCorrectionService
             'currency' => $original->currency,
             'base_currency' => $original->base_currency,
             'base_amount' => $amount,
-            'reason' => "Share moved to {$newNumber}",
+            'reason' => "Moved to {$newNumber}",
             'status' => 'applied',
             'received_at' => now(),
             'ap_account_id' => $keeper->ap_account_id,
@@ -479,9 +469,11 @@ class BillCorrectionService
     /** Mirrors Bill\CreateAction::nextNumber(); this runs inside the correction's own lock. */
     private function nextBillNumber(string $companyId): string
     {
+        // Highest by number, not by text: an odd number (a hand-typed one) must not reset the count.
         $last = Bill::withTrashed()->where('company_id', $companyId)
-            ->whereNotNull('bill_number')->lockForUpdate()
-            ->orderByDesc('bill_number')->value('bill_number');
+            ->where('bill_number', '~', '^BILL-[0-9]+$')
+            ->orderByRaw("CAST(substring(bill_number from '[0-9]+$') AS bigint) DESC")
+            ->value('bill_number');
         $seq = ($last && preg_match('/(\d+)$/', $last, $m)) ? ((int) $m[1]) + 1 : 1;
 
         return 'BILL-'.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
@@ -490,8 +482,9 @@ class BillCorrectionService
     /** Mirrors VendorCredit\CreateAction::nextNumber(). */
     private function nextVendorCreditNumber(string $companyId): string
     {
-        $last = VendorCredit::where('company_id', $companyId)->whereNotNull('credit_number')
-            ->lockForUpdate()->orderByDesc('credit_number')->value('credit_number');
+        $last = VendorCredit::where('company_id', $companyId)->where('credit_number', '~', '^VCRED-[0-9]+$')
+            ->orderByRaw("CAST(substring(credit_number from '[0-9]+$') AS bigint) DESC")
+            ->value('credit_number');
         $seq = ($last && preg_match('/(\d+)$/', $last, $m)) ? ((int) $m[1]) + 1 : 1;
 
         return 'VCRED-'.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);

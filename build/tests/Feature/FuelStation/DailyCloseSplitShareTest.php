@@ -34,6 +34,6 @@ test('a split credit sale shows on the close as each owner\'s share', function (
         ->and((float) $rows[0]['amount'])->toBe(2000.0)
         ->and($rows[1]['customer_name'])->toBe('Truck owner')
         ->and((float) $rows[1]['amount'])->toBe(4000.0)
-        ->and($rows[1]['split_from'])->toBe($invoice->invoice_number)
+        ->and($rows[0]['split_from'])->toBe($invoice->invoice_number)   // split in full: only the shares show
         ->and((float) $rows->sum('amount'))->toBe(6000.0);
 });

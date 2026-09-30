@@ -1400,7 +1400,9 @@ class DailyCloseController extends Controller
             $invoice = $invoices->get($detail['invoice_id'] ?? null);
             $shares = $splits->get($detail['invoice_id'] ?? null, collect());
             $movedOff = round((float) $shares->sum('amount'), 2);
-            $rows = [[
+            $kept = round(($invoice ? (float) $invoice->subtotal : (float) ($detail['amount'] ?? 0)) - $movedOff, 2);
+            // Split in full to others (the usual case): the sale shows only as its shares.
+            $rows = $shares->isNotEmpty() && $kept <= 0.005 ? [] : [[
                 'invoice_id' => $detail['invoice_id'] ?? null,
                 'invoice_number' => $detail['invoice_number'] ?? null,
                 'customer_id' => $invoice?->customer_id,

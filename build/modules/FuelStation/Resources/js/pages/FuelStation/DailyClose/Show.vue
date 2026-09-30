@@ -166,8 +166,9 @@ const creditRows = computed(() => {
       balance,
       split_from: undefined as string | undefined,
     }
-    // Each share split off it follows, under its own customer and invoice.
-    return [row, ...shares.filter((share) => share.split_from === frozen.invoice_number).map((share) => ({
+    // Each share split off it follows, under its own customer and invoice; split in full, only they show.
+    const own = shares.filter((share) => share.split_from === frozen.invoice_number)
+    return [...(own.length && !current ? [] : [row]), ...own.map((share) => ({
       invoice_id: share.invoice_id,
       invoice_number: share.invoice_number,
       customer_id: share.customer_id,

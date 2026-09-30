@@ -243,6 +243,8 @@ const documentTotals = computed<DocumentTotal[]>(() => {
 const overprint = computed(() => {
   if (['void', 'cancelled', 'reversed'].includes(props.invoice.status)) return 'Void'
   if (props.invoice.status === 'draft') return 'Draft'
+  // Cleared by credit notes alone (e.g. split to other customers): nothing was paid.
+  if ((props.invoice.status === 'paid' || Number(props.invoice.balance) === 0) && paidByPayments.value <= 0 && (props.appliedCredits ?? []).length) return 'Credited'
   if (props.invoice.status === 'paid' || props.invoice.balance === 0) return 'Paid'
   return null
 })

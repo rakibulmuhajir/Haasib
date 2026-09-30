@@ -16,8 +16,10 @@ export const fuelStationNav: ModuleNavConfig = {
 
     const groups: NavGroup[] = [
       { label: 'Daily Close', items: [
-        ...item('dailyClose', 'Daily Close', '/fuel/daily-close', ClipboardCheck),
-        ...(!allowed.has('dailyClose') ? item('closeHistory', 'Daily Close History', '/fuel/daily-close/history', ClipboardCheck) : []),
+        // Opens the history; a new close starts from its button.
+        ...(allowed.has('closeHistory')
+          ? item('closeHistory', 'Daily Close', '/fuel/daily-close/history', ClipboardCheck)
+          : item('dailyClose', 'Daily Close', '/fuel/daily-close', ClipboardCheck)),
       ] },
       { label: 'Stock', items: [
         ...item('stock', 'Stock Overview', '/stock', Warehouse, context.isInventoryEnabled),

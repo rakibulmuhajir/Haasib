@@ -4,7 +4,7 @@
  * does all the grouping and labelling; this page only renders it.
  */
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
@@ -42,7 +42,7 @@ const props = defineProps<{
     close_count: number
     missing_dates: string[]
     closes: Array<{ id: string; transaction_number: string; date: string }>
-    cash: { opening: number; money_in: number; money_out: number; short_over: number; closing: number; short_days: number; over_days: number }
+    cash: { opening: number; money_in: number; money_out: number; short_over: number; closing: number; short_days: number; over_days: number; variance_days: Array<{ id: string; date: string; amount: number }> }
     sales: Line[]
     sales_total: number
     tanks: TankRow[]
@@ -71,6 +71,12 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const shortOver = computed(() => s.value.cash.short_over)
+// Which days made up the month's short/over: 'short' or 'over' shows that list, clicking again hides it.
+const varianceFilter = ref<'short' | 'over' | null>(null)
+const toggleVariance = (kind: 'short' | 'over') => { varianceFilter.value = varianceFilter.value === kind ? null : kind }
+const varianceDays = computed(() =>
+    (s.value.cash.variance_days ?? []).filter((d) => (varianceFilter.value === 'short' ? d.amount < 0 : d.amount > 0)),
+)
 </script>
 
 <template>
@@ -113,15 +119,46 @@ const shortOver = computed(() => s.value.cash.short_over)
           <div class="flex justify-between"><dt>− Money out</dt><dd><MoneyText :amount="summary.cash.money_out" :currency="currency" :fraction-digits="0" /></dd></div>
           <div class="flex justify-between font-semibold">
             <dt>
-              <Hint>
-                {{ Math.round(shortOver) === 0 ? 'Balanced' : shortOver < 0 ? 'Short' : 'Over' }}
-                <template #content>{{ summary.cash.short_days }} short days, {{ summary.cash.over_days }} over days.</template>
-              </Hint>
+              {{ Math.round(shortOver) === 0 ? 'Balanced' : shortOver < 0 ? 'Short' : 'Over' }}
+              <span class="ml-1 text-xs font-normal">
+                <button
+                  v-if="summary.cash.short_days"
+                  type="button"
+                  class="underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                  :class="varianceFilter === 'short' ? 'text-foreground' : 'text-muted-foreground'"
+                  :aria-expanded="varianceFilter === 'short'"
+                  @click="toggleVariance('short')"
+                >{{ summary.cash.short_days }} short</button>
+                <template v-if="summary.cash.short_days && summary.cash.over_days"> · </template>
+                <button
+                  v-if="summary.cash.over_days"
+                  type="button"
+                  class="underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                  :class="varianceFilter === 'over' ? 'text-foreground' : 'text-muted-foreground'"
+                  :aria-expanded="varianceFilter === 'over'"
+                  @click="toggleVariance('over')"
+                >{{ summary.cash.over_days }} over</button>
+              </span>
             </dt>
             <dd :class="Math.round(shortOver) !== 0 ? 'text-status-attention' : ''"><MoneyText :amount="Math.abs(shortOver)" :currency="currency" :fraction-digits="0" /></dd>
           </div>
           <div class="flex justify-between font-medium"><dt>= Closing (counted)</dt><dd><MoneyText :amount="summary.cash.closing" :currency="currency" :fraction-digits="0" /></dd></div>
         </dl>
+        <div v-if="varianceFilter && varianceDays.length" class="mt-3 border-t border-rule-default pt-3">
+          <p class="mb-1 text-xs font-medium text-muted-foreground">{{ varianceFilter === 'short' ? 'Short days' : 'Over days' }}</p>
+          <ul class="grid gap-x-8 gap-y-1 text-sm tabular-nums sm:grid-cols-2 lg:grid-cols-3">
+            <li v-for="d in varianceDays" :key="d.id" class="flex justify-between gap-3">
+              <Link :href="`/${company.slug}/fuel/daily-close/${d.id}`" class="underline-offset-2 hover:underline">{{ shortDate(d.date) }}</Link>
+              <span :class="d.amount < 0 ? 'text-status-attention' : ''">
+                {{ d.amount < 0 ? '−' : '+' }}<MoneyText :amount="Math.abs(d.amount)" :currency="currency" :fraction-digits="0" />
+              </span>
+            </li>
+            <li class="flex justify-between gap-3 border-t border-rule-default pt-1 font-medium sm:col-span-2 lg:col-span-3">
+              <span>Total</span>
+              <span>{{ varianceFilter === 'short' ? '−' : '+' }}<MoneyText :amount="Math.abs(varianceDays.reduce((t, d) => t + d.amount, 0))" :currency="currency" :fraction-digits="0" /></span>
+            </li>
+          </ul>
+        </div>
       </section>
 
       <div class="grid gap-6 lg:grid-cols-2">

@@ -88,6 +88,12 @@ class DailyCloseMonthSummaryService
             'closing' => $tot($last, 'closing_cash'),
             'short_days' => $variances->filter(fn ($v) => round($v) < 0)->count(),
             'over_days' => $variances->filter(fn ($v) => round($v) > 0)->count(),
+            // Each day that did not balance, so the month's short/over can be traced to its days.
+            'variance_days' => $rows->map(fn ($r) => [
+                'id' => $r['id'],
+                'date' => $r['date'],
+                'amount' => $tot($r['m'], 'variance'),
+            ])->filter(fn ($d) => round($d['amount']) != 0)->values()->all(),
         ];
 
         // ---- names ----

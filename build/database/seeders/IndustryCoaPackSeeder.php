@@ -676,6 +676,7 @@ class IndustryCoaPackSeeder extends Seeder
             // Other Revenue (4200-4299)
             ['code' => '4200', 'name' => 'Shop Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Convenience store / non-fuel sales'],
             ['code' => '4210', 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'description' => 'Bulk discounts given'],
+            ['code' => '4400', 'name' => 'Rental Income', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Rent from shops on the station premises'],
             ['code' => '4900', 'name' => 'Fuel Variance Gain', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Diesel gain from temperature expansion'],
 
             // ========== COST OF GOODS SOLD ==========

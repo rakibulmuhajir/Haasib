@@ -647,6 +647,14 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '1250', 'name' => 'Lubricant Inventory - Open', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Open/loose lubricants sold by liter'],
             ['code' => '1251', 'name' => 'Lubricant Inventory - Sealed Packs', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Sealed pack lubricants (bottles/cans)'],
 
+            // Fixed Assets (1500-1599)
+            ['code' => '1500', 'name' => 'Furniture & Fixtures', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit'],
+            ['code' => '1510', 'name' => 'Accumulated Depreciation – Furniture', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+            ['code' => '1520', 'name' => 'Equipment & Machinery', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit', 'description' => 'Generator, compressor, pumps'],
+            ['code' => '1530', 'name' => 'Accumulated Depreciation – Equipment', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+            ['code' => '1540', 'name' => 'Building Improvements', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit', 'description' => 'Canopy, forecourt, construction'],
+            ['code' => '1550', 'name' => 'Accumulated Depreciation – Building Improvements', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+
             // ========== LIABILITIES ==========
             // Payables (2100-2199)
             ['code' => '2100', 'name' => 'Accounts Payable - Fuel Suppliers', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control', 'description' => 'Amount owed to PSO/Shell/Total'],
@@ -709,6 +717,9 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '6300', 'name' => 'Fuel Shrinkage - Petrol', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Petrol evaporation/loss'],
             ['code' => '6301', 'name' => 'Fuel Shrinkage - Hi-Octane', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Hi-Octane evaporation/loss'],
             ['code' => '6302', 'name' => 'Fuel Shrinkage - Diesel', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Diesel shrinkage/loss'],
+
+            // Depreciation (6600)
+            ['code' => '6600', 'name' => 'Depreciation Expense', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Yearly write-down of fixed assets'],
         ];
 
         $this->insertAccounts($industryId, $accounts, $now);

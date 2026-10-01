@@ -17,6 +17,12 @@ They provide a working chart of accounts out of the box and can be edited later.
 | 1150 | Employee Advances | Salary advances recoverable from payroll |
 | 1200 | Fuel Inventory | Value of fuel in tanks |
 | 1210 | Lubricants Inventory | Value of lubricants and oils |
+| 1500 | Furniture & Fixtures | Fixed asset |
+| 1510 | Accumulated Depreciation – Furniture | Contra (credit) |
+| 1520 | Equipment & Machinery | Generator, compressor, pumps |
+| 1530 | Accumulated Depreciation – Equipment | Contra (credit) |
+| 1540 | Building Improvements | Canopy, forecourt, construction |
+| 1550 | Accumulated Depreciation – Building Improvements | Contra (credit) |
 
 ### Liabilities
 | Code | Name | Purpose |
@@ -57,6 +63,7 @@ They provide a working chart of accounts out of the box and can be edited later.
 | 6300 | Utilities | Utilities expense |
 | 6400 | Pump Maintenance | Pump maintenance expense |
 | 6500 | General Expenses | Miscellaneous operating expenses |
+| 6600 | Depreciation Expense | Yearly write-down of fixed assets |
 
 ## Company default account mappings
 

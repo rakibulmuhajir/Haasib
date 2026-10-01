@@ -422,6 +422,14 @@ class FuelStationOnboardingService
                 'description' => 'Value of motor oils and lubricants',
             ],
 
+            // ===== FIXED ASSETS =====
+            ['code' => '1500', 'name' => 'Furniture & Fixtures', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit'],
+            ['code' => '1510', 'name' => 'Accumulated Depreciation – Furniture', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+            ['code' => '1520', 'name' => 'Equipment & Machinery', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit', 'description' => 'Generator, compressor, pumps'],
+            ['code' => '1530', 'name' => 'Accumulated Depreciation – Equipment', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+            ['code' => '1540', 'name' => 'Building Improvements', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit', 'description' => 'Canopy, forecourt, construction'],
+            ['code' => '1550', 'name' => 'Accumulated Depreciation – Building Improvements', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'credit', 'is_contra' => true],
+
             // ===== LIABILITIES =====
             [
                 'code' => '2100',
@@ -595,6 +603,14 @@ class FuelStationOnboardingService
                 'subtype' => 'expense',
                 'normal_balance' => 'debit',
                 'description' => 'Miscellaneous operating expenses',
+            ],
+            [
+                'code' => '6600',
+                'name' => 'Depreciation Expense',
+                'type' => 'expense',
+                'subtype' => 'expense',
+                'normal_balance' => 'debit',
+                'description' => 'Yearly write-down of fixed assets',
             ],
         ];
 

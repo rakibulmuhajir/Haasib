@@ -4729,38 +4729,29 @@ const cashFlowOut = computed(() => [
                                                 }}
                                                 (L)</Label
                                             >
+                                            <!-- Where the opening came from, and its stick reading, are on demand. -->
                                             <div
                                                 class="mt-1 text-lg font-semibold"
                                             >
-                                                {{
-                                                    tank.previous_liters > 0
-                                                        ? formatLiters(
-                                                              tank.previous_liters,
-                                                          )
-                                                        : '—'
-                                                }}
+                                                <Hint v-if="tank.previous_liters > 0 && (baselineLabel(tank) || tank.previous_stick > 0)">
+                                                    {{ formatLiters(tank.previous_liters) }}
+                                                    <template #content>
+                                                        <p v-if="baselineLabel(tank)">{{ baselineLabel(tank) }}</p>
+                                                        <p v-if="tank.previous_stick > 0">Stick: {{ tank.previous_stick }} cm</p>
+                                                    </template>
+                                                </Hint>
+                                                <template v-else>
+                                                    {{ tank.previous_liters > 0 ? formatLiters(tank.previous_liters) : '—' }}
+                                                </template>
                                             </div>
                                             <div
-                                                v-if="baselineLabel(tank)"
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                {{ baselineLabel(tank) }}
-                                            </div>
-                                            <div
-                                                v-else
+                                                v-if="!baselineLabel(tank)"
                                                 class="text-xs text-status-attention"
                                             >
                                                 <Hint>
                                                     No opening stock yet
                                                     <template #content>Record opening stock in Fuel setup, or post the previous day's close.</template>
                                                 </Hint>
-                                            </div>
-                                            <div
-                                                v-if="tank.previous_stick > 0"
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                Stick:
-                                                {{ tank.previous_stick }} cm
                                             </div>
                                             <div
                                                 class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs"

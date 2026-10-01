@@ -38,6 +38,7 @@ They provide a working chart of accounts out of the box and can be edited later.
 | 4110 | Shop Sales | Convenience store sales |
 | 4200 | Lubricant Sales | Lubricant revenue |
 | 4300 | Discounts Received | Supplier discounts on bills |
+| 4400 | Rental Income | Rent from shops on the premises |
 
 ### Cost of Goods Sold (COGS)
 | Code | Name | Purpose |

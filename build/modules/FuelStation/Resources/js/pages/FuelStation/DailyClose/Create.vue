@@ -574,6 +574,10 @@ const accountingHints = computed<Record<string, string>>(() =>
 const rateItemId = ref('');
 const newSaleRate = ref<number | null>(null);
 const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
+// Only fuels whose rate changed today are listed under the picker.
+const changedRateItems = computed(() =>
+    props.fuelItems.filter((item) => (props.rateChangesToday ?? []).some((c) => c.item_id === item.id)),
+);
 watch(rateItemId, () => {
     newSaleRate.value = null;
 });
@@ -3636,8 +3640,8 @@ const cashFlowOut = computed(() => [
                                 >
                             </template>
                         </div>
-                        <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
-                            <span v-for="item in fuelItems" :key="item.id">
+                        <div v-if="changedRateItems.length" class="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
+                            <span v-for="item in changedRateItems" :key="item.id">
                                 <span class="font-medium">{{ item.name }}</span>
                                 {{ Number(props.rates?.[item.id]?.sale_rate ?? 0) }}
                                 <template v-for="change in (props.rateChangesToday ?? []).filter((c) => c.item_id === item.id)" :key="change.item_id">

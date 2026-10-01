@@ -507,6 +507,14 @@ class FuelStationOnboardingService
                 'normal_balance' => 'credit',
                 'description' => 'Supplier discounts applied to bills',
             ],
+            [
+                'code' => '4400',
+                'name' => 'Rental Income',
+                'type' => 'other_income',
+                'subtype' => 'other_income',
+                'normal_balance' => 'credit',
+                'description' => 'Rent from shops on the station premises',
+            ],
 
             // ===== COST OF GOODS SOLD =====
             [

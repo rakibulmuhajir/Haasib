@@ -30,6 +30,7 @@ interface Filters {
 interface Totals {
   product_count: number
   quantity: number
+  purchased_quantity: number
   revenue: number
   cogs: number
   gross_profit: number
@@ -46,6 +47,7 @@ interface ProductRow {
   name: string
   unit: string
   quantity: number
+  purchased_quantity: number
   revenue: number
   cogs: number
   gross_profit: number
@@ -64,6 +66,7 @@ interface PeriodRow {
   key: string
   label: string
   quantity: number
+  purchased_quantity: number
   revenue: number
   cogs: number
   gross_profit: number
@@ -168,7 +171,8 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
 
 const productColumns = [
   { key: 'name', label: 'Product', kind: 'text' as const },
-  { key: 'quantity', label: 'Qty', kind: 'amount' as const },
+  { key: 'purchased_quantity', label: 'Purchased', kind: 'amount' as const },
+  { key: 'quantity', label: 'Sold', kind: 'amount' as const },
   { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
   { key: 'cogs', label: 'COGS', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
@@ -179,7 +183,8 @@ const productColumns = [
 
 const trendColumns = [
   { key: 'label', label: 'Period', kind: 'text' as const },
-  { key: 'quantity', label: 'Qty', kind: 'amount' as const },
+  { key: 'purchased_quantity', label: 'Purchased', kind: 'amount' as const },
+  { key: 'quantity', label: 'Sold', kind: 'amount' as const },
   { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
   { key: 'cogs', label: 'COGS', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Profit', kind: 'amount' as const },
@@ -275,7 +280,7 @@ const rateChangeColumns = [
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <Fuel class="h-4 w-4 text-status-info" />
-            {{ qty(totals.quantity) }} units/L sold
+            {{ qty(totals.quantity) }} units/L sold · {{ qty(totals.purchased_quantity) }} bought
           </CardContent>
         </Card>
 
@@ -330,6 +335,7 @@ const rateChangeColumns = [
               </div>
             </template>
 
+            <template #cell-purchased_quantity="{ row }">{{ row.purchased_quantity ? qty(row.purchased_quantity) : '—' }}</template>
             <template #cell-quantity="{ row }">{{ qty(row.quantity) }}</template>
             <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
             <template #cell-cogs="{ row }">
@@ -369,6 +375,7 @@ const rateChangeColumns = [
           <LedgerRegister :data="periodRows" :columns="trendColumns">
             <template #empty>No trend data found for this range.</template>
 
+            <template #cell-purchased_quantity="{ row }">{{ row.purchased_quantity ? qty(row.purchased_quantity) : '—' }}</template>
             <template #cell-quantity="{ row }">{{ qty(row.quantity) }}</template>
             <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
             <template #cell-cogs="{ row }"><MoneyText :amount="row.cogs" :currency="company.base_currency" /></template>

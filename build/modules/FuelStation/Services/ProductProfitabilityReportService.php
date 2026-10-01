@@ -99,6 +99,7 @@ class ProductProfitabilityReportService
         }
 
         $this->addStockVariance($companyId, $startDate, $endDate, $product, $items, $products);
+        $this->addPurchases($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
 
         $productRows = array_values($products);
         foreach ($productRows as &$row) {
@@ -107,6 +108,8 @@ class ProductProfitabilityReportService
         unset($row);
         usort($productRows, fn (array $a, array $b) => $b['revenue'] <=> $a['revenue']);
 
+        // A period with a delivery but no posted close is added after the others; keep date order.
+        ksort($periods);
         $periodRows = array_values($periods);
         foreach ($periodRows as &$row) {
             $this->finishPeriodRow($row);
@@ -244,12 +247,27 @@ class ProductProfitabilityReportService
      */
     private function addPeriodSale(array &$periods, Carbon $date, string $groupBy, array $row, string $transactionId, string $transactionNumber): void
     {
+        $periodKey = $this->ensurePeriod($periods, $date, $groupBy);
+
+        $periods[$periodKey]['quantity'] += $row['quantity'];
+        $periods[$periodKey]['revenue'] += $row['revenue'];
+        $periods[$periodKey]['cogs'] += $row['cogs'];
+        $periods[$periodKey]['daily_close_ids'][$transactionId] = $transactionId;
+        $periods[$periodKey]['daily_close_numbers'][$transactionNumber] = $transactionNumber;
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function ensurePeriod(array &$periods, Carbon $date, string $groupBy): string
+    {
         $periodKey = $this->periodKey($date, $groupBy);
         if (!isset($periods[$periodKey])) {
             $periods[$periodKey] = [
                 'key' => $periodKey,
                 'label' => $this->periodLabel($date, $groupBy),
                 'quantity' => 0.0,
+                'purchased_quantity' => 0.0,
                 'revenue' => 0.0,
                 'cogs' => 0.0,
                 'gross_profit' => 0.0,
@@ -262,11 +280,52 @@ class ProductProfitabilityReportService
             ];
         }
 
-        $periods[$periodKey]['quantity'] += $row['quantity'];
-        $periods[$periodKey]['revenue'] += $row['revenue'];
-        $periods[$periodKey]['cogs'] += $row['cogs'];
-        $periods[$periodKey]['daily_close_ids'][$transactionId] = $transactionId;
-        $periods[$periodKey]['daily_close_numbers'][$transactionNumber] = $transactionNumber;
+        return $periodKey;
+    }
+
+    /**
+     * Litres (or units) bought, by bill date: every bill line for a sellable item on a bill
+     * that counts (not draft, void or cancelled), whether it went into a tank or was sold
+     * straight off the tanker. Only lines that went to a tank or store are counted: a bill
+     * split between suppliers keeps its own lines, and its share bills carry money only
+     * (quantity 1, no warehouse), so counting those would add phantom litres.
+     *
+     * @param array<string,array<string,mixed>> $items
+     * @param array<string,array<string,mixed>> $products
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function addPurchases(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
+    {
+        $lines = DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')
+            ->whereNull('l.deleted_at')
+            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->whereBetween('b.bill_date', [$startDate, $endDate])
+            ->whereNotNull('l.item_id')
+            ->whereNotNull('l.warehouse_id')
+            ->get(['b.bill_date', 'l.item_id', 'l.quantity']);
+
+        $itemIds = array_column($items, 'id');
+        foreach ($lines as $line) {
+            if (! in_array($line->item_id, $itemIds, true)) {
+                continue;
+            }
+            $key = $this->itemKey($line->item_id, $items);
+            if ($product !== 'all' && $key !== $product) {
+                continue;
+            }
+
+            if (! isset($products[$key])) {
+                $products[$key] = $this->emptyProductRow($key, $this->productName($key, $items), (string) ($items[$key]['unit'] ?? 'L'));
+            }
+            $quantity = (float) $line->quantity;
+            $products[$key]['purchased_quantity'] += $quantity;
+
+            $periodKey = $this->ensurePeriod($periods, Carbon::parse($line->bill_date), $groupBy);
+            $periods[$periodKey]['purchased_quantity'] += $quantity;
+        }
     }
 
     /**
@@ -363,6 +422,7 @@ class ProductProfitabilityReportService
             'name' => $name,
             'unit' => $unit,
             'quantity' => 0.0,
+            'purchased_quantity' => 0.0,
             'revenue' => 0.0,
             'cogs' => 0.0,
             'gross_profit' => 0.0,
@@ -413,6 +473,7 @@ class ProductProfitabilityReportService
         $totals = [
             'product_count' => count($rows),
             'quantity' => array_sum(array_column($rows, 'quantity')),
+            'purchased_quantity' => array_sum(array_column($rows, 'purchased_quantity')),
             'revenue' => array_sum(array_column($rows, 'revenue')),
             'cogs' => array_sum(array_column($rows, 'cogs')),
             'gross_profit' => array_sum(array_column($rows, 'gross_profit')),

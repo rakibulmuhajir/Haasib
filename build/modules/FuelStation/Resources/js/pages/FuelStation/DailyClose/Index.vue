@@ -255,6 +255,12 @@ const confirmEditDay = () => {
           <CalendarDays class="h-4 w-4 mr-2" />
           Lock Month
         </Button>
+        <Button variant="outline" as-child>
+          <Link :href="`/${company.slug}/fuel/daily-close/month`">
+            <CalendarDays class="h-4 w-4 mr-2" />
+            Last month
+          </Link>
+        </Button>
         <Button as-child>
           <Link :href="`/${company.slug}/fuel/daily-close`">
             <Plus class="h-4 w-4 mr-2" />

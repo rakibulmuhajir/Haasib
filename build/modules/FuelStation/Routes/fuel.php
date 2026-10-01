@@ -92,7 +92,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('daily-close/{transaction}/credit-sales/{invoice}/discount', [DailyCloseController::class, 'applyPostCloseDiscount'])->name('fuel.daily-close.credit-sales.discount');
     Route::post('daily-close', [DailyCloseController::class, 'store'])->name('fuel.daily-close.store');
     Route::post('daily-close/direct-deliveries/{invoice}/cash', [DailyCloseController::class, 'receiveDirectDeliveryCash'])->name('fuel.daily-close.direct-delivery-cash');
-    Route::get('daily-close/history', [DailyCloseController::class, 'index'])->name('fuel.daily-close.index');
+    Route::get('daily-close/month', [DailyCloseController::class, 'month'])->name('fuel.daily-close.month');
+    Route::get('daily-close/history',[DailyCloseController::class, 'index'])->name('fuel.daily-close.index');
     Route::get('daily-close/{transaction}', [DailyCloseController::class, 'show'])->name('fuel.daily-close.show');
     Route::post('daily-close/{transaction}/lock', [DailyCloseController::class, 'lock'])->name('fuel.daily-close.lock');
     Route::post('daily-close/{transaction}/unlock', [DailyCloseController::class, 'unlock'])->name('fuel.daily-close.unlock');

@@ -1178,6 +1178,27 @@ class DailyCloseController extends Controller
         }
     }
 
+    public function month(Request $request): Response
+    {
+        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW), 403);
+        $company = app(CurrentCompany::class)->get();
+
+        $month = (string) $request->query('month', '');
+        if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) !== 1) {
+            $month = now()->startOfMonth()->subMonth()->format('Y-m');
+        }
+
+        return Inertia::render('FuelStation/DailyClose/Month', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+            ],
+            'summary' => app(\App\Modules\FuelStation\Services\DailyCloseMonthSummaryService::class)->run($company->id, $month),
+        ]);
+    }
+
     public function index(Request $request): Response
     {
         abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW), 403);

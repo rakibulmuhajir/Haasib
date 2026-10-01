@@ -8,6 +8,7 @@
  */
 import { computed } from 'vue'
 import { Link } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 
@@ -232,7 +233,10 @@ const cash = computed(() => ({
           </li>
         </ul>
         <p v-if="pumpTests.length" class="mt-2 text-xs text-muted-foreground">
-          Pump test (returned to tank, not a sale):
+          <Hint>
+            Pump test:
+            <template #content>Returned to the tank, not a sale.</template>
+          </Hint>
           <span v-for="(t, i) in pumpTests" :key="i">{{ i ? ' · ' : '' }}{{ litres(Number(t.liters)) }} L {{ t.fuel }}</span>
         </p>
       </section>

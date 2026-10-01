@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import Hint from '@/components/Hint.vue';
 import InputError from '@/components/InputError.vue';
 import MoneyText from '@/components/MoneyText.vue';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,6 @@ import {
     Save,
     Trash2,
     Wallet,
-    Info,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -3481,10 +3480,16 @@ const cashFlowOut = computed(() => [
                         cash
                     </template>
                     <template v-else-if="previousClose.source === 'ledger' && previousClose.closing_cash > 0">
-                        Opening cash from the ledger:
+                        <Hint>
+                            Opening cash from the ledger
+                            <template #content>No close has been posted yet, so opening cash is the cash balance in the ledger.</template>
+                        </Hint>:
                         <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" />
                     </template>
-                    <template v-else>No previous close: opening cash starts at zero</template>
+                    <Hint v-else>
+                        No previous close
+                        <template #content>Opening cash starts at zero.</template>
+                    </Hint>
                 </span>
                 <Badge v-if="parkedDraft" variant="outline">Parked draft</Badge>
                 <span v-if="props.openingsFromParked" class="text-status-attention">
@@ -3936,7 +3941,10 @@ const cashFlowOut = computed(() => [
                                                         v-model="form.nozzle_readings[idx].meter_rolled_over"
                                                     />
                                                     <Label :for="'nozzle-' + idx + '-rolled-over'" class="text-xs">
-                                                        Meter rolled over — it passed its last digit and restarted from zero
+                                                        <Hint>
+                                                            Meter rolled over
+                                                            <template #content>It passed its last digit and restarted from zero.</template>
+                                                        </Hint>
                                                     </Label>
                                                 </div>
                                                 <InputError
@@ -4078,19 +4086,13 @@ const cashFlowOut = computed(() => [
                                         class="mt-4 border-t border-dashed pt-4"
                                     >
                                         <div
-                                            class="mb-1 text-xs font-medium text-muted-foreground"
+                                            class="mb-3 text-xs font-medium text-muted-foreground"
                                         >
-                                            Manual Readings (daily, optional)
+                                            <Hint>
+                                                Manual Readings (daily, optional)
+                                                <template #content>Use these to verify the electronic readings for today. Leaving them blank won’t block submission, and you can enter or backdate manual readings later.</template>
+                                            </Hint>
                                         </div>
-                                        <p
-                                            class="mb-3 text-xs text-muted-foreground"
-                                        >
-                                            Use these to verify the electronic
-                                            readings for today. Leaving them
-                                            blank won’t block submission, and
-                                            you can enter or backdate manual
-                                            readings later.
-                                        </p>
                                         <div class="grid grid-cols-12 gap-4">
                                             <div
                                                 v-for="(
@@ -4287,10 +4289,12 @@ const cashFlowOut = computed(() => [
                         <div class="space-y-3 border-t border-rule-default pt-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h4 class="font-medium">Direct sales (not from pumps)</h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        Sold straight from the tanker.
-                                    </p>
+                                    <h4 class="font-medium">
+                                        <Hint>
+                                            Direct sales
+                                            <template #content>Not from pumps — sold straight from the tanker.</template>
+                                        </Hint>
+                                    </h4>
                                 </div>
                                 <Button variant="outline" size="sm" @click="addDirectSale()"><Plus class="mr-1 h-4 w-4" /> Add direct sale</Button>
                             </div>
@@ -4624,11 +4628,12 @@ const cashFlowOut = computed(() => [
             <TabsContent value="tanks">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Tank Dip</CardTitle>
-                        <CardDescription
-                            >Enter physical tank measurements and review stock
-                            variance.</CardDescription
-                        >
+                        <CardTitle>
+                            <Hint>
+                                Tank Dip
+                                <template #content>Enter physical tank measurements and review stock variance.</template>
+                            </Hint>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Empty State: No tanks configured -->
@@ -4745,9 +4750,10 @@ const cashFlowOut = computed(() => [
                                                 v-else
                                                 class="text-xs text-status-attention"
                                             >
-                                                No opening stock yet — record
-                                                opening stock in Fuel setup, or
-                                                post the previous day's close.
+                                                <Hint>
+                                                    No opening stock yet
+                                                    <template #content>Record opening stock in Fuel setup, or post the previous day's close.</template>
+                                                </Hint>
                                             </div>
                                             <div
                                                 v-if="tank.previous_stick > 0"
@@ -4759,116 +4765,59 @@ const cashFlowOut = computed(() => [
                                             <div
                                                 class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs"
                                             >
-                                                <div
-                                                    class="font-medium text-foreground"
-                                                >
-                                                    Expected this morning:
-                                                    {{
-                                                        formatLiters(
-                                                            expectedTankClosingLiters(
-                                                                tank,
-                                                            ),
-                                                        )
-                                                    }}
-                                                    L
+                                                <div class="font-medium text-foreground">
+                                                    <Hint>
+                                                        Expected this morning: {{ formatLiters(expectedTankClosingLiters(tank)) }} L
+                                                        <template #content>
+                                                            <div class="flex justify-between gap-6 tabular-nums">
+                                                                <span>Opening</span><span>{{ formatLiters(tank.previous_liters) }} L</span>
+                                                            </div>
+                                                            <div
+                                                                v-if="Math.abs(tank.stock_movements_since_baseline_liters || 0) >= 0.001"
+                                                                class="flex justify-between gap-6 tabular-nums"
+                                                            >
+                                                                <span>{{ stockMovementLabel(tank.stock_movements_since_baseline_liters || 0) }}</span>
+                                                                <span>{{ (tank.stock_movements_since_baseline_liters || 0) > 0 ? '+' : '−' }} {{ formatLiters(Math.abs(tank.stock_movements_since_baseline_liters || 0)) }} L</span>
+                                                            </div>
+                                                            <!-- Delivered by this close's own Purchases (first tab), before posting. -->
+                                                            <div
+                                                                v-if="(purchaseLitresByTank[tank.tank_id] || 0) > 0"
+                                                                class="flex justify-between gap-6 tabular-nums"
+                                                            >
+                                                                <span>Delivered today</span><span>+ {{ formatLiters(purchaseLitresByTank[tank.tank_id] || 0) }} L</span>
+                                                            </div>
+                                                            <div
+                                                                v-if="(litersSoldByTank[tank.tank_id] || 0) > 0"
+                                                                class="flex justify-between gap-6 tabular-nums"
+                                                            >
+                                                                <span>Sold</span><span>− {{ formatLiters(litersSoldByTank[tank.tank_id] || 0) }} L</span>
+                                                            </div>
+                                                            <div class="flex justify-between gap-6 border-t border-primary-foreground/30 pt-1 font-medium tabular-nums">
+                                                                <span>Expected</span><span>{{ formatLiters(expectedTankClosingLiters(tank)) }} L</span>
+                                                            </div>
+                                                        </template>
+                                                    </Hint>
                                                 </div>
                                                 <div
-                                                    class="text-muted-foreground"
-                                                >
-                                                    {{
-                                                        formatLiters(
-                                                            tank.previous_liters,
-                                                        )
-                                                    }}
-                                                    L opening
-                                                    <span
-                                                        v-if="
-                                                            Math.abs(
-                                                                tank.stock_movements_since_baseline_liters ||
-                                                                    0,
-                                                            ) >= 0.001
-                                                        "
-                                                    >
-                                                        {{
-                                                            (tank.stock_movements_since_baseline_liters ||
-                                                                0) > 0
-                                                                ? '+'
-                                                                : '-'
-                                                        }}
-                                                        {{
-                                                            formatLiters(
-                                                                Math.abs(
-                                                                    tank.stock_movements_since_baseline_liters ||
-                                                                        0,
-                                                                ),
-                                                            )
-                                                        }}
-                                                        L stock
-                                                    </span>
-                                                    <!-- Delivered by this close's own Purchases (first tab), before posting. -->
-                                                    <span
-                                                        v-if="(purchaseLitresByTank[tank.tank_id] || 0) > 0"
-                                                        class="font-medium text-foreground"
-                                                    >
-                                                        + {{ formatLiters(purchaseLitresByTank[tank.tank_id] || 0) }} L delivered today
-                                                    </span>
-                                                    <span
-                                                        v-if="
-                                                            (litersSoldByTank[
-                                                                tank.tank_id
-                                                            ] || 0) > 0
-                                                        "
-                                                    >
-                                                        -
-                                                        {{
-                                                            formatLiters(
-                                                                litersSoldByTank[
-                                                                    tank.tank_id
-                                                                ] || 0,
-                                                            )
-                                                        }}
-                                                        L sales
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="text-muted-foreground"
-                                                >
-                                                    {{
-                                                        stockMovementLabel(
-                                                            tank.stock_movements_since_baseline_liters ||
-                                                                0,
-                                                        )
-                                                    }}
-                                                </div>
-                                                <div
-                                                    v-if="
-                                                        tank.current_stock_after_close_date
-                                                    "
+                                                    v-if="tank.current_stock_after_close_date"
                                                     class="text-status-attention"
                                                 >
-                                                    This stock entry is after
-                                                    the selected close date, so
-                                                    it is not used as the
-                                                    opening baseline.
+                                                    <Hint>
+                                                        Later stock entry ignored
+                                                        <template #content>
+                                                            This stock entry is after the selected close date, so it is not used as the opening baseline.
+                                                        </template>
+                                                    </Hint>
                                                 </div>
                                                 <div
-                                                    v-if="
-                                                        (tank.pending_deliveries ||
-                                                            []
-                                                        ).length > 0
-                                                    "
+                                                    v-if="(tank.pending_deliveries || []).length > 0"
                                                     class="mt-1.5 border-t border-border/60 pt-1.5 text-status-attention"
                                                 >
                                                     <div class="font-medium">
-                                                        +
-                                                        {{
-                                                            formatLiters(
-                                                                tank.pending_delivery_liters ||
-                                                                    0,
-                                                            )
-                                                        }}
-                                                        L delivered, not yet
-                                                        received
+                                                        <Hint>
+                                                            + {{ formatLiters(tank.pending_delivery_liters || 0) }} L delivered, not yet received
+                                                            <template #content>Received into the tank when this close is posted.</template>
+                                                        </Hint>
                                                     </div>
                                                     <div
                                                         v-for="delivery in tank.pending_deliveries"
@@ -4878,31 +4827,9 @@ const cashFlowOut = computed(() => [
                                                             :href="`/${props.company.slug}/bills/${delivery.bill_id}`"
                                                             target="_blank"
                                                             class="underline hover:no-underline"
-                                                        >
-                                                            {{
-                                                                delivery.bill_number
-                                                            }}
-                                                        </a>
-                                                        ·
-                                                        {{
-                                                            formatBaselineDate(
-                                                                delivery.bill_date,
-                                                            )
-                                                        }}
-                                                        ·
-                                                        {{
-                                                            formatLiters(
-                                                                delivery.litres,
-                                                            )
-                                                        }}
-                                                        L
-                                                    </div>
-                                                    <div
-                                                        class="mt-1 text-muted-foreground"
-                                                    >
-                                                        Received into the tank
-                                                        when this close is
-                                                        posted.
+                                                        >{{ delivery.bill_number }}</a>
+                                                        · {{ formatBaselineDate(delivery.bill_date) }}
+                                                        · {{ formatLiters(delivery.litres) }} L
                                                     </div>
                                                 </div>
                                             </div>
@@ -4933,9 +4860,14 @@ const cashFlowOut = computed(() => [
                                             />
                                         </div>
                                         <div class="col-span-2">
-                                            <Label class="text-xs"
-                                                >Dip this morning (L)</Label
-                                            >
+                                            <Label class="text-xs">
+                                                <Hint>
+                                                    Dip this morning (L)
+                                                    <template #content>
+                                                        Taken the morning after {{ formatBaselineDate(form.date) }}. It closes that day and opens the next.
+                                                    </template>
+                                                </Hint>
+                                            </Label>
                                             <Input
                                                 v-model.number="tank.liters" :data-testid="'tank-' + index + '-liters'" :aria-label="`${tank.tank_name} · Litres in tank`"
                                                 type="number"
@@ -4943,17 +4875,6 @@ const cashFlowOut = computed(() => [
                                                 @focus="selectZeroValue"
                                                 class="mt-1"
                                             />
-                                            <p
-                                                class="mt-1 text-xs text-muted-foreground"
-                                            >
-                                                Taken the morning after
-                                                {{
-                                                    formatBaselineDate(
-                                                        form.date,
-                                                    )
-                                                }}. It closes that day and opens
-                                                the next.
-                                            </p>
                                             <InputError
                                                 :message="
                                                     tankReadingError(
@@ -5078,31 +4999,16 @@ const cashFlowOut = computed(() => [
                                                 0
                                             "
                                         >
-                                            Loss of
-                                            {{
-                                                Math.abs(
-                                                    tankVariances[index]
-                                                        ?.variance,
-                                                ).toFixed(0)
-                                            }}L detected ({{
-                                                Math.abs(
-                                                    tankVariances[index]
-                                                        ?.variance_percent,
-                                                ).toFixed(1)
-                                            }}% of sales) — may indicate
-                                            evaporation, leakage, or measurement
-                                            error
+                                            <Hint>
+                                                Loss of {{ Math.abs(tankVariances[index]?.variance).toFixed(0) }}L ({{ Math.abs(tankVariances[index]?.variance_percent).toFixed(1) }}% of sales)
+                                                <template #content>May be evaporation, a leak, or a misread dip.</template>
+                                            </Hint>
                                         </span>
                                         <span v-else>
-                                            Gain of
-                                            {{
-                                                Math.abs(
-                                                    tankVariances[index]
-                                                        ?.variance,
-                                                ).toFixed(0)
-                                            }}L detected — may indicate
-                                            measurement error or unrecorded
-                                            receipt
+                                            <Hint>
+                                                Gain of {{ Math.abs(tankVariances[index]?.variance).toFixed(0) }}L
+                                                <template #content>May be a misread dip, or a delivery not recorded.</template>
+                                            </Hint>
                                         </span>
                                     </div>
                                 </div>
@@ -5160,11 +5066,12 @@ const cashFlowOut = computed(() => [
             <TabsContent value="money-in">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Cash In</CardTitle>
-                        <CardDescription
-                            >Opening cash, cash sales, deposits, and non-cash
-                            receipts.</CardDescription
-                        >
+                        <CardTitle>
+                            <Hint>
+                                Cash In
+                                <template #content>Opening cash, cash sales, deposits, and non-cash receipts.</template>
+                            </Hint>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent class="flex flex-col gap-6">
 
@@ -5353,7 +5260,10 @@ const cashFlowOut = computed(() => [
                                     /></span>
                                 </div>
                                 <div class="flex justify-between text-sm">
-                                    <span>Sales (meters, lubricants, direct cash)</span>
+                                    <Hint>
+                                        Sales
+                                        <template #content>Meters, lubricants and direct cash sales.</template>
+                                    </Hint>
                                     <span class="font-medium"
                                         ><MoneyText
                                             :amount="totalSales + directSalesCash + formDirectSalesCash"
@@ -5370,25 +5280,21 @@ const cashFlowOut = computed(() => [
                                         :key="row.key"
                                         class="flex justify-between text-sm"
                                     >
-                                        <Tooltip>
-                                            <TooltipTrigger as-child>
-                                                <span class="inline-flex cursor-help items-center gap-1"
-                                                    >{{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
-                                                /></span>
-                                            </TooltipTrigger>
-                                            <TooltipContent class="max-w-sm space-y-1">
-                                                <p class="font-medium">Recorded on another screen this day</p>
-                                                <div
-                                                    v-for="src in row.sources"
-                                                    :key="src.id"
-                                                    class="flex justify-between gap-4 text-xs"
-                                                >
-                                                    <span>{{ src.type }} · {{ src.reference }}</span>
-                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
-                                                </div>
-                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
-                                            </TooltipContent>
-                                        </Tooltip>
+                                        <Hint>
+                                            {{ row.label }}
+                                            <template #content>
+                                                    <p class="font-medium">Recorded on another screen this day</p>
+                                                    <div
+                                                        v-for="src in row.sources"
+                                                        :key="src.id"
+                                                        class="flex justify-between gap-4 text-xs"
+                                                    >
+                                                        <span>{{ src.type }} · {{ src.reference }}</span>
+                                                        <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                    </div>
+                                                    <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </template>
+                                        </Hint>
                                         <span class="font-medium"
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"
@@ -5420,11 +5326,12 @@ const cashFlowOut = computed(() => [
             <TabsContent value="money-out">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Cash Out</CardTitle>
-                        <CardDescription
-                            >Bank deposits, withdrawals, advances, amanat, and
-                            expenses.</CardDescription
-                        >
+                        <CardTitle>
+                            <Hint>
+                                Cash Out
+                                <template #content>Bank deposits, withdrawals, advances, amanat, and expenses.</template>
+                            </Hint>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent class="flex flex-col gap-6">
                         <div class="flex flex-wrap items-center gap-2" style="order: -2">
@@ -5971,25 +5878,21 @@ const cashFlowOut = computed(() => [
                                         :key="row.key"
                                         class="flex justify-between text-sm"
                                     >
-                                        <Tooltip>
-                                            <TooltipTrigger as-child>
-                                                <span class="inline-flex cursor-help items-center gap-1"
-                                                    >{{ row.label }}<Info class="h-3.5 w-3.5 text-muted-foreground"
-                                                /></span>
-                                            </TooltipTrigger>
-                                            <TooltipContent class="max-w-sm space-y-1">
-                                                <p class="font-medium">Recorded on another screen this day</p>
-                                                <div
-                                                    v-for="src in row.sources"
-                                                    :key="src.id"
-                                                    class="flex justify-between gap-4 text-xs"
-                                                >
-                                                    <span>{{ src.type }} · {{ src.reference }}</span>
-                                                    <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
-                                                </div>
-                                                <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
-                                            </TooltipContent>
-                                        </Tooltip>
+                                        <Hint>
+                                            {{ row.label }}
+                                            <template #content>
+                                                    <p class="font-medium">Recorded on another screen this day</p>
+                                                    <div
+                                                        v-for="src in row.sources"
+                                                        :key="src.id"
+                                                        class="flex justify-between gap-4 text-xs"
+                                                    >
+                                                        <span>{{ src.type }} · {{ src.reference }}</span>
+                                                        <MoneyText :amount="src.cash_effect" :currency="currencyCode" :fraction-digits="0" />
+                                                    </div>
+                                                    <p class="text-xs opacity-80">Already counted in the expected closing cash.</p>
+                                            </template>
+                                        </Hint>
                                         <span class="font-medium"
                                             ><MoneyText
                                                 :amount="Math.abs(row.amount)"
@@ -6022,11 +5925,12 @@ const cashFlowOut = computed(() => [
             <TabsContent value="summary">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Review &amp; Post</CardTitle>
-                        <CardDescription
-                            >Review totals, enter counted cash, and post the
-                            daily close.</CardDescription
-                        >
+                        <CardTitle>
+                            <Hint>
+                                Review &amp; Post
+                                <template #content>Review totals, enter counted cash, and post the daily close.</template>
+                            </Hint>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Summary Grid -->
@@ -6136,15 +6040,14 @@ const cashFlowOut = computed(() => [
                             <div class="flex items-center justify-between">
                                 <div>
                                     <Label class="text-lg font-semibold"
-                                        >Actual Closing Cash</Label
+                                        ><Hint>
+                                            Actual Closing Cash
+                                            <template #content>
+                                                <p>Count the cash and enter the actual amount.</p>
+                                                <p>{{ accountingHints.variance }}</p>
+                                            </template>
+                                        </Hint></Label
                                     >
-                                    <p class="text-sm text-muted-foreground">
-                                        Count the cash and enter the actual
-                                        amount
-                                    </p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.variance }}
-                                    </p>
                                 </div>
                                 <div class="w-64">
                                     <Input

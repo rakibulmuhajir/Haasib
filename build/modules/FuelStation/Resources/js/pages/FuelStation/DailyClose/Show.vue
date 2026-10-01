@@ -38,6 +38,7 @@ import {
   Wallet,
   ArrowDownRight,
 } from 'lucide-vue-next'
+import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { useLexicon } from '@/composables/useLexicon'
 const { t } = useLexicon()
@@ -551,8 +552,10 @@ const unlockTransaction = () => {
       </CardHeader>
       <CardContent>
         <p class="text-sm text-muted-foreground mb-3">
-          These bills were entered before their goods were received. Posting this close received them,
-          dated on each bill's own date, so the litres are real stock rather than a dip "gain".
+          <Hint>
+            Received on posting
+            <template #content>These bills were entered before their goods were received. Posting this close received them, dated on each bill's own date, so the litres are real stock rather than a dip "gain".</template>
+          </Hint>
         </p>
         <table class="w-full text-sm">
           <thead>
@@ -591,11 +594,11 @@ const unlockTransaction = () => {
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           <Unlock class="h-4 w-4" />
-          This day has been reopened {{ unlockHistory.length }} time{{ unlockHistory.length === 1 ? '' : 's' }}
+          <Hint>
+            This day has been reopened {{ unlockHistory.length }} time{{ unlockHistory.length === 1 ? '' : 's' }}
+            <template #content>A settled day was unlocked so it could be changed. Each reopening is kept permanently.</template>
+          </Hint>
         </CardTitle>
-        <CardDescription>
-          A settled day was unlocked so it could be changed. Each reopening is kept permanently.
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <ul class="space-y-3">
@@ -614,9 +617,11 @@ const unlockTransaction = () => {
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           <RotateCcw class="h-4 w-4" />
-          This day has been edited {{ revisionHistory.length }} time{{ revisionHistory.length === 1 ? '' : 's' }}
+          <Hint>
+            This day has been edited {{ revisionHistory.length }} time{{ revisionHistory.length === 1 ? '' : 's' }}
+            <template #content>Each posted version before an edit is kept permanently.</template>
+          </Hint>
         </CardTitle>
-        <CardDescription>Each posted version before an edit is kept permanently.</CardDescription>
       </CardHeader>
       <CardContent>
         <ul class="space-y-3">
@@ -661,8 +666,10 @@ const unlockTransaction = () => {
         <div>
           <h3 class="mb-2 font-semibold">POST-CLOSE ACTIVITY</h3>
           <p class="mb-3 text-sm text-muted-foreground">
-            Read-only. To add a forgotten transaction, use "Edit day" above instead of a separate
-            post-close entry.
+            <Hint>
+              Read-only
+              <template #content>To add a forgotten transaction, use "Edit day" above instead of a separate post-close entry.</template>
+            </Hint>
           </p>
           <p v-if="!reconciliation.has_post_close_activity" class="text-sm text-muted-foreground">No changes since posting.</p>
           <div v-for="row in reconciliation.activity" :key="row.type + row.id" class="border-b py-3 text-sm">
@@ -678,8 +685,10 @@ const unlockTransaction = () => {
         <div>
           <h3 class="mb-2 font-semibold">READING CORRECTIONS</h3>
           <p class="mb-3 text-sm text-muted-foreground">
-            Read-only. To correct a tank or nozzle reading, use "Edit day" above instead of a
-            separate post-close correction.
+            <Hint>
+              Read-only
+              <template #content>To correct a tank or nozzle reading, use "Edit day" above instead of a separate post-close correction.</template>
+            </Hint>
           </p>
           <p v-if="!reconciliation.corrections?.length" class="text-sm text-muted-foreground">No corrections recorded.</p>
           <div v-for="row in reconciliation.corrections" :key="row.id" class="border-b py-3 text-sm">

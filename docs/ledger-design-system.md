@@ -257,7 +257,7 @@ The amounts are as wide as `MoneyText`'s on purpose — a derivation is fed stra
 
 ### Others worth knowing
 
-`PageShell` (page frame, title, breadcrumbs, `#actions` slot) · `TotalRow` · `DefinitionList` · `Explain` (glossary popover) · `RelatedActions` (context-aware action cluster) · `EmptyState` · `InlineEditable` + `useInlineEdit()`.
+`PageShell` (page frame, title, breadcrumbs, `#actions` slot) · `TotalRow` · `DefinitionList` · `Explain` (glossary popover) · `Hint` (this screen's own detail — the working behind a figure, the why behind a field — in a tooltip that opens on hover, tap or Enter; dotted underline, no icon) · `RelatedActions` (context-aware action cluster) · `EmptyState` · `InlineEditable` + `useInlineEdit()`.
 
 ---
 

@@ -762,11 +762,13 @@ class DailyCloseController extends Controller
             ->where('is_active', true)->whereNull('deleted_at')->whereIn('subtype', ['cash', 'bank'])
             ->orderBy('code')->get(['id', 'code', 'name']);
 
-        // Get expense accounts
+        // Expense accounts, then fixed assets (furniture, equipment bought for cash).
+        // Expenses first: a new expense row defaults to the first account.
         $expenseAccounts = Account::where('company_id', $companyId)
             ->where('is_active', true)
             ->whereNull('deleted_at')
-            ->where('type', 'expense')
+            ->moneyOutTarget()
+            ->orderByRaw("case when type = 'expense' then 0 else 1 end")
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
@@ -1301,7 +1303,7 @@ class DailyCloseController extends Controller
                 'reason' => $row->reason,
                 'previously_locked_at' => $row->previously_locked_at?->toDateTimeString(),
             ])->values(),
-            'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->where('type', 'expense')->get(['id', 'name']),
+            'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->moneyOutTarget()->get(['id', 'name']),
             'canAddActivity' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE),
             'canCorrectReadings' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CORRECT) && !empty($metadata['posting_snapshot']),
             'correctableReadings' => !empty($metadata['posting_snapshot']) ? [

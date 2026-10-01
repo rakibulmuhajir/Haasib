@@ -61,4 +61,14 @@ class Account extends Model
     {
         return $this->hasMany(self::class, 'parent_id');
     }
+
+    /**
+     * What cash paid out can be booked to: an expense, or a fixed asset bought
+     * (furniture, equipment). Accumulated depreciation is never a purchase.
+     */
+    public function scopeMoneyOutTarget($query)
+    {
+        return $query->where(fn ($q) => $q->where('type', 'expense')
+            ->orWhere(fn ($q) => $q->where('subtype', 'fixed_asset')->where('is_contra', false)));
+    }
 }

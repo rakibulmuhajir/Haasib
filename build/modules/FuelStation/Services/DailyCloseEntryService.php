@@ -88,7 +88,7 @@ class DailyCloseEntryService
     {
         return DB::transaction(function () use ($companyId, $date, $expense) {
             $account = Account::where('company_id', $companyId)->where('is_active', true)
-                ->where('type', 'expense')->findOrFail($expense['account_id']);
+                ->moneyOutTarget()->findOrFail($expense['account_id']);
             $cashId = app(DailyCloseService::class)->cashAccountId($companyId);
             $amount = round((float) $expense['amount'], 2);
             if ($amount <= 0 || !$cashId) {

@@ -116,6 +116,9 @@ const varianceDays = computed(() =>
 
     <template #actions>
       <div class="flex items-center gap-2">
+        <Button variant="ghost" as-child>
+          <Link :href="`/${company.slug}/fuel/reports/performance?start_date=${monthStart}&end_date=${monthEnd}`">Profit by day</Link>
+        </Button>
         <Button variant="outline" as-child>
           <Link :href="`${base}?month=${summary.prev_month}`">
             <ChevronLeft class="mr-1 h-4 w-4" />
@@ -234,7 +237,10 @@ const varianceDays = computed(() =>
 
         <!-- Tanks: full width, each row opens into its product's days -->
         <section class="rounded-md border border-rule-default p-4 lg:col-span-2">
-          <h3 class="mb-3 font-semibold">Tanks</h3>
+          <h3 class="mb-3 flex items-baseline justify-between gap-3 font-semibold">
+            Tanks
+            <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${monthStart}&end_date=${monthEnd}`" class="text-xs font-normal text-muted-foreground underline underline-offset-2">Gains &amp; losses</Link>
+          </h3>
           <div class="overflow-x-auto">
             <table class="w-full text-sm tabular-nums">
               <thead class="text-xs text-muted-foreground">
@@ -347,7 +353,10 @@ const varianceDays = computed(() =>
 
         <!-- Money out -->
         <section class="rounded-md border border-rule-default p-4">
-          <h3 class="mb-3 font-semibold">Money out</h3>
+          <h3 class="mb-3 flex items-baseline justify-between gap-3 font-semibold">
+            Money out
+            <Link :href="`/${company.slug}/fuel/reports/expenses?start_date=${monthStart}&end_date=${monthEnd}`" class="text-xs font-normal text-muted-foreground underline underline-offset-2">Expenses report</Link>
+          </h3>
           <ul class="space-y-1.5 text-sm tabular-nums">
             <li v-for="(line, i) in summary.money_out" :key="'o' + i">
               <div class="flex justify-between gap-3">

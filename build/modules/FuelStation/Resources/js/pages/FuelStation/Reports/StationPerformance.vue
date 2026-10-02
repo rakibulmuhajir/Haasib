@@ -134,7 +134,7 @@ const product = ref(props.filters.product)
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
-  { title: 'Daily Summary', href: `/${props.company.slug}/fuel/reports/performance` },
+  { title: 'Profit by day', href: `/${props.company.slug}/fuel/reports/performance` },
 ])
 
 const number = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
@@ -241,10 +241,10 @@ const movementCards = computed(() => [
 </script>
 
 <template>
-  <Head title="Daily Summary" />
+  <Head title="Profit by day" />
 
   <PageShell
-    title="Daily Summary"
+    title="Profit by day"
     description="Sales, profit and cash from each daily close."
     :icon="BarChart3"
     :breadcrumbs="breadcrumbs"

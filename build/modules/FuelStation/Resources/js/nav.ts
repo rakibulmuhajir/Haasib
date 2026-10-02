@@ -1,6 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
-import { ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, BookOpen, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText } from 'lucide-vue-next'
+import { ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -55,18 +55,18 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('investors', 'Investors', '/fuel/investors', UsersRound, fuelNavigation?.hasInvestors === true),
       ] },
       { label: t('reports'), items: [
-        ...item('reports', 'Daily Summary', '/fuel/reports/performance', BarChart3),
+        // Eight, not twelve: the rest open from inside these pages -- the stock statement is a
+        // Statements tab, Tank Gains & Losses and Expenses link from Month Summary and the stock
+        // statement, Trial Balance from the Balance Sheet, Journal Entries from all three
+        // accounting reports.
+        ...item('reports', 'Month Summary', '/fuel/daily-close/month', CalendarDays),
+        ...item('reports', 'Profit by day', '/fuel/reports/performance', BarChart3),
         ...item('reports', 'Fuel Profit', '/fuel/reports/product-profitability', Package),
-        ...item('reports', 'Expenses', '/fuel/reports/expenses', ReceiptText),
         ...item('reports', t('profitAndLoss'), '/reports/profit-loss', BarChart3),
         ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
         ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),
         ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
-        ...item('reports', 'Stock statement', '/fuel/reports/stock-statement', ScrollText),
-        ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
-        ...item('journals', 'Journal Entries', '/journals', BookOpen),
-        ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),
       ] },
       { label: 'Banking', items: [
         ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,6 +88,11 @@ const equityLines = computed<Line[]>(() => [
     description="What the business owns, what it owes, and what is left over — at one date."
     :breadcrumbs="breadcrumbs"
   >
+    <template #actions>
+      <Button variant="ghost" as-child>
+        <Link :href="`/${company.slug}/reports/trial-balance`">Trial balance</Link>
+      </Button>
+    </template>
     <div class="mx-auto w-full max-w-5xl space-y-6">
       <Card variant="form">
         <CardHeader><CardTitle>As at</CardTitle></CardHeader>

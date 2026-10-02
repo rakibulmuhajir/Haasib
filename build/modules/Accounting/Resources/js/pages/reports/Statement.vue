@@ -7,7 +7,7 @@
  * shows what comes back.
  */
 import { computed, ref, watch } from 'vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -121,7 +121,14 @@ const reload = () => {
   }, { preserveState: true, preserveScroll: true })
 }
 
+// A fuel station's stock statement is a statement too: its tab opens that page.
+const isFuelStation = computed(() => Boolean((usePage().props.auth as { fuelNavigation?: unknown } | undefined)?.fuelNavigation))
+
 const changeKind = (value: Kind | string) => {
+  if (value === 'stock') {
+    router.visit(`/${props.company.slug}/fuel/reports/stock-statement?start_date=${from.value}&end_date=${to.value}`)
+    return
+  }
   kind.value = value as Kind
   partyId.value = ''
   search.value = ''
@@ -210,6 +217,7 @@ const statementTitle = computed(() => (props.statement.combined
               <TabsTrigger value="supplier">Supplier</TabsTrigger>
               <TabsTrigger v-if="(options.amanat ?? []).length > 0" value="amanat">Amanat</TabsTrigger>
               <TabsTrigger v-if="(options.employee ?? []).length > 0" value="employee">Employee</TabsTrigger>
+              <TabsTrigger v-if="isFuelStation" value="stock">Stock</TabsTrigger>
             </TabsList>
           </Tabs>
 

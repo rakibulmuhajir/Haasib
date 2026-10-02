@@ -90,7 +90,7 @@ const lastClosed = computed(() => [...props.rows].reverse().find((r) => !r.missi
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
+  { title: 'Statements', href: `/${props.company.slug}/reports/statements` },
   { title: 'Stock statement', href: `/${props.company.slug}/fuel/reports/stock-statement` },
 ])
 
@@ -238,7 +238,10 @@ const apply = () => {
           </tbody>
         </table>
       </div>
-      <p v-if="products.length" class="text-xs text-muted-foreground">{{ item.name }} · litres</p>
+      <p v-if="products.length" class="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+        <span>{{ item.name }} · litres</span>
+        <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${filters.start_date}&end_date=${filters.end_date}`" class="underline underline-offset-2">Tank gains &amp; losses</Link>
+      </p>
     </div>
   </PageShell>
 </template>

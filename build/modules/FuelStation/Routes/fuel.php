@@ -19,6 +19,7 @@ use App\Modules\FuelStation\Http\Controllers\PumpReadingController;
 use App\Modules\FuelStation\Http\Controllers\RateChangeController;
 use App\Modules\FuelStation\Http\Controllers\StationPerformanceReportController;
 use App\Modules\FuelStation\Http\Controllers\StationSettingsController;
+use App\Modules\FuelStation\Http\Controllers\StockStatementReportController;
 use App\Modules\FuelStation\Http\Controllers\StockVarianceReportController;
 use App\Modules\FuelStation\Http\Controllers\TankReadingController;
 use App\Modules\FuelStation\Http\Controllers\DailyCloseController;
@@ -148,6 +149,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('reports/performance', [StationPerformanceReportController::class, 'index'])->name('fuel.reports.performance');
     Route::get('reports/product-profitability', [ProductProfitabilityReportController::class, 'index'])->name('fuel.reports.product-profitability');
     Route::get('reports/expenses', [ExpenseReportController::class, 'index'])->name('fuel.reports.expenses');
+    Route::get('reports/stock-statement', [StockStatementReportController::class, 'index'])->name('fuel.reports.stock-statement');
     Route::get('reports/stock-variance', [StockVarianceReportController::class, 'index'])->name('fuel.reports.stock-variance');
 
     // Credit Customers

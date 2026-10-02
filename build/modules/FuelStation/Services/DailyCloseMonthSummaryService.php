@@ -86,6 +86,8 @@ class DailyCloseMonthSummaryService
             'money_out' => (float) $moneyOut,
             'short_over' => (float) $variances->sum(),
             'closing' => $tot($last, 'closing_cash'),
+            'opening_close_id' => $rows->first()['id'],
+            'closing_close_id' => $rows->last()['id'],
             'short_days' => $variances->filter(fn ($v) => round($v) < 0)->count(),
             'over_days' => $variances->filter(fn ($v) => round($v) > 0)->count(),
             // Each day that did not balance, so the month's short/over can be traced to its days.
@@ -115,16 +117,21 @@ class DailyCloseMonthSummaryService
 
         $fuelNames = DB::table('inv.items')->where('company_id', $companyId)
             ->whereNotNull('fuel_category')->pluck('name', 'fuel_category')->all();
+        $fuelItemIds = DB::table('inv.items')->where('company_id', $companyId)
+            ->whereNotNull('fuel_category')->pluck('id', 'fuel_category')->all();
 
         // ---- grouping helper: label + detail => amount and distinct days ----
-        $group = function (array &$bag, string $label, ?string $detail, float $amount, string $date): void {
+        $group = function (array &$bag, string $label, ?string $detail, float $amount, string $date, string $closeId): void {
             if (abs($amount) < 1e-9) {
                 return;
             }
             $key = $label."\0".($detail ?? '');
-            $bag[$key] ??= ['label' => $label, 'detail' => $detail, 'amount' => 0.0, 'dates' => []];
+            $bag[$key] ??= ['label' => $label, 'detail' => $detail, 'amount' => 0.0, 'dates' => [], 'sources' => []];
             $bag[$key]['amount'] += $amount;
             $bag[$key]['dates'][$date] = true;
+            // Where the figure came from, per day: the close that day and what it contributed.
+            $bag[$key]['sources'][$date] ??= ['close_id' => $closeId, 'date' => $date, 'amount' => 0.0];
+            $bag[$key]['sources'][$date]['amount'] += $amount;
         };
         // Lines of one kind stay together (kinds in the order they first appear), largest first.
         $finish = function (array $bag): array {
@@ -134,6 +141,7 @@ class DailyCloseMonthSummaryService
                 'detail' => $g['detail'],
                 'amount' => $g['amount'],
                 'days' => count($g['dates']),
+                'sources' => collect($g['sources'])->sortKeys()->values()->all(),
             ], $bag));
             usort($lines, fn ($a, $b) => [$order[$a['label']], -$a['amount']] <=> [$order[$b['label']], -$b['amount']]);
 
@@ -145,25 +153,32 @@ class DailyCloseMonthSummaryService
         $other = [];
         foreach ($rows as $r) {
             foreach ((array) ($r['m']['fuel_sales'] ?? []) as $cat => $f) {
-                $fuel[$cat] ??= ['liters' => 0.0, 'revenue' => 0.0];
+                $fuel[$cat] ??= ['liters' => 0.0, 'revenue' => 0.0, 'sources' => []];
                 $fuel[$cat]['liters'] += $n($f['liters'] ?? 0);
                 $fuel[$cat]['revenue'] += $n($f['revenue'] ?? 0);
+                $fuel[$cat]['sources'][$r['date']] ??= ['close_id' => $r['id'], 'date' => $r['date'], 'amount' => 0.0, 'quantity' => 0.0];
+                $fuel[$cat]['sources'][$r['date']]['amount'] += $n($f['revenue'] ?? 0);
+                $fuel[$cat]['sources'][$r['date']]['quantity'] += $n($f['liters'] ?? 0);
             }
             foreach ((array) ($r['m']['other_sales_details'] ?? []) as $o) {
                 $name = $o['item_name'] ?? 'Other sale';
-                $other[$name] ??= ['qty' => 0.0, 'amount' => 0.0];
+                $other[$name] ??= ['qty' => 0.0, 'amount' => 0.0, 'sources' => []];
                 $other[$name]['qty'] += $n($o['quantity'] ?? 0);
                 $other[$name]['amount'] += $n($o['amount'] ?? 0);
+                $other[$name]['sources'][$r['date']] ??= ['close_id' => $r['id'], 'date' => $r['date'], 'amount' => 0.0, 'quantity' => 0.0];
+                $other[$name]['sources'][$r['date']]['amount'] += $n($o['amount'] ?? 0);
+                $other[$name]['sources'][$r['date']]['quantity'] += $n($o['quantity'] ?? 0);
             }
         }
+        $byDate = fn (array $src) => collect($src)->sortKeys()->values()->all();
         $fmt = fn (float $v) => rtrim(rtrim(number_format($v, 2, '.', ','), '0'), '.');
         $sales = [];
         foreach ($fuel as $cat => $f) {
-            $sales[] = ['label' => $fuelNames[$cat] ?? ucwords(str_replace('_', ' ', (string) $cat)), 'detail' => $fmt($f['liters']).' L', 'amount' => $f['revenue']];
+            $sales[] = ['label' => $fuelNames[$cat] ?? ucwords(str_replace('_', ' ', (string) $cat)), 'detail' => $fmt($f['liters']).' L', 'amount' => $f['revenue'], 'item_id' => $fuelItemIds[$cat] ?? null, 'sources' => $byDate($f['sources'])];
         }
         foreach ($other as $name => $o) {
             $avg = $o['qty'] > 0 ? $o['amount'] / $o['qty'] : 0;
-            $sales[] = ['label' => (string) $name, 'detail' => $fmt($o['qty']).' × '.$fmt($avg), 'amount' => $o['amount']];
+            $sales[] = ['label' => (string) $name, 'detail' => $fmt($o['qty']).' × '.$fmt($avg), 'amount' => $o['amount'], 'sources' => $byDate($o['sources'])];
         }
         $salesTotal = (float) $rows->sum(fn ($r) => $tot($r['m'], 'total_revenue'));
 
@@ -174,45 +189,45 @@ class DailyCloseMonthSummaryService
         foreach ($rows as $r) {
             $m = $r['m'];
             $d = $r['date'];
-            $group($in, 'Meter sales', null, $n($m['total_revenue'] ?? 0), $d);
-            $group($in, 'Lubricants & other sales', null, $n($m['other_sales'] ?? 0), $d);
+            $group($in, 'Meter sales', null, $n($m['total_revenue'] ?? 0), $d, $r['id']);
+            $group($in, 'Lubricants & other sales', null, $n($m['other_sales'] ?? 0), $d, $r['id']);
             foreach ((array) ($m['bank_withdrawals_by_account'] ?? []) as $id => $a) {
-                $group($in, 'Cash withdrawn from bank', $accName($id), $n($a), $d);
+                $group($in, 'Cash withdrawn from bank', $accName($id), $n($a), $d, $r['id']);
             }
             foreach ((array) ($m['payments_received_details'] ?? []) as $p) {
-                $group($in, 'Payment received', $p['customer_name'] ?? null, $n($p['amount'] ?? 0), $d);
+                $group($in, 'Payment received', $p['customer_name'] ?? null, $n($p['amount'] ?? 0), $d, $r['id']);
             }
-            $group($in, 'Partner deposits', null, $n($m['partner_deposits'] ?? 0), $d);
+            $group($in, 'Partner deposits', null, $n($m['partner_deposits'] ?? 0), $d, $r['id']);
             foreach ((array) ($m['amanat_deposit_details'] ?? []) as $a) {
-                $group($in, 'Amanat deposit', $a['customer_name'] ?? null, $n($a['amount'] ?? 0), $d);
+                $group($in, 'Amanat deposit', $a['customer_name'] ?? null, $n($a['amount'] ?? 0), $d, $r['id']);
             }
             foreach ((array) ($m['other_deposit_details'] ?? []) as $o) {
-                $group($in, 'Other cash in', ($o['description'] ?? null) ?: ($o['deposit_type'] ?? null), $n($o['amount'] ?? 0), $d);
+                $group($in, 'Other cash in', ($o['description'] ?? null) ?: ($o['deposit_type'] ?? null), $n($o['amount'] ?? 0), $d, $r['id']);
             }
 
-            $group($out, 'Credit sales', null, $n($m['credit_sales_total'] ?? 0), $d);
+            $group($out, 'Credit sales', null, $n($m['credit_sales_total'] ?? 0), $d, $r['id']);
             foreach ((array) ($m['payment_receipt_postings'] ?? []) as $p) {
-                $group($out, $p['channel_label'] ?? 'Card / bank sale', null, $n($p['amount'] ?? 0), $d);
+                $group($out, $p['channel_label'] ?? 'Card / bank sale', null, $n($p['amount'] ?? 0), $d, $r['id']);
             }
             foreach ((array) ($m['bank_deposits_by_account'] ?? []) as $id => $a) {
-                $group($out, 'Bank deposit', $accName($id), $n($a), $d);
+                $group($out, 'Bank deposit', $accName($id), $n($a), $d, $r['id']);
             }
             foreach ((array) ($m['pay_supplier_details'] ?? []) as $p) {
-                $group($out, 'Paid supplier', $p['vendor_name'] ?? null, $n($p['amount'] ?? 0), $d);
+                $group($out, 'Paid supplier', $p['vendor_name'] ?? null, $n($p['amount'] ?? 0), $d, $r['id']);
             }
             foreach ((array) ($m['bill_payment_details'] ?? []) as $b) {
-                $group($out, 'Supplier bill payment', $b['vendor_name'] ?? null, $n($b['amount'] ?? 0), $d);
+                $group($out, 'Supplier bill payment', $b['vendor_name'] ?? null, $n($b['amount'] ?? 0), $d, $r['id']);
             }
             foreach ((array) ($m['amanat_disbursement_details'] ?? []) as $a) {
-                $group($out, 'Amanat withdrawal', $a['customer_name'] ?? null, $n($a['amount'] ?? 0), $d);
+                $group($out, 'Amanat withdrawal', $a['customer_name'] ?? null, $n($a['amount'] ?? 0), $d, $r['id']);
             }
             foreach ((array) ($m['form_input']['expenses'] ?? []) as $e) {
-                $group($out, 'Expense', $accName($e['account_id'] ?? null), $n($e['amount'] ?? 0), $d);
+                $group($out, 'Expense', $accName($e['account_id'] ?? null), $n($e['amount'] ?? 0), $d, $r['id']);
             }
-            $group($out, 'Partner withdrawals', null, $n($m['partner_withdrawals'] ?? 0), $d);
-            $group($out, 'Salary advances', null, $n($m['employee_advances'] ?? 0), $d);
+            $group($out, 'Partner withdrawals', null, $n($m['partner_withdrawals'] ?? 0), $d, $r['id']);
+            $group($out, 'Salary advances', null, $n($m['employee_advances'] ?? 0), $d, $r['id']);
             foreach ((array) ($m['payroll_payout_details'] ?? []) as $p) {
-                $group($out, 'Salary paid', $p['employee_name'] ?? null, $n($p['amount'] ?? 0), $d);
+                $group($out, 'Salary paid', $p['employee_name'] ?? null, $n($p['amount'] ?? 0), $d, $r['id']);
             }
 
             // Recorded on other screens that day, as the close read it -- the same filter the
@@ -227,35 +242,36 @@ class DailyCloseMonthSummaryService
                     continue;
                 }
                 $label = self::OTHER_SCREEN_LABELS[$type] ?? ucfirst(str_replace(['_', ':'], ' ', $type));
-                $group($otherSales, $label, null, $n($s['sales'] ?? 0), $d);
+                $group($otherSales, $label, null, $n($s['sales'] ?? 0), $d, $r['id']);
                 if ($n($s['money_in'] ?? 0) > 0) {
-                    $group($in, $label, 'other screens', $n($s['money_in']), $d);
+                    $group($in, $label, 'other screens', $n($s['money_in']), $d, $r['id']);
                 }
                 if ($n($s['money_out'] ?? 0) > 0) {
-                    $group($out, $label, 'other screens', $n($s['money_out']), $d);
+                    $group($out, $label, 'other screens', $n($s['money_out']), $d, $r['id']);
                 }
             }
         }
         foreach ($finish($otherSales) as $line) {
-            $sales[] = ['label' => $line['label'] === 'Invoice' ? 'Direct / invoiced sales' : $line['label'], 'detail' => $line['days'].' days', 'amount' => $line['amount']];
+            $sales[] = ['label' => $line['label'] === 'Invoice' ? 'Direct / invoiced sales' : $line['label'], 'detail' => $line['days'].' days', 'amount' => $line['amount'], 'sources' => $line['sources']];
         }
         $diff = $salesTotal - array_sum(array_column($sales, 'amount'));
         if (abs($diff) >= 1) {
-            $sales[] = ['label' => 'Other sales', 'detail' => null, 'amount' => round($diff)];
+            $sales[] = ['label' => 'Other sales', 'detail' => null, 'amount' => round($diff), 'sources' => []];
         }
         $inLines = array_merge(
-            [['label' => 'Opening cash', 'detail' => $start->format('j M'), 'amount' => $cash['opening'], 'days' => 1]],
+            [['label' => 'Opening cash', 'detail' => $start->format('j M'), 'amount' => $cash['opening'], 'days' => 1,
+                'sources' => [['close_id' => $rows->first()['id'], 'date' => $rows->first()['date'], 'amount' => $cash['opening']]]]],
             $finish($in),
         );
         $moneyInTotal = $cash['opening'] + $cash['money_in'];
         $diff = $moneyInTotal - array_sum(array_column($inLines, 'amount'));
         if (abs($diff) >= 1) {
-            $inLines[] = ['label' => 'Other money in', 'detail' => null, 'amount' => round($diff), 'days' => 0];
+            $inLines[] = ['label' => 'Other money in', 'detail' => null, 'amount' => round($diff), 'days' => 0, 'sources' => []];
         }
         $outLines = $finish($out);
         $diff = $cash['money_out'] - array_sum(array_column($outLines, 'amount'));
         if (abs($diff) >= 1) {
-            $outLines[] = ['label' => 'Other money out', 'detail' => null, 'amount' => round($diff), 'days' => 0];
+            $outLines[] = ['label' => 'Other money out', 'detail' => null, 'amount' => round($diff), 'days' => 0, 'sources' => []];
         }
 
         // ---- tanks ----
@@ -267,7 +283,7 @@ class DailyCloseMonthSummaryService
                 if (! $id) {
                     continue;
                 }
-                $tanks[$id] ??= ['id' => $id, 'name' => $t['tank_name'] ?? 'Tank', 'closing' => null, 'variance' => 0.0];
+                $tanks[$id] ??= ['id' => $id, 'name' => $t['tank_name'] ?? 'Tank', 'item_id' => $t['item_id'] ?? null, 'closing' => null, 'variance' => 0.0];
                 $tanks[$id]['name'] = $t['tank_name'] ?? $tanks[$id]['name'];
                 $tanks[$id]['closing'] = $n($t['physical_liters'] ?? 0);
                 $tanks[$id]['variance'] += $n($t['variance_liters'] ?? 0);
@@ -352,6 +368,7 @@ class DailyCloseMonthSummaryService
             $expected = $opening === null ? null : $opening + $del - $s;
             $tankRows[] = [
                 'name' => $t['name'],
+                'item_id' => $t['item_id'],
                 'opening' => $opening,
                 'delivered' => $del,
                 'sold' => $s,

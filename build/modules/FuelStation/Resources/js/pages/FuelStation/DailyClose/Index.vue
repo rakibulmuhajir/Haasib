@@ -143,6 +143,8 @@ const getStatusConfig = (close: DailyClose) => {
   return configs[close.status] || configs.posted
 }
 
+const thisMonth = new Date().toLocaleDateString('en-CA').slice(0, 7)
+
 // Lock month dialog - default to previous month
 const lockMonthOpen = ref(false)
 const now = new Date()
@@ -254,6 +256,12 @@ const confirmEditDay = () => {
         <Button v-if="permissions.canLock" variant="outline" @click="lockMonthOpen = true">
           <CalendarDays class="h-4 w-4 mr-2" />
           Lock Month
+        </Button>
+        <Button variant="outline" as-child>
+          <Link :href="`/${company.slug}/fuel/daily-close/month?month=${thisMonth}`">
+            <CalendarDays class="h-4 w-4 mr-2" />
+            This month
+          </Link>
         </Button>
         <Button variant="outline" as-child>
           <Link :href="`/${company.slug}/fuel/daily-close/month`">

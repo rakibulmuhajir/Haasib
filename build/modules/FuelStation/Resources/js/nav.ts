@@ -63,6 +63,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),
         ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
+        ...item('reports', 'Stock statement', '/fuel/reports/stock-statement', ScrollText),
         ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', TrendingUp),
         ...item('journals', 'Journal Entries', '/journals', BookOpen),
         ...item('reports', 'Trial Balance', '/reports/trial-balance', Scale),

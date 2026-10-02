@@ -23,6 +23,8 @@ interface Row {
   name: string
   employee_number: string | null
   salary: number
+  pay_frequency: string
+  hours: number
   advances: number
   advance_count: number
   payslip: { id: string; number: string; gross: number; deductions: number; net: number; status: string; paid_at: string | null } | null
@@ -57,7 +59,7 @@ const monthEnd = computed(() => {
 })
 const open = computed(() => !props.period || ['open', 'processing'].includes(props.period.status))
 // No payslip yet: anyone on a salary, or on daily wages who was paid something this month.
-const missing = computed(() => props.rows.filter((r) => !r.payslip && (r.salary > 0 || r.advances > 0)).length)
+const missing = computed(() => props.rows.filter((r) => !r.payslip && (r.salary > 0 || r.advances > 0 || r.hours > 0)).length)
 const total = (pick: (r: Row) => number) => props.rows.reduce((sum, r) => sum + pick(r), 0)
 
 const run = () => router.post(`${base.value}/payroll/run-monthly`, { month: props.month }, { preserveScroll: true })
@@ -171,7 +173,10 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
               <Link :href="`${base}/employees/${row.id}`" class="font-medium text-primary underline-offset-2 hover:underline">{{ row.name }}</Link>
               <span v-if="row.employee_number" class="ml-2 text-xs text-muted-foreground">{{ row.employee_number }}</span>
             </td>
-            <td class="px-3 py-2 text-right tabular-nums"><MoneyText :amount="row.salary" :currency="currency" :show-currency="false" :fraction-digits="0" /></td>
+            <td class="px-3 py-2 text-right tabular-nums">
+              <span v-if="row.pay_frequency === 'hourly'">{{ row.hours }} h</span>
+              <MoneyText v-else :amount="row.salary" :currency="currency" :show-currency="false" :fraction-digits="0" />
+            </td>
             <td class="px-3 py-2 text-right tabular-nums" :class="row.advances > row.salary && row.salary > 0 ? 'text-status-critical' : ''">
               <MoneyText :amount="row.advances" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
               <Link v-if="row.advance_count" :href="`${base}/salary-advances?employee_id=${row.id}&month=${month}`" class="ml-1 text-xs text-primary underline-offset-2 hover:underline">({{ row.advance_count }})</Link>

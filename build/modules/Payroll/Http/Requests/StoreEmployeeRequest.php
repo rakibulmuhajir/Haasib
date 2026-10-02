@@ -54,9 +54,9 @@ class StoreEmployeeRequest extends BaseFormRequest
             'department' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',
             'manager_id' => ['nullable', 'uuid', Rule::exists(Employee::class, 'id')],
-            'pay_frequency' => 'required|in:daily,weekly,biweekly,semimonthly,monthly',
+            'pay_frequency' => 'required|in:daily,hourly,weekly,biweekly,semimonthly,monthly',
             'base_salary' => 'required|numeric|min:0',
-            'hourly_rate' => 'nullable|numeric|min:0',
+            'hourly_rate' => [Rule::requiredIf(fn () => $this->input('pay_frequency') === 'hourly'), 'nullable', 'numeric', $this->input('pay_frequency') === 'hourly' ? 'gt:0' : 'min:0'],
             'currency' => [
                 'required',
                 'string',

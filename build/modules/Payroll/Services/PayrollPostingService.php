@@ -234,14 +234,10 @@ class PayrollPostingService
 
                     // Daily wages have no fixed salary: the month's wages are what was paid out to
                     // them in it (their advances), which then come off again -- net 0, the wages in
-                    // Salaries & Wages, nothing left owing either way.
-                    $daily = $employee->pay_frequency === 'daily';
-                    $amount = $daily
-                        ? round((float) $employee->salaryAdvances()
-                            ->whereIn('status', ['pending', 'partially_recovered'])
-                            ->whereBetween('advance_date', [$period->period_start, $period->period_end])
-                            ->sum('amount_outstanding'), 2)
-                        : round((float) $employee->base_salary, 2);
+                    // Salaries & Wages, nothing left owing either way. Hourly: the month's logged
+                    // hours x their rate.
+                    $earning = $this->monthEarning($employee, $period);
+                    $amount = $earning['amount'];
 
                     if ($exists || $amount <= 0) {
                         return;
@@ -255,15 +251,15 @@ class PayrollPostingService
                         'currency' => $employee->currency ?: $baseCurrency,
                         'exchange_rate' => $this->resolveExchangeRate($period->company_id, $employee->currency ?: $baseCurrency, $baseCurrency),
                         'base_currency' => $baseCurrency,
-                        'notes' => $daily ? 'Daily wages paid this month.' : 'Generated from employee salary.',
+                        'notes' => $earning['notes'],
                     ]);
 
                     $payslip->lines()->create([
                         'line_type' => 'earning',
                         'earning_type_id' => $earningType->id,
-                        'description' => $daily ? 'Daily wages' : 'Base salary',
-                        'quantity' => 1,
-                        'rate' => $amount,
+                        'description' => $earning['description'],
+                        'quantity' => $earning['quantity'],
+                        'rate' => $earning['rate'],
                         'amount' => $amount,
                         'sort_order' => 1,
                     ]);
@@ -274,6 +270,43 @@ class PayrollPostingService
 
             return $created;
         });
+    }
+
+    /**
+     * What an employee earns for a payroll month, and how the payslip's single earning line
+     * reads: fixed salary, daily wages (the month's advances), or hourly (logged hours x rate).
+     *
+     * @return array{amount: float, description: string, quantity: float, rate: float, notes: string}
+     */
+    public function monthEarning(Employee $employee, PayrollPeriod $period): array
+    {
+        if ($employee->pay_frequency === 'daily') {
+            $amount = round((float) $employee->salaryAdvances()
+                ->whereIn('status', ['pending', 'partially_recovered'])
+                ->whereBetween('advance_date', [$period->period_start, $period->period_end])
+                ->sum('amount_outstanding'), 2);
+
+            return ['amount' => $amount, 'description' => 'Daily wages', 'quantity' => 1.0, 'rate' => $amount, 'notes' => 'Daily wages paid this month.'];
+        }
+
+        if ($employee->pay_frequency === 'hourly') {
+            $hours = round((float) $employee->timeEntries()
+                ->whereBetween('work_date', [$period->period_start, $period->period_end])
+                ->sum('hours'), 2);
+            $rate = (float) $employee->hourly_rate;
+
+            return [
+                'amount' => round($hours * $rate, 2),
+                'description' => 'Hours: '.rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.').' x '.rtrim(rtrim(number_format($rate, 4, '.', ''), '0'), '.'),
+                'quantity' => $hours,
+                'rate' => $rate,
+                'notes' => 'Hours logged this month.',
+            ];
+        }
+
+        $amount = round((float) $employee->base_salary, 2);
+
+        return ['amount' => $amount, 'description' => 'Base salary', 'quantity' => 1.0, 'rate' => $amount, 'notes' => 'Generated from employee salary.'];
     }
 
     public function approve(Payslip $payslip, string $userId): Transaction

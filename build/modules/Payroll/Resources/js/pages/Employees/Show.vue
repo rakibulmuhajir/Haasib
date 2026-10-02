@@ -3,11 +3,14 @@ import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import {
     ArrowLeft,
     Briefcase,
@@ -58,6 +61,7 @@ interface Employee {
     direct_reports: DirectReport[];
     pay_frequency: string;
     base_salary: number;
+    hourly_rate: number | null;
     currency: string;
     is_active: boolean;
     notes: string | null;
@@ -77,7 +81,32 @@ const props = defineProps<{
     employee: Employee;
     statement: Statement;
     month: string;
+    hours: Array<{ id: string; work_date: string; hours: number; notes: string | null }>;
+    hoursMonth: string;
+    hoursTotal: number;
+    hoursAmount: number;
 }>();
+
+// Hourly pay: hours logged per day; the month's payroll pays the total x the rate.
+const today = new Date();
+const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+const newHours = ref({ work_date: localToday, hours: '', notes: '' });
+const addingHours = ref(false);
+const addHours = () => {
+    addingHours.value = true;
+    router.post(`/${props.company.slug}/employees/${props.employee.id}/hours`, { ...newHours.value }, {
+        preserveScroll: true,
+        onSuccess: () => { newHours.value.hours = ''; newHours.value.notes = ''; },
+        onError: (errors) => toast.error(Object.values(errors)[0] as string),
+        onFinish: () => { addingHours.value = false; },
+    });
+};
+const removeHours = (id: string) => {
+    router.delete(`/${props.company.slug}/time-entries/${id}`, {
+        preserveScroll: true,
+        onError: (errors) => toast.error(Object.values(errors)[0] as string),
+    });
+};
 
 const monthLabel = computed(() => new Date(`${props.month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
 const shiftMonth = (step: number) => {
@@ -124,6 +153,7 @@ const formatEmploymentType = (type: string) => {
 const formatPayFrequency = (freq: string) => {
     const labels: Record<string, string> = {
         daily: 'Daily wages',
+        hourly: 'Hourly',
         weekly: 'Weekly',
         biweekly: 'Bi-weekly',
         semimonthly: 'Semi-monthly',
@@ -389,6 +419,47 @@ const formatPayFrequency = (freq: string) => {
 
             <!-- Sidebar -->
             <div class="space-y-6">
+                <Card v-if="employee.pay_frequency === 'hourly'">
+                    <CardHeader>
+                        <CardTitle class="flex items-center justify-between gap-2">
+                            Hours
+                            <span class="flex items-center gap-1 text-sm font-normal">
+                                <Button variant="ghost" size="sm" @click="shiftMonth(-1)">&lsaquo;</Button>
+                                {{ monthLabel }}
+                                <Button variant="ghost" size="sm" @click="shiftMonth(1)">&rsaquo;</Button>
+                            </span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <p v-if="!hours.length" class="text-sm text-muted-foreground">No hours yet.</p>
+                        <div v-for="h in hours" :key="h.id" class="flex items-center justify-between gap-2 text-sm">
+                            <span class="tabular-nums">{{ formatDate(h.work_date) }}</span>
+                            <span class="tabular-nums font-medium">{{ h.hours }} h</span>
+                            <span class="flex-1 truncate text-muted-foreground">{{ h.notes }}</span>
+                            <Button variant="ghost" size="sm" @click="removeHours(h.id)">Delete</Button>
+                        </div>
+                        <form class="grid grid-cols-2 gap-2 border-t pt-3" @submit.prevent="addHours">
+                            <div class="space-y-1">
+                                <Label for="work_date">Date</Label>
+                                <Input id="work_date" type="date" v-model="newHours.work_date" :max="localToday" />
+                            </div>
+                            <div class="space-y-1">
+                                <Label for="hours">Hours</Label>
+                                <Input id="hours" type="number" step="0.25" min="0" max="24" v-model="newHours.hours" />
+                            </div>
+                            <div class="col-span-2 space-y-1">
+                                <Label for="hours_note">Note</Label>
+                                <Input id="hours_note" v-model="newHours.notes" maxlength="255" />
+                            </div>
+                            <Button type="submit" class="col-span-2" :disabled="addingHours || !newHours.hours">Add</Button>
+                        </form>
+                        <div class="flex items-center justify-between border-t pt-3 text-sm font-medium">
+                            <span class="tabular-nums">{{ hoursTotal }} h &times; {{ employee.hourly_rate ?? 0 }} =</span>
+                            <MoneyText :amount="hoursAmount" :currency="employee.currency" :fraction-digits="0" />
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle class="flex items-center gap-2">

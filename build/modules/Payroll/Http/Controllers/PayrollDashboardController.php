@@ -43,12 +43,16 @@ class PayrollDashboardController extends Controller
             ->whereBetween('advance_date', [$monthStart, $monthEnd])
             ->selectRaw('employee_id, SUM(amount) as total, COUNT(*) as n')->groupBy('employee_id')->get()->keyBy('employee_id');
 
+        $hours = \App\Modules\Payroll\Models\TimeEntry::where('company_id', $company->id)
+            ->whereBetween('work_date', [$monthStart, $monthEnd])
+            ->selectRaw('employee_id, SUM(hours) as total')->groupBy('employee_id')->get()->keyBy('employee_id');
+
         $employees = Employee::where('company_id', $company->id)
             ->where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $payslips->keys()))
             ->orderBy('first_name')->orderBy('last_name')
-            ->get(['id', 'first_name', 'last_name', 'employee_number', 'base_salary', 'currency', 'is_active']);
+            ->get(['id', 'first_name', 'last_name', 'employee_number', 'base_salary', 'pay_frequency', 'currency', 'is_active']);
 
-        $rows = $employees->map(function (Employee $employee) use ($payslips, $advances) {
+        $rows = $employees->map(function (Employee $employee) use ($payslips, $advances, $hours) {
             $payslip = $payslips[$employee->id] ?? null;
 
             return [
@@ -56,6 +60,8 @@ class PayrollDashboardController extends Controller
                 'name' => trim($employee->first_name.' '.$employee->last_name),
                 'employee_number' => $employee->employee_number,
                 'salary' => (float) $employee->base_salary,
+                'pay_frequency' => $employee->pay_frequency,
+                'hours' => $employee->pay_frequency === 'hourly' ? round((float) ($hours[$employee->id]->total ?? 0), 2) : 0,
                 'advances' => round((float) ($advances[$employee->id]->total ?? 0), 2),
                 'advance_count' => (int) ($advances[$employee->id]->n ?? 0),
                 'payslip' => $payslip ? [

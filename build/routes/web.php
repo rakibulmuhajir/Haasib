@@ -47,6 +47,7 @@ use App\Modules\Payroll\Http\Controllers\PayrollPeriodController;
 use App\Modules\Payroll\Http\Controllers\PayslipController;
 use App\Modules\Payroll\Http\Controllers\SalaryAdvanceController;
 use App\Modules\Payroll\Http\Controllers\SalaryReportController;
+use App\Modules\Payroll\Http\Controllers\TimeEntryController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -448,6 +449,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{company}/employees/{employee}/edit', [EmployeeController::class, 'edit'])->whereUuid('employee')->name('employees.edit');
             Route::put('/{company}/employees/{employee}', [EmployeeController::class, 'update'])->whereUuid('employee')->name('employees.update');
             Route::delete('/{company}/employees/{employee}', [EmployeeController::class, 'destroy'])->whereUuid('employee')->name('employees.destroy');
+            Route::post('/{company}/employees/{employee}/hours', [TimeEntryController::class, 'store'])->whereUuid('employee')->name('employees.hours.store');
+            Route::delete('/{company}/time-entries/{timeEntry}', [TimeEntryController::class, 'destroy'])->whereUuid('timeEntry')->name('time-entries.destroy');
 
             // Earning Types
             Route::get('/{company}/earning-types', [EarningTypeController::class, 'index'])->name('earning-types.index');

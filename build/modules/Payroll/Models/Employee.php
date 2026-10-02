@@ -128,6 +128,11 @@ class Employee extends Model
         return $this->hasMany(SalaryAdvance::class);
     }
 
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
     public function outstandingAdvances(): HasMany
     {
         return $this->hasMany(SalaryAdvance::class)

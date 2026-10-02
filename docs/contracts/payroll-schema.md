@@ -393,6 +393,25 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - Advance amount has no salary-based maximum. The UI warns when the amount exceeds the employee's monthly base salary, but must not block submission.
   - Payroll recovery credits Employee Advances when the payslip is approved.
 
+### pay.time_entries
+- Purpose: hours worked per day by hourly-paid employees (`pay_frequency = hourly`); the month's payroll pays total hours x `hourly_rate`.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK -> `auth.companies.id` (CASCADE/CASCADE).
+  - `employee_id` uuid not null FK -> `pay.employees.id` (RESTRICT/CASCADE).
+  - `work_date` date not null.
+  - `hours` numeric(6,2) not null, CHECK `hours > 0`.
+  - `notes` varchar(255) nullable.
+  - `created_by_user_id` uuid nullable.
+  - `created_at`, `updated_at` timestamps.
+- Indexes: (`company_id`, `employee_id`, `work_date`).
+- RLS: enabled and FORCEd; `time_entries_super_admin` and `time_entries_company_isolation` policies (same as `pay.salary_advances`).
+- Model:
+  - `$connection = 'pgsql'; $table = 'pay.time_entries'; $keyType = 'string'; public $incrementing = false;`
+- Business rules:
+  - An entry cannot be added or removed for a month whose payslip for that employee is approved or paid.
+  - Generating or refreshing a draft payslip for an hourly employee sets its earning line to total hours x rate.
+
 ### pay.salary_advance_recoveries
 - Purpose: individual recovery records that reduce outstanding salary advances.
 - Columns:

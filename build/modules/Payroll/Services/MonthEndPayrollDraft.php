@@ -48,6 +48,34 @@ class MonthEndPayrollDraft
 
         $created = $this->posting->generatePayslipsForPeriod($period, $company->base_currency ?? 'PKR');
 
+        // Daily and hourly pay is worked out from the month's advances / logged hours, which keep
+        // changing while the draft waits: re-work each draft's earning line. The payslip_lines
+        // trigger recomputes the payslip's earnings, gross, net and base_* totals.
+        Payslip::with(['employee', 'lines'])
+            ->where('company_id', $company->id)
+            ->where('payroll_period_id', $period->id)
+            ->where('status', 'draft')
+            ->get()
+            ->each(function (Payslip $payslip) use ($period) {
+                if (! in_array($payslip->employee?->pay_frequency, ['daily', 'hourly'], true)) {
+                    return;
+                }
+                $line = $payslip->lines->firstWhere('line_type', 'earning');
+                if (! $line) {
+                    return;
+                }
+                $earning = $this->posting->monthEarning($payslip->employee, $period);
+                if ($earning['amount'] <= 0) {
+                    return;
+                }
+                $line->update([
+                    'description' => $earning['description'],
+                    'quantity' => $earning['quantity'],
+                    'rate' => $earning['rate'],
+                    'amount' => $earning['amount'],
+                ]);
+            });
+
         // Drafts made before the month's advances were paid show no deductions: bring them up to date.
         Payslip::where('company_id', $company->id)
             ->where('payroll_period_id', $period->id)

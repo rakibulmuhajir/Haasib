@@ -72,6 +72,7 @@ const form = useForm({
     manager_id: NO_MANAGER,
     pay_frequency: 'monthly',
     base_salary: 0,
+    hourly_rate: '',
     currency: props.company.base_currency || 'USD',
     notes: '',
 });
@@ -319,6 +320,7 @@ const submit = () => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="daily">Daily wages</SelectItem>
+                                    <SelectItem value="hourly">Hourly</SelectItem>
                                     <SelectItem value="weekly"
                                         >Weekly</SelectItem
                                     >
@@ -350,6 +352,19 @@ const submit = () => {
                                 }"
                             />
                             <InputError :message="form.errors.base_salary" />
+                        </div>
+
+                        <div v-if="form.pay_frequency === 'hourly'" class="space-y-2">
+                            <Label for="hourly_rate">Hourly rate *</Label>
+                            <Input
+                                id="hourly_rate"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                v-model="form.hourly_rate"
+                                :class="{ 'border-destructive': form.errors.hourly_rate }"
+                            />
+                            <InputError :message="form.errors.hourly_rate" />
                         </div>
 
                         <div class="space-y-2">

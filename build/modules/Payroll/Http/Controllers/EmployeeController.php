@@ -124,6 +124,23 @@ class EmployeeController extends Controller
         $statement = app(\App\Modules\Payroll\Services\EmployeeStatementService::class)
             ->statement($employee, $monthStart->toDateString(), $monthStart->copy()->endOfMonth()->toDateString());
 
+        // Hourly pay: the month's logged hours and what they come to.
+        $hours = [];
+        $hoursTotal = 0.0;
+        if ($employee->pay_frequency === 'hourly') {
+            $entries = $employee->timeEntries()
+                ->whereBetween('work_date', [$monthStart->toDateString(), $monthStart->copy()->endOfMonth()->toDateString()])
+                ->orderBy('work_date')->orderBy('created_at')
+                ->get();
+            $hours = $entries->map(fn ($e) => [
+                'id' => $e->id,
+                'work_date' => $e->work_date->toDateString(),
+                'hours' => (float) $e->hours,
+                'notes' => $e->notes,
+            ])->all();
+            $hoursTotal = round((float) $entries->sum('hours'), 2);
+        }
+
         return Inertia::render('Payroll/Employees/Show', [
             'company' => [
                 'id' => $company->id,
@@ -134,6 +151,10 @@ class EmployeeController extends Controller
             'employee' => $employee,
             'month' => $month,
             'statement' => $statement,
+            'hours' => $hours,
+            'hoursMonth' => $month,
+            'hoursTotal' => $hoursTotal,
+            'hoursAmount' => round($hoursTotal * (float) $employee->hourly_rate, 2),
         ]);
     }
 

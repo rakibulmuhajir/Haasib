@@ -62,7 +62,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Month Summary', '/fuel/daily-close/month', CalendarDays),
         ...item('reports', 'Profit by day', '/fuel/reports/performance', BarChart3),
         ...item('reports', 'Fuel Profit', '/fuel/reports/product-profitability', Package),
-        ...item('reports', t('profitAndLoss'), '/reports/profit-loss', BarChart3),
+        ...item('reports', 'Profit & Loss', '/reports/profit-loss', BarChart3),
         ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
         ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),
         ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),

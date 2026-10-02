@@ -6,6 +6,13 @@ use App\Modules\Accounting\Models\Account;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Expenses are what was entered as an expense: Daily Close > Money out > Expenses, and the Record
+ * Expense page -- every `expense` transaction, whatever account it went to (furniture and building
+ * work included, since that is where they are entered). Other costs that reach expense accounts
+ * without being entered as expenses -- tank shrinkage, cash short/over, payroll, bills, journals --
+ * are listed apart as "other costs", outside the expense total, so the report still ties to the P&L.
+ */
 class ExpenseReportService
 {
     /**
@@ -26,6 +33,7 @@ class ExpenseReportService
         $source = array_key_exists($source, $this->sourceMap()) ? $source : 'all';
 
         $rows = $this->expenseLines($companyId, $startDate, $endDate, $accountId, $source);
+        $otherRows = $this->otherCostRows($companyId, $startDate, $endDate);
         $periodRows = [];
         $accountRows = [];
         $sourceTotals = [];
@@ -109,7 +117,9 @@ class ExpenseReportService
                 'line_count' => count($rows),
                 'account_count' => count($accountRows),
                 'transaction_count' => count(array_unique(array_column($rows, 'transaction_id'))),
+                'other_amount' => round(array_sum(array_column($otherRows, 'amount')), 2),
             ],
+            'otherRows' => $otherRows,
             'periodRows' => array_values($periodRows),
             'accountRows' => $accountRows,
             'sourceRows' => $sourceRows,
@@ -132,7 +142,8 @@ class ExpenseReportService
             ->whereNull('t.deleted_at')
             ->whereNull('t.reversed_by_id')
             ->whereBetween('t.transaction_date', [$startDate, $endDate])
-            ->whereIn('a.type', ['expense', 'other_expense'])
+            ->where('t.transaction_type', 'expense')
+            ->where('je.debit_amount', '>', 0)
             ->select([
                 'je.id as line_id',
                 'je.transaction_id',
@@ -158,15 +169,10 @@ class ExpenseReportService
             $query->where('a.id', $accountId);
         }
 
-        $types = $this->sourceMap()[$source] ?? [];
-        if ($types) {
-            $query->whereIn('t.transaction_type', $types);
-        }
-
         return $query->get()
             ->map(function ($row) {
                 $amount = round((float) $row->debit_amount - (float) $row->credit_amount, 2);
-                $source = $this->sourceFor((string) $row->transaction_type);
+                $source = $this->sourceFor((string) $row->reference_type);
                 $metadata = is_string($row->metadata) ? json_decode($row->metadata, true) : [];
 
                 return [
@@ -190,8 +196,57 @@ class ExpenseReportService
                 ];
             })
             ->filter(fn (array $row) => abs((float) $row['amount']) > 0.005)
+            ->filter(fn (array $row) => $source === 'all' || $row['source_key'] === $source)
             ->values()
             ->all();
+    }
+
+    /**
+     * Costs on expense accounts that were not entered as expenses, per account and kind -- tank
+     * shrinkage, cash short/over, payroll, bills, journals.
+     *
+     * @return array<int,array{account_id:string,account_code:string,account_name:string,label:string,amount:float}>
+     */
+    private function otherCostRows(string $companyId, string $startDate, string $endDate): array
+    {
+        return DB::table('acct.journal_entries as je')
+            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
+            ->where('t.company_id', $companyId)
+            ->where('t.status', 'posted')
+            ->whereNull('t.deleted_at')
+            ->whereNull('t.reversed_by_id')
+            ->whereBetween('t.transaction_date', [$startDate, $endDate])
+            ->whereIn('a.type', ['expense', 'other_expense'])
+            ->where('t.transaction_type', '!=', 'expense')
+            ->groupBy('a.id', 'a.code', 'a.name', 't.transaction_type')
+            ->orderBy('a.code')
+            ->selectRaw('a.id as account_id, a.code as account_code, a.name as account_name, t.transaction_type, SUM(je.debit_amount - je.credit_amount) as amount')
+            ->get()
+            ->groupBy('account_id')
+            ->map(fn ($lines) => [
+                'account_id' => $lines->first()->account_id,
+                'account_code' => $lines->first()->account_code,
+                'account_name' => $lines->first()->account_name,
+                'label' => $lines->pluck('transaction_type')->map(fn ($type) => $this->otherLabel((string) $type))->unique()->implode(', '),
+                'amount' => round((float) $lines->sum('amount'), 2),
+            ])
+            ->filter(fn (array $row) => abs($row['amount']) > 0.005)
+            ->values()
+            ->all();
+    }
+
+    private function otherLabel(string $transactionType): string
+    {
+        return match ($transactionType) {
+            'fuel_daily_close' => 'Daily close (dips, cash count)',
+            'fuel_close_cost_fix' => 'Cost correction',
+            'bill' => 'Bill',
+            'payroll_accrual' => 'Payroll',
+            'adjustment', 'fuel_variance', 'inventory_revaluation' => 'Stock adjustment',
+            'manual' => 'Journal',
+            default => str($transactionType)->replace('_', ' ')->title()->toString(),
+        };
     }
 
     /**
@@ -199,29 +254,17 @@ class ExpenseReportService
      */
     private function sourceMap(): array
     {
-        return [
-            'all' => [],
-            'daily_close' => ['fuel_daily_close'],
-            'bill' => ['bill'],
-            'payroll' => ['payroll_accrual'],
-            'adjustment' => ['adjustment', 'fuel_variance', 'inventory_revaluation'],
-            'manual' => ['manual'],
-        ];
+        return ['all' => [], 'daily_close' => [], 'recorded' => []];
     }
 
     /**
      * @return array{key:string,label:string}
      */
-    private function sourceFor(string $transactionType): array
+    private function sourceFor(string $referenceType): array
     {
-        return match ($transactionType) {
-            'fuel_daily_close' => ['key' => 'daily_close', 'label' => 'Daily Close'],
-            'bill' => ['key' => 'bill', 'label' => 'Bill'],
-            'payroll_accrual' => ['key' => 'payroll', 'label' => 'Payroll'],
-            'adjustment', 'fuel_variance', 'inventory_revaluation' => ['key' => 'adjustment', 'label' => 'Adjustment'],
-            'manual' => ['key' => 'manual', 'label' => 'Manual Journal'],
-            default => ['key' => 'other', 'label' => str($transactionType)->replace('_', ' ')->title()->toString()],
-        };
+        return $referenceType === 'fuel.daily_close_expense'
+            ? ['key' => 'daily_close', 'label' => 'Daily Close']
+            : ['key' => 'recorded', 'label' => 'Record Expense'];
     }
 
     /**
@@ -255,7 +298,7 @@ class ExpenseReportService
     private function accountOptions(string $companyId): array
     {
         return Account::where('company_id', $companyId)
-            ->whereIn('type', ['expense', 'other_expense'])
+            ->moneyOutTarget()
             ->whereNull('deleted_at')
             ->orderBy('code')
             ->get(['id', 'code', 'name'])
@@ -276,10 +319,7 @@ class ExpenseReportService
         return [
             ['value' => 'all', 'label' => 'All sources'],
             ['value' => 'daily_close', 'label' => 'Daily Close'],
-            ['value' => 'bill', 'label' => 'Bills'],
-            ['value' => 'payroll', 'label' => 'Payroll'],
-            ['value' => 'adjustment', 'label' => 'Adjustments'],
-            ['value' => 'manual', 'label' => 'Manual Journals'],
+            ['value' => 'recorded', 'label' => 'Record Expense'],
         ];
     }
 

@@ -65,6 +65,14 @@ class StatementReportController extends Controller
                 ->map(fn ($e) => ['id' => $e->id, 'name' => trim($e->first_name.' '.$e->last_name), 'customer_number' => $e->employee_number])
             : collect();
 
+        // Expense accounts: everything Daily Close > Money out > Expenses can be booked to (fixed
+        // assets included), one statement each, or any of them together.
+        $expenseAccounts = Account::where('company_id', $company->id)
+            ->moneyOutTarget()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         $vendors = Vendor::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -80,6 +88,7 @@ class StatementReportController extends Controller
                 'supplier' => $this->allParties($pick($vendors), fn ($pid) => $this->supplierStatement($vendors, $pid, $from, $to), $from, $to),
                 'amanat' => $this->allParties($pick($holders), fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
                 'employee' => $this->allParties($pick($employees), fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
+                'expense' => $this->allParties($pick($expenseAccounts), fn ($pid) => $this->expenseStatement($expenseAccounts, $pid, $from, $to), $from, $to),
             };
             if ($ids) {
                 $resolvedId = 'some';
@@ -90,6 +99,7 @@ class StatementReportController extends Controller
                 'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
                 'amanat' => $this->amanatStatement($holders, $id, $from, $to),
                 'employee' => $this->employeeStatement($employees, $id, $from, $to),
+                'expense' => $this->expenseStatement($expenseAccounts, $id, $from, $to),
                 default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
             };
         }
@@ -108,6 +118,7 @@ class StatementReportController extends Controller
                 'supplier' => $vendors,
                 'amanat' => $holders,
                 'employee' => $employees->values(),
+                'expense' => $expenseAccounts,
                 // Customer groups: the group and its members, to pick in one go.
                 'groups' => Customer::where('company_id', $company->id)->whereNotNull('parent_customer_id')
                     ->where('is_active', true)->get(['id', 'parent_customer_id'])
@@ -172,6 +183,26 @@ class StatementReportController extends Controller
             ],
             $columns ?? ['money_in' => 'In', 'money_out' => 'Out', 'balance' => 'Balance'],
             'all',
+        ];
+    }
+
+    /** One expense account's ledger: each entry to it by date, with the running total. */
+    private function expenseStatement($expenseAccounts, ?string $id, string $from, string $to): array
+    {
+        $columns = ['money_in' => 'Spent', 'money_out' => 'Reduced', 'balance' => 'Total'];
+        $pick = $id ? $expenseAccounts->firstWhere('id', $id) : $expenseAccounts->first();
+        if (! $pick) {
+            return [
+                ['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'account' => null],
+                $columns,
+                null,
+            ];
+        }
+
+        return [
+            app(AccountStatementService::class)->statement(Account::find($pick->id), $from, $to),
+            $columns,
+            $pick->id,
         ];
     }
 

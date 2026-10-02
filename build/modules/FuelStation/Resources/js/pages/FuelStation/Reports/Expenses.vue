@@ -33,6 +33,15 @@ interface Totals {
   line_count: number
   account_count: number
   transaction_count: number
+  other_amount: number
+}
+
+interface OtherRow {
+  account_id: string
+  account_code: string
+  account_name: string
+  label: string
+  amount: number
 }
 
 interface PeriodRow {
@@ -94,6 +103,7 @@ const props = defineProps<{
   accountRows: AccountRow[]
   sourceRows: SourceRow[]
   detailRows: DetailRow[]
+  otherRows: OtherRow[]
   accountOptions: AccountOption[]
   sourceOptions: SourceOption[]
 }>()
@@ -392,7 +402,7 @@ const detailColumns = [
       <Card>
         <CardHeader>
           <CardTitle class="text-base">Expense Lines</CardTitle>
-          <CardDescription>Drill down to Daily Close, bill, or journal entry.</CardDescription>
+          <CardDescription>Entered under Daily Close › Money out › Expenses, or on Record Expense.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
           <LedgerRegister :data="detailRows" :columns="detailColumns" key-field="line_id">
@@ -418,6 +428,27 @@ const detailColumns = [
               </Link>
             </template>
           </LedgerRegister>
+        </CardContent>
+      </Card>
+
+      <!-- Costs on expense accounts that were never entered as expenses: tank shrinkage, cash
+           short/over, payroll, bills. Outside the total above, listed so the report still ties to the P&L. -->
+      <Card v-if="otherRows.length">
+        <CardHeader>
+          <CardTitle class="text-base">Other costs, not expenses</CardTitle>
+          <CardDescription>In the Profit &amp; Loss, not in the total above.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul class="space-y-1.5 text-sm tabular-nums">
+            <li v-for="row in otherRows" :key="row.account_id" class="flex justify-between gap-3">
+              <span><span class="font-medium">{{ row.account_name }}</span> <span class="text-muted-foreground">· {{ row.label }}</span></span>
+              <MoneyText :amount="row.amount" :currency="company.base_currency" :fraction-digits="0" />
+            </li>
+            <li class="flex justify-between gap-3 border-t border-rule-default pt-2 font-semibold">
+              <span>Total other costs</span>
+              <MoneyText :amount="totals.other_amount" :currency="company.base_currency" :fraction-digits="0" />
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>

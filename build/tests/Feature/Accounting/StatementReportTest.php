@@ -641,3 +641,44 @@ test('a split invoice page lists the moved share as a credit note, not as paid',
             ->where('appliedCredits.1.amount', fn ($v) => (float) $v === 300.0)
             ->has('appliedPayments', 0));
 });
+
+test('the expense statement lists any expense account alone, several together, or all of them', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $mk = fn (string $code, string $name, string $type, string $subtype, bool $contra = false) => Account::create([
+        'company_id' => $f['company']->id, 'code' => $code, 'name' => $name, 'type' => $type,
+        'subtype' => $subtype, 'normal_balance' => $contra ? 'credit' : 'debit', 'is_contra' => $contra, 'is_active' => true,
+    ]);
+    $power = $mk('6110', 'Electricity', 'expense', 'expense');
+    $tea = $mk('6130', 'Food & Tea', 'expense', 'expense');
+    $furniture = $mk('1500', 'Furniture & Fixtures', 'asset', 'fixed_asset');
+    $mk('1510', 'Accumulated Depreciation – Furniture', 'asset', 'fixed_asset', true);
+
+    postJournal($f, '2026-09-05', [['account_id' => $power->id, 'type' => 'debit', 'amount' => 3000], ['account_id' => $f['cash']->id, 'type' => 'credit', 'amount' => 3000]]);
+    postJournal($f, '2026-09-06', [['account_id' => $tea->id, 'type' => 'debit', 'amount' => 500], ['account_id' => $f['cash']->id, 'type' => 'credit', 'amount' => 500]]);
+    postJournal($f, '2026-09-07', [['account_id' => $furniture->id, 'type' => 'debit', 'amount' => 9000], ['account_id' => $f['cash']->id, 'type' => 'credit', 'amount' => 9000]]);
+
+    $get = fn (string $query) => test()->actingAs($f['user'])->get("/{$f['company']->slug}/reports/statements?kind=expense&from=2026-09-01&to=2026-09-24{$query}");
+
+    // One account: its own running total.
+    $get("&id={$power->id}")->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->component('accounting/reports/Statement', false)
+        ->where('filters.kind', 'expense')
+        ->where('statement.closing_balance', 3000)
+        // Everything an expense can be booked to -- fixed assets too -- but never a contra account.
+        ->has('options.expense', 3)
+    );
+
+    // Several together.
+    $get("&ids={$power->id},{$tea->id}")->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('statement.combined', true)
+        ->where('statement.closing_balance', 3500)
+    );
+
+    // All of them.
+    $get('&id=all')->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('filters.id', 'all')
+        ->where('statement.combined', true)
+        ->where('statement.closing_balance', 12500)
+    );
+});

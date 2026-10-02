@@ -22,6 +22,7 @@ interface Bill {
   bill_number: string | null
   quantity: number
   direct?: number
+  amount?: number
 }
 
 interface DirectInvoice {
@@ -163,10 +164,9 @@ const apply = () => {
             <tr>
               <th class="px-3 py-2 text-left font-normal">Date</th>
               <th class="px-3 py-2 text-right font-normal">Bought (in)</th>
-              <th class="px-3 py-2 text-right font-normal">Purchase rate</th>
+              <th class="px-3 py-2 text-right font-normal">Purchase amount</th>
               <th class="px-3 py-2 text-right font-normal">Purchases to date</th>
               <th class="px-3 py-2 text-right font-normal">Sold (out)</th>
-              <th class="px-3 py-2 text-right font-normal">Sale rate</th>
               <th class="px-3 py-2 text-right font-normal">Sale amount</th>
               <th class="px-3 py-2 text-right font-normal">Sales to date</th>
               <th class="px-3 py-2 text-right font-normal">Balance</th>
@@ -178,11 +178,16 @@ const apply = () => {
               <td class="px-3 py-1.5">Opening</td>
               <template v-if="includeOpening">
                 <td class="px-3 py-1.5 text-right text-foreground">{{ litres(totals.opening) }}</td>
-                <td class="px-3 py-1.5 text-right">{{ totals.opening_rate ? fmt.format(totals.opening_rate) : '' }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  <Hint v-if="totals.opening_value" side="left">
+                    <MoneyText :amount="totals.opening_value" :currency="currency" :fraction-digits="0" />
+                    <template #content>{{ litres(totals.opening) }} L @ {{ fmt.format(totals.opening_rate ?? 0) }}</template>
+                  </Hint>
+                </td>
                 <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.opening_value" :amount="totals.opening_value" :currency="currency" :fraction-digits="0" /></td>
-                <td colspan="4"></td>
+                <td colspan="3"></td>
               </template>
-              <td v-else colspan="7"></td>
+              <td v-else colspan="6"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.opening) }}</td>
               <td></td>
             </tr>
@@ -190,9 +195,14 @@ const apply = () => {
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
                 <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
-                <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  <Hint v-if="r.purchase_amount" side="left">
+                    <MoneyText :amount="r.purchase_amount" :currency="currency" :fraction-digits="0" />
+                    <template #content>@ {{ fmt.format(r.purchase_rate ?? 0) }} / L</template>
+                  </Hint>
+                </td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
-                <td colspan="6" class="px-3 py-1.5 text-muted-foreground">
+                <td colspan="5" class="px-3 py-1.5 text-muted-foreground">
                   No close
                   <Link :href="`/${company.slug}/fuel/daily-close?date=${r.date}`" class="ml-2 underline underline-offset-2">Close this day</Link>
                 </td>
@@ -202,18 +212,25 @@ const apply = () => {
                   <Link :href="`/${company.slug}/fuel/daily-close/${r.close_id}`" class="underline-offset-2 hover:underline">{{ shortDate(r.date) }}</Link>
                 </td>
                 <td class="px-3 py-1.5 text-right">
-                  <Hint v-if="r.bills && r.bills.length" side="left">
+                  <Hint v-if="r.received_direct" side="left">
                     {{ litres(r.received) }}
+                    <template #content>{{ litres(r.received_direct) }} L sold straight off the tanker.</template>
+                  </Hint>
+                  <template v-else>{{ r.received ? litres(r.received) : '' }}</template>
+                </td>
+                <!-- The rate and the bills behind the amount. -->
+                <td class="px-3 py-1.5 text-right">
+                  <Hint v-if="r.purchase_amount" side="left">
+                    <MoneyText :amount="r.purchase_amount" :currency="currency" :fraction-digits="0" />
                     <template #content>
-                      <div v-for="b in r.bills" :key="b.id" class="flex justify-between gap-4">
+                      <p class="font-medium">@ {{ fmt.format(r.purchase_rate ?? 0) }} / L</p>
+                      <div v-for="b in r.bills ?? []" :key="b.id" class="flex justify-between gap-4">
                         <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }}</Link>
-                        <span>{{ litres(b.quantity) }} L<template v-if="b.direct"> · {{ litres(b.direct) }} sold off tanker</template></span>
+                        <span>{{ litres(b.quantity) }} L · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
                       </div>
                     </template>
                   </Hint>
-                  <template v-else>{{ litres(r.received) }}</template>
                 </td>
-                <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.sold_direct" side="left">
@@ -221,16 +238,26 @@ const apply = () => {
                     <template #content>
                       <div class="flex justify-between gap-4"><span>Pumps</span><span>{{ litres(r.sold_pumps ?? 0) }} L</span></div>
                       <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct) }} L</span></div>
-                      <div v-for="inv in r.direct_invoices ?? []" :key="inv.id" class="flex justify-between gap-4 pl-2">
-                        <Link :href="`/${company.slug}/invoices/${inv.id}`" class="underline underline-offset-2">{{ inv.invoice_number }}</Link>
-                        <MoneyText :amount="inv.amount" :currency="currency" :fraction-digits="0" />
-                      </div>
                     </template>
                   </Hint>
-                  <template v-else>{{ litres(r.sold) }}</template>
+                  <template v-else>{{ r.sold ? litres(r.sold) : '' }}</template>
                 </td>
-                <td class="px-3 py-1.5 text-right">{{ rateText(r.rates) }}</td>
-                <td class="px-3 py-1.5 text-right"><MoneyText :amount="r.sale_amount ?? 0" :currency="currency" :fraction-digits="0" /></td>
+                <!-- The rate (both, on a day the rate changed) and the off-tanker invoices. -->
+                <td class="px-3 py-1.5 text-right">
+                  <Hint v-if="r.sale_amount" side="left">
+                    <MoneyText :amount="r.sale_amount" :currency="currency" :fraction-digits="0" />
+                    <template #content>
+                      <p class="font-medium">@ {{ rateText(r.rates) }} / L</p>
+                      <template v-if="r.direct_amount">
+                        <div class="flex justify-between gap-4"><span>Pumps</span><MoneyText :amount="(r.sale_amount ?? 0) - r.direct_amount" :currency="currency" :fraction-digits="0" /></div>
+                        <div v-for="inv in r.direct_invoices ?? []" :key="inv.id" class="flex justify-between gap-4">
+                          <Link :href="`/${company.slug}/invoices/${inv.id}`" class="underline underline-offset-2">{{ inv.invoice_number }}</Link>
+                          <MoneyText :amount="inv.amount" :currency="currency" :fraction-digits="0" />
+                        </div>
+                      </template>
+                    </template>
+                  </Hint>
+                </td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.sale_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">{{ litres(r.dip) }}</td>
                 <td class="px-3 py-1.5 text-right" :class="Math.abs(r.variance ?? 0) >= 1 ? 'text-status-attention' : 'text-muted-foreground'">
@@ -244,16 +271,25 @@ const apply = () => {
               </template>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="10" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
+              <td colspan="9" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
             </tr>
             <tr class="border-t-2 border-rule-default font-semibold">
               <td class="px-3 py-2">Total</td>
               <td class="px-3 py-2 text-right">{{ litres(boughtTotal) }}</td>
-              <td class="px-3 py-2 text-right">{{ purchaseRateTotal === null ? '—' : fmt.format(purchaseRateTotal) }}</td>
-              <td class="px-3 py-2 text-right"><MoneyText :amount="purchaseTotal" :currency="currency" :fraction-digits="0" /></td>
+              <td class="px-3 py-2 text-right">
+                <Hint side="left">
+                  <MoneyText :amount="purchaseTotal" :currency="currency" :fraction-digits="0" />
+                  <template #content>Average @ {{ purchaseRateTotal === null ? '—' : fmt.format(purchaseRateTotal) }} / L</template>
+                </Hint>
+              </td>
+              <td></td>
               <td class="px-3 py-2 text-right">{{ litres(totals.sold) }}</td>
-              <td class="px-3 py-2 text-right">{{ totals.rate === null ? '—' : fmt.format(totals.rate) }}</td>
-              <td class="px-3 py-2 text-right"><MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" /></td>
+              <td class="px-3 py-2 text-right">
+                <Hint side="left">
+                  <MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" />
+                  <template #content>Average @ {{ totals.rate === null ? '—' : fmt.format(totals.rate) }} / L</template>
+                </Hint>
+              </td>
               <td></td>
               <td class="px-3 py-2 text-right">
                 <Link v-if="lastClosed" :href="`/${company.slug}/fuel/daily-close/${lastClosed.close_id}`" class="underline-offset-2 hover:underline">{{ litres(totals.closing) }}</Link>
@@ -270,8 +306,12 @@ const apply = () => {
                 </Hint>
               </td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.available) }}</td>
-              <td class="px-3 py-1.5 text-right">{{ totals.available_value && totals.available ? fmt.format(totals.available_value / totals.available) : '' }}</td>
-              <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.available_value" :amount="totals.available_value" :currency="currency" :fraction-digits="0" /></td>
+              <td class="px-3 py-1.5 text-right">
+                <Hint v-if="totals.available_value" side="left">
+                  <MoneyText :amount="totals.available_value" :currency="currency" :fraction-digits="0" />
+                  <template #content>Average @ {{ fmt.format(totals.available_value / (totals.available || 1)) }} / L</template>
+                </Hint>
+              </td>
               <td colspan="6"></td>
             </tr>
           </tbody>

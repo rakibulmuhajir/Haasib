@@ -46,7 +46,7 @@ interface TankRow {
   purchase_amount: number | null
   opening_rate: number | null
   opening_value: number | null
-  days: Array<{ date: string; close_id?: string; received?: number; purchase_rate?: number | null; purchase_running?: number; sold?: number; rates?: number[]; sale_amount?: number; sale_running?: number; dip?: number }>
+  days: Array<{ date: string; close_id?: string; received?: number; purchase_amount?: number; purchase_rate?: number | null; purchase_running?: number; sold?: number; rates?: number[]; sale_amount?: number; sale_running?: number; dip?: number }>
 }
 
 const props = defineProps<{
@@ -226,15 +226,20 @@ const varianceDays = computed(() =>
               </div>
               <ul v-if="openLine === 's' + i" class="mt-1 space-y-0.5 border-l border-rule-default pl-3 text-xs">
                 <!-- A fuel's days read like its stock statement: litres, rate, amount, sales to date. -->
-                <li v-if="line.item_id" class="grid grid-cols-5 gap-3 text-muted-foreground">
-                  <span>Date</span><span class="text-right">Litres</span><span class="text-right">Rate</span><span class="text-right">Amount</span><span class="text-right">To date</span>
+                <li v-if="line.item_id" class="grid grid-cols-4 gap-3 text-muted-foreground">
+                  <span>Date</span><span class="text-right">Litres</span><span class="text-right">Amount</span><span class="text-right">To date</span>
                 </li>
-                <li v-for="(src, j) in line.sources" :key="src.date" :class="line.item_id ? 'grid grid-cols-5 gap-3' : 'flex justify-between gap-3'">
+                <li v-for="(src, j) in line.sources" :key="src.date" :class="line.item_id ? 'grid grid-cols-4 gap-3' : 'flex justify-between gap-3'">
                   <Link :href="closeUrl(src.close_id)" class="underline-offset-2 hover:underline">{{ shortDate(src.date) }}</Link>
                   <template v-if="line.item_id">
                     <span class="text-right">{{ litres(src.quantity ?? 0) }}</span>
-                    <span class="text-right">{{ src.quantity ? rate(src.amount / src.quantity) : '—' }}</span>
-                    <MoneyText class="text-right" :amount="src.amount" :currency="currency" :fraction-digits="0" />
+                    <span class="text-right">
+                      <Hint v-if="src.quantity" side="left">
+                        <MoneyText :amount="src.amount" :currency="currency" :fraction-digits="0" />
+                        <template #content>@ {{ rate(src.amount / src.quantity) }} / L</template>
+                      </Hint>
+                      <MoneyText v-else :amount="src.amount" :currency="currency" :fraction-digits="0" />
+                    </span>
                     <MoneyText class="text-right text-muted-foreground" :amount="runningTo(line.sources ?? [], j)" :currency="currency" :fraction-digits="0" />
                   </template>
                   <span v-else><span v-if="src.quantity" class="mr-2 text-muted-foreground">{{ litres(src.quantity) }}</span><MoneyText :amount="src.amount" :currency="currency" :fraction-digits="0" /></span>
@@ -264,11 +269,9 @@ const varianceDays = computed(() =>
                   <th class="pb-1 text-left font-normal">Tank</th>
                   <th class="pb-1 text-right font-normal">Opening</th>
                   <th class="pb-1 text-right font-normal">+ Bought</th>
-                  <th class="pb-1 text-right font-normal">Purchase rate</th>
                   <th class="pb-1 text-right font-normal">Purchases</th>
                   <th class="pb-1 text-right font-normal">− Sold</th>
-                  <th class="pb-1 text-right font-normal">Sale rate</th>
-                  <th class="pb-1 text-right font-normal">Sale amount</th>
+                  <th class="pb-1 text-right font-normal">Sales</th>
                   <th class="pb-1 text-right font-normal">= Expected</th>
                   <th class="pb-1 text-right font-normal">Closing dip</th>
                   <th class="pb-1 text-right font-normal">Variance</th>
@@ -284,11 +287,19 @@ const varianceDays = computed(() =>
                   </td>
                   <td class="py-1 text-right">{{ includeOpening ? '—' : dash(t.opening) }}</td>
                   <td class="py-1 text-right">{{ dash(tankBought(t)) }}</td>
-                  <td class="py-1 text-right">{{ tankPurchaseRate(t) ? rate(tankPurchaseRate(t)!) : '' }}</td>
-                  <td class="py-1 text-right"><MoneyText v-if="tankPurchases(t)" :amount="tankPurchases(t)!" :currency="currency" :fraction-digits="0" /></td>
+                  <td class="py-1 text-right">
+                    <Hint v-if="tankPurchases(t)" side="left">
+                      <MoneyText :amount="tankPurchases(t)!" :currency="currency" :fraction-digits="0" />
+                      <template #content>Average @ {{ rate(tankPurchaseRate(t) ?? 0) }} / L</template>
+                    </Hint>
+                  </td>
                   <td class="py-1 text-right">{{ dash(t.sold) }}</td>
-                  <td class="py-1 text-right">{{ t.rate ? rate(t.rate) : '' }}</td>
-                  <td class="py-1 text-right"><MoneyText v-if="t.sale_amount" :amount="t.sale_amount" :currency="currency" :fraction-digits="0" /></td>
+                  <td class="py-1 text-right">
+                    <Hint v-if="t.sale_amount" side="left">
+                      <MoneyText :amount="t.sale_amount" :currency="currency" :fraction-digits="0" />
+                      <template #content>Average @ {{ rate(t.rate ?? 0) }} / L</template>
+                    </Hint>
+                  </td>
                   <td class="py-1 text-right">{{ dash(t.expected) }}</td>
                   <td class="py-1 text-right">{{ dash(t.closing) }}</td>
                   <td class="py-1 text-right font-medium" :class="Math.abs(t.variance) >= 1 ? '' : 'text-muted-foreground'">
@@ -300,16 +311,15 @@ const varianceDays = computed(() =>
                 </tr>
                 <!-- The product's days, read like its stock statement. -->
                 <tr v-if="openTank === t.name">
-                  <td colspan="10" class="pb-3">
+                  <td colspan="9" class="pb-3">
                     <table class="mt-1 w-full border-l border-rule-default text-xs tabular-nums">
                       <thead class="text-muted-foreground">
                         <tr>
                           <th class="py-0.5 pl-3 text-left font-normal">Date</th>
                           <th class="py-0.5 text-right font-normal">Bought</th>
-                          <th class="py-0.5 text-right font-normal">Purchase rate</th>
+                          <th class="py-0.5 text-right font-normal">Purchase amount</th>
                           <th class="py-0.5 text-right font-normal">Purchases to date</th>
                           <th class="py-0.5 text-right font-normal">Sold</th>
-                          <th class="py-0.5 text-right font-normal">Sale rate</th>
                           <th class="py-0.5 text-right font-normal">Sale amount</th>
                           <th class="py-0.5 text-right font-normal">Sales to date</th>
                           <th class="py-0.5 text-right font-normal">Balance</th>
@@ -322,11 +332,20 @@ const varianceDays = computed(() =>
                             <span v-else class="text-muted-foreground">{{ shortDate(d.date) }} · no close</span>
                           </td>
                           <td class="py-0.5 text-right">{{ d.received ? litres(d.received) : '' }}</td>
-                          <td class="py-0.5 text-right">{{ d.purchase_rate ? rate(d.purchase_rate) : '' }}</td>
+                          <td class="py-0.5 text-right">
+                            <Hint v-if="d.purchase_amount" side="left">
+                              <MoneyText :amount="d.purchase_amount" :currency="currency" :fraction-digits="0" />
+                              <template #content>@ {{ rate(d.purchase_rate ?? 0) }} / L</template>
+                            </Hint>
+                          </td>
                           <td class="py-0.5 text-right text-muted-foreground"><MoneyText :amount="d.purchase_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                           <td class="py-0.5 text-right">{{ d.sold ? litres(d.sold) : '' }}</td>
-                          <td class="py-0.5 text-right">{{ (d.rates ?? []).map(rate).join(' → ') }}</td>
-                          <td class="py-0.5 text-right"><MoneyText v-if="d.sale_amount" :amount="d.sale_amount" :currency="currency" :fraction-digits="0" /></td>
+                          <td class="py-0.5 text-right">
+                            <Hint v-if="d.sale_amount" side="left">
+                              <MoneyText :amount="d.sale_amount" :currency="currency" :fraction-digits="0" />
+                              <template #content>@ {{ (d.rates ?? []).map(rate).join(' → ') || '—' }} / L</template>
+                            </Hint>
+                          </td>
                           <td class="py-0.5 text-right text-muted-foreground"><MoneyText :amount="d.sale_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                           <td class="py-0.5 text-right">{{ d.dip === undefined ? '' : litres(d.dip) }}</td>
                         </tr>

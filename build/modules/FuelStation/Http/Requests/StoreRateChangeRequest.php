@@ -35,4 +35,32 @@ class StoreRateChangeRequest extends BaseFormRequest
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
+
+    /**
+     * A rate from a day that is already closed would reprice a posted day behind its back: the
+     * close keeps its own rates, but anything that later asks "what was the rate that day" -- a
+     * reopen of it, the rates history -- would get the new one. That is how diesel's 385.5,
+     * applied from a form still showing 7 Sep after 7 Sep was posted, came back on reopening
+     * 7 Sep. A reopened day is a draft again, so it can still take a rate change.
+     */
+    public function after(): array
+    {
+        return [function ($validator) {
+            $date = $this->input('effective_date');
+            if ($validator->errors()->has('effective_date') || ! $date) {
+                return;
+            }
+            $companyId = app(\App\Services\CurrentCompany::class)->get()?->id;
+            $closed = $companyId && \App\Modules\Accounting\Models\Transaction::where('company_id', $companyId)
+                ->where('transaction_type', 'fuel_daily_close')
+                ->whereIn('status', ['posted', 'locked'])
+                ->whereNull('deleted_at')
+                ->whereNull('reversed_by_id')
+                ->whereDate('transaction_date', $date)
+                ->exists();
+            if ($closed) {
+                $validator->errors()->add('effective_date', \Illuminate\Support\Carbon::parse($date)->format('j M').' is already closed.');
+            }
+        }];
+    }
 }

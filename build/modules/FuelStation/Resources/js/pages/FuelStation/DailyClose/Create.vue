@@ -606,6 +606,10 @@ const applyRate = () => {
                 rateItemId.value = '';
                 newSaleRate.value = null;
             },
+            // A day already posted cannot take a rate from itself (StoreRateChangeRequest).
+            onError: (errors) => {
+                toast.error(errors.effective_date ?? Object.values(errors)[0] ?? 'Rate not applied');
+            },
             onFinish: () => {
                 applyingRate.value = false;
             },
@@ -3636,7 +3640,7 @@ const cashFlowOut = computed(() => [
                             </Select>
                             <template v-if="rateItemId">
                                 <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-9 w-32" placeholder="New rate" aria-label="New sale rate" />
-                                <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }}</span>
+                                <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }} · from {{ formatBaselineDate(form.date) }}</span>
                                 <Button
                                     size="sm"
                                     :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"

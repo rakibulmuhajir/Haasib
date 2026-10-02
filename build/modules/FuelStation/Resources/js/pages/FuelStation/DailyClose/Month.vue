@@ -39,6 +39,8 @@ interface TankRow {
   closing: number | null
   variance: number
   daily_variance: number
+  rate: number | null
+  sale_amount: number | null
 }
 
 const props = defineProps<{
@@ -67,6 +69,9 @@ const currency = computed(() => props.company.base_currency || 'PKR')
 const base = computed(() => `/${props.company.slug}/fuel/daily-close/month`)
 const s = computed(() => props.summary)
 const litres = (v: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v)
+const rate = (v: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v)
+// Sales to date within one line's days, like the stock statement's running total.
+const runningTo = (sources: Array<{ amount: number }>, upTo: number) => sources.slice(0, upTo + 1).reduce((t, s) => t + s.amount, 0)
 const dash = (v: number | null | undefined) => (v === null || v === undefined ? '—' : litres(v))
 const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 const closeUrl = (id: string) => `/${props.company.slug}/fuel/daily-close/${id}`
@@ -200,9 +205,19 @@ const varianceDays = computed(() =>
                 <MoneyText :amount="line.amount" :currency="currency" :fraction-digits="0" />
               </div>
               <ul v-if="openLine === 's' + i" class="mt-1 space-y-0.5 border-l border-rule-default pl-3 text-xs">
-                <li v-for="src in line.sources" :key="src.date" class="flex justify-between gap-3">
+                <!-- A fuel's days read like its stock statement: litres, rate, amount, sales to date. -->
+                <li v-if="line.item_id" class="grid grid-cols-5 gap-3 text-muted-foreground">
+                  <span>Date</span><span class="text-right">Litres</span><span class="text-right">Rate</span><span class="text-right">Amount</span><span class="text-right">To date</span>
+                </li>
+                <li v-for="(src, j) in line.sources" :key="src.date" :class="line.item_id ? 'grid grid-cols-5 gap-3' : 'flex justify-between gap-3'">
                   <Link :href="closeUrl(src.close_id)" class="underline-offset-2 hover:underline">{{ shortDate(src.date) }}</Link>
-                  <span><span v-if="src.quantity" class="mr-2 text-muted-foreground">{{ litres(src.quantity) }}<template v-if="line.item_id"> L</template></span><MoneyText :amount="src.amount" :currency="currency" :fraction-digits="0" /></span>
+                  <template v-if="line.item_id">
+                    <span class="text-right">{{ litres(src.quantity ?? 0) }}</span>
+                    <span class="text-right">{{ src.quantity ? rate(src.amount / src.quantity) : '—' }}</span>
+                    <MoneyText class="text-right" :amount="src.amount" :currency="currency" :fraction-digits="0" />
+                    <MoneyText class="text-right text-muted-foreground" :amount="runningTo(line.sources ?? [], j)" :currency="currency" :fraction-digits="0" />
+                  </template>
+                  <span v-else><span v-if="src.quantity" class="mr-2 text-muted-foreground">{{ litres(src.quantity) }}</span><MoneyText :amount="src.amount" :currency="currency" :fraction-digits="0" /></span>
                 </li>
               </ul>
             </li>
@@ -224,6 +239,8 @@ const varianceDays = computed(() =>
                   <th class="pb-1 text-right font-normal">Opening</th>
                   <th class="pb-1 text-right font-normal">+ Bought</th>
                   <th class="pb-1 text-right font-normal">− Sold</th>
+                  <th class="pb-1 text-right font-normal">Rate</th>
+                  <th class="pb-1 text-right font-normal">Sale amount</th>
                   <th class="pb-1 text-right font-normal">= Expected</th>
                   <th class="pb-1 text-right font-normal">Closing dip</th>
                   <th class="pb-1 text-right font-normal">Variance</th>
@@ -238,6 +255,8 @@ const varianceDays = computed(() =>
                   <td class="py-1 text-right">{{ dash(t.opening) }}</td>
                   <td class="py-1 text-right">{{ dash(t.delivered) }}</td>
                   <td class="py-1 text-right">{{ dash(t.sold) }}</td>
+                  <td class="py-1 text-right">{{ t.rate ? rate(t.rate) : '' }}</td>
+                  <td class="py-1 text-right"><MoneyText v-if="t.sale_amount" :amount="t.sale_amount" :currency="currency" :fraction-digits="0" /></td>
                   <td class="py-1 text-right">{{ dash(t.expected) }}</td>
                   <td class="py-1 text-right">{{ dash(t.closing) }}</td>
                   <td class="py-1 text-right font-medium" :class="Math.abs(t.variance) >= 1 ? '' : 'text-muted-foreground'">

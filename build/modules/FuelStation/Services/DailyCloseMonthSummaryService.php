@@ -384,8 +384,26 @@ class DailyCloseMonthSummaryService
                 // The row's own arithmetic, so it reads across; what the daily dips posted rides along.
                 'variance' => $expected === null ? $t['variance'] : $t['closing'] - $expected,
                 'daily_variance' => $t['variance'],
+                'rate' => null,
+                'sale_amount' => null,
             ];
         }
+
+        // Each product's month rate and sale amount, from the stock statement itself so the two
+        // pages cannot disagree (pumps plus litres sold off the tanker). One tank row per product
+        // carries them, so a product with two tanks is not counted twice.
+        $statement = app(StockStatementService::class);
+        $seen = [];
+        foreach ($tankRows as &$row) {
+            if (! $row['item_id'] || isset($seen[$row['item_id']])) {
+                continue;
+            }
+            $seen[$row['item_id']] = true;
+            $totals = $statement->run($companyId, $row['item_id'], $start->toDateString(), $end->toDateString())['totals'];
+            $row['rate'] = $totals['rate'];
+            $row['sale_amount'] = $totals['sale_amount'];
+        }
+        unset($row);
 
         return $result + [
             'cash' => $cash,

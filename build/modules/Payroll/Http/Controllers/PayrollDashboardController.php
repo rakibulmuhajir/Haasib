@@ -77,6 +77,11 @@ class PayrollDashboardController extends Controller
             'month' => $month,
             'period' => $period ? ['id' => $period->id, 'status' => $period->status] : null,
             'rows' => $rows,
+            // What "Pay" can pay from: the cash and bank accounts, Cash on Hand first.
+            'paymentAccounts' => \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+                ->whereIn('subtype', ['cash', 'bank'])->where('is_active', true)->whereNull('deleted_at')
+                ->orderByRaw("case when subtype = 'cash' then 0 else 1 end")->orderBy('code')
+                ->get(['id', 'code', 'name', 'subtype']),
             'counts' => [
                 'employees' => $rows->count(),
                 'payslips' => $payslips->count(),

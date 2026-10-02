@@ -4,12 +4,17 @@
  * the advances they took that month and that month's payslip, with the month's actions on top --
  * run payroll, approve, pay. Replaces the overview, periods, payslips list and salary report.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'vue-sonner'
 import { Banknote, CheckCircle2, ChevronLeft, ChevronRight, Play, Wallet } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
@@ -29,6 +34,7 @@ const props = defineProps<{
   period: { id: string; status: string } | null
   rows: Row[]
   counts: { employees: number; payslips: number; draft: number; approved: number; paid: number }
+  paymentAccounts?: Array<{ id: string; code: string; name: string; subtype: string }>
 }>()
 
 const base = computed(() => `/${props.company.slug}`)
@@ -55,7 +61,30 @@ const total = (pick: (r: Row) => number) => props.rows.reduce((sum, r) => sum + 
 
 const run = () => router.post(`${base.value}/payroll/run-monthly`, { month: props.month }, { preserveScroll: true })
 const approveAll = () => props.period && router.post(`${base.value}/payroll-periods/${props.period.id}/approve-payslips`, {}, { preserveScroll: true })
-const payAll = () => props.period && router.post(`${base.value}/payroll-periods/${props.period.id}/pay-payslips`, {}, { preserveScroll: true })
+// Paying asks when and from where first: it posts every approved payslip's net from that
+// account, so it must never pick one silently. Staff paid cash through the daily close instead
+// ("Salary paid") do not need this at all.
+const paying = ref(false)
+const today = new Date().toISOString().slice(0, 10)
+const paidOn = ref(today)
+const paidFrom = ref('')
+const openPay = () => {
+  paidOn.value = today
+  paidFrom.value = props.paymentAccounts?.[0]?.id ?? ''
+  paying.value = true
+}
+const payAll = () => {
+  if (!props.period) return
+  router.post(`${base.value}/payroll-periods/${props.period.id}/pay-payslips`, {
+    paid_on: paidOn.value,
+    payment_account_id: paidFrom.value || null,
+    payment_method: props.paymentAccounts?.find((a) => a.id === paidFrom.value)?.subtype === 'cash' ? 'cash' : 'bank_transfer',
+  }, {
+    preserveScroll: true,
+    onSuccess: () => { paying.value = false },
+    onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not paid') },
+  })
+}
 
 const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (status === 'paid' ? 'default' : status === 'approved' ? 'outline' : 'secondary')
 </script>
@@ -67,10 +96,35 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
     <template #actions>
       <Button variant="outline" size="icon" aria-label="Previous month" @click="shift(-1)"><ChevronLeft class="h-4 w-4" /></Button>
       <Button variant="outline" size="icon" aria-label="Next month" @click="shift(1)"><ChevronRight class="h-4 w-4" /></Button>
-      <Button v-if="open && missing > 0" @click="run"><Play class="mr-2 h-4 w-4" />Run payroll</Button>
+      <Button v-if="open && (missing > 0 || counts.draft > 0)" :variant="missing > 0 ? 'default' : 'outline'" @click="run"><Play class="mr-2 h-4 w-4" />{{ missing > 0 ? 'Run payroll' : 'Update drafts' }}</Button>
       <Button v-if="counts.draft > 0" variant="outline" @click="approveAll"><CheckCircle2 class="mr-2 h-4 w-4" />Approve {{ counts.draft }}</Button>
-      <Button v-if="counts.approved > 0" @click="payAll"><Wallet class="mr-2 h-4 w-4" />Pay {{ counts.approved }}</Button>
+      <Button v-if="counts.approved > 0" @click="openPay"><Wallet class="mr-2 h-4 w-4" />Pay {{ counts.approved }}</Button>
     </template>
+
+    <Dialog v-model:open="paying">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Pay {{ counts.approved }} payslips</DialogTitle></DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-1.5">
+            <Label for="paid_on">Paid on</Label>
+            <Input id="paid_on" v-model="paidOn" type="date" :max="today" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Paid from</Label>
+            <Select v-model="paidFrom">
+              <SelectTrigger><SelectValue placeholder="Account" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="a in paymentAccounts ?? []" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="paying = false">Cancel</Button>
+          <Button :disabled="!paidOn || !paidFrom" @click="payAll">Pay</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <p v-if="period && !open" class="mb-4 text-sm text-muted-foreground">This month is closed.</p>
 

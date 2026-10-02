@@ -316,7 +316,7 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
 - Indexes/constraints:
   - PK `id`.
   - Unique (`company_id`, `payslip_number`).
-  - Unique (`payroll_period_id`, `employee_id`).
+  - Unique (`payroll_period_id`, `employee_id`) among live payslips only (partial index, status not cancelled/voided/void): a voided payslip stays on record and the month can be run again.
   - Index: `company_id`; `payroll_period_id`; `employee_id`; (`company_id`, `status`).
 - RLS: company_id + super-admin override.
 - Model:

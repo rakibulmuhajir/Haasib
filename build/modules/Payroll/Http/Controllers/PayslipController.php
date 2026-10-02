@@ -2,8 +2,10 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Payroll\Http\Requests\AddPayslipDeductionRequest;
 use App\Modules\Payroll\Http\Requests\ApprovePayslipRequest;
 use App\Modules\Payroll\Http\Requests\BulkDeletePayslipsRequest;
 use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
@@ -18,6 +20,7 @@ use App\Modules\Payroll\Models\EarningType;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\Payslip;
+use App\Modules\Payroll\Models\PayslipLine;
 use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
@@ -274,6 +277,59 @@ class PayslipController extends Controller
         return redirect()
             ->route('payslips.show', ['company' => $company->slug, 'payslip' => $payslip->id])
             ->with('success', 'Payslip updated successfully.');
+    }
+
+    /** An owner's deduction (leave, absence, damage, a fine) on a draft payslip. */
+    public function addDeduction(AddPayslipDeductionRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $payslip = Payslip::where('company_id', $company->id)->findOrFail($payslipId);
+        $validated = $request->validated();
+        $type = DeductionType::where('company_id', $company->id)->findOrFail($validated['deduction_type_id']);
+        $amount = round((float) $validated['amount'], 2);
+
+        DB::transaction(function () use ($payslip, $type, $validated, $amount, $payrollPostingService) {
+            // After the earnings, before the advance lines (those are rebuilt right after).
+            $payslip->lines()->create([
+                'line_type' => 'deduction',
+                'deduction_type_id' => $type->id,
+                'description' => filled($validated['description'] ?? null) ? $validated['description'] : $type->name,
+                'quantity' => 1,
+                'rate' => $amount,
+                'amount' => $amount,
+                'sort_order' => ((int) $payslip->lines()->whereNull('salary_advance_id')->max('sort_order')) + 1,
+            ]);
+
+            $payrollPostingService->prepareAutomaticAdvanceDeductions($payslip->refresh());
+        });
+
+        return back()->with('success', 'Deduction added.');
+    }
+
+    /** Takes a manual deduction back off a draft; advance recovery lines are the service's own. */
+    public function removeDeduction(Request $request, PayrollPostingService $payrollPostingService, string $companySlug, string $lineId): RedirectResponse
+    {
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::PAYSLIP_CREATE), 403);
+
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $line = PayslipLine::query()
+            ->whereKey($lineId)
+            ->where('line_type', 'deduction')
+            ->whereNull('salary_advance_id')
+            ->whereHas('payslip', fn ($q) => $q->where('company_id', $company->id)->where('status', 'draft'))
+            ->firstOrFail();
+
+        DB::transaction(function () use ($line, $payrollPostingService) {
+            $payslip = Payslip::findOrFail($line->payslip_id);
+            $line->delete();
+            $payrollPostingService->prepareAutomaticAdvanceDeductions($payslip->refresh());
+        });
+
+        return back()->with('success', 'Deduction removed.');
     }
 
     public function approve(ApprovePayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse

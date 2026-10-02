@@ -52,7 +52,17 @@ class PayrollDashboardController extends Controller
             ->orderBy('first_name')->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name', 'employee_number', 'base_salary', 'pay_frequency', 'currency', 'is_active']);
 
-        $rows = $employees->map(function (Employee $employee) use ($payslips, $advances, $hours) {
+        $deductionTypes = app(PayrollPostingService::class)->ensureStandardDeductionTypes($company->id)
+            ->map(fn ($t) => ['id' => $t->id, 'code' => $t->code, 'name' => $t->name])->values();
+
+        $deductionLines = $payslips->isEmpty() ? collect() : \App\Modules\Payroll\Models\PayslipLine::query()
+            ->with('deductionType:id,name')
+            ->whereIn('payslip_id', $payslips->pluck('id'))
+            ->where('line_type', 'deduction')
+            ->orderBy('sort_order')->orderBy('created_at')
+            ->get()->groupBy('payslip_id');
+
+        $rows = $employees->map(function (Employee $employee) use ($payslips, $advances, $hours, $deductionLines) {
             $payslip = $payslips[$employee->id] ?? null;
 
             return [
@@ -73,6 +83,13 @@ class PayrollDashboardController extends Controller
                     'status' => $payslip->status,
                     'paid_at' => $payslip->paid_at?->toDateString(),
                 ] : null,
+                'deduction_lines' => $payslip ? ($deductionLines[$payslip->id] ?? collect())->map(fn ($line) => [
+                    'id' => $line->id,
+                    'type' => $line->deductionType?->name,
+                    'description' => $line->description,
+                    'amount' => (float) $line->amount,
+                    'is_advance' => $line->salary_advance_id !== null,
+                ])->values() : [],
             ];
         })->values();
 
@@ -83,6 +100,7 @@ class PayrollDashboardController extends Controller
             'month' => $month,
             'period' => $period ? ['id' => $period->id, 'status' => $period->status] : null,
             'rows' => $rows,
+            'deductionTypes' => $deductionTypes,
             // What "Pay" can pay from: the cash and bank accounts, Cash on Hand first.
             'paymentAccounts' => \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
                 ->whereIn('subtype', ['cash', 'bank'])->where('is_active', true)->whereNull('deleted_at')

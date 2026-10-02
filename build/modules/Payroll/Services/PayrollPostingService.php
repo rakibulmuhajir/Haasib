@@ -198,6 +198,42 @@ class PayrollPostingService
         );
     }
 
+    /**
+     * The deduction types an owner picks from when taking pay off for leave, absence, damage or a
+     * fine. Created on demand and idempotent by code. Leave and absence reduce the salary expense
+     * (the wage was never earned); damage and fines are recovered into Staff Fines & Recoveries.
+     */
+    public function ensureStandardDeductionTypes(string $companyId): \Illuminate\Support\Collection
+    {
+        $this->setRlsContext($companyId);
+
+        $salaryAccount = $this->findExpenseAccount($companyId, ['Salaries & Wages', 'Salaries', 'Wages', 'Salary Expense'], ['6200', '6150']);
+        $finesAccount = $this->findByNames($companyId, ['Staff Fines & Recoveries'], 'other_income')
+            ?? $this->ensureAccount($companyId, '4410', 'Staff Fines & Recoveries', 'other_income', 'other_income', 'credit');
+
+        $standard = [
+            ['UNPAID_LEAVE', 'Unpaid leave', $salaryAccount],
+            ['ABSENCE', 'Absence', $salaryAccount],
+            ['DAMAGE', 'Damage to property', $finesAccount],
+            ['NEGLIGENCE', 'Negligence / fine', $finesAccount],
+            ['OTHER_DEDUCTION', 'Other deduction', $finesAccount],
+        ];
+
+        return collect($standard)->map(fn (array $row) => DeductionType::updateOrCreate(
+            ['company_id' => $companyId, 'code' => $row[0]],
+            [
+                'name' => $row[1],
+                'description' => 'Taken off pay by the owner.',
+                'is_pre_tax' => false,
+                'is_statutory' => false,
+                'is_recurring' => false,
+                'gl_account_id' => $row[2],
+                'is_system' => true,
+                'is_active' => true,
+            ]
+        ))->values();
+    }
+
     public function nextPayslipNumber(string $companyId): string
     {
         DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ["pay.payslip_number:{$companyId}"]);

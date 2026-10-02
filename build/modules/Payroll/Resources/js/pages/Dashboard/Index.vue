@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import Hint from '@/components/Hint.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -15,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'vue-sonner'
-import { Banknote, CheckCircle2, ChevronLeft, ChevronRight, Play, Wallet } from 'lucide-vue-next'
+import { Banknote, CheckCircle2, ChevronLeft, ChevronRight, Play, Wallet, X } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
 interface Row {
@@ -27,6 +28,7 @@ interface Row {
   hours: number
   advances: number
   advance_count: number
+  deduction_lines?: Array<{ id: string; type: string | null; description: string | null; amount: number; is_advance: boolean }>
   payslip: { id: string; number: string; gross: number; deductions: number; net: number; status: string; paid_at: string | null } | null
 }
 
@@ -36,6 +38,7 @@ const props = defineProps<{
   period: { id: string; status: string } | null
   rows: Row[]
   counts: { employees: number; payslips: number; draft: number; approved: number; paid: number }
+  deductionTypes?: Array<{ id: string; code: string; name: string }>
   paymentAccounts?: Array<{ id: string; code: string; name: string; subtype: string }>
 }>()
 
@@ -100,6 +103,38 @@ const undoApproval = () => {
   })
 }
 
+// Take pay off a draft payslip: leave, absence, damage, a fine. Advance recovery is re-worked
+// from what is left, server side.
+const deducting = ref<Row | null>(null)
+const deductType = ref('')
+const deductAmount = ref('')
+const deductNote = ref('')
+const openDeduct = (row: Row) => {
+  deductType.value = ''
+  deductAmount.value = ''
+  deductNote.value = ''
+  deducting.value = row
+}
+const addDeduction = () => {
+  const payslipId = deducting.value?.payslip?.id
+  if (!payslipId) return
+  router.post(`${base.value}/payslips/${payslipId}/deductions`, {
+    deduction_type_id: deductType.value,
+    amount: deductAmount.value,
+    description: deductNote.value || null,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => { deducting.value = null },
+    onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not added') },
+  })
+}
+const removeDeduction = (id: string) => {
+  router.delete(`${base.value}/payslip-lines/${id}`, {
+    preserveScroll: true,
+    onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not removed') },
+  })
+}
+
 const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (status === 'paid' ? 'default' : status === 'approved' ? 'outline' : 'secondary')
 </script>
 
@@ -152,6 +187,35 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
       </DialogContent>
     </Dialog>
 
+    <Dialog :open="!!deducting" @update:open="(v: boolean) => { if (!v) deducting = null }">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Deduct from {{ deducting?.name }}</DialogTitle></DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-1.5">
+            <Label>Type</Label>
+            <Select v-model="deductType">
+              <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="t in deductionTypes ?? []" :key="t.id" :value="t.id">{{ t.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="deduct_amount">Amount</Label>
+            <Input id="deduct_amount" v-model="deductAmount" type="number" min="0" step="0.01" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="deduct_note">Note</Label>
+            <Input id="deduct_note" v-model="deductNote" maxlength="255" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="deducting = null">Cancel</Button>
+          <Button :disabled="!deductType || !(Number(deductAmount) > 0)" @click="addDeduction">Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <p v-if="period && !open" class="mb-4 text-sm text-muted-foreground">This month is closed.</p>
 
     <div class="overflow-x-auto rounded-lg border">
@@ -181,7 +245,27 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
               <MoneyText :amount="row.advances" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
               <Link v-if="row.advance_count" :href="`${base}/salary-advances?employee_id=${row.id}&month=${month}`" class="ml-1 text-xs text-primary underline-offset-2 hover:underline">({{ row.advance_count }})</Link>
             </td>
-            <td class="px-3 py-2 text-right tabular-nums"><MoneyText v-if="row.payslip" :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero /><span v-else class="text-muted-foreground">—</span></td>
+            <td class="px-3 py-2 text-right tabular-nums">
+              <template v-if="row.payslip">
+                <Hint v-if="row.deduction_lines?.length">
+                  <MoneyText :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
+                  <template #content>
+                    <div v-for="line in row.deduction_lines" :key="line.id" class="flex items-center justify-between gap-3">
+                      <span>{{ [line.type, line.description !== line.type ? line.description : null].filter(Boolean).join(' · ') }} · {{ line.amount.toLocaleString() }}</span>
+                      <button
+                        v-if="row.payslip.status === 'draft' && !line.is_advance"
+                        type="button"
+                        class="rounded p-0.5 hover:bg-muted"
+                        aria-label="Remove deduction"
+                        @click.stop="removeDeduction(line.id)"
+                      ><X class="h-3 w-3" /></button>
+                    </div>
+                  </template>
+                </Hint>
+                <MoneyText v-else :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
+              </template>
+              <span v-else class="text-muted-foreground">—</span>
+            </td>
             <td class="px-3 py-2 text-right font-medium tabular-nums">
               <MoneyText v-if="row.payslip" :amount="row.payslip.net" :currency="currency" :show-currency="false" :fraction-digits="0" />
               <span v-else class="text-muted-foreground" title="Before payroll runs: salary less this month's advances">
@@ -194,6 +278,7 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
                 <Badge :variant="statusVariant(row.payslip.status)" class="capitalize">{{ row.payslip.status }}</Badge>
               </Link>
               <span v-else class="text-xs text-muted-foreground">Not run</span>
+              <Button v-if="row.payslip && row.payslip.status === 'draft'" variant="ghost" size="sm" class="ml-2 h-6 px-2 text-xs" @click="openDeduct(row)">Deduct</Button>
             </td>
             <td class="px-4 py-2 text-right">
               <Link :href="`${base}/reports/statements?kind=employee&id=${row.id}&from=${month}-01&to=${monthEnd}`" class="text-xs text-primary underline-offset-2 hover:underline">Statement</Link>

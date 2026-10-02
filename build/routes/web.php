@@ -507,6 +507,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{company}/payslips/{payslip}', [PayslipController::class, 'show'])->whereUuid('payslip')->name('payslips.show');
             Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
             Route::put('/{company}/payslips/{payslip}', [PayslipController::class, 'update'])->whereUuid('payslip')->name('payslips.update');
+            Route::post('/{company}/payslips/{payslip}/deductions', [PayslipController::class, 'addDeduction'])->whereUuid('payslip')->name('payslips.deductions.store');
+            Route::delete('/{company}/payslip-lines/{line}', [PayslipController::class, 'removeDeduction'])->whereUuid('line')->name('payslip-lines.destroy');
             Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
             Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
             Route::post('/{company}/payslips/{payslip}/reverse-payment', [PayslipController::class, 'reversePayment'])->whereUuid('payslip')->name('payslips.reverse-payment');

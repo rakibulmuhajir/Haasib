@@ -29,11 +29,21 @@ class StockStatementReportController extends Controller
         // The product list comes with every run, empty or not.
         $products = $this->service->run($company->id, '', $startDate->toDateString(), $endDate->toDateString())['products'];
         $itemId = (string) $request->query('item', '');
-        if (! collect($products)->contains('id', $itemId)) {
-            $itemId = $products[0]['id'] ?? '';
-        }
+        $known = collect($products)->pluck('id')->all();
+        $picked = array_values(array_intersect($known, array_filter(explode(',', (string) $request->query('items', '')))));
+        $from = $startDate->toDateString();
+        $to = $endDate->toDateString();
 
-        $report = $this->service->run($company->id, $itemId, $startDate->toDateString(), $endDate->toDateString());
+        if ($itemId === 'all') {
+            $report = $this->service->runMany($company->id, $known, $from, $to);
+        } elseif ($picked) {
+            $report = $this->service->runMany($company->id, $picked, $from, $to);
+        } else {
+            if (! in_array($itemId, $known, true)) {
+                $itemId = $products[0]['id'] ?? '';
+            }
+            $report = $this->service->run($company->id, $itemId, $from, $to);
+        }
 
         return Inertia::render('FuelStation/Reports/StockStatement', [
             'company' => [
@@ -43,7 +53,8 @@ class StockStatementReportController extends Controller
                 'base_currency' => $company->base_currency ?? 'PKR',
             ],
             'filters' => [
-                'item' => $itemId,
+                'item' => ! empty($report['combined']) ? $report['item']['id'] : $itemId,
+                'items' => $picked,
                 'start_date' => $startDate->toDateString(),
                 'end_date' => $endDate->toDateString(),
             ],

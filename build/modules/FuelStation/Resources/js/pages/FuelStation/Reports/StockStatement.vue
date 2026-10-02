@@ -35,7 +35,9 @@ interface DirectInvoice {
 interface Row {
   date: string
   missing?: boolean
-  close_id?: string
+  close_id?: string | null
+  product?: string
+  unit?: string | null
   transaction_number?: string
   opening?: number | null
   received?: number | null
@@ -75,14 +77,18 @@ interface Totals {
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
-  filters: { item: string; start_date: string; end_date: string }
+  filters: { item: string; items?: string[]; start_date: string; end_date: string }
   item: { id: string; name: string }
+  combined?: boolean
+  has_tank?: boolean
   rows: Row[]
   totals: Totals
-  products: Array<{ id: string; name: string }>
+  products: Array<{ id: string; name: string; unit?: string | null; has_tank?: boolean }>
 }>()
 
 const itemId = ref(props.filters.item)
+const picked = ref<string[]>(props.filters.items ?? [])
+const picking = ref(false)
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
 
@@ -103,7 +109,38 @@ const litres = (v: number | null | undefined) => (v === null || v === undefined 
 const signed = (v: number) => `${v > 0 ? '+' : ''}${fmt.format(v)}`
 const rateText = (r: number[] | undefined) => (r && r.length ? r.map((x) => fmt.format(x)).join(' → ') : '—')
 const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-const lastClosed = computed(() => [...props.rows].reverse().find((r) => !r.missing))
+const lastClosed = computed(() => [...props.rows].reverse().find((r) => !r.missing && r.close_id))
+
+const combined = computed(() => Boolean(props.combined))
+// Items without a tank have no dip: the balance is a book balance and there is no variance.
+const showVariance = computed(() => combined.value || props.has_tank !== false)
+const unitLabel = computed(() => {
+  if (combined.value) return 'units'
+  if (props.has_tank !== false) return 'L'
+  return props.products.find((p) => p.id === props.item.id)?.unit || 'units'
+})
+const rowUnit = (r: Row) => (combined.value ? r.unit || 'unit' : unitLabel.value)
+const colCount = computed(() => 9 + (combined.value ? 1 : 0) - (showVariance.value ? 0 : 1))
+const pickedLabel = computed(() => `${picked.value.length} product${picked.value.length === 1 ? '' : 's'}`)
+
+const changeItem = (value: string) => {
+  if (value === 'some') {
+    itemId.value = 'some'
+    picking.value = true
+    return
+  }
+  itemId.value = value
+  picked.value = []
+  picking.value = false
+  apply()
+}
+const togglePick = (id: string, on: boolean) => {
+  picked.value = on ? [...new Set([...picked.value, id])] : picked.value.filter((p) => p !== id)
+}
+const showPicked = () => {
+  picking.value = false
+  apply()
+}
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -113,7 +150,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const apply = () => {
   router.get(`/${props.company.slug}/fuel/reports/stock-statement`, {
-    item: itemId.value,
+    item: itemId.value === 'some' ? undefined : itemId.value,
+    items: itemId.value === 'some' && picked.value.length ? picked.value.join(',') : undefined,
     start_date: startDate.value,
     end_date: endDate.value,
   }, { preserveScroll: true, preserveState: true })
@@ -130,14 +168,26 @@ const apply = () => {
           <div class="flex flex-wrap items-end gap-3">
             <div class="grid gap-1.5">
               <Label>Product</Label>
-              <Select v-model="itemId">
+              <Select :model-value="itemId" @update:model-value="changeItem">
                 <SelectTrigger class="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All products</SelectItem>
+                  <SelectItem value="some">{{ itemId === 'some' && picked.length ? pickedLabel : 'Choose several…' }}</SelectItem>
                   <SelectItem v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
                 </SelectContent>
               </Select>
+              <div v-if="picking" class="max-h-64 w-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                <label v-for="p in products" :key="p.id" class="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted">
+                  <Checkbox :model-value="picked.includes(p.id)" @update:model-value="(v) => togglePick(p.id, v === true)" />
+                  <span class="truncate">{{ p.name }}</span>
+                </label>
+                <div class="sticky bottom-0 flex items-center justify-between gap-2 bg-background pt-2">
+                  <span class="text-xs text-muted-foreground">{{ picked.length }} chosen</span>
+                  <Button size="sm" :disabled="!picked.length" @click="showPicked">Show</Button>
+                </div>
+              </div>
             </div>
             <div class="grid gap-1.5">
               <Label for="start_date">From</Label>
@@ -156,32 +206,34 @@ const apply = () => {
         </CardContent>
       </Card>
 
-      <p v-if="!products.length" class="py-8 text-center text-sm text-muted-foreground">No tank products.</p>
+      <p v-if="!products.length" class="py-8 text-center text-sm text-muted-foreground">No products.</p>
 
       <div v-else class="overflow-x-auto rounded-md border border-rule-default">
         <table class="w-full text-sm tabular-nums">
           <thead class="text-xs text-muted-foreground">
             <tr>
               <th class="px-3 py-2 text-left font-normal">Date</th>
+              <th v-if="combined" class="px-3 py-2 text-left font-normal">Product</th>
               <th class="px-3 py-2 text-right font-normal">Bought (in)</th>
               <th class="px-3 py-2 text-right font-normal">Purchase amount</th>
               <th class="px-3 py-2 text-right font-normal">Purchases to date</th>
               <th class="px-3 py-2 text-right font-normal">Sold (out)</th>
               <th class="px-3 py-2 text-right font-normal">Sale amount</th>
               <th class="px-3 py-2 text-right font-normal">Sales to date</th>
-              <th class="px-3 py-2 text-right font-normal">Balance</th>
-              <th class="px-3 py-2 text-right font-normal">Variance</th>
+              <th class="px-3 py-2 text-right font-normal">{{ showVariance ? 'Balance' : 'Balance (book)' }}</th>
+              <th v-if="showVariance" class="px-3 py-2 text-right font-normal">Variance</th>
             </tr>
           </thead>
           <tbody>
             <tr class="border-t border-rule-default text-muted-foreground">
               <td class="px-3 py-1.5">Opening</td>
+              <td v-if="combined"></td>
               <template v-if="includeOpening">
                 <td class="px-3 py-1.5 text-right text-foreground">{{ litres(totals.opening) }}</td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="totals.opening_value" side="left">
                     <MoneyText :amount="totals.opening_value" :currency="currency" :fraction-digits="0" />
-                    <template #content>{{ litres(totals.opening) }} L @ {{ fmt.format(totals.opening_rate ?? 0) }}</template>
+                    <template #content>{{ litres(totals.opening) }} {{ unitLabel }} @ {{ fmt.format(totals.opening_rate ?? 0) }}</template>
                   </Hint>
                 </td>
                 <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.opening_value" :amount="totals.opening_value" :currency="currency" :fraction-digits="0" /></td>
@@ -189,7 +241,7 @@ const apply = () => {
               </template>
               <td v-else colspan="6"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.opening) }}</td>
-              <td></td>
+              <td v-if="showVariance"></td>
             </tr>
             <tr v-for="r in rows" :key="r.date" class="border-t border-rule-default">
               <template v-if="r.missing">
@@ -198,7 +250,7 @@ const apply = () => {
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.purchase_amount" side="left">
                     <MoneyText :amount="r.purchase_amount" :currency="currency" :fraction-digits="0" />
-                    <template #content>@ {{ fmt.format(r.purchase_rate ?? 0) }} / L</template>
+                    <template #content>@ {{ fmt.format(r.purchase_rate ?? 0) }} / {{ rowUnit(r) }}</template>
                   </Hint>
                 </td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
@@ -209,12 +261,14 @@ const apply = () => {
               </template>
               <template v-else>
                 <td class="px-3 py-1.5">
-                  <Link :href="`/${company.slug}/fuel/daily-close/${r.close_id}`" class="underline-offset-2 hover:underline">{{ shortDate(r.date) }}</Link>
+                  <Link v-if="r.close_id" :href="`/${company.slug}/fuel/daily-close/${r.close_id}`" class="underline-offset-2 hover:underline">{{ shortDate(r.date) }}</Link>
+                  <template v-else>{{ shortDate(r.date) }}</template>
                 </td>
+                <td v-if="combined" class="px-3 py-1.5">{{ r.product }}</td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.received_direct" side="left">
                     {{ litres(r.received) }}
-                    <template #content>{{ litres(r.received_direct) }} L sold straight off the tanker.</template>
+                    <template #content>{{ litres(r.received_direct) }} {{ rowUnit(r) }} sold straight off the tanker.</template>
                   </Hint>
                   <template v-else>{{ r.received ? litres(r.received) : '' }}</template>
                 </td>
@@ -223,10 +277,10 @@ const apply = () => {
                   <Hint v-if="r.purchase_amount" side="left">
                     <MoneyText :amount="r.purchase_amount" :currency="currency" :fraction-digits="0" />
                     <template #content>
-                      <p class="font-medium">@ {{ fmt.format(r.purchase_rate ?? 0) }} / L</p>
+                      <p class="font-medium">@ {{ fmt.format(r.purchase_rate ?? 0) }} / {{ rowUnit(r) }}</p>
                       <div v-for="b in r.bills ?? []" :key="b.id" class="flex justify-between gap-4">
                         <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }}</Link>
-                        <span>{{ litres(b.quantity) }} L · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
+                        <span>{{ litres(b.quantity) }} {{ rowUnit(r) }} · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
                       </div>
                     </template>
                   </Hint>
@@ -236,8 +290,8 @@ const apply = () => {
                   <Hint v-if="r.sold_direct" side="left">
                     {{ litres(r.sold) }}
                     <template #content>
-                      <div class="flex justify-between gap-4"><span>Pumps</span><span>{{ litres(r.sold_pumps ?? 0) }} L</span></div>
-                      <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct) }} L</span></div>
+                      <div class="flex justify-between gap-4"><span>Pumps</span><span>{{ litres(r.sold_pumps ?? 0) }} {{ rowUnit(r) }}</span></div>
+                      <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct) }} {{ rowUnit(r) }}</span></div>
                     </template>
                   </Hint>
                   <template v-else>{{ r.sold ? litres(r.sold) : '' }}</template>
@@ -247,7 +301,7 @@ const apply = () => {
                   <Hint v-if="r.sale_amount" side="left">
                     <MoneyText :amount="r.sale_amount" :currency="currency" :fraction-digits="0" />
                     <template #content>
-                      <p class="font-medium">@ {{ rateText(r.rates) }} / L</p>
+                      <p class="font-medium">@ {{ rateText(r.rates) }} / {{ rowUnit(r) }}</p>
                       <template v-if="r.direct_amount">
                         <div class="flex justify-between gap-4"><span>Pumps</span><MoneyText :amount="(r.sale_amount ?? 0) - r.direct_amount" :currency="currency" :fraction-digits="0" /></div>
                         <div v-for="inv in r.direct_invoices ?? []" :key="inv.id" class="flex justify-between gap-4">
@@ -260,7 +314,7 @@ const apply = () => {
                 </td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.sale_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">{{ litres(r.dip) }}</td>
-                <td class="px-3 py-1.5 text-right" :class="Math.abs(r.variance ?? 0) >= 1 ? 'text-status-attention' : 'text-muted-foreground'">
+                <td v-if="showVariance" class="px-3 py-1.5 text-right" :class="Math.abs(r.variance ?? 0) >= 1 ? 'text-status-attention' : 'text-muted-foreground'">
                   <Hint side="left">
                     {{ signed(r.variance ?? 0) }}
                     <template #content>
@@ -271,15 +325,16 @@ const apply = () => {
               </template>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="9" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
+              <td :colspan="colCount" class="px-3 py-6 text-center text-muted-foreground">{{ combined || has_tank === false ? 'No activity.' : 'No closes.' }}</td>
             </tr>
             <tr class="border-t-2 border-rule-default font-semibold">
               <td class="px-3 py-2">Total</td>
+              <td v-if="combined"></td>
               <td class="px-3 py-2 text-right">{{ litres(boughtTotal) }}</td>
               <td class="px-3 py-2 text-right">
                 <Hint side="left">
                   <MoneyText :amount="purchaseTotal" :currency="currency" :fraction-digits="0" />
-                  <template #content>Average @ {{ purchaseRateTotal === null ? '—' : fmt.format(purchaseRateTotal) }} / L</template>
+                  <template #content>Average @ {{ purchaseRateTotal === null ? '—' : fmt.format(purchaseRateTotal) }} / {{ unitLabel }}</template>
                 </Hint>
               </td>
               <td></td>
@@ -287,15 +342,15 @@ const apply = () => {
               <td class="px-3 py-2 text-right">
                 <Hint side="left">
                   <MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" />
-                  <template #content>Average @ {{ totals.rate === null ? '—' : fmt.format(totals.rate) }} / L</template>
+                  <template #content>Average @ {{ totals.rate === null ? '—' : fmt.format(totals.rate) }} / {{ unitLabel }}</template>
                 </Hint>
               </td>
               <td></td>
               <td class="px-3 py-2 text-right">
-                <Link v-if="lastClosed" :href="`/${company.slug}/fuel/daily-close/${lastClosed.close_id}`" class="underline-offset-2 hover:underline">{{ litres(totals.closing) }}</Link>
+                <Link v-if="lastClosed && !combined" :href="`/${company.slug}/fuel/daily-close/${lastClosed.close_id}`" class="underline-offset-2 hover:underline">{{ litres(totals.closing) }}</Link>
                 <template v-else>{{ litres(totals.closing) }}</template>
               </td>
-              <td class="px-3 py-2 text-right" :class="Math.abs(totals.variance) >= 1 ? 'text-status-attention' : ''">{{ signed(totals.variance) }}</td>
+              <td v-if="showVariance" class="px-3 py-2 text-right" :class="Math.abs(totals.variance) >= 1 ? 'text-status-attention' : ''">{{ signed(totals.variance) }}</td>
             </tr>
             <!-- Opening + bought: what there was to sell. Shown when the opening is not already in the total. -->
             <tr v-if="!includeOpening && totals.available !== null" class="text-muted-foreground">
@@ -305,20 +360,21 @@ const apply = () => {
                   <template #content>Opening stock + bought.</template>
                 </Hint>
               </td>
+              <td v-if="combined"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.available) }}</td>
               <td class="px-3 py-1.5 text-right">
                 <Hint v-if="totals.available_value" side="left">
                   <MoneyText :amount="totals.available_value" :currency="currency" :fraction-digits="0" />
-                  <template #content>Average @ {{ fmt.format(totals.available_value / (totals.available || 1)) }} / L</template>
+                  <template #content>Average @ {{ fmt.format(totals.available_value / (totals.available || 1)) }} / {{ unitLabel }}</template>
                 </Hint>
               </td>
-              <td colspan="6"></td>
+              <td :colspan="showVariance ? 6 : 5"></td>
             </tr>
           </tbody>
         </table>
       </div>
       <p v-if="products.length" class="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-        <span>{{ item.name }} · litres</span>
+        <span>{{ item.name }} · {{ combined ? 'units' : unitLabel === 'L' ? 'litres' : unitLabel }}</span>
         <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${filters.start_date}&end_date=${filters.end_date}`" class="underline underline-offset-2">Tank gains &amp; losses</Link>
       </p>
     </div>

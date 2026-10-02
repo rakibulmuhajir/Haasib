@@ -108,7 +108,7 @@ test('opening comes from the close before the range; bought comes from the bills
     $r = app(StockStatementService::class)->run($company->id, $itemId, '2026-09-01', '2026-09-03');
 
     expect($r['item'])->toBe(['id' => $itemId, 'name' => 'Petrol'])
-        ->and($r['products'])->toBe([['id' => $itemId, 'name' => 'Petrol']])
+        ->and($r['products'])->toBe([['id' => $itemId, 'name' => 'Petrol', 'unit' => 'liter', 'has_tank' => true]])
         ->and($r['rows'])->toHaveCount(3);
 
     [$a, $b, $c] = $r['rows'];
@@ -183,4 +183,113 @@ test('with no earlier close and no opening stock, the opening is unknown', funct
         ->and($r['totals']['opening'])->toBeNull()
         ->and($r['totals']['received'])->toBe(0.0)
         ->and($r['totals']['sold'])->toBe(1000.0);
+});
+
+/** A packaged item: sellable, no tank, sold through a close's other_sales_details. */
+function statementPackaged(Company $company, string $tankId): string
+{
+    $oilId = (string) str()->uuid();
+    DB::table('inv.items')->insert([
+        'id' => $oilId, 'company_id' => $company->id, 'sku' => 'OIL-'.str()->random(5), 'name' => 'Oil 1L',
+        'item_type' => 'product', 'unit_of_measure' => 'piece', 'currency' => 'PKR',
+    ]);
+    // Any warehouse will do for the opening entry.
+    DB::table('inv.stock_movements')->insert([
+        'company_id' => $company->id, 'warehouse_id' => $tankId, 'item_id' => $oilId,
+        'movement_date' => '2026-08-01', 'movement_type' => 'opening', 'quantity' => 50,
+    ]);
+
+    return $oilId;
+}
+
+function statementOtherSale(Transaction $close, string $itemId, float $quantity, float $price): void
+{
+    $m = $close->metadata;
+    $m['other_sales_details'] = [['item_id' => $itemId, 'quantity' => $quantity, 'unit_price' => $price, 'amount' => $quantity * $price]];
+    $close->metadata = $m;
+    $close->save();
+}
+
+function statementPackagedBill(Company $company, string $oilId, string $tankId, string $date, float $quantity): string
+{
+    $billId = statementBill($company, $oilId, $tankId, $date, $quantity);
+    // Packaged stock may be billed without a warehouse.
+    DB::table('acct.bill_line_items')->where('bill_id', $billId)->update(['warehouse_id' => null]);
+
+    return $billId;
+}
+
+test('an item without a tank reads as a book balance, with rows only on active days', function () {
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
+    [$company, $petrolId, $tankId] = statementFixture();
+    $oilId = statementPackaged($company, $tankId);
+
+    // Before the range: 10 bought and 4 sold -> opening 50 + 10 - 4 = 56.
+    statementPackagedBill($company, $oilId, $tankId, '2026-08-15', 10);
+    statementOtherSale(statementClose($company, $petrolId, $tankId, '2026-08-20', 5000, 5000, 0, 400), $oilId, 4, 500);
+
+    // In the range: 5 sold on 1 Sep (a close); 20 bought on 2 Sep (no close); nothing on 3 Sep.
+    statementOtherSale(statementClose($company, $petrolId, $tankId, '2026-09-01', 5000, 5000, 0, 400), $oilId, 5, 500);
+    $bill = statementPackagedBill($company, $oilId, $tankId, '2026-09-02', 20);
+
+    $r = app(StockStatementService::class)->run($company->id, $oilId, '2026-09-01', '2026-09-03');
+
+    expect($r['has_tank'])->toBeFalse()
+        ->and($r['rows'])->toHaveCount(2);
+
+    [$a, $b] = $r['rows'];
+    expect($a['date'])->toBe('2026-09-01')
+        ->and($a['book'])->toBeTrue()
+        ->and($a['opening'])->toBe(56.0)
+        ->and($a['sold'])->toBe(5.0)
+        ->and($a['sale_amount'])->toBe(2500.0)
+        ->and($a['rates'])->toBe([500.0])
+        ->and($a['dip'])->toBe(51.0)
+        ->and($a['expected'])->toBe(51.0)
+        ->and($a['variance'])->toBe(0.0)
+        ->and($a['close_id'])->not->toBeNull();
+
+    expect($b['date'])->toBe('2026-09-02')
+        ->and($b['close_id'])->toBeNull()
+        ->and($b['received'])->toBe(20.0)
+        ->and($b['bills'][0]['id'])->toBe($bill)
+        ->and($b['dip'])->toBe(71.0)
+        ->and($b['variance'])->toBe(0.0);
+
+    expect($r['totals']['opening'])->toBe(56.0)
+        ->and($r['totals']['received'])->toBe(20.0)
+        ->and($r['totals']['available'])->toBe(76.0)
+        ->and($r['totals']['sold'])->toBe(5.0)
+        ->and($r['totals']['closing'])->toBe(71.0)
+        ->and($r['totals']['variance'])->toBe(0.0);
+
+    expect(collect($r['products'])->firstWhere('id', $oilId))->toBe(['id' => $oilId, 'name' => 'Oil 1L', 'unit' => 'piece', 'has_tank' => false])
+        ->and($r['products'][0]['id'])->toBe($petrolId);
+});
+
+test('several products combine into one date-sorted statement with summed totals', function () {
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
+    [$company, $petrolId, $tankId] = statementFixture();
+    $oilId = statementPackaged($company, $tankId);
+
+    statementOtherSale(statementClose($company, $petrolId, $tankId, '2026-09-01', 5000, 5000, 1000, 400), $oilId, 5, 500);
+    statementBill($company, $petrolId, $tankId, '2026-09-02', 300);
+    statementPackagedBill($company, $oilId, $tankId, '2026-09-02', 20);
+
+    $r = app(StockStatementService::class)->runMany($company->id, [$petrolId, $oilId], '2026-09-01', '2026-09-03');
+
+    expect($r['combined'])->toBeTrue()
+        ->and($r['item'])->toBe(['id' => 'all', 'name' => 'All products'])
+        ->and(array_map(fn ($x) => [$x['date'], $x['product']], $r['rows']))->toBe([
+            ['2026-09-01', 'Oil 1L'], ['2026-09-01', 'Petrol'], ['2026-09-02', 'Oil 1L'],
+        ])
+        ->and($r['rows'][0]['unit'])->toBe('piece')
+        ->and($r['rows'][1]['unit'])->toBe('liter');
+
+    expect($r['totals']['sold'])->toBe(1005.0)
+        ->and($r['totals']['sale_amount'])->toBe(402500.0)
+        ->and($r['totals']['received'])->toBe(320.0)
+        ->and($r['totals']['purchase_amount'])->toBe(121600.0)
+        ->and($r['totals']['opening'])->toBe(50.0)
+        ->and($r['rows'][2]['sale_running'])->toBe(402500.0);
 });

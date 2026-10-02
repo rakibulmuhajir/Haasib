@@ -27,9 +27,13 @@ class StockStatementService
             'rows' => [],
             'totals' => ['opening' => null, 'received' => null, 'purchase_amount' => 0.0, 'purchase_rate' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'rate' => null, 'closing' => null, 'variance' => 0.0, 'opening_rate' => null, 'opening_value' => null, 'available' => null, 'available_value' => null],
             'products' => $products,
+            'has_tank' => true,
         ];
         if (! $item) {
             return $result;
+        }
+        if (! DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')->where('linked_item_id', $itemId)->exists()) {
+            return $this->runBook($companyId, $item, $startDate, $endDate, $result);
         }
 
         $closes = $this->liveCloses($companyId)
@@ -181,7 +185,7 @@ class StockStatementService
             'opening' => $openingTotal,
             // Opening stock at cost, and opening + bought: what was there to sell. Not folded into
             // "bought" -- this month's opening is last month's closing, already bought then.
-            'opening_rate' => $openingRate = $this->openingRate($companyId, $itemId, $startDate),
+            'opening_rate' => $openingRate = $this->openingRate($companyId, $itemId, $startDate, true),
             'opening_value' => $openingTotal !== null && $openingRate !== null ? round($openingTotal * $openingRate, 2) : null,
             'available' => $openingTotal === null ? null : $openingTotal + ($tot['received'] ?? 0.0),
             'available_value' => $openingTotal !== null && $openingRate !== null ? round($openingTotal * $openingRate, 2) + $tot['purchase_amount'] : null,
@@ -202,7 +206,7 @@ class StockStatementService
      * What a litre of the opening stock cost: the last purchase before the range (weighted over
      * that bill date), else the opening-stock entry's own cost. Null when neither carries a cost.
      */
-    private function openingRate(string $companyId, string $itemId, string $start): ?float
+    private function openingRate(string $companyId, string $itemId, string $start, bool $tank): ?float
     {
         $bills = fn () => DB::table('acct.bill_line_items as l')
             ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
@@ -210,7 +214,7 @@ class StockStatementService
             ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
             ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
             ->where('l.item_id', $itemId)
-            ->whereNotNull('l.warehouse_id')
+            ->when($tank, fn ($q) => $q->whereNotNull('l.warehouse_id'))
             ->where('b.bill_date', '<', $start);
         $lastDate = $bills()->max('b.bill_date');
         if ($lastDate) {
@@ -287,7 +291,7 @@ class StockStatementService
      *
      * @return array<string, array<int, array{id:string,bill_number:string,quantity:float,direct:float}>>
      */
-    private function purchases(string $companyId, string $itemId, string $start, string $end): array
+    private function purchases(string $companyId, string $itemId, string $start, string $end, bool $tank = true): array
     {
         $out = [];
         $lines = DB::table('acct.bill_line_items as l')
@@ -296,7 +300,7 @@ class StockStatementService
             ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
             ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
             ->where('l.item_id', $itemId)
-            ->whereNotNull('l.warehouse_id')
+            ->when($tank, fn ($q) => $q->whereNotNull('l.warehouse_id'))
             ->whereBetween('b.bill_date', [$start, $end])
             ->orderBy('b.bill_number')
             ->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.direct_quantity', 'l.total']);
@@ -347,15 +351,240 @@ class StockStatementService
         return $out;
     }
 
-    /** Items that own at least one tank. */
+    /** Every sellable item: tank products first, then the rest by name. */
     private function products(string $companyId): array
     {
-        $ids = DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')
+        $tankIds = DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')
             ->whereNotNull('linked_item_id')->pluck('linked_item_id')->unique()->all();
 
-        return $ids
-            ? DB::table('inv.items')->where('company_id', $companyId)->whereIn('id', $ids)->orderBy('name')
-                ->get(['id', 'name'])->map(fn ($i) => ['id' => $i->id, 'name' => $i->name])->all()
-            : [];
+        $items = DB::table('inv.items')->where('company_id', $companyId)->where('is_sellable', true)->whereNull('deleted_at')
+            ->orderBy('name')->get(['id', 'name', 'unit_of_measure'])
+            ->map(fn ($i) => ['id' => $i->id, 'name' => $i->name, 'unit' => $i->unit_of_measure, 'has_tank' => in_array($i->id, $tankIds, true)])
+            ->all();
+
+        return array_merge(
+            array_values(array_filter($items, fn ($p) => $p['has_tank'])),
+            array_values(array_filter($items, fn ($p) => ! $p['has_tank'])),
+        );
+    }
+
+    /**
+     * An item without a tank: no dip, so a book balance (opening + bought - sold). Rows only for
+     * days with activity; sold comes from the closes' other sales plus direct-delivery invoices.
+     */
+    private function runBook(string $companyId, object $item, string $startDate, string $endDate, array $result): array
+    {
+        $n = fn ($v) => (float) ($v ?? 0);
+        $itemId = $item->id;
+        $result['has_tank'] = false;
+
+        $closes = $this->liveCloses($companyId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->orderBy('transaction_date')->orderBy('created_at')
+            ->get(['id', 'transaction_number', 'transaction_date', 'metadata']);
+        $byDate = [];
+        foreach ($closes as $t) {
+            $byDate[Carbon::parse($t->transaction_date)->toDateString()] = $t;
+        }
+
+        $bought = $this->purchases($companyId, $itemId, $startDate, $endDate, false);
+        $hasDirect = false;
+        foreach ($bought as $dayBills) {
+            if (array_sum(array_column($dayBills, 'direct')) > 0) {
+                $hasDirect = true;
+            }
+        }
+        $directSales = $hasDirect ? $this->directSales($companyId, $itemId, $startDate, $endDate, $bought) : [];
+
+        // Book opening: opening-stock entries + earlier bills (net of what went straight off the
+        // tanker) - earlier other sales.
+        $openingStock = (float) DB::table('inv.stock_movements')->where('company_id', $companyId)->where('item_id', $itemId)
+            ->where('movement_type', 'opening')->where('movement_date', '<', $startDate)->sum('quantity');
+        $earlierBills = DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
+            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->where('l.item_id', $itemId)
+            ->where('b.bill_date', '<', $startDate)
+            ->selectRaw('COALESCE(SUM(l.quantity), 0) - COALESCE(SUM(l.direct_quantity), 0) as qty')->value('qty');
+        $earlierSold = 0.0;
+        foreach ($this->liveCloses($companyId)->where('transaction_date', '<', $startDate)->get(['id', 'metadata']) as $t) {
+            foreach ((array) ($t->metadata['other_sales_details'] ?? []) as $o) {
+                if (($o['item_id'] ?? null) === $itemId) {
+                    $earlierSold += $n($o['quantity'] ?? 0);
+                }
+            }
+        }
+        $openingTotal = $openingStock + (float) $earlierBills - $earlierSold;
+
+        $rows = [];
+        $balance = $openingTotal;
+        $tot = ['received' => 0.0, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0];
+
+        for ($d = Carbon::parse($startDate)->startOfDay(), $e = Carbon::parse($endDate)->startOfDay(); $d->lte($e); $d->addDay()) {
+            $date = $d->toDateString();
+            $t = $byDate[$date] ?? null;
+            $dayBills = $bought[$date] ?? [];
+            $dayBought = array_sum(array_column($dayBills, 'quantity'));
+            $dayDirect = array_sum(array_column($dayBills, 'direct'));
+            $dayPurchase = array_sum(array_column($dayBills, 'amount'));
+            $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
+
+            $soldClose = 0.0;
+            $saleAmount = 0.0;
+            $rates = [];
+            if ($t) {
+                foreach ((array) (((array) ($t->metadata ?? []))['other_sales_details'] ?? []) as $o) {
+                    if (($o['item_id'] ?? null) !== $itemId) {
+                        continue;
+                    }
+                    $soldClose += $n($o['quantity'] ?? 0);
+                    $saleAmount += $n($o['amount'] ?? 0);
+                    if (isset($o['unit_price'])) {
+                        $rates[] = round($n($o['unit_price']), 2);
+                    }
+                }
+            }
+            $sold = $soldClose + $dayDirect;
+            $saleAmount += $dayDirectAmount;
+            if ($dayBought <= 0 && $sold <= 0) {
+                continue;
+            }
+            $rates = array_values(array_unique($rates));
+            sort($rates);
+
+            $opening = $balance;
+            $balance = $opening + $dayBought - $sold;
+            $tot['received'] += $dayBought;
+            $tot['purchase_amount'] += $dayPurchase;
+            $tot['sold'] += $sold;
+            $tot['sale_amount'] += $saleAmount;
+
+            $rows[] = [
+                'date' => $date,
+                'close_id' => $t->id ?? null,
+                'transaction_number' => $t->transaction_number ?? null,
+                'opening' => $opening,
+                'received' => $dayBought,
+                'received_direct' => $dayDirect,
+                'purchase_amount' => $dayPurchase,
+                'purchase_rate' => $dayBought > 0 ? round($dayPurchase / $dayBought, 2) : null,
+                'sold' => $sold,
+                'sold_pumps' => $soldClose,
+                'sold_direct' => $dayDirect,
+                'rates' => $rates,
+                'sale_amount' => $saleAmount,
+                'direct_amount' => $dayDirectAmount,
+                'direct_invoices' => $directSales[$date]['invoices'] ?? [],
+                'expected' => $balance,
+                'close_expected' => $balance,
+                'dip' => $balance,
+                'variance' => 0.0,
+                'bills' => $dayBills,
+                'book' => true,
+                'sale_running' => $tot['sale_amount'],
+                'purchase_running' => $tot['purchase_amount'],
+            ];
+        }
+
+        $openingRate = $this->openingRate($companyId, $itemId, $startDate, false);
+        $result['rows'] = $rows;
+        $result['totals'] = [
+            'opening' => $openingTotal,
+            'opening_rate' => $openingRate,
+            'opening_value' => $openingRate !== null ? round($openingTotal * $openingRate, 2) : null,
+            'available' => $openingTotal + $tot['received'],
+            'available_value' => $openingRate !== null ? round($openingTotal * $openingRate, 2) + $tot['purchase_amount'] : null,
+            'received' => $tot['received'],
+            'sold' => $tot['sold'],
+            'sale_amount' => $tot['sale_amount'],
+            'rate' => $tot['sold'] > 0 ? round($tot['sale_amount'] / $tot['sold'], 2) : null,
+            'purchase_amount' => $tot['purchase_amount'],
+            'purchase_rate' => $tot['received'] > 0 ? round($tot['purchase_amount'] / $tot['received'], 2) : null,
+            'closing' => $balance,
+            'variance' => 0.0,
+        ];
+
+        return $result;
+    }
+
+    /**
+     * Several products in one statement: each product's rows (no gaps), tagged with the product and
+     * its unit, date-sorted, with the totals summed. Units may differ, so rates are per unit.
+     *
+     * @param  array<int, string>  $itemIds
+     */
+    public function runMany(string $companyId, array $itemIds, string $start, string $end): array
+    {
+        $products = $this->products($companyId);
+        $rows = [];
+        $sum = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'opening' => null, 'closing' => null, 'variance' => 0.0, 'opening_value' => null, 'available' => null, 'available_value' => null];
+        $add = function (string $k, $v) use (&$sum) {
+            if ($v !== null) {
+                $sum[$k] = ($sum[$k] ?? 0.0) + (float) $v;
+            }
+        };
+        $anyTank = false;
+        $count = 0;
+
+        foreach (array_values(array_unique($itemIds)) as $id) {
+            $r = $this->run($companyId, $id, $start, $end);
+            if (($r['item']['name'] ?? '') === '') {
+                continue;
+            }
+            $count++;
+            $unit = collect($products)->firstWhere('id', $id)['unit'] ?? null;
+            $anyTank = $anyTank || ($r['has_tank'] ?? true);
+            foreach ($r['rows'] as $row) {
+                if (! empty($row['missing'])) {
+                    continue;
+                }
+                $rows[] = $row + ['product' => $r['item']['name'], 'unit' => $unit];
+            }
+            foreach (['received', 'opening', 'closing', 'opening_value', 'available', 'available_value'] as $k) {
+                $add($k, $r['totals'][$k] ?? null);
+            }
+            foreach (['purchase_amount', 'sold', 'sale_amount', 'variance'] as $k) {
+                $add($k, $r['totals'][$k] ?? 0);
+            }
+        }
+
+        usort($rows, fn ($a, $b) => [$a['date'], $a['product']] <=> [$b['date'], $b['product']]);
+        $purchaseRunning = 0.0;
+        $saleRunning = 0.0;
+        foreach ($rows as &$row) {
+            $purchaseRunning += (float) ($row['purchase_amount'] ?? 0);
+            $saleRunning += (float) ($row['sale_amount'] ?? 0);
+            $row['purchase_running'] = $purchaseRunning;
+            $row['sale_running'] = $saleRunning;
+        }
+        unset($row);
+
+        $received = $sum['received'];
+        $all = $count > 0 && $count === count($products);
+
+        return [
+            'item' => ['id' => $all ? 'all' : 'some', 'name' => $all ? 'All products' : $count.' products'],
+            'rows' => $rows,
+            'totals' => [
+                'opening' => $sum['opening'],
+                'received' => $received,
+                'purchase_amount' => $sum['purchase_amount'],
+                'purchase_rate' => ($received ?? 0) > 0 ? round($sum['purchase_amount'] / $received, 2) : null,
+                'sold' => $sum['sold'],
+                'sale_amount' => $sum['sale_amount'],
+                'rate' => $sum['sold'] > 0 ? round($sum['sale_amount'] / $sum['sold'], 2) : null,
+                'closing' => $sum['closing'],
+                'variance' => $sum['variance'],
+                'opening_rate' => null,
+                'opening_value' => $sum['opening_value'],
+                'available' => $sum['available'],
+                'available_value' => $sum['available_value'],
+            ],
+            'products' => $products,
+            'has_tank' => $anyTank,
+            'combined' => true,
+        ];
     }
 }

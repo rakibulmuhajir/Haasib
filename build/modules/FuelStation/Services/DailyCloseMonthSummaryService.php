@@ -386,6 +386,9 @@ class DailyCloseMonthSummaryService
                 'daily_variance' => $t['variance'],
                 'rate' => null,
                 'sale_amount' => null,
+                'purchase_rate' => null,
+                'purchase_amount' => null,
+                'days' => [],
             ];
         }
 
@@ -399,9 +402,14 @@ class DailyCloseMonthSummaryService
                 continue;
             }
             $seen[$row['item_id']] = true;
-            $totals = $statement->run($companyId, $row['item_id'], $start->toDateString(), $end->toDateString())['totals'];
+            $productStatement = $statement->run($companyId, $row['item_id'], $start->toDateString(), $end->toDateString());
+            $totals = $productStatement['totals'];
             $row['rate'] = $totals['rate'];
             $row['sale_amount'] = $totals['sale_amount'];
+            $row['purchase_rate'] = $totals['purchase_rate'];
+            $row['purchase_amount'] = $totals['purchase_amount'];
+            // The product's days, so the row opens into its statement.
+            $row['days'] = $productStatement['rows'];
         }
         unset($row);
 

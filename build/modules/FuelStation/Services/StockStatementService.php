@@ -25,7 +25,7 @@ class StockStatementService
         $result = [
             'item' => ['id' => $itemId, 'name' => $item->name ?? ''],
             'rows' => [],
-            'totals' => ['opening' => null, 'received' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'rate' => null, 'closing' => null, 'variance' => 0.0],
+            'totals' => ['opening' => null, 'received' => null, 'purchase_amount' => 0.0, 'purchase_rate' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'rate' => null, 'closing' => null, 'variance' => 0.0],
             'products' => $products,
         ];
         if (! $item) {
@@ -66,7 +66,7 @@ class StockStatementService
         $first = true;
         $openingTotal = null;
         $closing = null;
-        $tot = ['received' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'variance' => 0.0];
+        $tot = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'variance' => 0.0];
 
         for ($d = Carbon::parse($startDate)->startOfDay(), $e = Carbon::parse($endDate)->startOfDay(); $d->lte($e); $d->addDay()) {
             $date = $d->toDateString();
@@ -74,15 +74,19 @@ class StockStatementService
             $dayBills = $bought[$date] ?? [];
             $dayBought = array_sum(array_column($dayBills, 'quantity'));
             $dayDirect = array_sum(array_column($dayBills, 'direct'));
+            $dayPurchase = array_sum(array_column($dayBills, 'amount'));
+            $dayPurchaseRate = $dayBought > 0 ? round($dayPurchase / $dayBought, 2) : null;
             $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
             if (! $t) {
                 if ($d->lte($today)) {
                     // No close, but a purchase that day still counts as bought.
                     $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
+                    $tot['purchase_amount'] += $dayPurchase;
                     $tot['sold'] += $dayDirect;
                     $tot['sale_amount'] += $dayDirectAmount;
                     $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills,
-                        'sale_amount' => $dayDirectAmount, 'sale_running' => $tot['sale_amount']];
+                        'sale_amount' => $dayDirectAmount, 'sale_running' => $tot['sale_amount'],
+                        'purchase_amount' => $dayPurchase, 'purchase_rate' => $dayPurchaseRate, 'purchase_running' => $tot['purchase_amount']];
                 }
 
                 continue;
@@ -143,6 +147,8 @@ class StockStatementService
                 'opening' => $opening,
                 'received' => $dayBought,
                 'received_direct' => $dayDirect,
+                'purchase_amount' => $dayPurchase,
+                'purchase_rate' => $dayPurchaseRate,
                 'sold' => $sold,
                 'sold_pumps' => $soldPumps,
                 'sold_direct' => $dayDirect,
@@ -162,7 +168,9 @@ class StockStatementService
             $tot['sale_amount'] += $saleAmount;
             $tot['variance'] += $dip - $rowExpected;
             // Sales to date, like a running balance on a bank statement.
+            $tot['purchase_amount'] += $dayPurchase;
             $rows[array_key_last($rows)]['sale_running'] = $tot['sale_amount'];
+            $rows[array_key_last($rows)]['purchase_running'] = $tot['purchase_amount'];
             $prevDip = $dip;
             $first = false;
             $closing = $dip;
@@ -175,6 +183,8 @@ class StockStatementService
             'sold' => $tot['sold'],
             'sale_amount' => $tot['sale_amount'],
             'rate' => $tot['sold'] > 0 ? round($tot['sale_amount'] / $tot['sold'], 2) : null,
+            'purchase_amount' => $tot['purchase_amount'],
+            'purchase_rate' => ($tot['received'] ?? 0) > 0 ? round($tot['purchase_amount'] / $tot['received'], 2) : null,
             'closing' => $closing,
             'variance' => $tot['variance'],
         ];
@@ -249,11 +259,12 @@ class StockStatementService
             ->whereNotNull('l.warehouse_id')
             ->whereBetween('b.bill_date', [$start, $end])
             ->orderBy('b.bill_number')
-            ->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.direct_quantity']);
+            ->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.direct_quantity', 'l.total']);
         foreach ($lines as $l) {
             $date = Carbon::parse($l->bill_date)->toDateString();
-            $out[$date][$l->id] ??= ['id' => $l->id, 'bill_number' => $l->bill_number, 'quantity' => 0.0, 'direct' => 0.0];
+            $out[$date][$l->id] ??= ['id' => $l->id, 'bill_number' => $l->bill_number, 'quantity' => 0.0, 'direct' => 0.0, 'amount' => 0.0];
             $out[$date][$l->id]['quantity'] += (float) $l->quantity;
+            $out[$date][$l->id]['amount'] += (float) $l->total;
             $out[$date][$l->id]['direct'] += (float) $l->direct_quantity;
         }
 

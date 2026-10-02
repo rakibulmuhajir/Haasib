@@ -46,6 +46,9 @@ interface Row {
   rates?: number[]
   sale_amount?: number
   sale_running?: number
+  purchase_amount?: number
+  purchase_rate?: number | null
+  purchase_running?: number
   expected?: number
   dip?: number
   variance?: number
@@ -55,6 +58,8 @@ interface Row {
 interface Totals {
   opening: number | null
   received: number | null
+  purchase_amount: number
+  purchase_rate: number | null
   sold: number
   sale_amount: number
   rate: number | null
@@ -138,8 +143,10 @@ const apply = () => {
             <tr>
               <th class="px-3 py-2 text-left font-normal">Date</th>
               <th class="px-3 py-2 text-right font-normal">Bought (in)</th>
+              <th class="px-3 py-2 text-right font-normal">Purchase rate</th>
+              <th class="px-3 py-2 text-right font-normal">Purchases to date</th>
               <th class="px-3 py-2 text-right font-normal">Sold (out)</th>
-              <th class="px-3 py-2 text-right font-normal">Rate</th>
+              <th class="px-3 py-2 text-right font-normal">Sale rate</th>
               <th class="px-3 py-2 text-right font-normal">Sale amount</th>
               <th class="px-3 py-2 text-right font-normal">Sales to date</th>
               <th class="px-3 py-2 text-right font-normal">Balance</th>
@@ -149,7 +156,7 @@ const apply = () => {
           <tbody>
             <tr class="border-t border-rule-default text-muted-foreground">
               <td class="px-3 py-1.5">Opening</td>
-              <td colspan="5"></td>
+              <td colspan="7"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.opening) }}</td>
               <td></td>
             </tr>
@@ -157,6 +164,8 @@ const apply = () => {
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
                 <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
+                <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
+                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.purchase_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td colspan="6" class="px-3 py-1.5 text-muted-foreground">
                   No close
                   <Link :href="`/${company.slug}/fuel/daily-close?date=${r.date}`" class="ml-2 underline underline-offset-2">Close this day</Link>
@@ -178,6 +187,8 @@ const apply = () => {
                   </Hint>
                   <template v-else>{{ litres(r.received) }}</template>
                 </td>
+                <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
+                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.purchase_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.sold_direct" side="left">
                     {{ litres(r.sold) }}
@@ -207,11 +218,13 @@ const apply = () => {
               </template>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="8" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
+              <td colspan="10" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
             </tr>
             <tr class="border-t-2 border-rule-default font-semibold">
               <td class="px-3 py-2">Total</td>
               <td class="px-3 py-2 text-right">{{ litres(totals.received) }}</td>
+              <td class="px-3 py-2 text-right">{{ totals.purchase_rate === null ? '—' : fmt.format(totals.purchase_rate) }}</td>
+              <td class="px-3 py-2 text-right"><MoneyText :amount="totals.purchase_amount" :currency="currency" :fraction-digits="0" /></td>
               <td class="px-3 py-2 text-right">{{ litres(totals.sold) }}</td>
               <td class="px-3 py-2 text-right">{{ totals.rate === null ? '—' : fmt.format(totals.rate) }}</td>
               <td class="px-3 py-2 text-right"><MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" /></td>

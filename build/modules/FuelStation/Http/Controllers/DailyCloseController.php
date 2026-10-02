@@ -96,6 +96,7 @@ class DailyCloseController extends Controller
             'full_name' => trim($employee->first_name . ' ' . $employee->last_name),
             'position' => $employee->position,
             'base_salary' => (float) ($employee->base_salary ?? 0),
+            'pay_frequency' => $employee->pay_frequency,
             'outstanding_advances' => (float) $outstandingAdvances,
             'month_advances' => (float) $monthAdvances,
         ];

@@ -132,3 +132,23 @@ test('a cancelled payslip does not stop the month being run again', function () 
     expect($draft->prepare($company, '2026-09-01'))->toBe(1)
         ->and(Payslip::where('company_id', $company->id)->where('status', 'draft')->count())->toBe(1);
 });
+
+test('a daily-wage worker\'s month is what they were paid in it, settled to nothing owing', function () {
+    [, $company] = monthEndPayrollCompany();
+    $worker = Employee::create([
+        'company_id' => $company->id, 'employee_number' => 'EMP-ME-DW', 'first_name' => 'Day', 'last_name' => 'Wage',
+        'hire_date' => '2026-01-01', 'employment_type' => 'contract', 'employment_status' => 'active',
+        'pay_frequency' => 'daily', 'base_salary' => 0, 'currency' => 'PKR', 'is_active' => true,
+    ]);
+    monthEndAdvance($company, $worker, '2026-09-03', 1500);
+    monthEndAdvance($company, $worker, '2026-09-17', 2500);
+    // Paid in October: not September's wages.
+    monthEndAdvance($company, $worker, '2026-10-01', 1000);
+
+    app(MonthEndPayrollDraft::class)->prepare($company, '2026-09-01');
+
+    $payslip = Payslip::where('company_id', $company->id)->where('employee_id', $worker->id)->sole()->refresh();
+    expect((float) $payslip->gross_pay)->toBe(4000.0)
+        ->and((float) $payslip->total_deductions)->toBe(4000.0)
+        ->and((float) $payslip->net_pay)->toBe(0.0);
+});

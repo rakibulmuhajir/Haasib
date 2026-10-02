@@ -123,6 +123,7 @@ const formatEmploymentType = (type: string) => {
 
 const formatPayFrequency = (freq: string) => {
     const labels: Record<string, string> = {
+        daily: 'Daily wages',
         weekly: 'Weekly',
         biweekly: 'Bi-weekly',
         semimonthly: 'Semi-monthly',

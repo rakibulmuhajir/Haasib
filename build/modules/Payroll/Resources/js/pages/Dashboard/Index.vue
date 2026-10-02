@@ -56,7 +56,8 @@ const monthEnd = computed(() => {
   return `${props.month}-${String(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()).padStart(2, '0')}`
 })
 const open = computed(() => !props.period || ['open', 'processing'].includes(props.period.status))
-const missing = computed(() => props.rows.filter((r) => !r.payslip && r.salary > 0).length)
+// No payslip yet: anyone on a salary, or on daily wages who was paid something this month.
+const missing = computed(() => props.rows.filter((r) => !r.payslip && (r.salary > 0 || r.advances > 0)).length)
 const total = (pick: (r: Row) => number) => props.rows.reduce((sum, r) => sum + pick(r), 0)
 
 const run = () => router.post(`${base.value}/payroll/run-monthly`, { month: props.month }, { preserveScroll: true })

@@ -374,6 +374,7 @@ const submit = () => {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="daily">Daily wages</SelectItem>
                                     <SelectItem value="weekly"
                                         >Weekly</SelectItem
                                     >

@@ -232,7 +232,18 @@ class PayrollPostingService
                         ->whereNotIn('status', ['cancelled', 'voided', 'void'])
                         ->exists();
 
-                    if ($exists || (float) $employee->base_salary <= 0) {
+                    // Daily wages have no fixed salary: the month's wages are what was paid out to
+                    // them in it (their advances), which then come off again -- net 0, the wages in
+                    // Salaries & Wages, nothing left owing either way.
+                    $daily = $employee->pay_frequency === 'daily';
+                    $amount = $daily
+                        ? round((float) $employee->salaryAdvances()
+                            ->whereIn('status', ['pending', 'partially_recovered'])
+                            ->whereBetween('advance_date', [$period->period_start, $period->period_end])
+                            ->sum('amount_outstanding'), 2)
+                        : round((float) $employee->base_salary, 2);
+
+                    if ($exists || $amount <= 0) {
                         return;
                     }
 
@@ -244,14 +255,13 @@ class PayrollPostingService
                         'currency' => $employee->currency ?: $baseCurrency,
                         'exchange_rate' => $this->resolveExchangeRate($period->company_id, $employee->currency ?: $baseCurrency, $baseCurrency),
                         'base_currency' => $baseCurrency,
-                        'notes' => 'Generated from employee salary.',
+                        'notes' => $daily ? 'Daily wages paid this month.' : 'Generated from employee salary.',
                     ]);
 
-                    $amount = round((float) $employee->base_salary, 2);
                     $payslip->lines()->create([
                         'line_type' => 'earning',
                         'earning_type_id' => $earningType->id,
-                        'description' => 'Base salary',
+                        'description' => $daily ? 'Daily wages' : 'Base salary',
                         'quantity' => 1,
                         'rate' => $amount,
                         'amount' => $amount,

@@ -59,7 +59,7 @@ class UpdateEmployeeRequest extends BaseFormRequest
             'department' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',
             'manager_id' => ['nullable', 'uuid', "not_in:{$employeeId}", Rule::exists(Employee::class, 'id')],
-            'pay_frequency' => 'required|in:weekly,biweekly,semimonthly,monthly',
+            'pay_frequency' => 'required|in:daily,weekly,biweekly,semimonthly,monthly',
             'base_salary' => 'required|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',
             'currency' => [

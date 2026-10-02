@@ -1534,6 +1534,8 @@ const employeeMonthHint = (employeeId: string) => {
     const salary = Number(e.base_salary ?? 0);
     const taken = Number(e.month_advances ?? 0) + typed;
     const money = (n: number) => formatMoneyText(n, currencyCode.value);
+    // Daily wages, or no salary set: no limit to measure against, so just what was taken.
+    if (e.pay_frequency === 'daily' || salary <= 0) return `Taken this month ${money(taken)}`;
     return `Salary ${money(salary)} · Taken ${money(taken)} · Left ${money(salary - taken)}`;
 };
 const holderBalance = (row: any) => {

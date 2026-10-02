@@ -3,7 +3,9 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
+use App\Modules\Payroll\Http\Requests\SavePayrollSettingsRequest;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\Payslip;
@@ -95,7 +97,14 @@ class PayrollDashboardController extends Controller
 
         $count = fn (string $status) => $payslips->where('status', $status)->count();
 
+        $recording = app(PayrollPostingService::class)->paymentRecording($company->id);
+
         return Inertia::render('Payroll/Dashboard/Index', [
+            'settings' => [
+                'payment_recording' => $recording['mode'],
+                'payment_account_id' => $recording['account_id'],
+            ],
+            'canUpdateSettings' => (bool) $request->user()?->hasCompanyPermission(Permissions::PAYROLL_SETTINGS_UPDATE),
             'company' => ['id' => $company->id, 'name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'month' => $month,
             'period' => $period ? ['id' => $period->id, 'status' => $period->status] : null,
@@ -166,5 +175,23 @@ class PayrollDashboardController extends Controller
             : "{$label} payroll is already prepared.";
 
         return back()->with('success', $message);
+    }
+
+    public function saveSettings(SavePayrollSettingsRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+        $company = \App\Models\Company::findOrFail($company->id);
+        $settings = (array) ($company->settings ?? []);
+        $payroll = (array) ($settings['payroll'] ?? []);
+        $payroll['payment_recording'] = $request->validated('payment_recording');
+        $payroll['payment_account_id'] = $request->validated('payment_recording') === 'on_approval'
+            ? ($request->validated('payment_account_id') ?: null)
+            : ($payroll['payment_account_id'] ?? null);
+        $company->settings = array_merge($settings, ['payroll' => $payroll]);
+        $company->save();
+
+        return back()->with('success', 'Payroll settings saved.');
     }
 }

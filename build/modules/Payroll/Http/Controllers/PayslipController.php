@@ -462,7 +462,9 @@ class PayslipController extends Controller
             DB::transaction(function () use ($company, $period, $payrollPostingService, $request, &$undone) {
                 Payslip::where('company_id', $company->id)
                     ->where('payroll_period_id', $period->id)
-                    ->where('status', 'approved')
+                    ->where(fn ($q) => $q->where('status', 'approved')
+                        // Nothing-to-pay payslips are marked paid on approval; they have no payment to protect.
+                        ->orWhere(fn ($q) => $q->where('status', 'paid')->whereNull('payment_gl_transaction_id')))
                     ->get()
                     ->each(function (Payslip $payslip) use ($payrollPostingService, $request, &$undone) {
                         $payrollPostingService->void($payslip, 'Approval undone to redo the month', (string) $request->user()->id);

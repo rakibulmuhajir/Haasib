@@ -345,7 +345,72 @@ class PayrollPostingService
         return ['amount' => $amount, 'description' => 'Base salary', 'quantity' => 1.0, 'rate' => $amount, 'notes' => 'Generated from employee salary.'];
     }
 
+    /**
+     * How salary payments are recorded: 'on_entry' (default) leaves an approved payslip owed
+     * until someone pays it (daily close, Pay); 'on_approval' pays it the moment it is approved,
+     * from account_id (null = the usual cash / bank fallback). Stored in companies.settings.payroll.
+     *
+     * @return array{mode:string, account_id:?string}
+     */
+    public function paymentRecording(string $companyId): array
+    {
+        $settings = (array) (Company::whereKey($companyId)->value('settings') ?? []);
+        $payroll = (array) ($settings['payroll'] ?? []);
+
+        return [
+            'mode' => ($payroll['payment_recording'] ?? 'on_entry') === 'on_approval' ? 'on_approval' : 'on_entry',
+            'account_id' => $payroll['payment_account_id'] ?? null,
+        ];
+    }
+
     public function approve(Payslip $payslip, string $userId): Transaction
+    {
+        return DB::transaction(function () use ($payslip, $userId) {
+            $transaction = $this->postApproval($payslip, $userId);
+
+            $payslip->refresh();
+            if ($payslip->status === 'approved') {
+                $this->settleAfterApproval($payslip, $userId);
+            }
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * Nothing to pay (net <= 0, advances covered it) is paid on the spot; otherwise the payment
+     * setting decides whether it is paid now or stays owed.
+     */
+    private function settleAfterApproval(Payslip $payslip, string $userId): void
+    {
+        $netPay = round((float) $payslip->net_pay, 2);
+
+        if ($netPay <= 0) {
+            $payslip->update([
+                'status' => 'paid',
+                'paid_at' => now()->toDateString(),
+                'payment_method' => $payslip->payment_method ?? 'cash',
+            ]);
+
+            return;
+        }
+
+        $setting = $this->paymentRecording($payslip->company_id);
+        if ($setting['mode'] !== 'on_approval') {
+            return;
+        }
+
+        $accountId = $this->resolvePaymentAccount($payslip->company_id, $setting['account_id']);
+        $subtype = Account::where('company_id', $payslip->company_id)->whereKey($accountId)->value('subtype');
+
+        $this->markPaid($payslip, [
+            'paid_on' => now()->toDateString(),
+            'payment_account_id' => $accountId,
+            'payment_method' => $subtype === 'cash' ? 'cash' : 'bank_transfer',
+        ], $userId);
+    }
+
+    private function postApproval(Payslip $payslip, string $userId): Transaction
     {
         return DB::transaction(function () use ($payslip, $userId) {
             $this->prepareAutomaticAdvanceDeductions($payslip);

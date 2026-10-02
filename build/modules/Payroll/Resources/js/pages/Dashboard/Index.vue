@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'vue-sonner'
-import { Banknote, CheckCircle2, ChevronLeft, ChevronRight, Play, Wallet, X } from 'lucide-vue-next'
+import { Banknote, CheckCircle2, ChevronLeft, ChevronRight, Play, Settings, Wallet, X } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
 interface Row {
@@ -40,6 +40,8 @@ const props = defineProps<{
   counts: { employees: number; payslips: number; draft: number; approved: number; paid: number }
   deductionTypes?: Array<{ id: string; code: string; name: string }>
   paymentAccounts?: Array<{ id: string; code: string; name: string; subtype: string }>
+  settings?: { payment_recording: 'on_entry' | 'on_approval'; payment_account_id: string | null }
+  canUpdateSettings?: boolean
 }>()
 
 const base = computed(() => `/${props.company.slug}`)
@@ -89,6 +91,26 @@ const payAll = () => {
     preserveScroll: true,
     onSuccess: () => { paying.value = false },
     onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not paid') },
+  })
+}
+
+// How salary payments are recorded: when paid (daily close / Pay), or when payroll is approved.
+const settingsOpen = ref(false)
+const recording = ref<'on_entry' | 'on_approval'>('on_entry')
+const settingsAccount = ref('')
+const openSettings = () => {
+  recording.value = props.settings?.payment_recording ?? 'on_entry'
+  settingsAccount.value = props.settings?.payment_account_id ?? props.paymentAccounts?.[0]?.id ?? ''
+  settingsOpen.value = true
+}
+const saveSettings = () => {
+  router.post(`${base.value}/payroll/settings`, {
+    payment_recording: recording.value,
+    payment_account_id: recording.value === 'on_approval' ? settingsAccount.value || null : null,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => { settingsOpen.value = false },
+    onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not saved') },
   })
 }
 
@@ -145,11 +167,43 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
     <template #actions>
       <Button variant="outline" size="icon" aria-label="Previous month" @click="shift(-1)"><ChevronLeft class="h-4 w-4" /></Button>
       <Button variant="outline" size="icon" aria-label="Next month" @click="shift(1)"><ChevronRight class="h-4 w-4" /></Button>
+      <Button v-if="canUpdateSettings" variant="ghost" size="icon" aria-label="Settings" @click="openSettings"><Settings class="h-4 w-4" /></Button>
       <Button v-if="open && (missing > 0 || counts.draft > 0)" :variant="missing > 0 ? 'default' : 'outline'" @click="run"><Play class="mr-2 h-4 w-4" />{{ missing > 0 ? 'Run payroll' : 'Update drafts' }}</Button>
       <Button v-if="counts.draft > 0" variant="outline" @click="approveAll"><CheckCircle2 class="mr-2 h-4 w-4" />Approve {{ counts.draft }}</Button>
       <Button v-if="counts.approved > 0" variant="ghost" @click="undoing = true">Undo approval</Button>
       <Button v-if="counts.approved > 0" @click="openPay"><Wallet class="mr-2 h-4 w-4" />Pay {{ counts.approved }}</Button>
     </template>
+
+    <Dialog v-model:open="settingsOpen">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Payroll settings</DialogTitle></DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-1.5">
+            <Label>Record salary payment</Label>
+            <Select v-model="recording">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="on_entry">When it is paid (daily close or Pay)</SelectItem>
+                <SelectItem value="on_approval">When payroll is approved</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div v-if="recording === 'on_approval'" class="space-y-1.5">
+            <Label>Paid from</Label>
+            <Select v-model="settingsAccount">
+              <SelectTrigger><SelectValue placeholder="Account" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="a in paymentAccounts ?? []" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="settingsOpen = false">Cancel</Button>
+          <Button :disabled="recording === 'on_approval' && !settingsAccount" @click="saveSettings">Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="undoing">
       <DialogContent class="sm:max-w-sm">

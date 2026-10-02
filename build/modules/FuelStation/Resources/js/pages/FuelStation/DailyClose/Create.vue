@@ -870,7 +870,9 @@ const refreshServerFacts = () => {
     // Lists the server works out for this day: salaries still unpaid, supplier payments made
     // on other screens, and invoices the close must take in. A draft saved before a payslip was
     // approved carried an empty salary list and hid it. Typed credit rows are kept.
-    form.payroll_payouts = props.approvedPayrollPayouts.map((payout) => ({ ...payout }));
+    // Salary paid is a row of the Salary / advance entry; rows come back from the draft, and
+    // only those whose payslip is still unpaid (amount taken fresh).
+    foldPayoutsIntoRows(true);
     form.bill_payments = props.pendingBillPayments.map((payment) => ({ ...payment }));
     const typedCredit = (form.credit_sales || []).filter(
         (row: any) => !row.pending_fuel_invoice && !row.pending_accounting_invoice,
@@ -896,6 +898,40 @@ const refreshServerFacts = () => {
         })),
         ...typedCredit,
     ];
+};
+
+/**
+ * Salary paid lives in the Salary / advance rows (kind 'salary'). Anything in payroll_payouts
+ * (an older draft, a reopened day) is turned into such rows. With validate, salary rows and
+ * payouts whose payslip is no longer unpaid are dropped and amounts refreshed.
+ */
+const foldPayoutsIntoRows = (validate: boolean) => {
+    const unpaid = new Map(props.approvedPayrollPayouts.map((p) => [p.payslip_id, p]));
+    const rows: any[] = [];
+    for (const row of form.employee_advances as any[]) {
+        if (row.kind === 'salary' && validate) {
+            const source = unpaid.get(row.payslip_id);
+            if (!source) continue;
+            row.amount = source.amount;
+        }
+        rows.push(row);
+    }
+    for (const payout of (form.payroll_payouts || []) as PayrollPayout[]) {
+        const source = validate ? unpaid.get(payout.payslip_id) : payout;
+        if (!source || rows.some((r) => r.kind === 'salary' && r.payslip_id === payout.payslip_id)) continue;
+        rows.push({
+            employee_id: source.employee_id,
+            employee_name: source.employee_name,
+            amount: source.amount,
+            reason: '',
+            kind: 'salary',
+            payslip_id: source.payslip_id,
+            payslip_number: source.payslip_number,
+            due_label: source.due_label ?? null,
+        });
+    }
+    form.employee_advances = rows;
+    form.payroll_payouts = [];
 };
 
 /** Salary still unpaid for an employee as of this close (approved payslips not yet paid). */
@@ -1205,15 +1241,19 @@ const form = useForm({
         partner_name: string;
         amount: number;
     }[],
+    // Salary / advance rows. A 'salary' row pays an approved payslip in full; it is moved into
+    // payroll_payouts when the form is prepared to post (getCleanedFormData).
     employee_advances: [] as {
         employee_id: string;
         employee_name: string;
         amount: number;
         reason: string;
+        kind?: 'salary' | 'advance';
+        payslip_id?: string;
+        payslip_number?: string;
+        due_label?: string | null;
     }[],
-    payroll_payouts: props.approvedPayrollPayouts.map((payout) => ({
-        ...payout,
-    })),
+    payroll_payouts: [] as PayrollPayout[],
     bill_payments: props.pendingBillPayments.map((payment) => ({ ...payment })),
     pay_suppliers: [] as {
         vendor_id: string;
@@ -1523,13 +1563,42 @@ const partyOf = computed<Record<string, { key: string; nameKey?: string; options
     credit_sales: { key: 'customer_id', nameKey: 'customer_name', options: saleCustomerOptions.value },
     payments_received: { key: 'customer_id', nameKey: 'customer_name', options: customerOptions.value },
 }));
+// A Salary / advance row pays the employee's oldest approved, unpaid payslip not already used by
+// another row (kind 'salary': amount fixed at its net); with none left it is an advance.
+const nextPayoutFor = (row: any) => {
+    const used = new Set((form.employee_advances as any[]).filter((r) => r !== row && r.kind === 'salary').map((r) => r.payslip_id));
+    return props.approvedPayrollPayouts.find((p) => p.employee_id === row.employee_id && !used.has(p.payslip_id)) ?? null;
+};
+const makeSalary = (row: any, payout: PayrollPayout) => {
+    Object.assign(row, { kind: 'salary', payslip_id: payout.payslip_id, payslip_number: payout.payslip_number, amount: payout.amount, due_label: payout.due_label ?? null, reason: '' });
+};
+const makeAdvance = (row: any) => {
+    const wasSalary = row.kind === 'salary';
+    Object.assign(row, { kind: 'advance', payslip_id: '', payslip_number: '', due_label: null, amount: wasSalary ? 0 : row.amount });
+};
+const applyEmployeeKind = (row: any) => {
+    const payout = row.employee_id ? nextPayoutFor(row) : null;
+    if (payout) makeSalary(row, payout);
+    else makeAdvance(row);
+};
+const salaryAmountText = (row: any) => {
+    if (row.kind !== 'salary') return null;
+    const month = String(row.due_label ?? '').replace(/^Unpaid\s*\u00b7\s*/, '');
+    return `${formatMoneyText(Number(row.amount || 0), currencyCode.value)} approved${month ? ` \u00b7 ${month}` : ''}`;
+};
+const salaryRowAction = (row: any) => {
+    if (row.kept_advance_id) return null;
+    if (row.kind === 'salary') return { label: 'Advance instead', run: () => makeAdvance(row) };
+    const payout = row.employee_id ? nextPayoutFor(row) : null;
+    return payout ? { label: 'Pay salary', run: () => makeSalary(row, payout) } : null;
+};
 // Beside an advance: salary, what the employee has taken this month, and what is left of it.
 // "Taken" counts the posted advances plus the ones typed on this close (a kept row is already posted).
 const employeeMonthHint = (employeeId: string) => {
     const e: any = props.employees.find((x) => x.id === employeeId);
     if (!e) return null;
     const typed = form.employee_advances
-        .filter((row: any) => row.employee_id === employeeId && !row.kept_advance_id)
+        .filter((row: any) => row.employee_id === employeeId && !row.kept_advance_id && row.kind !== 'salary')
         .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
     const salary = Number(e.base_salary ?? 0);
     const taken = Number(e.month_advances ?? 0) + typed;
@@ -1571,6 +1640,7 @@ const openSection = (key: string, partyId = '') => {
         row[party.key] = partyId;
         if (party.nameKey) row[party.nameKey] = party.options.find((o) => o.id === partyId)?.name ?? '';
         if (key === 'amanat_deposits' || key === 'amanat_disbursements') holderBalance(row);
+        if (key === 'employee_advances') applyEmployeeKind(row);
         if (key === 'credit_sales') {
             // Credit context for the over-limit warning, as picking in the row itself gives.
             const customer = props.customerChoices?.find((c) => c.id === partyId);
@@ -1617,7 +1687,7 @@ const entryOptions = computed(() => {
             { key: 'expenses', label: 'Expense' },
             { key: 'bank_deposits', label: 'Bank deposit' },
             { key: 'pay_suppliers', label: 'Pay Vendor' },
-            { key: 'employee_advances', label: 'Employee advance' },
+            { key: 'employee_advances', label: 'Salary / advance' },
             ...(partners ? [{ key: 'partner_withdrawals', label: 'Partner withdrawal' }] : []),
             ...(amanat ? [{ key: 'amanat_disbursements', label: 'Amanat withdrawal' }] : []),
         ],
@@ -1815,9 +1885,7 @@ const resetFormToInitial = () => {
     form.bank_deposits = [];
     form.partner_withdrawals = [];
     form.employee_advances = [];
-    form.payroll_payouts = props.approvedPayrollPayouts.map((payout) => ({
-        ...payout,
-    }));
+    form.payroll_payouts = [];
     form.bill_payments = props.pendingBillPayments.map((payment) => ({
         ...payment,
     }));
@@ -2069,6 +2137,7 @@ const hydrateFormForAmendment = () => {
         form.payroll_payouts = orig.payroll_payouts.map((payout) => ({
             ...payout,
         }));
+        foldPayoutsIntoRows(false);
     }
 
     if (orig.bill_payments && orig.bill_payments.length > 0) {
@@ -3178,15 +3247,24 @@ const getCleanedFormData = () => {
     );
 
     // Filter out incomplete employee advances
-    data.employee_advances = (data.employee_advances || []).filter(
-        (a: { employee_id: string; amount: number }) =>
-            a.employee_id && a.amount > 0,
-    );
-
-    data.payroll_payouts = (data.payroll_payouts || []).filter(
-        (p: { payslip_id: string; amount: number }) =>
-            p.payslip_id && p.amount > 0,
-    );
+    // Salary rows go to payroll_payouts (the whole approved net); the rest stay advances.
+    const salaryAdvanceRows: any[] = data.employee_advances || [];
+    data.payroll_payouts = salaryAdvanceRows
+        .filter((r) => r.kind === 'salary' && r.employee_id && r.payslip_id && r.amount > 0)
+        .map((r) => {
+            const source = props.approvedPayrollPayouts.find((p) => p.payslip_id === r.payslip_id);
+            return {
+                ...(source ?? {}),
+                payslip_id: r.payslip_id,
+                payslip_number: r.payslip_number,
+                employee_id: r.employee_id,
+                employee_name: r.employee_name,
+                amount: r.amount,
+            };
+        });
+    data.employee_advances = salaryAdvanceRows
+        .filter((r) => r.kind !== 'salary' && r.employee_id && r.amount > 0)
+        .map(({ kind: _kind, payslip_id: _p, payslip_number: _n, due_label: _d, ...advance }) => advance);
 
     // Filter out incomplete amanat disbursements
     data.amanat_disbursements = (data.amanat_disbursements || []).filter(
@@ -3439,8 +3517,7 @@ const cashFlowOut = computed(() => [
     { label: 'Supplier payments', amount: totalCashBillPayments.value + totalCashPaySuppliers.value },
     { label: 'Purchases paid now', amount: paidNowPurchasesTotal.value },
     { label: 'Expenses', amount: sumOf(form.expenses) },
-    { label: 'Salaries paid', amount: sumOf(form.payroll_payouts) },
-    { label: 'Salary advances', amount: sumOf(form.employee_advances) },
+    { label: 'Salaries / advances', amount: sumOf(form.employee_advances) + sumOf(form.payroll_payouts) },
     { label: 'Partner withdrawals', amount: sumOf(form.partner_withdrawals) },
     { label: 'Amanat withdrawals', amount: sumOf(form.amanat_disbursements) },
 ].filter((l) => Math.abs(l.amount) >= 0.5));
@@ -5431,14 +5508,18 @@ const cashFlowOut = computed(() => [
                         <!-- Employee Advances -->
                         <div v-if="isExpanded('employee_advances')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
-                                <h4 class="font-medium">Employee advances</h4>
+                                <h4 class="font-medium">Salary / advances</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['employee_advances']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
                             <CloseEntryList
                                 v-model="form.employee_advances"
                                 :party="{ key: 'employee_id', nameKey: 'employee_name', label: 'Employee', options: employeeOptions }"
                                 :text="{ key: 'reason', label: 'Reason' }"
-                                :hint="(row: any) => employeeMonthHint(row.employee_id)"
+                                :hint="(row: any) => (row.kind === 'salary' ? null : employeeMonthHint(row.employee_id))"
+                                :on-party="applyEmployeeKind"
+                                :amount-text="salaryAmountText"
+                                :hide-text="(row: any) => row.kind === 'salary'"
+                                :action="salaryRowAction"
                                 :locked="(row: any) => row.kept_advance_id ? `${row.employee_name} · ${row.amount} · kept (has repayments)` : null"
                                 errors-prefix="employee_advances"
                                 :errors="form.errors as Record<string, string>"
@@ -5447,73 +5528,6 @@ const cashFlowOut = computed(() => [
                             <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('employee_advances')">+ Add another</button>
                         </div>
 
-
-                        <template v-if="form.payroll_payouts.length > 0">
-
-                            <div class="space-y-4">
-                                <div>
-                                    <h4 class="font-medium">
-                                        Approved Salaries
-                                    </h4>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ accountingHints.payrollPayout }}
-                                    </p>
-                                </div>
-
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="payout in form.payroll_payouts"
-                                        :key="payout.payslip_id"
-                                        class="flex items-center justify-between rounded-md border p-3 text-sm"
-                                    >
-                                        <div>
-                                            <p class="font-medium">
-                                                {{ payout.employee_name }}
-                                            </p>
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                {{ payout.payslip_number }}
-                                                <span
-                                                    v-if="
-                                                        payout.employee_number
-                                                    "
-                                                >
-                                                    ·
-                                                    {{
-                                                        payout.employee_number
-                                                    }}</span
-                                                >
-                                                <span v-if="payout.approved_at">
-                                                    · Approved
-                                                    {{
-                                                        formatSharedDateTime(
-                                                            payout.approved_at,
-                                                            {
-                                                                mode: 'datetime',
-                                                            },
-                                                        )
-                                                    }}</span
-                                                >
-                                            </p>
-                                            <p
-                                                v-if="payout.due_label"
-                                                class="text-xs font-medium text-status-attention"
-                                            >
-                                                {{ payout.due_label }}
-                                            </p>
-                                        </div>
-                                        <span
-                                            class="font-semibold"
-                                            ><MoneyText
-                                                :amount="payout.amount"
-                                                :currency="currencyCode"
-                                                :fraction-digits="0"
-                                        /></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
 
                         <template v-if="form.bill_payments.length > 0">
 

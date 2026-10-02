@@ -439,6 +439,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['require.module:payroll'])->group(function () {
             Route::get('/{company}/payroll', [PayrollDashboardController::class, 'index'])->name('payroll.index');
             Route::post('/{company}/payroll/run-monthly', [PayrollDashboardController::class, 'runMonthly'])->name('payroll.run-monthly');
+            Route::post('/{company}/payroll/settings', [PayrollDashboardController::class, 'saveSettings'])->name('payroll.settings.save');
             Route::get('/{company}/payroll/reports/salary', [SalaryReportController::class, 'index'])->name('payroll.reports.salary');
 
             // Employees

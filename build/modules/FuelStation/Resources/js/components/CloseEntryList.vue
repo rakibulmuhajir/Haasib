@@ -28,6 +28,12 @@ const props = defineProps<{
   text?: { key: string; label: string; placeholder?: string }
   hint?: (row: any) => string | null
   locked?: (row: any) => string | null
+  // Read-only text in place of the amount box (e.g. a salary that must be paid in full).
+  amountText?: (row: any) => string | null
+  // Hides the detail box on rows that do not take one.
+  hideText?: (row: any) => boolean
+  // A small link under the row, e.g. switching what the row is.
+  action?: (row: any) => { label: string; run: () => void } | null
   onParty?: (row: any) => void
   errorsPrefix: string
   errors?: Record<string, string>
@@ -78,10 +84,13 @@ const setParty = (row: any, value: unknown) => {
           <InputError :message="err(index, extra.key)" />
         </div>
         <div v-if="text">
-          <Input v-model="row[text.key]" class="h-9" :placeholder="text.placeholder ?? text.label" :aria-label="text.label" :disabled="disabled" maxlength="255" />
-          <InputError :message="err(index, text.key)" />
+          <template v-if="!hideText?.(row)">
+            <Input v-model="row[text.key]" class="h-9" :placeholder="text.placeholder ?? text.label" :aria-label="text.label" :disabled="disabled" maxlength="255" />
+            <InputError :message="err(index, text.key)" />
+          </template>
         </div>
-        <div>
+        <p v-if="amountText?.(row)" class="text-right text-sm text-muted-foreground">{{ amountText(row) }}</p>
+        <div v-else>
           <Input v-model.number="row.amount" class="h-9 text-right" type="number" min="0" step="0.01" aria-label="Amount" :disabled="disabled" @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" />
           <InputError :message="err(index, 'amount')" />
         </div>
@@ -89,6 +98,7 @@ const setParty = (row: any, value: unknown) => {
           <Trash2 class="h-4 w-4" />
         </Button>
       </div>
+      <button v-if="action?.(row)" type="button" class="mt-0.5 text-xs text-primary underline-offset-2 hover:underline" :disabled="disabled" @click="action(row)!.run()">{{ action(row)!.label }}</button>
     </div>
   </div>
 </template>

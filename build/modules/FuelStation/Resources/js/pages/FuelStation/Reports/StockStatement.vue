@@ -45,6 +45,7 @@ interface Row {
   direct_invoices?: DirectInvoice[]
   rates?: number[]
   sale_amount?: number
+  sale_running?: number
   expected?: number
   dip?: number
   variance?: number
@@ -140,6 +141,7 @@ const apply = () => {
               <th class="px-3 py-2 text-right font-normal">Sold (out)</th>
               <th class="px-3 py-2 text-right font-normal">Rate</th>
               <th class="px-3 py-2 text-right font-normal">Sale amount</th>
+              <th class="px-3 py-2 text-right font-normal">Sales to date</th>
               <th class="px-3 py-2 text-right font-normal">Balance</th>
               <th class="px-3 py-2 text-right font-normal">Variance</th>
             </tr>
@@ -147,7 +149,7 @@ const apply = () => {
           <tbody>
             <tr class="border-t border-rule-default text-muted-foreground">
               <td class="px-3 py-1.5">Opening</td>
-              <td colspan="4"></td>
+              <td colspan="5"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.opening) }}</td>
               <td></td>
             </tr>
@@ -155,7 +157,7 @@ const apply = () => {
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
                 <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
-                <td colspan="5" class="px-3 py-1.5 text-muted-foreground">
+                <td colspan="6" class="px-3 py-1.5 text-muted-foreground">
                   No close
                   <Link :href="`/${company.slug}/fuel/daily-close?date=${r.date}`" class="ml-2 underline underline-offset-2">Close this day</Link>
                 </td>
@@ -192,6 +194,7 @@ const apply = () => {
                 </td>
                 <td class="px-3 py-1.5 text-right">{{ rateText(r.rates) }}</td>
                 <td class="px-3 py-1.5 text-right"><MoneyText :amount="r.sale_amount ?? 0" :currency="currency" :fraction-digits="0" /></td>
+                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.sale_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">{{ litres(r.dip) }}</td>
                 <td class="px-3 py-1.5 text-right" :class="Math.abs(r.variance ?? 0) >= 1 ? 'text-status-attention' : 'text-muted-foreground'">
                   <Hint side="left">
@@ -204,7 +207,7 @@ const apply = () => {
               </template>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
+              <td colspan="8" class="px-3 py-6 text-center text-muted-foreground">No closes.</td>
             </tr>
             <tr class="border-t-2 border-rule-default font-semibold">
               <td class="px-3 py-2">Total</td>
@@ -212,6 +215,7 @@ const apply = () => {
               <td class="px-3 py-2 text-right">{{ litres(totals.sold) }}</td>
               <td class="px-3 py-2 text-right">{{ totals.rate === null ? '—' : fmt.format(totals.rate) }}</td>
               <td class="px-3 py-2 text-right"><MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" /></td>
+              <td></td>
               <td class="px-3 py-2 text-right">
                 <Link v-if="lastClosed" :href="`/${company.slug}/fuel/daily-close/${lastClosed.close_id}`" class="underline-offset-2 hover:underline">{{ litres(totals.closing) }}</Link>
                 <template v-else>{{ litres(totals.closing) }}</template>

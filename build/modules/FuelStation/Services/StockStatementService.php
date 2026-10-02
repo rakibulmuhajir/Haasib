@@ -78,10 +78,11 @@ class StockStatementService
             if (! $t) {
                 if ($d->lte($today)) {
                     // No close, but a purchase that day still counts as bought.
-                    $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills];
                     $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
                     $tot['sold'] += $dayDirect;
                     $tot['sale_amount'] += $dayDirectAmount;
+                    $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills,
+                        'sale_amount' => $dayDirectAmount, 'sale_running' => $tot['sale_amount']];
                 }
 
                 continue;
@@ -160,6 +161,8 @@ class StockStatementService
             $tot['sold'] += $sold;
             $tot['sale_amount'] += $saleAmount;
             $tot['variance'] += $dip - $rowExpected;
+            // Sales to date, like a running balance on a bank statement.
+            $rows[array_key_last($rows)]['sale_running'] = $tot['sale_amount'];
             $prevDip = $dip;
             $first = false;
             $closing = $dip;

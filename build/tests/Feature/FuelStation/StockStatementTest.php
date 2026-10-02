@@ -135,6 +135,8 @@ test('opening comes from the close before the range; bought comes from the bills
         ->and($b['expected'])->toBe(4150.0)
         ->and($b['variance'])->toBe(0.0)
         ->and($b['sale_amount'])->toBe(324800.0)
+        ->and($a['sale_running'])->toBe(400000.0)
+        ->and($b['sale_running'])->toBe(724800.0)
         ->and($b['rates'])->toBe([406.0]);
 
     // The reversed close leaves 3 Sep as a visible gap.

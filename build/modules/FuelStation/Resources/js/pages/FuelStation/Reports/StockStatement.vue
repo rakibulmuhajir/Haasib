@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { ScrollText } from 'lucide-vue-next'
@@ -65,6 +66,10 @@ interface Totals {
   rate: number | null
   closing: number | null
   variance: number
+  opening_rate: number | null
+  opening_value: number | null
+  available: number | null
+  available_value: number | null
 }
 
 const props = defineProps<{
@@ -82,6 +87,17 @@ const endDate = ref(props.filters.end_date)
 
 const currency = computed(() => props.company.base_currency || 'PKR')
 const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
+// Off: opening stock sits on its own line and Available = opening + bought shows under the total.
+// On: the opening counts as the first purchase, so Bought and Purchases start from it -- what a
+// month's paperwork shows when last month's stock is carried in.
+const includeOpening = ref(false)
+const openingValue = computed(() => (includeOpening.value ? props.totals.opening_value ?? 0 : 0))
+const boughtTotal = computed(() => (includeOpening.value ? props.totals.available : props.totals.received))
+const purchaseTotal = computed(() => (includeOpening.value ? props.totals.available_value ?? props.totals.purchase_amount : props.totals.purchase_amount))
+const purchaseRateTotal = computed(() => {
+  const litres = boughtTotal.value ?? 0
+  return litres > 0 ? purchaseTotal.value / litres : null
+})
 const litres = (v: number | null | undefined) => (v === null || v === undefined ? '—' : fmt.format(v))
 const signed = (v: number) => `${v > 0 ? '+' : ''}${fmt.format(v)}`
 const rateText = (r: number[] | undefined) => (r && r.length ? r.map((x) => fmt.format(x)).join(' → ') : '—')
@@ -131,6 +147,10 @@ const apply = () => {
               <Input id="end_date" v-model="endDate" type="date" class="w-40" />
             </div>
             <Button @click="apply">Apply</Button>
+            <div class="flex items-center gap-2 pb-2">
+              <Checkbox id="include_opening" v-model="includeOpening" />
+              <Label for="include_opening" class="text-sm font-normal">Include opening stock</Label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -156,7 +176,13 @@ const apply = () => {
           <tbody>
             <tr class="border-t border-rule-default text-muted-foreground">
               <td class="px-3 py-1.5">Opening</td>
-              <td colspan="7"></td>
+              <template v-if="includeOpening">
+                <td class="px-3 py-1.5 text-right text-foreground">{{ litres(totals.opening) }}</td>
+                <td class="px-3 py-1.5 text-right">{{ totals.opening_rate ? fmt.format(totals.opening_rate) : '' }}</td>
+                <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.opening_value" :amount="totals.opening_value" :currency="currency" :fraction-digits="0" /></td>
+                <td colspan="4"></td>
+              </template>
+              <td v-else colspan="7"></td>
               <td class="px-3 py-1.5 text-right">{{ litres(totals.opening) }}</td>
               <td></td>
             </tr>
@@ -165,7 +191,7 @@ const apply = () => {
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
                 <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
                 <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
-                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.purchase_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
+                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
                 <td colspan="6" class="px-3 py-1.5 text-muted-foreground">
                   No close
                   <Link :href="`/${company.slug}/fuel/daily-close?date=${r.date}`" class="ml-2 underline underline-offset-2">Close this day</Link>
@@ -188,7 +214,7 @@ const apply = () => {
                   <template v-else>{{ litres(r.received) }}</template>
                 </td>
                 <td class="px-3 py-1.5 text-right">{{ r.purchase_rate ? fmt.format(r.purchase_rate) : '' }}</td>
-                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="r.purchase_running ?? 0" :currency="currency" :fraction-digits="0" /></td>
+                <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.sold_direct" side="left">
                     {{ litres(r.sold) }}
@@ -222,9 +248,9 @@ const apply = () => {
             </tr>
             <tr class="border-t-2 border-rule-default font-semibold">
               <td class="px-3 py-2">Total</td>
-              <td class="px-3 py-2 text-right">{{ litres(totals.received) }}</td>
-              <td class="px-3 py-2 text-right">{{ totals.purchase_rate === null ? '—' : fmt.format(totals.purchase_rate) }}</td>
-              <td class="px-3 py-2 text-right"><MoneyText :amount="totals.purchase_amount" :currency="currency" :fraction-digits="0" /></td>
+              <td class="px-3 py-2 text-right">{{ litres(boughtTotal) }}</td>
+              <td class="px-3 py-2 text-right">{{ purchaseRateTotal === null ? '—' : fmt.format(purchaseRateTotal) }}</td>
+              <td class="px-3 py-2 text-right"><MoneyText :amount="purchaseTotal" :currency="currency" :fraction-digits="0" /></td>
               <td class="px-3 py-2 text-right">{{ litres(totals.sold) }}</td>
               <td class="px-3 py-2 text-right">{{ totals.rate === null ? '—' : fmt.format(totals.rate) }}</td>
               <td class="px-3 py-2 text-right"><MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" /></td>
@@ -234,6 +260,19 @@ const apply = () => {
                 <template v-else>{{ litres(totals.closing) }}</template>
               </td>
               <td class="px-3 py-2 text-right" :class="Math.abs(totals.variance) >= 1 ? 'text-status-attention' : ''">{{ signed(totals.variance) }}</td>
+            </tr>
+            <!-- Opening + bought: what there was to sell. Shown when the opening is not already in the total. -->
+            <tr v-if="!includeOpening && totals.available !== null" class="text-muted-foreground">
+              <td class="px-3 py-1.5">
+                <Hint>
+                  Available
+                  <template #content>Opening stock + bought.</template>
+                </Hint>
+              </td>
+              <td class="px-3 py-1.5 text-right">{{ litres(totals.available) }}</td>
+              <td class="px-3 py-1.5 text-right">{{ totals.available_value && totals.available ? fmt.format(totals.available_value / totals.available) : '' }}</td>
+              <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.available_value" :amount="totals.available_value" :currency="currency" :fraction-digits="0" /></td>
+              <td colspan="6"></td>
             </tr>
           </tbody>
         </table>

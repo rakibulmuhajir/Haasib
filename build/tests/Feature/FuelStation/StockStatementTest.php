@@ -144,6 +144,9 @@ test('opening comes from the close before the range; bought comes from the bills
 
     expect($r['totals']['opening'])->toBe(5000.0)
         ->and($r['totals']['received'])->toBe(1300.0)
+        // Opening + bought, never folded into bought: this opening was bought last month.
+        ->and($r['totals']['available'])->toBe(6300.0)
+        ->and($r['totals']['opening_value'])->toBeNull()
         ->and($r['totals']['sold'])->toBe(2100.0)
         ->and($r['totals']['sale_amount'])->toBe(724800.0)
         ->and($r['totals']['rate'])->toBe(345.14)

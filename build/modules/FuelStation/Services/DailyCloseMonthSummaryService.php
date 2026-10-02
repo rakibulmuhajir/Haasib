@@ -388,6 +388,8 @@ class DailyCloseMonthSummaryService
                 'sale_amount' => null,
                 'purchase_rate' => null,
                 'purchase_amount' => null,
+                'opening_rate' => null,
+                'opening_value' => null,
                 'days' => [],
             ];
         }
@@ -408,6 +410,8 @@ class DailyCloseMonthSummaryService
             $row['sale_amount'] = $totals['sale_amount'];
             $row['purchase_rate'] = $totals['purchase_rate'];
             $row['purchase_amount'] = $totals['purchase_amount'];
+            $row['opening_rate'] = $totals['opening_rate'];
+            $row['opening_value'] = $totals['opening_value'];
             // The product's days, so the row opens into its statement.
             $row['days'] = $productStatement['rows'];
         }

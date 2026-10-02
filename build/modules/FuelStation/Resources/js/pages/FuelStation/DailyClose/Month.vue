@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
+import { Checkbox } from '@/components/ui/checkbox'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
@@ -43,6 +44,8 @@ interface TankRow {
   sale_amount: number | null
   purchase_rate: number | null
   purchase_amount: number | null
+  opening_rate: number | null
+  opening_value: number | null
   days: Array<{ date: string; close_id?: string; received?: number; purchase_rate?: number | null; purchase_running?: number; sold?: number; rates?: number[]; sale_amount?: number; sale_running?: number; dip?: number }>
 }
 
@@ -85,6 +88,16 @@ const statementUrl = (itemId: string) =>
 // One line's source list open at a time: key is section + index.
 const openLine = ref<string | null>(null)
 const openTank = ref<string | null>(null)
+// Carry last month's stock into this month's purchases: the opening moves into Bought (at its
+// cost) and the Opening column empties, so each row still reads opening + bought − sold.
+const includeOpening = ref(false)
+const tankBought = (t: TankRow) => (includeOpening.value ? (t.opening ?? 0) + (t.delivered ?? 0) : t.delivered)
+const tankPurchases = (t: TankRow) => (includeOpening.value ? (t.opening_value ?? 0) + (t.purchase_amount ?? 0) : t.purchase_amount)
+const tankPurchaseRate = (t: TankRow) => {
+  const l = tankBought(t) ?? 0
+  const amount = tankPurchases(t) ?? 0
+  return l > 0 && amount > 0 ? amount / l : null
+}
 const toggleLine = (key: string) => { openLine.value = openLine.value === key ? null : key }
 // Detail for a grouped line: what it is, plus how many days it spans when more than one.
 const detailOf = (l: Line) => [l.detail, (l.days ?? 0) > 1 ? `${l.days} days` : null].filter(Boolean).join(' · ')
@@ -239,7 +252,10 @@ const varianceDays = computed(() =>
         <section class="rounded-md border border-rule-default p-4 lg:col-span-2">
           <h3 class="mb-3 flex items-baseline justify-between gap-3 font-semibold">
             Tanks
-            <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${monthStart}&end_date=${monthEnd}`" class="text-xs font-normal text-muted-foreground underline underline-offset-2">Gains &amp; losses</Link>
+            <span class="flex items-baseline gap-4 text-xs font-normal text-muted-foreground">
+              <label class="flex items-center gap-1.5"><Checkbox v-model="includeOpening" /> Include opening stock</label>
+              <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${monthStart}&end_date=${monthEnd}`" class="underline underline-offset-2">Gains &amp; losses</Link>
+            </span>
           </h3>
           <div class="overflow-x-auto">
             <table class="w-full text-sm tabular-nums">
@@ -266,10 +282,10 @@ const varianceDays = computed(() =>
                     <template v-else>{{ t.name }}</template>
                     <Link v-if="t.item_id" :href="statementUrl(t.item_id)" class="ml-1 text-xs text-muted-foreground underline underline-offset-2">Statement</Link>
                   </td>
-                  <td class="py-1 text-right">{{ dash(t.opening) }}</td>
-                  <td class="py-1 text-right">{{ dash(t.delivered) }}</td>
-                  <td class="py-1 text-right">{{ t.purchase_rate ? rate(t.purchase_rate) : '' }}</td>
-                  <td class="py-1 text-right"><MoneyText v-if="t.purchase_amount" :amount="t.purchase_amount" :currency="currency" :fraction-digits="0" /></td>
+                  <td class="py-1 text-right">{{ includeOpening ? '—' : dash(t.opening) }}</td>
+                  <td class="py-1 text-right">{{ dash(tankBought(t)) }}</td>
+                  <td class="py-1 text-right">{{ tankPurchaseRate(t) ? rate(tankPurchaseRate(t)!) : '' }}</td>
+                  <td class="py-1 text-right"><MoneyText v-if="tankPurchases(t)" :amount="tankPurchases(t)!" :currency="currency" :fraction-digits="0" /></td>
                   <td class="py-1 text-right">{{ dash(t.sold) }}</td>
                   <td class="py-1 text-right">{{ t.rate ? rate(t.rate) : '' }}</td>
                   <td class="py-1 text-right"><MoneyText v-if="t.sale_amount" :amount="t.sale_amount" :currency="currency" :fraction-digits="0" /></td>

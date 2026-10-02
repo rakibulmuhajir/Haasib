@@ -25,7 +25,7 @@ class StockStatementService
         $result = [
             'item' => ['id' => $itemId, 'name' => $item->name ?? ''],
             'rows' => [],
-            'totals' => ['opening' => null, 'received' => null, 'purchase_amount' => 0.0, 'purchase_rate' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'rate' => null, 'closing' => null, 'variance' => 0.0],
+            'totals' => ['opening' => null, 'received' => null, 'purchase_amount' => 0.0, 'purchase_rate' => null, 'sold' => 0.0, 'sale_amount' => 0.0, 'rate' => null, 'closing' => null, 'variance' => 0.0, 'opening_rate' => null, 'opening_value' => null, 'available' => null, 'available_value' => null],
             'products' => $products,
         ];
         if (! $item) {
@@ -179,6 +179,12 @@ class StockStatementService
         $result['rows'] = $rows;
         $result['totals'] = [
             'opening' => $openingTotal,
+            // Opening stock at cost, and opening + bought: what was there to sell. Not folded into
+            // "bought" -- this month's opening is last month's closing, already bought then.
+            'opening_rate' => $openingRate = $this->openingRate($companyId, $itemId, $startDate),
+            'opening_value' => $openingTotal !== null && $openingRate !== null ? round($openingTotal * $openingRate, 2) : null,
+            'available' => $openingTotal === null ? null : $openingTotal + ($tot['received'] ?? 0.0),
+            'available_value' => $openingTotal !== null && $openingRate !== null ? round($openingTotal * $openingRate, 2) + $tot['purchase_amount'] : null,
             'received' => $tot['received'],
             'sold' => $tot['sold'],
             'sale_amount' => $tot['sale_amount'],
@@ -190,6 +196,40 @@ class StockStatementService
         ];
 
         return $result;
+    }
+
+    /**
+     * What a litre of the opening stock cost: the last purchase before the range (weighted over
+     * that bill date), else the opening-stock entry's own cost. Null when neither carries a cost.
+     */
+    private function openingRate(string $companyId, string $itemId, string $start): ?float
+    {
+        $bills = fn () => DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
+            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->where('l.item_id', $itemId)
+            ->whereNotNull('l.warehouse_id')
+            ->where('b.bill_date', '<', $start);
+        $lastDate = $bills()->max('b.bill_date');
+        if ($lastDate) {
+            $row = $bills()->whereDate('b.bill_date', $lastDate)->selectRaw('SUM(l.total) as amount, SUM(l.quantity) as qty')->first();
+            if ((float) $row->qty > 0) {
+                return round((float) $row->amount / (float) $row->qty, 4);
+            }
+        }
+
+        $opening = DB::table('inv.stock_movements')
+            ->where('company_id', $companyId)
+            ->where('item_id', $itemId)
+            ->where('movement_type', 'opening')
+            ->where('movement_date', '<', $start)
+            ->where('unit_cost', '>', 0)
+            ->selectRaw('SUM(total_cost) as amount, SUM(quantity) as qty')
+            ->first();
+
+        return $opening && (float) $opening->qty > 0 ? round((float) $opening->amount / (float) $opening->qty, 4) : null;
     }
 
     private function liveCloses(string $companyId)

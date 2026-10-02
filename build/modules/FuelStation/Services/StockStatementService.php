@@ -55,6 +55,11 @@ class StockStatementService
         }
         $tankIds = array_values(array_unique($tankIds));
 
+        // What was bought, from the bills (by bill date) -- including litres sold straight off the
+        // tanker, which never enter the tank and so never show in a close's dip arithmetic.
+        $bought = $this->purchases($companyId, $itemId, $startDate, $endDate);
+        $directSales = $this->directSales($companyId, $itemId, $startDate, $endDate, $bought);
+
         $today = now()->startOfDay();
         $rows = [];
         $prevDip = null;
@@ -66,9 +71,17 @@ class StockStatementService
         for ($d = Carbon::parse($startDate)->startOfDay(), $e = Carbon::parse($endDate)->startOfDay(); $d->lte($e); $d->addDay()) {
             $date = $d->toDateString();
             $t = $byDate[$date] ?? null;
+            $dayBills = $bought[$date] ?? [];
+            $dayBought = array_sum(array_column($dayBills, 'quantity'));
+            $dayDirect = array_sum(array_column($dayBills, 'direct'));
+            $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
             if (! $t) {
                 if ($d->lte($today)) {
-                    $rows[] = ['date' => $date, 'missing' => true];
+                    // No close, but a purchase that day still counts as bought.
+                    $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills];
+                    $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
+                    $tot['sold'] += $dayDirect;
+                    $tot['sale_amount'] += $dayDirectAmount;
                 }
 
                 continue;
@@ -116,29 +129,37 @@ class StockStatementService
                 $openingTotal = $prevDip;
             }
             $opening = $prevDip;
-            $received = $opening === null ? null : $expected - $opening + $sold;
+            $soldPumps = $sold;
+            $sold += $dayDirect;
+            $saleAmount += $dayDirectAmount;
+            // The row reads across: opening + bought − sold = expected; the dip against it is the variance.
+            $rowExpected = $opening === null ? $expected : $opening + $dayBought - $sold;
 
             $rows[] = [
                 'date' => $date,
                 'close_id' => $t->id,
                 'transaction_number' => $t->transaction_number,
                 'opening' => $opening,
-                'received' => $received,
+                'received' => $dayBought,
+                'received_direct' => $dayDirect,
                 'sold' => $sold,
+                'sold_pumps' => $soldPumps,
+                'sold_direct' => $dayDirect,
                 'rates' => $rates,
                 'sale_amount' => $saleAmount,
-                'expected' => $expected,
+                'direct_amount' => $dayDirectAmount,
+                'direct_invoices' => $directSales[$date]['invoices'] ?? [],
+                'expected' => $rowExpected,
+                'close_expected' => $expected,
                 'dip' => $dip,
-                'variance' => $dip - $expected,
-                'bills' => $this->bills($companyId, $tankIds, $date),
+                'variance' => $dip - $rowExpected,
+                'bills' => $dayBills,
             ];
 
-            if ($received !== null) {
-                $tot['received'] = ($tot['received'] ?? 0.0) + $received;
-            }
+            $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
             $tot['sold'] += $sold;
             $tot['sale_amount'] += $saleAmount;
-            $tot['variance'] += $dip - $expected;
+            $tot['variance'] += $dip - $rowExpected;
             $prevDip = $dip;
             $first = false;
             $closing = $dip;
@@ -205,26 +226,71 @@ class StockStatementService
         return $found ? array_sum($found) : null;
     }
 
-    /** Receipts into the product's tanks on one day, one entry per bill. */
-    private function bills(string $companyId, array $tankIds, string $date): array
+    /**
+     * Litres bought per bill date: every line for the product on a bill that counts (not draft,
+     * void or cancelled), with how much of it was sold straight off the tanker. Only lines that
+     * name a tank or store: a bill split between suppliers keeps its own lines, and its share
+     * bills carry money only.
+     *
+     * @return array<string, array<int, array{id:string,bill_number:string,quantity:float,direct:float}>>
+     */
+    private function purchases(string $companyId, string $itemId, string $start, string $end): array
     {
-        if (! $tankIds) {
-            return [];
+        $out = [];
+        $lines = DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
+            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->where('l.item_id', $itemId)
+            ->whereNotNull('l.warehouse_id')
+            ->whereBetween('b.bill_date', [$start, $end])
+            ->orderBy('b.bill_number')
+            ->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.direct_quantity']);
+        foreach ($lines as $l) {
+            $date = Carbon::parse($l->bill_date)->toDateString();
+            $out[$date][$l->id] ??= ['id' => $l->id, 'bill_number' => $l->bill_number, 'quantity' => 0.0, 'direct' => 0.0];
+            $out[$date][$l->id]['quantity'] += (float) $l->quantity;
+            $out[$date][$l->id]['direct'] += (float) $l->direct_quantity;
         }
 
-        return DB::table('inv.stock_movements as sm')
-            ->leftJoin('acct.bills as b', 'b.id', '=', 'sm.reference_id')
-            ->where('sm.company_id', $companyId)
-            ->where('sm.movement_type', 'purchase')
-            ->whereIn('sm.warehouse_id', $tankIds)
-            ->whereDate('sm.movement_date', $date)
-            ->where('sm.reference_type', 'acct.bills')
-            ->groupBy('sm.reference_id', 'b.bill_number')
-            ->selectRaw('sm.reference_id as id, b.bill_number, SUM(sm.quantity) as quantity')
-            ->orderBy('b.bill_number')
-            ->get()
-            ->map(fn ($r) => ['id' => $r->id, 'bill_number' => $r->bill_number, 'quantity' => (float) $r->quantity])
-            ->all();
+        return array_map('array_values', $out);
+    }
+
+    /**
+     * What the litres sold off the tanker were invoiced for, per day: direct-delivery invoice
+     * lines for the product. Lines from before invoices carried an item are matched by date and
+     * quantity to that day's direct litres on the product's bills.
+     *
+     * @param  array<string, array<int, array{direct:float}>>  $bought
+     * @return array<string, array{amount:float, invoices:array}>
+     */
+    private function directSales(string $companyId, string $itemId, string $start, string $end, array $bought): array
+    {
+        $out = [];
+        $lines = DB::table('acct.invoice_line_items as l')
+            ->join('acct.invoices as i', 'i.id', '=', 'l.invoice_id')
+            ->where('i.company_id', $companyId)
+            ->where('i.is_direct_delivery', true)
+            ->whereNull('i.deleted_at')->whereNull('l.deleted_at')
+            ->whereNotIn('i.status', ['draft', 'void', 'cancelled'])
+            ->whereBetween('i.invoice_date', [$start, $end])
+            ->where(fn ($q) => $q->where('l.item_id', $itemId)->orWhereNull('l.item_id'))
+            ->get(['i.id', 'i.invoice_number', 'i.invoice_date', 'l.item_id', 'l.quantity', 'l.total']);
+        foreach ($lines as $l) {
+            $date = Carbon::parse($l->invoice_date)->toDateString();
+            if ($l->item_id === null) {
+                $directs = array_map(fn ($b) => round($b['direct'], 3), $bought[$date] ?? []);
+                if (! in_array(round((float) $l->quantity, 3), $directs, true)) {
+                    continue;
+                }
+            }
+            $out[$date] ??= ['amount' => 0.0, 'invoices' => []];
+            $out[$date]['amount'] += (float) $l->total;
+            $out[$date]['invoices'][] = ['id' => $l->id, 'invoice_number' => $l->invoice_number, 'quantity' => (float) $l->quantity, 'amount' => (float) $l->total];
+        }
+
+        return $out;
     }
 
     /** Items that own at least one tank. */

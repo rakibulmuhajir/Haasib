@@ -222,7 +222,7 @@ const varianceDays = computed(() =>
                 <tr>
                   <th class="pb-1 text-left font-normal">Tank</th>
                   <th class="pb-1 text-right font-normal">Opening</th>
-                  <th class="pb-1 text-right font-normal">+ Received</th>
+                  <th class="pb-1 text-right font-normal">+ Bought</th>
                   <th class="pb-1 text-right font-normal">− Sold</th>
                   <th class="pb-1 text-right font-normal">= Expected</th>
                   <th class="pb-1 text-right font-normal">Closing dip</th>

@@ -349,16 +349,23 @@ class DailyCloseMonthSummaryService
             }
         }
 
-        // What actually went into each tank, from the stock ledger -- not what was billed: a bill's
-        // litres can be sold straight off the tanker, or not yet received.
-        $delivered = $tanks ? DB::table('inv.stock_movements')
-            ->where('company_id', $companyId)
-            ->where('movement_type', 'purchase')
-            ->whereIn('warehouse_id', array_keys($tanks))
-            ->whereBetween('movement_date', [$start->toDateString(), $end->toDateString()])
-            ->groupBy('warehouse_id')
-            ->selectRaw('warehouse_id as tank_id, SUM(quantity) as qty')
-            ->pluck('qty', 'tank_id')->all() : [];
+        // Bought, from the bills (by bill date) -- the same rule as the stock statement. Litres sold
+        // straight off the tanker are bought and sold the same day: they go in both columns, so
+        // the row still lands on the closing dip, and the month's purchases match the paperwork.
+        $billed = $tanks ? DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)
+            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
+            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->whereIn('l.warehouse_id', array_keys($tanks))
+            ->whereBetween('b.bill_date', [$start->toDateString(), $end->toDateString()])
+            ->groupBy('l.warehouse_id')
+            ->selectRaw('l.warehouse_id as tank_id, SUM(l.quantity) as qty, SUM(l.direct_quantity) as direct')
+            ->get()->keyBy('tank_id') : collect();
+        $delivered = $billed->map(fn ($b) => (float) $b->qty)->all();
+        foreach ($billed as $id => $b) {
+            $sold[$id] = ($sold[$id] ?? 0.0) + (float) $b->direct;
+        }
 
         $tankRows = [];
         foreach ($tanks as $id => $t) {

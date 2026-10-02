@@ -7,9 +7,10 @@ use App\Modules\FuelStation\Services\StockStatementService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The stock statement reads posted closes only (not soft-deleted, not reversed) and derives
- * received as expected - opening + sold. Metadata is written by hand so every figure can be
- * checked against an input.
+ * The stock statement reads posted closes only (not soft-deleted, not reversed). Bought comes
+ * from the bills by bill date, including litres sold straight off the tanker, which are counted
+ * as sold too; the balance is the dip, and the variance is dip - (opening + bought - sold).
+ * Metadata is written by hand so every figure can be checked against an input.
  */
 function statementFixture(): array
 {
@@ -60,13 +61,42 @@ function statementClose(Company $company, string $itemId, string $tankId, string
     ]);
 }
 
-test('opening comes from the close before the range; received is expected - opening + sold', function () {
+function statementBill(Company $company, string $itemId, string $tankId, string $date, float $quantity, float $direct = 0): string
+{
+    $vendorId = DB::table('acct.vendors')->where('company_id', $company->id)->value('id');
+    if (! $vendorId) {
+        $vendorId = (string) str()->uuid();
+        DB::table('acct.vendors')->insert(['id' => $vendorId, 'company_id' => $company->id, 'vendor_number' => 'V-'.str()->random(5), 'name' => 'Supplier', 'base_currency' => 'PKR']);
+    }
+    $billId = (string) str()->uuid();
+    DB::table('acct.bills')->insert([
+        'id' => $billId, 'company_id' => $company->id, 'vendor_id' => $vendorId, 'bill_number' => 'BILL-'.str()->random(5),
+        'bill_date' => $date, 'due_date' => $date, 'status' => 'received', 'currency' => 'PKR', 'base_currency' => 'PKR',
+        'subtotal' => $quantity * 380, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => $quantity * 380,
+        'paid_amount' => 0, 'balance' => $quantity * 380, 'base_amount' => $quantity * 380, 'payment_terms' => 30,
+    ]);
+    DB::table('acct.bill_line_items')->insert([
+        'id' => (string) str()->uuid(), 'company_id' => $company->id, 'bill_id' => $billId, 'line_number' => 1,
+        'description' => 'Petrol', 'quantity' => $quantity, 'unit_price' => 380, 'tax_rate' => 0, 'discount_rate' => 0,
+        'line_total' => $quantity * 380, 'tax_amount' => 0, 'total' => $quantity * 380,
+        'item_id' => $itemId, 'warehouse_id' => $tankId, 'direct_quantity' => $direct,
+    ]);
+
+    return $billId;
+}
+
+test('opening comes from the close before the range; bought comes from the bills', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
     [$company, $itemId, $tankId] = statementFixture();
 
     statementClose($company, $itemId, $tankId, '2026-08-31', 5000, 5000, 0, 400);
-    statementClose($company, $itemId, $tankId, '2026-09-01', 5000, 4950, 1000, 400);   // 1000 received
+    statementClose($company, $itemId, $tankId, '2026-09-01', 5000, 4950, 1000, 400);   // 1000 bought into the tank
     statementClose($company, $itemId, $tankId, '2026-09-02', 4150, 4150, 800, 406);
+    $bill = statementBill($company, $itemId, $tankId, '2026-09-01', 1000);
+    // 2 Sep: 300 bought and sold straight off the tanker -- in both columns, the tank untouched.
+    statementBill($company, $itemId, $tankId, '2026-09-02', 300, 300);
+    // A draft bill is not a purchase.
+    DB::table('acct.bills')->where('id', statementBill($company, $itemId, $tankId, '2026-09-02', 9999))->update(['status' => 'draft']);
 
     // Soft-deleted older version of 1 Sep, and a reversed close on 3 Sep: neither counts.
     statementClose($company, $itemId, $tankId, '2026-09-01', 1, 1, 9999, 1, 'old')->delete();
@@ -91,11 +121,19 @@ test('opening comes from the close before the range; received is expected - open
         ->and($a['variance'])->toBe(-50.0)
         ->and($a['sale_amount'])->toBe(400000.0)
         ->and($a['rates'])->toBe([400.0])
-        ->and($a['bills'])->toBe([]);
+        ->and($a['bills'])->toHaveCount(1)
+        ->and($a['bills'][0]['id'])->toBe($bill)
+        ->and($a['bills'][0]['quantity'])->toBe(1000.0);
 
     // The next row opens with the previous row's dip.
     expect($b['opening'])->toBe(4950.0)
-        ->and($b['received'])->toBe(0.0)
+        ->and($b['received'])->toBe(300.0)
+        ->and($b['received_direct'])->toBe(300.0)
+        ->and($b['sold'])->toBe(1100.0)
+        ->and($b['sold_pumps'])->toBe(800.0)
+        ->and($b['sold_direct'])->toBe(300.0)
+        ->and($b['expected'])->toBe(4150.0)
+        ->and($b['variance'])->toBe(0.0)
         ->and($b['sale_amount'])->toBe(324800.0)
         ->and($b['rates'])->toBe([406.0]);
 
@@ -103,10 +141,10 @@ test('opening comes from the close before the range; received is expected - open
     expect($c)->toBe(['date' => '2026-09-03', 'missing' => true]);
 
     expect($r['totals']['opening'])->toBe(5000.0)
-        ->and($r['totals']['received'])->toBe(1000.0)
-        ->and($r['totals']['sold'])->toBe(1800.0)
+        ->and($r['totals']['received'])->toBe(1300.0)
+        ->and($r['totals']['sold'])->toBe(2100.0)
         ->and($r['totals']['sale_amount'])->toBe(724800.0)
-        ->and($r['totals']['rate'])->toBe(402.67)
+        ->and($r['totals']['rate'])->toBe(345.14)
         ->and($r['totals']['closing'])->toBe(4150.0)
         ->and($r['totals']['variance'])->toBe(-50.0);
 });
@@ -128,7 +166,7 @@ test('with no earlier close the first row opens on the opening stock', function 
         ->and($r['totals']['opening'])->toBe(6000.0);
 });
 
-test('with no earlier close and no opening stock, opening and received are unknown', function () {
+test('with no earlier close and no opening stock, the opening is unknown', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
     [$company, $itemId, $tankId] = statementFixture();
     statementClose($company, $itemId, $tankId, '2026-09-01', 5000, 5000, 1000, 400);
@@ -136,8 +174,8 @@ test('with no earlier close and no opening stock, opening and received are unkno
     $r = app(StockStatementService::class)->run($company->id, $itemId, '2026-09-01', '2026-09-01');
 
     expect($r['rows'][0]['opening'])->toBeNull()
-        ->and($r['rows'][0]['received'])->toBeNull()
+        ->and($r['rows'][0]['received'])->toBe(0.0)
         ->and($r['totals']['opening'])->toBeNull()
-        ->and($r['totals']['received'])->toBeNull()
+        ->and($r['totals']['received'])->toBe(0.0)
         ->and($r['totals']['sold'])->toBe(1000.0);
 });

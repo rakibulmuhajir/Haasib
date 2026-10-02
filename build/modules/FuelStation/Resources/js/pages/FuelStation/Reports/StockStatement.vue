@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * One product's litres over a date range, read like a bank statement: opening balance, one line
- * per posted Daily Close (received in, sold out, rate, sale amount, balance = the dip), totals.
+ * per posted Daily Close (bought in, sold out, rate, sale amount, balance = the dip), totals.
  */
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
@@ -20,6 +20,14 @@ interface Bill {
   id: string
   bill_number: string | null
   quantity: number
+  direct?: number
+}
+
+interface DirectInvoice {
+  id: string
+  invoice_number: string
+  quantity: number
+  amount: number
 }
 
 interface Row {
@@ -30,6 +38,11 @@ interface Row {
   opening?: number | null
   received?: number | null
   sold?: number
+  received_direct?: number
+  sold_pumps?: number
+  sold_direct?: number
+  direct_amount?: number
+  direct_invoices?: DirectInvoice[]
   rates?: number[]
   sale_amount?: number
   expected?: number
@@ -123,7 +136,7 @@ const apply = () => {
           <thead class="text-xs text-muted-foreground">
             <tr>
               <th class="px-3 py-2 text-left font-normal">Date</th>
-              <th class="px-3 py-2 text-right font-normal">Received (in)</th>
+              <th class="px-3 py-2 text-right font-normal">Bought (in)</th>
               <th class="px-3 py-2 text-right font-normal">Sold (out)</th>
               <th class="px-3 py-2 text-right font-normal">Rate</th>
               <th class="px-3 py-2 text-right font-normal">Sale amount</th>
@@ -141,7 +154,8 @@ const apply = () => {
             <tr v-for="r in rows" :key="r.date" class="border-t border-rule-default">
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
-                <td colspan="6" class="px-3 py-1.5 text-muted-foreground">
+                <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
+                <td colspan="5" class="px-3 py-1.5 text-muted-foreground">
                   No close
                   <Link :href="`/${company.slug}/fuel/daily-close?date=${r.date}`" class="ml-2 underline underline-offset-2">Close this day</Link>
                 </td>
@@ -156,13 +170,26 @@ const apply = () => {
                     <template #content>
                       <div v-for="b in r.bills" :key="b.id" class="flex justify-between gap-4">
                         <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }}</Link>
-                        <span>{{ litres(b.quantity) }} L</span>
+                        <span>{{ litres(b.quantity) }} L<template v-if="b.direct"> · {{ litres(b.direct) }} sold off tanker</template></span>
                       </div>
                     </template>
                   </Hint>
                   <template v-else>{{ litres(r.received) }}</template>
                 </td>
-                <td class="px-3 py-1.5 text-right">{{ litres(r.sold) }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  <Hint v-if="r.sold_direct" side="left">
+                    {{ litres(r.sold) }}
+                    <template #content>
+                      <div class="flex justify-between gap-4"><span>Pumps</span><span>{{ litres(r.sold_pumps ?? 0) }} L</span></div>
+                      <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct) }} L</span></div>
+                      <div v-for="inv in r.direct_invoices ?? []" :key="inv.id" class="flex justify-between gap-4 pl-2">
+                        <Link :href="`/${company.slug}/invoices/${inv.id}`" class="underline underline-offset-2">{{ inv.invoice_number }}</Link>
+                        <MoneyText :amount="inv.amount" :currency="currency" :fraction-digits="0" />
+                      </div>
+                    </template>
+                  </Hint>
+                  <template v-else>{{ litres(r.sold) }}</template>
+                </td>
                 <td class="px-3 py-1.5 text-right">{{ rateText(r.rates) }}</td>
                 <td class="px-3 py-1.5 text-right"><MoneyText :amount="r.sale_amount ?? 0" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">{{ litres(r.dip) }}</td>
@@ -170,7 +197,7 @@ const apply = () => {
                   <Hint side="left">
                     {{ signed(r.variance ?? 0) }}
                     <template #content>
-                      Opening {{ litres(r.opening) }} + received {{ litres(r.received) }} − sold {{ litres(r.sold) }} = expected {{ litres(r.expected) }}; dip {{ litres(r.dip) }}
+                      Opening {{ litres(r.opening) }} + bought {{ litres(r.received) }} − sold {{ litres(r.sold) }} = expected {{ litres(r.expected) }}; dip {{ litres(r.dip) }}
                     </template>
                   </Hint>
                 </td>

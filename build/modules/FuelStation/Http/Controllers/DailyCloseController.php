@@ -930,10 +930,20 @@ class DailyCloseController extends Controller
                 return back()->with('success', 'Daily Close parked. Resume it by selecting this business date.');
             }
 
+            // The month's last day closed: draft its payroll (never posted) for review.
+            $payrollNote = '';
+            try {
+                if (app(\App\Modules\Payroll\Services\MonthEndPayrollDraft::class)->prepareAfterClose($company, (string) $validated['date']) > 0) {
+                    $payrollNote = ' '.\Illuminate\Support\Carbon::parse($validated['date'])->format('F').' payroll drafted for review.';
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
 
             return redirect()
                 ->route('fuel.daily-close.index', ['company' => $company->slug])
-                ->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number']);
+                ->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number'] . $payrollNote);
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
@@ -1196,6 +1206,7 @@ class DailyCloseController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'summary' => app(\App\Modules\FuelStation\Services\DailyCloseMonthSummaryService::class)->run($company->id, $month),
+            'payrollReminder' => $this->payrollReminder($company),
         ]);
     }
 
@@ -1240,6 +1251,7 @@ class DailyCloseController extends Controller
             // Counted without the window, so the page can say "none in this range" rather
             // than "none at all" when the two are not the same thing.
             'totalCloses' => $this->dailyCloseService->countCloses($company->id),
+            'payrollReminder' => $this->payrollReminder($company),
             'parkedCloses' => DB::table('fuel.daily_close_drafts')->where('company_id', $company->id)->orderByDesc('business_date')->get(['business_date', 'updated_at']),
             'permissions' => [
                 'canLock' => $canLock,
@@ -1247,6 +1259,18 @@ class DailyCloseController extends Controller
                 'canEditDay' => $canEditDay,
             ],
         ]);
+    }
+
+    /** The month whose payroll is waiting for review, if any. Never breaks the page. */
+    private function payrollReminder($company): ?array
+    {
+        try {
+            return app(\App\Modules\Payroll\Services\MonthEndPayrollDraft::class)->reminder($company);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**

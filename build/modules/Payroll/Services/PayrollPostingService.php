@@ -30,7 +30,7 @@ class PayrollPostingService
     {
         $this->setRlsContext($payslip->company_id);
 
-        $payslip->loadMissing(['lines', 'employee']);
+        $payslip->loadMissing(['lines', 'employee', 'payrollPeriod']);
 
         if ($payslip->status !== 'draft') {
             return;
@@ -59,8 +59,11 @@ class PayrollPostingService
             return;
         }
 
+        // Only advances given by the end of this payslip's month: approving August late must not
+        // take September's advances out of August's salary.
         $advances = $payslip->employee
             ->outstandingAdvances()
+            ->when($payslip->payrollPeriod?->period_end, fn ($q, $end) => $q->whereDate('advance_date', '<=', $end))
             ->orderBy('advance_date')
             ->orderBy('created_at')
             ->get();

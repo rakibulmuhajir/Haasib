@@ -69,6 +69,7 @@ const props = defineProps<{
   /** Every close on record, ignoring the window, so the empty state can tell the difference. */
   totalCloses?: number
   parkedCloses?: Array<{ business_date: string; updated_at: string }>
+  payrollReminder?: { month: string; label: string; drafts: number } | null
   permissions: {
     canLock: boolean
     canUnlock: boolean
@@ -247,6 +248,14 @@ const confirmEditDay = () => {
     :breadcrumbs="breadcrumbs"
   >
     <DailyCloseNav :company="company" history />
+    <!-- The month's payroll, drafted when its last day closed, waiting for review and Approve. -->
+    <div v-if="payrollReminder" class="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-attention/40 bg-status-attention/5 px-4 py-3 text-sm">
+      <span>
+        <span class="font-medium">{{ payrollReminder.label }} payroll</span>
+        <span class="text-muted-foreground"> · {{ payrollReminder.drafts ? `${payrollReminder.drafts} payslips to review` : 'not run' }}</span>
+      </span>
+      <Link :href="`/${company.slug}/payroll?month=${payrollReminder.month}`" class="font-medium underline underline-offset-2">Review payroll</Link>
+    </div>
     <div v-if="parkedCloses?.length" class="my-4 rounded-lg border p-4">
       <h2 class="font-semibold">Parked Daily Closes</h2>
       <Link v-for="draft in parkedCloses" :key="draft.business_date" :href="`/${company.slug}/fuel/daily-close?date=${draft.business_date}`" class="mr-4 inline-block py-2 underline">Resume {{ draft.business_date }}</Link>

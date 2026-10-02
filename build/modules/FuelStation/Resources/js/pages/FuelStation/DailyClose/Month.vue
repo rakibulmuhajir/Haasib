@@ -51,6 +51,7 @@ interface TankRow {
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
+  payrollReminder?: { month: string; label: string; drafts: number } | null
   summary: {
     month: string
     label: string
@@ -147,6 +148,14 @@ const varianceDays = computed(() =>
       </div>
     </template>
 
+    <!-- The month's payroll, drafted when its last day closed, waiting for review and Approve. -->
+    <div v-if="payrollReminder" class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-attention/40 bg-status-attention/5 px-4 py-3 text-sm">
+      <span>
+        <span class="font-medium">{{ payrollReminder.label }} payroll</span>
+        <span class="text-muted-foreground"> · {{ payrollReminder.drafts ? `${payrollReminder.drafts} payslips to review` : 'not run' }}</span>
+      </span>
+      <Link :href="`/${company.slug}/payroll?month=${payrollReminder.month}`" class="font-medium underline underline-offset-2">Review payroll</Link>
+    </div>
     <p v-if="summary.missing_dates.length" class="mb-4 text-sm text-status-attention">
       Not closed:
       <template v-for="(d, i) in summary.missing_dates" :key="d">

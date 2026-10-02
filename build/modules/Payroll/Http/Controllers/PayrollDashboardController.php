@@ -123,7 +123,8 @@ class PayrollDashboardController extends Controller
                 return back()->with('error', 'This month payroll is already closed.');
             }
 
-            $created = $postingService->generatePayslipsForPeriod($period, $company->base_currency ?? 'PKR');
+            // Drafts the month already has get their advance deductions brought up to date too.
+            $created = app(\App\Modules\Payroll\Services\MonthEndPayrollDraft::class)->prepare($company, $monthStart);
         } catch (\Throwable $e) {
             report($e);
 

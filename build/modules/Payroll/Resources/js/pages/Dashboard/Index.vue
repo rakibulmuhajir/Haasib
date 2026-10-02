@@ -86,6 +86,17 @@ const payAll = () => {
   })
 }
 
+// Undo the month's approval (approved, unpaid payslips are voided and reversed) to redo it.
+const undoing = ref(false)
+const undoApproval = () => {
+  if (!props.period) return
+  router.post(`${base.value}/payroll-periods/${props.period.id}/unapprove-payslips`, {}, {
+    preserveScroll: true,
+    onSuccess: () => { undoing.value = false },
+    onError: (errors) => { toast.error(Object.values(errors)[0] ?? 'Not undone') },
+  })
+}
+
 const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (status === 'paid' ? 'default' : status === 'approved' ? 'outline' : 'secondary')
 </script>
 
@@ -98,8 +109,20 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
       <Button variant="outline" size="icon" aria-label="Next month" @click="shift(1)"><ChevronRight class="h-4 w-4" /></Button>
       <Button v-if="open && (missing > 0 || counts.draft > 0)" :variant="missing > 0 ? 'default' : 'outline'" @click="run"><Play class="mr-2 h-4 w-4" />{{ missing > 0 ? 'Run payroll' : 'Update drafts' }}</Button>
       <Button v-if="counts.draft > 0" variant="outline" @click="approveAll"><CheckCircle2 class="mr-2 h-4 w-4" />Approve {{ counts.draft }}</Button>
+      <Button v-if="counts.approved > 0" variant="ghost" @click="undoing = true">Undo approval</Button>
       <Button v-if="counts.approved > 0" @click="openPay"><Wallet class="mr-2 h-4 w-4" />Pay {{ counts.approved }}</Button>
     </template>
+
+    <Dialog v-model:open="undoing">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Undo approval?</DialogTitle></DialogHeader>
+        <p class="text-sm text-muted-foreground">{{ counts.approved }} payslips are voided and their entries reversed. Run payroll again to redo the month.</p>
+        <DialogFooter>
+          <Button variant="outline" @click="undoing = false">Cancel</Button>
+          <Button variant="destructive" @click="undoApproval">Undo approval</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="paying">
       <DialogContent class="sm:max-w-sm">

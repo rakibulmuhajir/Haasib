@@ -389,6 +389,39 @@ class PayslipController extends Controller
         return back()->with('success', "{$approved} payslips approved and posted.");
     }
 
+    /**
+     * Undo a month's approval to redo it: every approved, unpaid payslip of the period is voided --
+     * its accrual reversed by a journal of its own, its advance recoveries released -- so the month
+     * can be run and approved again. Paid payslips are left alone.
+     */
+    public function unapproveForPeriod(ApprovePayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $periodId): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+
+        $period = PayrollPeriod::where('company_id', $company->id)->findOrFail($periodId);
+        $undone = 0;
+
+        try {
+            DB::transaction(function () use ($company, $period, $payrollPostingService, $request, &$undone) {
+                Payslip::where('company_id', $company->id)
+                    ->where('payroll_period_id', $period->id)
+                    ->where('status', 'approved')
+                    ->get()
+                    ->each(function (Payslip $payslip) use ($payrollPostingService, $request, &$undone) {
+                        $payrollPostingService->void($payslip, 'Approval undone to redo the month', (string) $request->user()->id);
+                        $undone++;
+                    });
+            });
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Approval could not be undone.');
+        }
+
+        return back()->with('success', "{$undone} payslips undone. Run payroll to redo the month.");
+    }
+
     public function payForPeriod(MarkPayslipPaidRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $periodId): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();

@@ -491,6 +491,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'show'])->whereUuid('payroll_period')->name('payroll-periods.show');
             Route::post('/{company}/payroll-periods/{payroll_period}/generate-payslips', [PayslipController::class, 'generateForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.generate-payslips');
             Route::post('/{company}/payroll-periods/{payroll_period}/approve-payslips', [PayslipController::class, 'approveForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.approve-payslips');
+            Route::post('/{company}/payroll-periods/{payroll_period}/unapprove-payslips', [PayslipController::class, 'unapproveForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.unapprove-payslips');
             Route::post('/{company}/payroll-periods/{payroll_period}/pay-payslips', [PayslipController::class, 'payForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.pay-payslips');
             Route::post('/{company}/payroll-periods/{payroll_period}/close', [PayrollPeriodController::class, 'close'])->whereUuid('payroll_period')->name('payroll-periods.close');
             Route::delete('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'destroy'])->whereUuid('payroll_period')->name('payroll-periods.destroy');

@@ -51,9 +51,10 @@ class PayrollPostingService
             ->where('line_type', 'deduction')
             ->sum(fn ($line) => (float) $line->amount);
 
-        $availableNet = max(0, round($grossPay - $manualDeductions, 2));
-        $advanceRecoveryCap = round($grossPay * 0.5, 2);
-        $remaining = min($availableNet, $advanceRecoveryCap);
+        // Advances come off in full, up to the whole net pay. A station pays most salary as advances
+        // through the month; a half-salary cap left both sides open -- "still owes X" against "we
+        // owe X" -- for people already paid in full.
+        $remaining = max(0, round($grossPay - $manualDeductions, 2));
 
         if ($remaining <= 0) {
             return;
@@ -228,6 +229,7 @@ class PayrollPostingService
                     $exists = Payslip::where('company_id', $period->company_id)
                         ->where('payroll_period_id', $period->id)
                         ->where('employee_id', $employee->id)
+                        ->whereNotIn('status', ['cancelled', 'voided', 'void'])
                         ->exists();
 
                     if ($exists || (float) $employee->base_salary <= 0) {

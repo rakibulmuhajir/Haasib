@@ -108,3 +108,27 @@ test('the reminder names the latest closed month whose payroll is not approved',
     Payslip::where('company_id', $company->id)->update(['status' => 'approved']);
     expect($draft->reminder($company))->toBeNull();
 });
+
+test('advances come off in full, up to the whole net pay', function () {
+    [, $company, $employee] = monthEndPayrollCompany();
+    // The whole salary taken as advances through the month.
+    monthEndAdvance($company, $employee, '2026-09-05', 12000);
+    monthEndAdvance($company, $employee, '2026-09-20', 8000);
+
+    app(MonthEndPayrollDraft::class)->prepare($company, '2026-09-01');
+
+    $payslip = Payslip::where('company_id', $company->id)->sole()->refresh();
+    expect((float) $payslip->total_deductions)->toBe(20000.0)
+        ->and((float) $payslip->net_pay)->toBe(0.0);
+});
+
+test('a cancelled payslip does not stop the month being run again', function () {
+    [, $company] = monthEndPayrollCompany();
+    $draft = app(MonthEndPayrollDraft::class);
+
+    $draft->prepare($company, '2026-09-01');
+    Payslip::where('company_id', $company->id)->update(['status' => 'cancelled']);
+
+    expect($draft->prepare($company, '2026-09-01'))->toBe(1)
+        ->and(Payslip::where('company_id', $company->id)->where('status', 'draft')->count())->toBe(1);
+});

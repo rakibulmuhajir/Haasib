@@ -147,6 +147,9 @@ class DailyCloseReopenService
             $formInput = $this->markKeptDocuments($formInput, $metadata, $keptBills, $keptDirectSales, $keptAdvances);
             app(DailyCloseReconciliationService::class)->park($companyId, $formInput, $user->id);
 
+            // No live close left on a month's last day: that month's stock write-down goes with it.
+            app(MonthEndStockValuationService::class)->syncForCloseDate($companyId, $businessDate);
+
             return ['parked_date' => $businessDate, 'warnings' => $warnings];
         });
     }

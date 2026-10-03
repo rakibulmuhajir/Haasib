@@ -58,6 +58,7 @@ interface ProductRow {
   margin_per_unit: number
   estimated_cogs: boolean
   direct_quantity?: number
+  writedown?: number
   stock_loss_quantity: number
   stock_loss_value: number
   stock_gain_quantity: number
@@ -347,7 +348,11 @@ const rateChangeColumns = [
             </template>
             <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
             <template #cell-cogs="{ row }">
-              <div><MoneyText :amount="row.cogs" :currency="company.base_currency" /></div>
+              <Hint v-if="(row.writedown ?? 0) > 0" side="left">
+                <MoneyText :amount="row.cogs" :currency="company.base_currency" />
+                <template #content>Includes <MoneyText :amount="row.writedown" :currency="company.base_currency" /> stock valued at the new rate.</template>
+              </Hint>
+              <div v-else><MoneyText :amount="row.cogs" :currency="company.base_currency" /></div>
               <div class="text-xs text-muted-foreground"><MoneyText :amount="row.avg_cost" :currency="company.base_currency" />/{{ row.unit }}</div>
             </template>
             <template #cell-gross_profit="{ row }"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></template>

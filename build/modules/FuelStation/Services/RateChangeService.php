@@ -7,6 +7,7 @@ use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CurrentCompany;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -120,6 +121,9 @@ class RateChangeService
 
             // Only the selling price follows the rate change; cost stays delivery-based.
             $item->update(['selling_price' => (float) $data['sale_rate']]);
+
+            // The rate on the 1st decides the month-end stock value of the month before it.
+            app(MonthEndStockValuationService::class)->syncForRateDate($company->id, Carbon::parse($data['effective_date'])->toDateString());
 
             return $rateChange;
         });

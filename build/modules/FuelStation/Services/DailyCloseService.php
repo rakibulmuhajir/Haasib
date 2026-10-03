@@ -2041,6 +2041,10 @@ class DailyCloseService
 
             DB::table('fuel.daily_close_drafts')->where('company_id', $companyId)->where('business_date', $date)->delete();
 
+            // A month's last day also settles that month's stock value (lower of cost or the new
+            // purchase rate); inside this transaction so the books stay in step with the close.
+            app(MonthEndStockValuationService::class)->syncForCloseDate($companyId, $date);
+
             return [
                 'transaction_number' => $transactionNumber,
                 'transaction_id' => $transaction->id,

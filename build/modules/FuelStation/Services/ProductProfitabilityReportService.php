@@ -99,6 +99,7 @@ class ProductProfitabilityReportService
         }
 
         $this->addOffTankerSales($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
+        $this->addWritedowns($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
         $this->addStockVariance($companyId, $startDate, $endDate, $product, $items, $products);
         $this->addPurchases($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
 
@@ -391,6 +392,39 @@ class ProductProfitabilityReportService
     }
 
     /**
+     * Month-end stock valued at the new purchase rate (MonthEndStockValuationService): a cost
+     * of that fuel in the month that held the litres, on the journal's own date, so gross profit
+     * matches the books.
+     *
+     * @param array<string,array<string,mixed>> $items
+     * @param array<string,array<string,mixed>> $products
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function addWritedowns(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
+    {
+        $itemIds = array_column($items, 'id');
+        foreach (app(MonthEndStockValuationService::class)->liveWritedowns($companyId, null, $startDate, $endDate) as $writedown) {
+            $itemId = $writedown->metadata['item_id'] ?? null;
+            if (! in_array($itemId, $itemIds, true)) {
+                continue;
+            }
+            $key = $this->itemKey($itemId, $items);
+            if ($product !== 'all' && $key !== $product) {
+                continue;
+            }
+            $amount = (float) ($writedown->metadata['amount'] ?? 0);
+            if (! isset($products[$key])) {
+                $products[$key] = $this->emptyProductRow($key, $this->productName($key, $items), (string) ($items[$key]['unit'] ?? 'L'));
+            }
+            $products[$key]['cogs'] += $amount;
+            $products[$key]['writedown'] += $amount;
+
+            $periodKey = $this->ensurePeriod($periods, Carbon::parse($writedown->transaction_date), $groupBy);
+            $periods[$periodKey]['cogs'] += $amount;
+        }
+    }
+
+    /**
      * @param array<string,array<string,mixed>> $products
      * @param array<string,array<string,mixed>> $items
      */
@@ -495,6 +529,7 @@ class ProductProfitabilityReportService
             'estimated_cogs' => false,
             'direct_quantity' => 0.0,
             'direct_revenue' => 0.0,
+            'writedown' => 0.0,
             'stock_loss_quantity' => 0.0,
             'stock_loss_value' => 0.0,
             'stock_gain_quantity' => 0.0,
@@ -540,6 +575,7 @@ class ProductProfitabilityReportService
             'purchased_quantity' => array_sum(array_column($rows, 'purchased_quantity')),
             'revenue' => array_sum(array_column($rows, 'revenue')),
             'cogs' => array_sum(array_column($rows, 'cogs')),
+            'writedown' => array_sum(array_column($rows, 'writedown')),
             'gross_profit' => array_sum(array_column($rows, 'gross_profit')),
             'stock_loss_quantity' => array_sum(array_column($rows, 'stock_loss_quantity')),
             'stock_loss_value' => array_sum(array_column($rows, 'stock_loss_value')),

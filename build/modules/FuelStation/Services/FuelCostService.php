@@ -62,12 +62,22 @@ class FuelCostService
             ->groupBy(DB::raw('reading_date::date'))
             ->get()->keyBy(fn ($r) => substr((string) $r->d, 0, 10));
 
+        // Month-end write-downs to the new purchase rate (MonthEndStockValuationService): a value
+        // change on the last day of a month, applied after that day's dip like the dips are.
+        $revaluations = DB::table('inv.stock_movements')
+            ->where('company_id', $companyId)->where('item_id', $itemId)
+            ->where('movement_type', 'revaluation')
+            ->whereDate('movement_date', '<', $date)
+            ->selectRaw('movement_date::date d, SUM(total_cost) v')
+            ->groupBy(DB::raw('movement_date::date'))
+            ->get()->keyBy(fn ($r) => substr((string) $r->d, 0, 10));
+
         $qty = (float) $opening->q;
         $value = (float) $opening->v;
         $cost = $qty > 0 ? $value / $qty : null;
         $start = $opening->d ? substr((string) $opening->d, 0, 10) : null;
 
-        $days = collect($purchases->keys())->merge($dips->keys())->unique()->sort()->values();
+        $days = collect($purchases->keys())->merge($dips->keys())->merge($revaluations->keys())->unique()->sort()->values();
         foreach ($days as $day) {
             if ($start !== null && $day < $start) {
                 continue; // before the opening stock: the opening already counts it
@@ -87,6 +97,12 @@ class FuelCostService
                 // Selling and dip gains/losses leave the cost per litre as it was.
                 $qty = max(0.0, (float) $d->q);
                 $value = $qty * $cost;
+            }
+            if (($r = $revaluations->get($day)) && $cost !== null) {
+                $value += (float) $r->v;
+                if ($qty > 0) {
+                    $cost = $value / $qty;
+                }
             }
         }
 

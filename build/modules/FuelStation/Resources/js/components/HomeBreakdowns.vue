@@ -10,7 +10,7 @@ import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 
-export interface ProductLine { name: string; unit: string | null; quantity: number; revenue: number; cogs: number; gross_profit: number; estimated_cogs: boolean; direct_quantity?: number; href: string | null }
+export interface ProductLine { name: string; unit: string | null; quantity: number; revenue: number; cogs: number; gross_profit: number; book_profit?: number | null; book_opening?: number | null; book_closing?: number | null; book_purchases?: number | null; estimated_cogs: boolean; direct_quantity?: number; href: string | null }
 export interface ExpenseLine { name: string; code: string; amount: number; asset: boolean; href: string | null }
 export interface PurchaseLine { name: string; unit: string | null; quantity: number; amount: number; href: string | null }
 
@@ -25,6 +25,8 @@ const open = ref<'sales' | 'expenses' | 'purchases' | null>(null)
 const toggle = (k: 'sales' | 'expenses' | 'purchases') => { open.value = open.value === k ? null : k }
 const qty = (v: number, unit: string | null) => `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(v)}${unit === 'L' ? ' L' : ''}`
 const sum = <T,>(rows: T[], pick: (r: T) => number) => rows.reduce((t, r) => t + pick(r), 0)
+const shown = (p: ProductLine) => p.book_profit ?? p.gross_profit
+const money = (v: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v)
 const lnk = 'tabular-nums underline-offset-2 hover:underline'
 </script>
 
@@ -73,14 +75,20 @@ const lnk = 'tabular-nums underline-offset-2 hover:underline'
             <td class="px-3 py-1 text-right">
               <MoneyText :amount="p.cogs" :currency="currency" :fraction-digits="0" /><span v-if="p.estimated_cogs" class="ml-1 text-xs text-text-secondary">est.</span>
             </td>
-            <td class="px-3 py-1 text-right" :class="p.gross_profit < 0 ? 'text-status-attention' : ''"><MoneyText :amount="p.gross_profit" :currency="currency" :fraction-digits="0" /></td>
+            <td class="px-3 py-1 text-right" :class="shown(p) < 0 ? 'text-status-attention' : ''">
+              <Hint v-if="p.book_profit != null" side="left">
+                <MoneyText :amount="p.book_profit" :currency="currency" :fraction-digits="0" />
+                <template #content>Sales {{ money(p.revenue) }} + closing {{ money(p.book_closing ?? 0) }} - opening {{ money(p.book_opening ?? 0) }} - bought {{ money(p.book_purchases ?? 0) }}</template>
+              </Hint>
+              <MoneyText v-else :amount="p.gross_profit" :currency="currency" :fraction-digits="0" />
+            </td>
           </tr>
           <tr v-if="!products.length"><td colspan="5" class="px-3 py-3 text-center text-text-secondary">No sales.</td></tr>
           <tr v-else class="border-t border-rule-default font-semibold">
             <td class="px-3 py-1.5" colspan="2">Total</td>
             <td class="px-3 py-1.5 text-right"><MoneyText :amount="sum(products, (p) => p.revenue)" :currency="currency" :fraction-digits="0" /></td>
             <td class="px-3 py-1.5 text-right"><MoneyText :amount="sum(products, (p) => p.cogs)" :currency="currency" :fraction-digits="0" /></td>
-            <td class="px-3 py-1.5 text-right"><MoneyText :amount="sum(products, (p) => p.gross_profit)" :currency="currency" :fraction-digits="0" /></td>
+            <td class="px-3 py-1.5 text-right"><MoneyText :amount="sum(products, shown)" :currency="currency" :fraction-digits="0" /></td>
           </tr>
         </tbody>
       </table>

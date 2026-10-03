@@ -80,6 +80,7 @@ interface Today {
     purchase_products: PurchaseLine[]
     sales_total: number
     gross_profit: number
+    profit: number
     expenses: number
     short_over: number
     purchases: Purchases
@@ -101,6 +102,7 @@ interface History {
   purchase_products: PurchaseLine[]
   sales_total: number
   gross_profit: number
+  profit: number
   expenses: number
   short_over: number
   purchases: Purchases
@@ -173,9 +175,9 @@ const moneyRows = (m: Money, today: boolean): Row[] => {
 interface Metric { key: string; label: string; amount: number; href: string | null; hint: string[] }
 
 // Sales, gross profit, expenses and short/over for a period, shared by Today and History.
-const metricsFor = (d: { sales_total: number; gross_profit: number; expenses: number; short_over: number; revenue: number; cogs: number; short_days: number; over_days: number }, links: { sales: string; profit: string; expenses: string; short_over: string | null }, wording: string): Metric[] => [
+const metricsFor = (d: { sales_total: number; gross_profit: number; profit: number; expenses: number; short_over: number; revenue: number; cogs: number; short_days: number; over_days: number }, links: { sales: string; profit: string; expenses: string; short_over: string | null }, wording: string): Metric[] => [
   { key: 'sales', label: 'Sales', amount: d.sales_total, href: links.sales, hint: [`Everything sold ${wording}, as posted at each daily close.`] },
-  { key: 'gp', label: 'Gross profit', amount: d.gross_profit, href: links.profit, hint: [`Revenue ${amt(d.revenue)} - cost of fuel sold ${amt(d.cogs)} = ${amt(d.gross_profit)}.`] },
+  { key: 'gp', label: 'Profit', amount: d.profit, href: links.profit, hint: ['Sales + closing stock - opening stock - purchases, from the books. Packaged items at gross profit.', `Gross profit ${amt(d.gross_profit)}.`] },
   { key: 'expenses', label: 'Expenses', amount: d.expenses, href: links.expenses, hint: ['Entered under Daily Close > Money out > Expenses.'] },
   { key: 'short', label: 'Short / over', amount: d.short_over, href: links.short_over, hint: [`${d.short_days} ${d.short_days === 1 ? 'day' : 'days'} short, ${d.over_days} ${d.over_days === 1 ? 'day' : 'days'} over.`, 'Counted cash against what the books expect.'] },
 ]

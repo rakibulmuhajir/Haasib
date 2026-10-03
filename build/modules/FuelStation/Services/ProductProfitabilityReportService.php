@@ -450,6 +450,9 @@ class ProductProfitabilityReportService
             $purchases = (float) ($this->statement($companyId, (string) $item['id'], $startDate, $endDate)['totals']['purchase_amount'] ?? 0);
             $opening = $valuation->accountBalance($companyId, $accountId, $dayBefore);
             $closing = $valuation->accountBalance($companyId, $accountId, $endDate);
+            $row['book_opening'] = round($opening, 2);
+            $row['book_closing'] = round($closing, 2);
+            $row['book_purchases'] = round($purchases, 2);
             $row['book_profit'] = round($row['revenue'] + $closing - $opening - $purchases, 2);
             // Margins follow the books where the books have the figure (tank gains and losses,
             // later costs and the month-end write-down all in); elsewhere they stay on gross profit.
@@ -599,6 +602,9 @@ class ProductProfitabilityReportService
             'direct_revenue' => 0.0,
             'writedown' => 0.0,
             'book_profit' => null,
+            'book_opening' => null,
+            'book_closing' => null,
+            'book_purchases' => null,
             'stock_loss_quantity' => 0.0,
             'stock_loss_value' => 0.0,
             'stock_gain_quantity' => 0.0,
@@ -657,6 +663,7 @@ class ProductProfitabilityReportService
 
         // Each product's own basis: the books' profit where there is one, gross profit otherwise.
         $profit = array_sum(array_map(fn ($r) => $r['book_profit'] ?? $r['gross_profit'], $rows));
+        $totals['profit'] = round($profit, 2);
         $totals['gross_margin_percent'] = $totals['revenue'] > 0 ? ($profit / $totals['revenue']) * 100 : 0;
         $totals['margin_per_unit'] = $totals['quantity'] > 0 ? ($profit / $totals['quantity']) : 0;
 

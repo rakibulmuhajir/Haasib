@@ -144,6 +144,7 @@ test('the history tab adds the chosen range', function () {
             ->where('history.to', '2026-09-30')
             ->where('history.closes.count', 1)
             ->where('history.closes.days', 30)
+            ->where('history.profit', fn ($v) => abs((float) $v - (float) app(\App\Modules\FuelStation\Services\ProductProfitabilityReportService::class)->run($f['company']->id, '2026-09-01', '2026-09-30')['totals']['profit']) < 0.01)
             ->has('history.stock')
             ->has('history.money')
             ->has('history.links.stock_statement'));

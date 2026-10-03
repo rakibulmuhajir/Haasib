@@ -546,46 +546,9 @@ class FuelHomeService
             'cogs' => (float) $r['cogs'],
             'gross_profit' => (float) $r['gross_profit'],
             'estimated_cogs' => (bool) ($r['estimated_cogs'] ?? false),
+            'direct_quantity' => (float) ($r['direct_quantity'] ?? 0),
             'href' => isset($itemByName[$r['name']]) && $slug !== '' ? $this->stockItemLink($slug, $itemByName[$r['name']], $from, $to) : null,
         ], array_values(array_filter($profitRun['productRows'], fn ($r) => abs((float) $r['revenue']) > 0.005 || abs((float) $r['quantity']) > 0.0001)));
-
-        // Sold straight off the tanker: never through a pump or a close's own sale, so the
-        // profitability figures above miss it. The stock statement has it -- litres, the invoices'
-        // amount, and its cost from the bill's own rate -- so each product takes its share.
-        $direct = [];
-        foreach ($stock as $p) {
-            $q = 0.0; $amount = 0.0; $cost = 0.0;
-            foreach ((array) ($p['rows'] ?? []) as $row) {
-                $q += (float) ($row['sold_direct'] ?? 0);
-                $amount += (float) ($row['direct_amount'] ?? 0);
-                foreach ((array) ($row['bills'] ?? []) as $b) {
-                    if ((float) ($b['direct'] ?? 0) > 0 && (float) ($b['quantity'] ?? 0) > 0) {
-                        $cost += (float) ($b['amount'] ?? 0) * (float) $b['direct'] / (float) $b['quantity'];
-                    }
-                }
-            }
-            if ($q > 0.0001) {
-                $direct[$p['name']] = ['quantity' => $q, 'revenue' => $amount, 'cogs' => round($cost, 2)];
-            }
-        }
-        $directRevenue = array_sum(array_column($direct, 'revenue'));
-        $directCost = array_sum(array_column($direct, 'cogs'));
-        foreach ($products as &$line) {
-            if ($d = $direct[$line['name']] ?? null) {
-                $line['quantity'] += $d['quantity'];
-                $line['revenue'] += $d['revenue'];
-                $line['cogs'] += $d['cogs'];
-                $line['gross_profit'] = $line['revenue'] - $line['cogs'];
-                $line['direct_quantity'] = $d['quantity'];
-                unset($direct[$line['name']]);
-            }
-        }
-        unset($line);
-        foreach ($direct as $name => $d) {
-            $products[] = ['name' => $name, 'unit' => 'L', 'quantity' => $d['quantity'], 'revenue' => $d['revenue'], 'cogs' => $d['cogs'],
-                'gross_profit' => $d['revenue'] - $d['cogs'], 'estimated_cogs' => false, 'direct_quantity' => $d['quantity'],
-                'href' => isset($itemByName[$name]) && $slug !== '' ? $this->stockItemLink($slug, $itemByName[$name], $from, $to) : null];
-        }
 
         // Expenses by the account they were entered against, each opening its expense statement.
         $expenseAccounts = array_map(fn ($a) => [
@@ -645,11 +608,11 @@ class FuelHomeService
             'products' => $products,
             'expense_accounts' => $expenseAccounts,
             'purchase_products' => $purchaseProducts,
-            // Pump and close sales plus what went straight off the tanker.
-            'revenue' => (float) ($profit['revenue'] ?? 0) + $directRevenue,
-            'cogs' => (float) ($profit['cogs'] ?? 0) + $directCost,
-            'sales_total' => (float) ($profit['revenue'] ?? 0) + $directRevenue,
-            'gross_profit' => (float) ($profit['gross_profit'] ?? 0) + $directRevenue - $directCost,
+            // Pump and close sales plus what went straight off the tanker (the profitability report has both).
+            'revenue' => (float) ($profit['revenue'] ?? 0),
+            'cogs' => (float) ($profit['cogs'] ?? 0),
+            'sales_total' => (float) ($profit['revenue'] ?? 0),
+            'gross_profit' => (float) ($profit['gross_profit'] ?? 0),
             'expenses' => (float) ($expenses['amount'] ?? 0),
             'purchases' => ['liters' => $litres, 'amount' => $amount, 'bills' => $bills],
         ];

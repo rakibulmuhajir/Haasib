@@ -98,6 +98,7 @@ class ProductProfitabilityReportService
             }
         }
 
+        $this->addOffTankerSales($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
         $this->addStockVariance($companyId, $startDate, $endDate, $product, $items, $products);
         $this->addPurchases($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
 
@@ -329,6 +330,67 @@ class ProductProfitabilityReportService
     }
 
     /**
+     * Fuel sold straight off the tanker never passes a pump, so no close has it. The stock
+     * statement knows it per day: the litres, what the direct-delivery invoices charged, and
+     * the bills' own cost (bill amount x direct litres / bill litres).
+     *
+     * @param array<string,array<string,mixed>> $items
+     * @param array<string,array<string,mixed>> $products
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function addOffTankerSales(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
+    {
+        $tankItemIds = DB::table('inv.warehouses')
+            ->where('company_id', $companyId)
+            ->where('warehouse_type', 'tank')
+            ->whereNotNull('linked_item_id')
+            ->distinct()
+            ->pluck('linked_item_id')
+            ->all();
+
+        $statement = app(StockStatementService::class);
+        foreach ($items as $key => $item) {
+            if (! in_array($item['id'], $tankItemIds, true)) {
+                continue;
+            }
+            if ($product !== 'all' && $key !== $product) {
+                continue;
+            }
+
+            foreach ($statement->run($companyId, (string) $item['id'], $startDate, $endDate)['rows'] as $row) {
+                $bills = (array) ($row['bills'] ?? []);
+                // A day without a close has no sold_direct; its bills still say how much went off the tanker.
+                $quantity = (float) ($row['sold_direct'] ?? array_sum(array_column($bills, 'direct')));
+                if ($quantity <= 0.0001) {
+                    continue;
+                }
+                $revenue = (float) ($row['direct_amount'] ?? $row['sale_amount'] ?? 0);
+                $cogs = 0.0;
+                foreach ($bills as $bill) {
+                    if ((float) ($bill['direct'] ?? 0) > 0 && (float) ($bill['quantity'] ?? 0) > 0) {
+                        $cogs += (float) ($bill['amount'] ?? 0) * (float) $bill['direct'] / (float) $bill['quantity'];
+                    }
+                }
+                $cogs = round($cogs, 2);
+
+                if (! isset($products[$key])) {
+                    $products[$key] = $this->emptyProductRow($key, $this->productName($key, $items), (string) ($item['unit'] ?? 'L'));
+                }
+                $products[$key]['quantity'] += $quantity;
+                $products[$key]['revenue'] += $revenue;
+                $products[$key]['cogs'] += $cogs;
+                $products[$key]['direct_quantity'] += $quantity;
+                $products[$key]['direct_revenue'] += $revenue;
+
+                $periodKey = $this->ensurePeriod($periods, Carbon::parse($row['date']), $groupBy);
+                $periods[$periodKey]['quantity'] += $quantity;
+                $periods[$periodKey]['revenue'] += $revenue;
+                $periods[$periodKey]['cogs'] += $cogs;
+            }
+        }
+    }
+
+    /**
      * @param array<string,array<string,mixed>> $products
      * @param array<string,array<string,mixed>> $items
      */
@@ -431,6 +493,8 @@ class ProductProfitabilityReportService
             'avg_cost' => 0.0,
             'margin_per_unit' => 0.0,
             'estimated_cogs' => false,
+            'direct_quantity' => 0.0,
+            'direct_revenue' => 0.0,
             'stock_loss_quantity' => 0.0,
             'stock_loss_value' => 0.0,
             'stock_gain_quantity' => 0.0,

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Package, Percent, TrendingUp, WalletCards } from 'lucide-vue-next'
@@ -56,6 +57,7 @@ interface ProductRow {
   avg_cost: number
   margin_per_unit: number
   estimated_cogs: boolean
+  direct_quantity?: number
   stock_loss_quantity: number
   stock_loss_value: number
   stock_gain_quantity: number
@@ -336,7 +338,13 @@ const rateChangeColumns = [
             </template>
 
             <template #cell-purchased_quantity="{ row }">{{ row.purchased_quantity ? qty(row.purchased_quantity) : '—' }}</template>
-            <template #cell-quantity="{ row }">{{ qty(row.quantity) }}</template>
+            <template #cell-quantity="{ row }">
+              <Hint v-if="row.direct_quantity > 0" side="left">
+                {{ qty(row.quantity) }}
+                <template #content>Includes {{ qty(row.direct_quantity) }} L sold straight off the tanker.</template>
+              </Hint>
+              <template v-else>{{ qty(row.quantity) }}</template>
+            </template>
             <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
             <template #cell-cogs="{ row }">
               <div><MoneyText :amount="row.cogs" :currency="company.base_currency" /></div>

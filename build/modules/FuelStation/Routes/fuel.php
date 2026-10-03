@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CompanyController;
 use App\Modules\FuelStation\Http\Controllers\AmanatController;
 use App\Modules\FuelStation\Http\Controllers\CollectionController;
 use App\Modules\FuelStation\Http\Controllers\CreditCustomerController;
@@ -52,6 +53,9 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('onboarding/lubricants', [FuelStationOnboardingController::class, 'setupLubricants'])->name('fuel.onboarding.lubricants');
     Route::post('onboarding/initial-stock', [FuelStationOnboardingController::class, 'setupInitialStock'])->name('fuel.onboarding.initial-stock');
     Route::post('onboarding/complete', [FuelStationOnboardingController::class, 'complete'])->name('fuel.onboarding.complete');
+
+    // Product and tank setup: what the company home showed before a station got its own.
+    Route::get('products', [CompanyController::class, 'products'])->name('fuel.products');
 
     // Dashboard
     Route::get('dashboard', [FuelDashboardController::class, 'index'])->name('fuel.dashboard');

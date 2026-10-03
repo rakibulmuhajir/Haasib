@@ -26,8 +26,8 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('deliveries', 'Fuel Deliveries', '/fuel/receipts', Droplets),
         ...item('stock', 'Stock Movements', '/stock/movements', Warehouse, context.isInventoryEnabled),
         ...item('prices', 'Fuel Prices', '/fuel/rates', TrendingUp),
-        // Company home contains the station product setup workspace.
-        ...item('products', 'Products You Sell', '', Package),
+        // The station product setup workspace.
+        ...item('products', 'Products You Sell', '/fuel/products', Package),
       ] },
       { label: 'Purchases', items: [
         ...item('bills', t('bills'), '/bills', ReceiptText),

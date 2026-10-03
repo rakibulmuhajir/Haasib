@@ -264,6 +264,83 @@ class CompanyController extends Controller
     {
         $company = CompanyContext::getCompany();
 
+        // A fuel station lands on its own home; the product / tank setup page it used to open
+        // on lives at /fuel/products.
+        $isFuelStation = $company->isModuleEnabled('fuel_station')
+            || ($company->industry_code ?? null) === 'fuel_station'
+            || ($company->industry ?? null) === 'fuel_station';
+        $isUmrahCompany = $company->isModuleEnabled('umrah')
+            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
+            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
+
+        if ($isFuelStation && ! $isUmrahCompany) {
+            $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
+            $isMember = DB::table('auth.company_user')
+                ->where('company_id', $company->id)
+                ->where('user_id', Auth::id())
+                ->where('is_active', true)
+                ->exists();
+            if (! $isGodMode && ! $isMember) {
+                abort(403, 'You are not a member of this company.');
+            }
+
+            $tab = $request->query('tab') === 'history' ? 'history' : 'today';
+            $service = app(\App\Modules\FuelStation\Services\FuelHomeService::class);
+            $props = [
+                'company' => [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'base_currency' => $company->base_currency ?? 'PKR',
+                ],
+                'tab' => $tab,
+                'today' => $service->today($company),
+            ];
+            if ($tab === 'history') {
+                [$from, $to] = $this->historyRange($request->query('from'), $request->query('to'));
+                $props['history'] = $service->period($company, $from, $to);
+                $props['range'] = ['from' => $from, 'to' => $to];
+            }
+
+            return Inertia::render('FuelStation/Home/Index', $props);
+        }
+
+        return $this->renderShow($request);
+    }
+
+    /** What a fuel station's old home showed: product and tank setup plus the generic dashboard. */
+    public function products(Request $request): Response|RedirectResponse
+    {
+        return $this->renderShow($request);
+    }
+
+    /** The History tab's range: ?from & ?to as dates, last month when absent or unreadable. */
+    private function historyRange(mixed $from, mixed $to): array
+    {
+        $parse = function (mixed $v): ?Carbon {
+            try {
+                return $v ? Carbon::parse((string) $v)->startOfDay() : null;
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+        $start = $parse($from);
+        $end = $parse($to);
+        if (! $start || ! $end) {
+            $start = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+            $end = $start->copy()->endOfMonth();
+        }
+        if ($start->gt($end)) {
+            [$start, $end] = [$end, $start];
+        }
+
+        return [$start->toDateString(), $end->toDateString()];
+    }
+
+    protected function renderShow(Request $request): Response|RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+
         // Guard: only company members (or god-mode) may view
         $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
         $isMember = DB::table('auth.company_user')

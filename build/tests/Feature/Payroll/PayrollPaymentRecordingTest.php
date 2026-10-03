@@ -118,7 +118,7 @@ test('on_approval pays the net from the chosen cash account when payroll is appr
 
     $payment = Transaction::where('company_id', $company->id)->findOrFail($payslip->payment_gl_transaction_id);
     $credit = DB::table('acct.journal_entries')
-        ->where('transaction_id', $payment->id)->where('account_id', $chosen->id)->where('type', 'credit')->sum('amount');
+        ->where('transaction_id', $payment->id)->where('account_id', $chosen->id)->sum('credit_amount');
     expect((float) $credit)->toBe(20000.0);
 });
 

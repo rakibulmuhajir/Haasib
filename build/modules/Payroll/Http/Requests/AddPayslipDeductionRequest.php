@@ -33,7 +33,7 @@ class AddPayslipDeductionRequest extends BaseFormRequest
                 Rule::exists(DeductionType::class, 'id')
                     ->where('company_id', $company->id)
                     ->where('is_active', true)
-                    ->where('code', '!=', 'SALARY_ADVANCE')
+                    ->whereNot('code', 'SALARY_ADVANCE')
                     ->whereNull('deleted_at'),
             ],
             'amount' => ['required', 'numeric', 'gt:0'],

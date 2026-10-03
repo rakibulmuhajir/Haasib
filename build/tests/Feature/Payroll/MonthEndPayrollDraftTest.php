@@ -94,10 +94,12 @@ test('the reminder names the latest closed month whose payroll is not approved',
     // No month-end close yet: nothing to remind about.
     expect($draft->reminder($company))->toBeNull();
 
+    $fy = \App\Modules\Accounting\Models\FiscalYear::create(['company_id' => $company->id, 'name' => '2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']);
+    $period = \App\Modules\Accounting\Models\AccountingPeriod::create(['company_id' => $company->id, 'fiscal_year_id' => $fy->id, 'name' => 'September', 'period_number' => 9, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
     \App\Modules\Accounting\Models\Transaction::create([
-        'company_id' => $company->id, 'transaction_number' => 'DC-2026-09-30-'.str()->random(4),
+        'company_id' => $company->id, 'fiscal_year_id' => $fy->id, 'period_id' => $period->id, 'transaction_number' => 'DC-2026-09-30-'.str()->random(4),
         'transaction_type' => 'fuel_daily_close', 'transaction_date' => '2026-09-30', 'posting_date' => '2026-09-30',
-        'description' => 'Daily close 2026-09-30', 'currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0,
+        'description' => 'Daily close 2026-09-30', 'currency' => 'PKR', 'base_currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0,
         'status' => 'posted', 'metadata' => [],
     ]);
     expect($draft->reminder($company))->toBe(['month' => '2026-09', 'label' => 'September 2026', 'drafts' => 0]);

@@ -1597,12 +1597,20 @@ class DailyCloseController extends Controller
 
         $validated = $request->validated();
 
-        $count = $this->lockService->lockMonth(
-            $companyModel->id,
-            $validated['year'],
-            $validated['month'],
-            $request->user()->id
-        );
+        try {
+            $count = $this->lockService->lockMonth(
+                $companyModel->id,
+                $validated['year'],
+                $validated['month'],
+                $request->user()->id
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->back()->with('error', 'The month could not be locked. Please try again.');
+        }
 
         $monthName = \Carbon\Carbon::create($validated['year'], $validated['month'], 1)->format('F Y');
 

@@ -171,6 +171,23 @@ class StationPerformanceReportService
 
         usort($productRows, fn (array $a, array $b) => $b['revenue'] <=> $a['revenue']);
 
+        $valuationMethod = DB::table('fuel.station_settings')->where('company_id', $companyId)
+            ->value('month_end_stock_valuation') ?: 'inventory_cost';
+        $monthlyFuelProfit = [];
+        if ($groupBy === 'month') {
+            for ($month = Carbon::parse($startDate)->startOfMonth(); $month->toDateString() <= $endDate; $month->addMonth()) {
+                if ($month->toDateString() < $startDate || $month->copy()->endOfMonth()->toDateString() > $endDate) {
+                    continue;
+                }
+                $saved = DB::table('fuel.month_profit_snapshots')->where('company_id', $companyId)
+                    ->where('month', $month->toDateString())->whereNull('reopened_at')->exists();
+                if ($valuationMethod !== 'next_month_purchase_rate' && ! $saved) {
+                    continue;
+                }
+                $monthlyFuelProfit[] = app(MonthlyFuelProfitService::class)->run($companyId, $month->format('Y-m'), $product);
+            }
+        }
+
         return [
             'filters' => [
                 'start_date' => $startDate,
@@ -184,6 +201,8 @@ class StationPerformanceReportService
             'productOptions' => array_values($productOptions),
             'cashRows' => $cashRows,
             'movementTotals' => $movementTotals,
+            'monthEndStockValuation' => $valuationMethod,
+            'monthlyFuelProfit' => $monthlyFuelProfit,
         ];
     }
 

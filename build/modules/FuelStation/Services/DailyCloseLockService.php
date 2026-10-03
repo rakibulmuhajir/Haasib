@@ -20,7 +20,7 @@ class DailyCloseLockService
      */
     public function lockTransaction(Transaction $transaction, User $user, string $reason = 'manual'): void
     {
-        if (!$transaction->isLockable()) {
+        if (! $transaction->isLockable()) {
             throw new \RuntimeException('This transaction cannot be locked.');
         }
 
@@ -37,7 +37,7 @@ class DailyCloseLockService
      */
     public function unlockTransaction(Transaction $transaction, User $user, string $reason): void
     {
-        if (!$transaction->is_locked) {
+        if (! $transaction->is_locked) {
             throw new \RuntimeException('This transaction is not locked.');
         }
 
@@ -47,6 +47,7 @@ class DailyCloseLockService
         }
 
         DB::transaction(function () use ($transaction, $user, $reason) {
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['fuel-month-profit:'.$transaction->company_id]);
             DailyCloseUnlock::create([
                 'company_id' => $transaction->company_id,
                 'close_transaction_id' => $transaction->id,
@@ -59,6 +60,7 @@ class DailyCloseLockService
             ]);
 
             $transaction->unlock();
+            app(MonthlyFuelProfitService::class)->reopen($transaction->company_id, $transaction->transaction_date->format('Y-m'));
         });
     }
 
@@ -82,16 +84,23 @@ class DailyCloseLockService
         $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
         $endDate = $startDate->copy()->endOfMonth();
 
-        return Transaction::where('company_id', $companyId)
-            ->where('transaction_type', 'fuel_daily_close')
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('is_locked', false)
-            ->whereNull('deleted_at')
-            ->update([
-                'is_locked' => true,
-                'locked_at' => now(),
-                'locked_by_user_id' => $userId,
-                'lock_reason' => 'month_end',
-            ]);
+        return DB::transaction(function () use ($companyId, $startDate, $endDate, $userId) {
+            // Serialize month finalization and reopening before changing any locks.
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['fuel-month-profit:'.$companyId]);
+            $count = Transaction::where('company_id', $companyId)
+                ->where('transaction_type', 'fuel_daily_close')
+                ->whereBetween('transaction_date', [$startDate, $endDate])
+                ->where('is_locked', false)
+                ->whereNull('deleted_at')
+                ->update([
+                    'is_locked' => true,
+                    'locked_at' => now(),
+                    'locked_by_user_id' => $userId,
+                    'lock_reason' => 'month_end',
+                ]);
+            app(MonthlyFuelProfitService::class)->finalize($companyId, $startDate->format('Y-m'), $userId);
+
+            return $count;
+        });
     }
 }

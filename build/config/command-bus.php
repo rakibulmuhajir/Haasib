@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'fuel.settings.update' => \App\Modules\FuelStation\Actions\UpdateStationSettingsAction::class,
     'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
     'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
     'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,

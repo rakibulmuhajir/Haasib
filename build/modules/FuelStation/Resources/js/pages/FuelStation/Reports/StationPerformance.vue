@@ -121,6 +121,32 @@ interface MovementTotals {
   bill_payments: number
 }
 
+interface MonthlyFuelLine {
+  item: string
+  opening_liters: number
+  opening_rate: number
+  opening_value: number
+  purchased_liters: number
+  purchases: number
+  sold_liters: number
+  sales: number
+  closing_liters: number
+  closing_rate: number
+  closing_value: number
+  fuel_profit: number
+}
+
+interface MonthlyFuelProfit {
+  month: string
+  next_rate_date: string
+  complete: boolean
+  missing_products: string[]
+  lines: MonthlyFuelLine[]
+  totals: { sales: number; opening_value: number; purchases: number; closing_value: number; fuel_profit: number }
+  finalized: boolean
+  reconciliation: { book_fuel_profit: number; book_net_profit: number | null; adjustment: number | null; net_station_profit: number | null } | null
+}
+
 const props = defineProps<{
   company: Company
   filters: Filters
@@ -130,6 +156,8 @@ const props = defineProps<{
   productOptions: ProductOption[]
   cashRows: CashRow[]
   movementTotals: MovementTotals
+  monthEndStockValuation: 'inventory_cost' | 'next_month_purchase_rate'
+  monthlyFuelProfit: MonthlyFuelProfit[]
 }>()
 
 const startDate = ref(props.filters.start_date)
@@ -349,6 +377,44 @@ const movementCards = computed(() => [
             </div>
 
             <Button @click="applyFilters">Apply</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="groupBy === 'month' && (monthEndStockValuation === 'next_month_purchase_rate' || monthlyFuelProfit.length)">
+        <CardHeader>
+          <CardTitle>Monthly fuel profit at purchase rates</CardTitle>
+          <CardDescription>Opening stock uses this month's first-day purchase rate. Closing stock uses the next month's first-day rate. This management calculation does not change the accounting Profit &amp; Loss.</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-5">
+          <p v-if="!monthlyFuelProfit.length" class="text-sm text-muted-foreground">Select a complete calendar month to see the stock valuation.</p>
+          <div v-for="month in monthlyFuelProfit" :key="month.month" class="space-y-3 rounded-lg border p-4">
+            <h3 class="font-medium">{{ month.month }} <span class="text-xs text-muted-foreground">· {{ month.finalized ? 'Locked month' : 'Live calculation · lock the month to preserve it' }}</span></h3>
+            <p v-if="!month.complete" class="text-sm text-status-attention">Calculation unavailable. Check first-day purchase rates, daily closes, and opening and final-day tank readings for {{ month.missing_products.join(', ') || 'this month' }}.</p>
+            <template v-else>
+              <div class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                <div>Customer sales<br><MoneyText :amount="month.totals.sales" :currency="company.base_currency" /></div>
+                <div>+ Closing stock<br><MoneyText :amount="month.totals.closing_value" :currency="company.base_currency" /></div>
+                <div>− Opening stock<br><MoneyText :amount="month.totals.opening_value" :currency="company.base_currency" /></div>
+                <div>− Purchases received<br><MoneyText :amount="month.totals.purchases" :currency="company.base_currency" /></div>
+                <div class="font-semibold">= Fuel profit<br><MoneyText :amount="month.totals.fuel_profit" :currency="company.base_currency" /></div>
+              </div>
+              <div v-for="line in month.lines" :key="line.item" class="border-t pt-2 text-xs text-muted-foreground">
+                {{ line.item }}: opening {{ number(line.opening_liters, 2) }} L × {{ number(line.opening_rate, 2) }},
+                bought {{ number(line.purchased_liters, 2) }} L, sold {{ number(line.sold_liters, 2) }} L,
+                closing {{ number(line.closing_liters, 2) }} L × {{ number(line.closing_rate, 2) }}.
+                Fuel profit:
+                <MoneyText :amount="line.fuel_profit" :currency="company.base_currency" />
+              </div>
+              <div v-if="month.reconciliation?.net_station_profit !== null && month.reconciliation?.net_station_profit !== undefined" class="border-t pt-3 text-sm">
+                <p class="font-semibold">Net station profit: <MoneyText :amount="month.reconciliation.net_station_profit" :currency="company.base_currency" /></p>
+                <p class="mt-1 text-xs text-muted-foreground">Accounting net profit <MoneyText :amount="month.reconciliation.book_net_profit ?? 0" :currency="company.base_currency" />
+                  + fuel valuation adjustment <MoneyText :amount="month.reconciliation.adjustment ?? 0" :currency="company.base_currency" />.
+                  Expenses and other income are included once. The adjustment replaces the book fuel result with the calculation above.
+                </p>
+              </div>
+              <p v-else-if="filters.product === 'all'" class="text-xs text-muted-foreground">Net profit reconciliation needs separate sales and cost accounts for fuel products.</p>
+            </template>
           </div>
         </CardContent>
       </Card>

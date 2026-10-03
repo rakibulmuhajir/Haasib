@@ -901,6 +901,7 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
 
 ### fuel.station_settings.sales_discount_account_id (2026-09-19)
 - Nullable UUID FK acct.accounts. Where a discount given on a fuel sale is posted.
+
 - Resolved and created on demand by StationAccountMapper (code 4210
   "Sales Discounts", type revenue, normal_balance debit, is_contra true).
 - The Daily Close posts revenue from the meters at the posted pump rate, so a sale
@@ -910,6 +911,18 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   transaction (transaction_type fuel_sale_discount, reference_type acct.invoices),
   so DailyCloseReconciliationService::sources() picks it up whether or not the
   close for that date has already posted.
+
+### fuel.station_settings.month_end_stock_valuation (2026-10-03)
+- Non-null varchar(30), default `inventory_cost`, CHECK IN (`inventory_cost`, `next_month_purchase_rate`).
+- Controls the station's monthly management fuel-profit presentation only. `inventory_cost` shows the booked fuel gross profit; `next_month_purchase_rate` uses the physical opening and closing litres at the purchase rates effective on the first days of this and the following month, plus actual dated fuel purchases and customer sales.
+- The chosen method never posts a journal or changes the statutory inventory valuation. Missing rates, daily closes or physical counts make the management calculation unavailable, never zero.
+- Add `month_end_stock_valuation` to StationSettings `$fillable`; no cast is needed.
+
+### fuel.month_profit_snapshots (2026-10-03)
+- UUID `id` PK; `company_id` UUID FK auth.companies cascade delete; `month` date (first of month); `method` varchar(30) CHECK IN (`inventory_cost`, `next_month_purchase_rate`); `payload` jsonb; `finalized_by_user_id` nullable UUID FK auth.users null on delete; `finalized_at` timestamp; `reopened_at` nullable timestamp.
+- Company RLS (ENABLE + FORCE), index (company_id, month), unique partial index (company_id, month) WHERE reopened_at IS NULL.
+- For the purchase-rate method, Lock month saves the completed management calculation, method, per-item quantities/rates/values, and book-profit reconciliation. Read paths never create snapshots. Unlocking any daily close in that month marks its active snapshot and subsequent dependent snapshots reopened; earlier versions remain available as audit evidence.
+- A purchase-rate report uses the previous active snapshot's closing quantities and values as its opening. A changed opening physical quantity makes it incomplete until the preceding month is reviewed. Changing the station preference does not alter a finalized snapshot.
 
 ### fuel.daily_close_reading_corrections (2026-09-16)
 - Controlled correction of a physical tank or nozzle reading belonging to an

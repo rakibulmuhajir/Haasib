@@ -163,6 +163,8 @@ class StockStatementService
                 'expected' => $rowExpected,
                 'close_expected' => $expected,
                 'dip' => $dip,
+                'physical_reading_complete' => $tankIds !== [] && array_diff($tankIds, $ids) === []
+                    && count(array_filter($tanks, fn ($tk) => ($tk['physical_liters'] ?? null) !== null)) === count($tanks),
                 'variance' => $dip - $rowExpected,
                 'bills' => $dayBills,
             ];
@@ -256,7 +258,7 @@ class StockStatementService
         foreach ($earlier as $t) {
             foreach ((array) ($t->metadata['posting_snapshot']['tanks'] ?? []) as $tk) {
                 $id = $tk['tank_id'] ?? null;
-                if ($id && in_array($id, $tankIds, true) && ! array_key_exists($id, $found)) {
+                if ($id && in_array($id, $tankIds, true) && ! array_key_exists($id, $found) && ($tk['physical_liters'] ?? null) !== null) {
                     $found[$id] = (float) ($tk['physical_liters'] ?? 0);
                 }
             }
@@ -273,7 +275,7 @@ class StockStatementService
                 // Only this product's opening: another item's opening entry may sit in the same tank.
                 ->where('item_id', $itemId)
                 ->whereIn('warehouse_id', $missing)
-                ->where('movement_date', '<', $firstDate)
+                ->where('movement_date', '<=', $firstDate)
                 ->groupBy('warehouse_id')
                 ->selectRaw('warehouse_id, SUM(quantity) as qty')
                 ->pluck('qty', 'warehouse_id')->all();
@@ -282,7 +284,7 @@ class StockStatementService
             }
         }
 
-        return $found ? array_sum($found) : null;
+        return $tankIds !== [] && count($found) === count($tankIds) ? array_sum($found) : null;
     }
 
     /**

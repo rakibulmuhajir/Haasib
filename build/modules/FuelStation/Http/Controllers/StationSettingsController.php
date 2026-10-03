@@ -5,14 +5,14 @@ namespace App\Modules\FuelStation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\FuelStation\Http\Requests\UpdateStationSettingsRequest;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\FuelStation\Services\StationAccountMapper;
 use App\Modules\Inventory\Models\Item;
+use App\Services\CommandBus;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -75,6 +75,7 @@ class StationSettingsController extends Controller
             'settings' => [
                 'id' => $settings->id,
                 'fuel_vendor' => $settings->fuel_vendor,
+                'month_end_stock_valuation' => $settings->month_end_stock_valuation,
                 'has_partners' => $settings->has_partners,
                 'has_amanat' => $settings->has_amanat,
                 'has_lubricant_sales' => $settings->has_lubricant_sales,
@@ -104,151 +105,18 @@ class StationSettingsController extends Controller
     /**
      * Update the station settings.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(UpdateStationSettingsRequest $request): RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
+        try {
+            app(CommandBus::class)->dispatch('fuel.settings.update', $request->validated(), $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
 
-        $validated = $request->validate([
-            'has_partners' => 'boolean',
-            'has_amanat' => 'boolean',
-            'has_lubricant_sales' => 'boolean',
-            'has_investors' => 'boolean',
-            'dual_meter_readings' => 'boolean',
-            'payment_channels' => 'nullable|array',
-            'payment_channels.*.code' => 'required|string',
-            'payment_channels.*.label' => 'required|string',
-            'payment_channels.*.type' => 'required|string|in:cash,bank_transfer,card_pos,fuel_card,mobile_wallet',
-            'payment_channels.*.enabled' => 'boolean',
-            'payment_channels.*.bank_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'payment_channels.*.clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'payment_channels.*.settles_to' => ['nullable', 'string', 'in:clearing,bank,supplier'],
-            'payment_channels.*.settles_to_vendor_id' => ['nullable', 'uuid', Rule::exists(Vendor::class, 'id')],
-            // What the bank keeps of this channel's sales, e.g. 0.8 / 1 / 1.2 (% of the total).
-            'payment_channels.*.fee_percent' => ['nullable', 'numeric', 'min:0', 'max:10'],
-            'cash_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_sales_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_cogs_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_inventory_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'cash_over_short_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'partner_drawings_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'employee_advances_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'operating_bank_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_card_clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'card_pos_clearing_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_products' => 'nullable|array',
-            'fuel_products.*.id' => ['required', 'uuid', Rule::exists(Item::class, 'id')],
-            'fuel_products.*.income_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_products.*.expense_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-            'fuel_products.*.asset_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],
-        ]);
-
-        $settings = StationSettings::forCompany($company->id);
-        $validated = app(StationAccountMapper::class)->applyAutomaticPayloadMappings(
-            $settings,
-            $validated,
-            optional($request->user())->id
-        );
-
-        $this->validatePaymentChannelMappings($validated['payment_channels'] ?? [], $company->id);
-
-        $fuelProducts = $validated['fuel_products'] ?? [];
-        unset($validated['fuel_products']);
-
-        $settings->update($validated);
-        app(StationAccountMapper::class)->ensureMappings($settings->fresh(), optional($request->user())->id);
-        $this->updateFuelProductMappings($company->id, $fuelProducts);
+            return redirect()->back()->with('error', 'Station settings could not be saved. Please try again.');
+        }
 
         return redirect()->back()->with('success', 'Station settings updated successfully.');
-    }
-
-    private function updateFuelProductMappings(string $companyId, array $fuelProducts): void
-    {
-        $mapper = app(FuelProductAccountMapper::class);
-
-        foreach ($fuelProducts as $product) {
-            $item = Item::where('company_id', $companyId)
-                ->where('id', $product['id'])
-                ->whereNotNull('fuel_category')
-                ->first();
-
-            if (!$item) {
-                continue;
-            }
-
-            $item = $mapper->ensureItemMappings($item);
-
-            $item->update([
-                'income_account_id' => $product['income_account_id'] ?? $item->income_account_id,
-                'expense_account_id' => $product['expense_account_id'] ?? $item->expense_account_id,
-                'asset_account_id' => $product['asset_account_id'] ?? $item->asset_account_id,
-            ]);
-        }
-    }
-
-    private function validatePaymentChannelMappings(array $channels, string $companyId): void
-    {
-        foreach ($channels as $index => $channel) {
-            if (!($channel['enabled'] ?? false)) {
-                continue;
-            }
-
-            $label = $channel['label'] ?? "Payment channel #" . ($index + 1);
-            $type = $channel['type'] ?? null;
-            $bankAccountId = $channel['bank_account_id'] ?? null;
-            $clearingAccountId = $channel['clearing_account_id'] ?? null;
-            $settlesTo = $channel['settles_to'] ?? 'clearing';
-
-            if (in_array($type, ['bank_transfer'], true) && !$bankAccountId) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    "payment_channels.{$index}.bank_account_id" => "{$label} requires a destination bank account.",
-                ]);
-            }
-
-            if (in_array($type, ['card_pos', 'fuel_card'], true) && !$clearingAccountId) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    "payment_channels.{$index}.clearing_account_id" => "{$label} requires a clearing account.",
-                ]);
-            }
-
-            if ($type === 'mobile_wallet' && !$clearingAccountId && !$bankAccountId) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    "payment_channels.{$index}.clearing_account_id" => "{$label} requires either a clearing account or a bank account.",
-                ]);
-            }
-
-            if (!in_array($type, ['card_pos', 'fuel_card', 'mobile_wallet'], true) || $settlesTo === 'clearing') {
-                continue;
-            }
-
-            if ($settlesTo === 'bank') {
-                if (!$bankAccountId) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        "payment_channels.{$index}.bank_account_id" => "{$label} settles straight to the bank, so it needs a bank account.",
-                    ]);
-                }
-                $bankAccount = Account::where('company_id', $companyId)->whereKey($bankAccountId)->first();
-                if (!$bankAccount || !in_array($bankAccount->subtype, ['cash', 'bank'], true)) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        "payment_channels.{$index}.bank_account_id" => "{$label}'s settlement account must be a cash or bank account.",
-                    ]);
-                }
-
-                continue;
-            }
-
-            if ($settlesTo === 'supplier') {
-                $vendorId = $channel['settles_to_vendor_id'] ?? null;
-                if (!$vendorId || !Vendor::where('company_id', $companyId)->whereKey($vendorId)->exists()) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        "payment_channels.{$index}.settles_to_vendor_id" => "{$label} settles straight to a supplier, so it needs a vendor from this company.",
-                    ]);
-                }
-                if (!$clearingAccountId) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        "payment_channels.{$index}.clearing_account_id" => "{$label} still needs a clearing account — the supplier payment is made from it.",
-                    ]);
-                }
-            }
-        }
     }
 }

@@ -11,8 +11,9 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import InputError from '@/components/InputError.vue'
+import { toast } from 'vue-sonner'
 import type { BreadcrumbItem } from '@/types'
-import { Settings, Building2, CreditCard, Wallet, Save, ChevronDown } from 'lucide-vue-next'
+import { Settings, Building2, CreditCard, Wallet, Save, ChevronDown, LoaderCircle } from 'lucide-vue-next'
 
 interface Account {
   id: string
@@ -52,6 +53,7 @@ interface FuelProductAccountMapping {
 interface StationSettingsData {
   id: string
   fuel_vendor: string
+  month_end_stock_valuation: 'inventory_cost' | 'next_month_purchase_rate'
   has_partners: boolean
   has_amanat: boolean
   has_lubricant_sales: boolean
@@ -98,6 +100,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const form = useForm({
+  month_end_stock_valuation: props.settings.month_end_stock_valuation,
   has_partners: props.settings.has_partners,
   has_amanat: props.settings.has_amanat,
   has_lubricant_sales: props.settings.has_lubricant_sales,
@@ -217,7 +220,9 @@ const settlesToHint = (value: string | undefined) => {
 }
 
 const submit = () => {
-  form.put(`/${props.company.slug}/fuel/settings`)
+  form.put(`/${props.company.slug}/fuel/settings`, {
+    onError: () => toast.error('Check the highlighted settings and try again.'),
+  })
 }
 
 /** Laravel returns these as `payment_channels.0.label`. */
@@ -380,6 +385,25 @@ const formatFuelCategory = (category: string | null) => {
 
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly fuel profit</CardTitle>
+          <CardDescription>Choose how the station performance report values fuel left in the tanks. Locked monthly reports retain the method and values used when they were locked.</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-2">
+          <Label for="month_end_stock_valuation">Month-end remaining stock</Label>
+          <Select v-model="form.month_end_stock_valuation">
+            <SelectTrigger id="month_end_stock_valuation" class="max-w-md"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inventory_cost">Recorded inventory cost</SelectItem>
+              <SelectItem value="next_month_purchase_rate">Purchase rate on the next month's first day</SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-xs text-muted-foreground">The purchase-rate method includes gains and losses on unsold fuel in monthly management profit. Its closing value becomes next month's opening value.</p>
+          <InputError :message="form.errors.month_end_stock_valuation" />
         </CardContent>
       </Card>
 
@@ -817,8 +841,9 @@ const formatFuelCategory = (category: string | null) => {
       <!-- Submit -->
       <div class="flex justify-end">
         <Button type="submit" :disabled="form.processing" class="gap-2">
-          <Save class="h-4 w-4" />
-          Save Settings
+          <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
+          <Save v-else class="h-4 w-4" />
+          {{ form.processing ? 'Saving…' : 'Save Settings' }}
         </Button>
       </div>
     </form>

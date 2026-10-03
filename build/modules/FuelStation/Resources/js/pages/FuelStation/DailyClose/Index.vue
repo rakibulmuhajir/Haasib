@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import InputError from '@/components/InputError.vue'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
@@ -37,6 +38,7 @@ import {
   MoreHorizontal,
   Eye,
   CalendarDays,
+  LoaderCircle,
 } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import MoneyText from '@/components/MoneyText.vue'
@@ -148,6 +150,8 @@ const thisMonth = new Date().toLocaleDateString('en-CA').slice(0, 7)
 
 // Lock month dialog - default to previous month
 const lockMonthOpen = ref(false)
+const lockingMonth = ref(false)
+const lockMonthErrors = ref<Record<string, string>>({})
 const now = new Date()
 const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth() // If January, previous is December (getMonth is 0-indexed)
 const prevMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
@@ -175,6 +179,9 @@ const months = [
 ]
 
 const lockMonth = () => {
+  if (lockingMonth.value) return
+  lockingMonth.value = true
+  lockMonthErrors.value = {}
   router.post(`/${props.company.slug}/fuel/daily-close/lock-month`, {
     year: selectedYear.value,
     month: selectedMonth.value,
@@ -186,9 +193,11 @@ const lockMonth = () => {
         lockMonthOpen.value = false
       }
     },
-    onError: () => {
+    onError: (errors) => {
+      lockMonthErrors.value = errors
       toast.error('Failed to lock month')
     },
+    onFinish: () => { lockingMonth.value = false },
   })
 }
 
@@ -487,14 +496,14 @@ const confirmEditDay = () => {
         <DialogHeader>
           <DialogTitle>Lock Month</DialogTitle>
           <DialogDescription>
-            Lock all daily closes for a specific month. This will prevent post-close corrections to those entries.
+            Lock all daily closes for a specific month. A completed purchase-rate fuel profit calculation is saved with the month. Unlocking a day reopens that calculation and any later months that depend on it.
           </DialogDescription>
         </DialogHeader>
 
         <div class="grid grid-cols-2 gap-4 py-4">
           <div class="space-y-2">
             <Label>Year</Label>
-            <Select v-model="selectedYear">
+            <Select v-model="selectedYear" :disabled="lockingMonth">
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -504,11 +513,12 @@ const confirmEditDay = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="lockMonthErrors.year" />
           </div>
 
           <div class="space-y-2">
             <Label>Month</Label>
-            <Select v-model="selectedMonth">
+            <Select v-model="selectedMonth" :disabled="lockingMonth">
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -518,12 +528,16 @@ const confirmEditDay = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <InputError :message="lockMonthErrors.month" />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="lockMonthOpen = false">Cancel</Button>
-          <Button @click="lockMonth">Lock Month</Button>
+          <Button variant="outline" :disabled="lockingMonth" @click="lockMonthOpen = false">Cancel</Button>
+          <Button :disabled="lockingMonth" @click="lockMonth">
+            <LoaderCircle v-if="lockingMonth" class="mr-2 h-4 w-4 animate-spin" />
+            {{ lockingMonth ? 'Locking…' : 'Lock Month' }}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

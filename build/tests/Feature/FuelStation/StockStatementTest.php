@@ -114,6 +114,32 @@ function statementBill(Company $company, string $itemId, string $tankId, string 
     return $billId;
 }
 
+test('monthly management profit reads the actual credit purchases and carries first-day opening stock', function () {
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
+    [$company, $itemId, $tankId] = statementFixture();
+    DB::table('inv.stock_movements')->insert([
+        'id' => (string) str()->uuid(), 'company_id' => $company->id, 'warehouse_id' => $tankId, 'item_id' => $itemId,
+        'movement_date' => '2026-09-01', 'movement_type' => 'opening', 'quantity' => 100,
+        'unit_cost' => 380, 'total_cost' => 38000,
+    ]);
+    $billId = statementBill($company, $itemId, $tankId, '2026-09-01', 36531);
+    DB::table('acct.bill_line_items')->where('bill_id', $billId)->update(['unit_price' => 14021475 / 36531, 'line_total' => 14021475, 'total' => 14021475]);
+    DB::table('acct.bills')->where('id', $billId)->update(['subtotal' => 14021475, 'total_amount' => 14021475, 'base_amount' => 14021475, 'balance' => 14021475]);
+    foreach ([['2026-09-01', 380], ['2026-10-01', 395.80]] as [$date, $rate]) {
+        \App\Modules\FuelStation\Models\RateChange::create(['company_id' => $company->id, 'item_id' => $itemId, 'effective_date' => $date, 'purchase_rate' => $rate, 'sale_rate' => 410]);
+    }
+    for ($day = 1; $day <= 30; $day++) {
+        statementClose($company, $itemId, $tankId, sprintf('2026-09-%02d', $day), 536, 536, $day === 1 ? 36095 : 0, 14415245 / 36095);
+    }
+
+    $result = app(\App\Modules\FuelStation\Services\MonthlyFuelProfitService::class)->run($company->id, '2026-09');
+    expect($result['complete'])->toBeTrue()
+        ->and($result['totals']['opening_value'])->toBe(38000.0)
+        ->and($result['totals']['purchases'])->toBe(14021475.0)
+        ->and($result['totals']['sales'])->toBe(14415245.0)
+        ->and($result['totals']['fuel_profit'])->toBe(567918.8);
+});
+
 test('opening comes from the close before the range; bought comes from the bills', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
     [$company, $itemId, $tankId] = statementFixture();

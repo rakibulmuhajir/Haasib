@@ -104,6 +104,7 @@ class StationSettings extends Model
     protected $fillable = [
         'company_id',
         'fuel_vendor',
+        'month_end_stock_valuation',
         'has_partners',
         'has_amanat',
         'has_lubricant_sales',

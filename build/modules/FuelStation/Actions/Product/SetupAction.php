@@ -151,7 +151,7 @@ class SetupAction implements PaletteAction
                         $fuelCategory = 'lubricant';
                         $unit = $unit !== '' ? $unit : 'liters';
                     } else {
-                        $unit = $unit !== '' ? $unit : 'bottle';
+                        $unit = $unit !== '' ? $unit : 'pack';
                     }
                 } else {
                     $trackInventory = (bool) $trackInventory;

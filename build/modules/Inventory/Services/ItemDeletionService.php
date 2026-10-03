@@ -24,7 +24,6 @@ class ItemDeletionService
         ['fuel.nozzle_readings', 'item_id', false],
         ['fuel.tank_readings', 'item_id', false],
         ['fuel.pump_readings', 'item_id', false],
-        ['fuel.rate_changes', 'item_id', false],
         ['fuel.customer_fuel_discounts', 'item_id', false],
     ];
 
@@ -79,6 +78,8 @@ class ItemDeletionService
                     ->update(['quantity' => DB::raw('quantity - '.(float) $opening->quantity)]);
             }
             DB::table('inv.stock_movements')->whereIn('id', $openings->pluck('id'))->delete();
+            // Its rates were set up with it (fuel quick add); with nothing sold or bought they go too.
+            DB::table('fuel.rate_changes')->where('item_id', $item->id)->delete();
             DB::table('inv.stock_levels')->where('item_id', $item->id)->where('quantity', 0)->delete();
 
             $item->delete();

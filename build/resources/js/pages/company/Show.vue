@@ -451,7 +451,7 @@ const setRowDefaults = (row: ReturnType<typeof buildProductRow>) => {
     row.packaging = row.lubricant_format
     row.track_inventory = true
     row.fuel_category = row.lubricant_format === 'open' ? 'lubricant' : ''
-    row.unit_of_measure = row.unit_of_measure || (row.lubricant_format === 'open' ? 'liters' : 'bottle')
+    row.unit_of_measure = row.unit_of_measure || (row.lubricant_format === 'open' ? 'liters' : 'pack')
     row.create_pump_points = false
     row.pump_setups = []
     return
@@ -480,6 +480,8 @@ const handleTypeChange = (row: ReturnType<typeof buildProductRow>) => {
   row.new_tank = null
   row.create_pump_points = true
   row.pump_setups = [buildPumpSetup()]
+  // A new kind of product starts from its own unit, not the previous kind's (fuel's litres).
+  row.unit_of_measure = ''
   setRowDefaults(row)
 }
 
@@ -495,11 +497,11 @@ const handleStorageTypeChange = (row: ReturnType<typeof buildProductRow>) => {
   if (row.type === 'lubricant') {
     row.packaging = row.lubricant_format
     row.fuel_category = row.lubricant_format === 'open' ? 'lubricant' : ''
-    if (row.lubricant_format === 'open' && (!row.unit_of_measure || row.unit_of_measure === 'bottle')) {
+    if (row.lubricant_format === 'open' && (!row.unit_of_measure || ['bottle', 'pack'].includes(row.unit_of_measure))) {
       row.unit_of_measure = 'liters'
     }
-    if (row.lubricant_format === 'packaged' && (!row.unit_of_measure || row.unit_of_measure === 'liters')) {
-      row.unit_of_measure = 'bottle'
+    if (row.lubricant_format === 'packaged' && (!row.unit_of_measure || ['liters', 'bottle'].includes(row.unit_of_measure))) {
+      row.unit_of_measure = 'pack'
     }
   }
 

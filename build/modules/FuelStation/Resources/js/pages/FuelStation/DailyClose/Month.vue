@@ -8,7 +8,6 @@ import { computed, ref } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
-import { Checkbox } from '@/components/ui/checkbox'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
@@ -92,7 +91,8 @@ const openLine = ref<string | null>(null)
 const openTank = ref<string | null>(null)
 // Carry last month's stock into this month's purchases: the opening moves into Bought (at its
 // cost) and the Opening column empties, so each row still reads opening + bought − sold.
-const includeOpening = ref(Boolean(props.includeOpeningDefault))
+// Set by Station Settings (month-end stock valuation): next month's rate carries last month's stock in.
+const includeOpening = computed(() => Boolean(props.includeOpeningDefault))
 const tankBought = (t: TankRow) => (includeOpening.value ? (t.opening ?? 0) + (t.delivered ?? 0) : t.delivered)
 const tankPurchases = (t: TankRow) => (includeOpening.value ? (t.opening_value ?? 0) + (t.purchase_amount ?? 0) : t.purchase_amount)
 const tankPurchaseRate = (t: TankRow) => {
@@ -268,7 +268,6 @@ const varianceDays = computed(() =>
           <h3 class="mb-3 flex items-baseline justify-between gap-3 font-semibold">
             Tanks
             <span class="flex items-baseline gap-4 text-xs font-normal text-muted-foreground">
-              <label class="flex items-center gap-1.5"><Checkbox v-model="includeOpening" /> Include opening stock</label>
               <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${monthStart}&end_date=${monthEnd}`" class="underline underline-offset-2">Gains &amp; losses</Link>
             </span>
           </h3>

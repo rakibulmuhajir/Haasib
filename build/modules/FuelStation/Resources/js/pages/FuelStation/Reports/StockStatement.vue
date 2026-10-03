@@ -95,10 +95,10 @@ const endDate = ref(props.filters.end_date)
 
 const currency = computed(() => props.company.base_currency || 'PKR')
 const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
-// Off: opening stock sits on its own line and Available = opening + bought shows under the total.
-// On: the opening counts as the first purchase, so Bought and Purchases start from it -- what a
-// month's paperwork shows when last month's stock is carried in.
-const includeOpening = ref(Boolean(props.includeOpeningDefault))
+// Set by Station Settings (month-end stock valuation), not here. Next month's rate: the opening
+// counts as the first purchase, so Bought and Purchases start from it -- last month's stock carried
+// in. Recorded cost: the opening sits on its own line and Available = opening + bought shows below.
+const includeOpening = computed(() => Boolean(props.includeOpeningDefault))
 const openingValue = computed(() => (includeOpening.value ? props.totals.opening_value ?? 0 : 0))
 const boughtTotal = computed(() => (includeOpening.value ? props.totals.available : props.totals.received))
 const purchaseTotal = computed(() => (includeOpening.value ? props.totals.available_value ?? props.totals.purchase_amount : props.totals.purchase_amount))
@@ -199,10 +199,6 @@ const apply = () => {
               <Input id="end_date" v-model="endDate" type="date" class="w-40" />
             </div>
             <Button @click="apply">Apply</Button>
-            <div class="flex items-center gap-2 pb-2">
-              <Checkbox id="include_opening" v-model="includeOpening" />
-              <Label for="include_opening" class="text-sm font-normal">Include opening stock</Label>
-            </div>
           </div>
         </CardContent>
       </Card>

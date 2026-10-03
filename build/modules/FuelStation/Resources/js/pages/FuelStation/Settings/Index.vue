@@ -402,7 +402,35 @@ const formatFuelCategory = (category: string | null) => {
               <SelectItem value="next_month_purchase_rate">Purchase rate on the next month's first day</SelectItem>
             </SelectContent>
           </Select>
-          <p class="text-xs text-muted-foreground">The purchase-rate method includes gains and losses on unsold fuel in monthly management profit. Its closing value becomes next month's opening value.</p>
+          <!-- How each choice works out a month's fuel profit, in plain words, with a worked example. -->
+          <div class="max-w-2xl rounded-md border border-rule-default p-3 text-sm">
+            <p class="mb-2 font-medium">How a month's fuel profit is worked out</p>
+            <template v-if="form.month_end_stock_valuation === 'next_month_purchase_rate'">
+              <ol class="list-decimal space-y-0.5 pl-5">
+                <li>Sales for the month</li>
+                <li>+ fuel left in the tank (closing dip) × the purchase rate on the 1st of next month</li>
+                <li>− last month's stock (its closing value, carried in)</li>
+                <li>− everything bought this month (bills)</li>
+                <li>= fuel profit — tank gains and losses are included, as the dip counts what is really there</li>
+              </ol>
+              <p class="mt-2 text-xs text-muted-foreground">
+                Example, diesel: sales 14,415,246 + 725 L × 395.80 = 286,955 − 2,671,421 last month − 11,388,054 bought = 642,727.
+                Last month's stock is counted in Bought on the stock statement and month summary.
+                If the new rate is lower than what the stock cost, the books take the drop on the month's last day; a higher rate is never booked until sold.
+              </p>
+            </template>
+            <template v-else>
+              <ol class="list-decimal space-y-0.5 pl-5">
+                <li>Sales for the month</li>
+                <li>− what the fuel sold cost, at the average cost of the stock each day</li>
+                <li>± tank gains and losses, shown on their own</li>
+                <li>= fuel profit</li>
+              </ol>
+              <p class="mt-2 text-xs text-muted-foreground">
+                Fuel left over stays at what it cost; rate changes show up only when it is sold. Last month's stock sits on its own Opening line, not in Bought.
+              </p>
+            </template>
+          </div>
           <InputError :message="form.errors.month_end_stock_valuation" />
         </CardContent>
       </Card>

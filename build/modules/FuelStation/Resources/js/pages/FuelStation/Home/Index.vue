@@ -8,6 +8,8 @@ import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
+import HomeBreakdowns from '../../../components/HomeBreakdowns.vue'
+import type { ProductLine, ExpenseLine, PurchaseLine } from '../../../components/HomeBreakdowns.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -73,6 +75,9 @@ interface Today {
   month: {
     label: string
     sales: SaleLine[]
+    products: ProductLine[]
+    expense_accounts: ExpenseLine[]
+    purchase_products: PurchaseLine[]
     sales_total: number
     gross_profit: number
     expenses: number
@@ -91,6 +96,9 @@ interface History {
   from: string
   to: string
   sales: SaleLine[]
+  products: ProductLine[]
+  expense_accounts: ExpenseLine[]
+  purchase_products: PurchaseLine[]
   sales_total: number
   gross_profit: number
   expenses: number
@@ -397,12 +405,7 @@ const quick = computed(() => [
                 <MoneyText v-else :amount="m.amount" :currency="currency" :fraction-digits="0" />
               </div>
             </div>
-            <ul v-if="today.month.sales.length" class="grid grid-cols-1 gap-x-8 text-sm sm:grid-cols-2">
-              <li v-for="s in today.month.sales" :key="s.item_id" class="flex items-baseline justify-between gap-3 border-b border-rule-subtle py-1.5">
-                <span class="text-text-secondary">{{ s.name }}</span>
-                <Link :href="s.href" :class="lnk">{{ litres(s.liters) }} L · <MoneyText :amount="s.amount" :currency="currency" :fraction-digits="0" /></Link>
-              </li>
-            </ul>
+            <HomeBreakdowns :products="today.month.products" :expense-accounts="today.month.expense_accounts" :purchase-products="today.month.purchase_products" :currency="currency" />
             <p class="text-sm tabular-nums text-text-secondary">
               <Hint>Bought<template #content><p v-for="(l, i) in purchasesHint(today.month.purchases)" :key="i">{{ l }}</p></template></Hint>
               <Link :href="today.month.links.stock_statement" :class="lnk"> {{ litres(today.month.purchases.liters) }} L ·
@@ -519,12 +522,7 @@ const quick = computed(() => [
                   <MoneyText v-else :amount="m.amount" :currency="currency" :fraction-digits="0" />
                 </div>
               </div>
-              <ul v-if="h.sales.length" class="grid grid-cols-1 gap-x-8 text-sm sm:grid-cols-2">
-                <li v-for="s in h.sales" :key="s.item_id" class="flex items-baseline justify-between gap-3 border-b border-rule-subtle py-1.5">
-                  <span class="text-text-secondary">{{ s.name }}</span>
-                  <Link :href="s.href" :class="lnk">{{ litres(s.liters) }} L · <MoneyText :amount="s.amount" :currency="currency" :fraction-digits="0" /></Link>
-                </li>
-              </ul>
+              <HomeBreakdowns :products="h.products" :expense-accounts="h.expense_accounts" :purchase-products="h.purchase_products" :currency="currency" />
               <p class="text-sm tabular-nums text-text-secondary">
                 <Hint>Bought<template #content><p v-for="(l, i) in purchasesHint(h.purchases)" :key="i">{{ l }}</p></template></Hint>
                 <Link :href="h.links.stock_statement" :class="lnk"> {{ litres(h.purchases.liters) }} L ·

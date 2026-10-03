@@ -44,12 +44,15 @@ class FuelHomeService
         $money = $this->money($company, $monthStart, $todayDate);
         $tanks = $this->tanks($company, $closes['last_date'], $closes['last_id'], $monthStart, $todayDate);
         $stock = $this->stockRuns($id, $monthStart, $todayDate);
-        $fig = $this->figures($id, $monthStart, $todayDate, $stock);
+        $fig = $this->figures($id, $monthStart, $todayDate, $stock, $slug);
         $overdue = $money['overdue'];
 
         $month = [
             'label' => $today->format('F Y'),
             'sales' => $this->saleLinks($slug, $fig['sales'], $monthStart, $todayDate),
+            'products' => $fig['products'],
+            'expense_accounts' => $fig['expense_accounts'],
+            'purchase_products' => $fig['purchase_products'],
             'sales_total' => (float) ($summary['sales_total'] ?? 0),
             'gross_profit' => $fig['gross_profit'],
             'expenses' => $fig['expenses'],
@@ -86,7 +89,7 @@ class FuelHomeService
         $today = Carbon::today();
 
         $stock = $this->stockRuns($id, $from, $to);
-        $fig = $this->figures($id, $from, $to, $stock);
+        $fig = $this->figures($id, $from, $to, $stock, $slug);
 
         $rows = $this->liveCloses($id)
             ->whereBetween('transaction_date', [$from, $to])
@@ -116,6 +119,9 @@ class FuelHomeService
             'from' => $from,
             'to' => $to,
             'sales' => $this->saleLinks($slug, $fig['sales'], $from, $to),
+            'products' => $fig['products'],
+            'expense_accounts' => $fig['expense_accounts'],
+            'purchase_products' => $fig['purchase_products'],
             'sales_total' => $fig['sales_total'],
             'gross_profit' => $fig['gross_profit'],
             'expenses' => $fig['expenses'],
@@ -511,6 +517,8 @@ class FuelHomeService
                 'unit' => $p['unit'] ?? null,
                 'has_tank' => (bool) ($r['has_tank'] ?? $p['has_tank'] ?? false),
                 'totals' => $r['totals'],
+                // Days, for what went straight off the tanker (its invoices and its bills' cost).
+                'rows' => $r['rows'],
             ];
         }
 
@@ -518,10 +526,90 @@ class FuelHomeService
     }
 
     /** Sales per fuel, gross profit, expenses and purchases for the range. */
-    private function figures(string $companyId, string $from, string $to, array $stock): array
+    private function figures(string $companyId, string $from, string $to, array $stock, string $slug = ''): array
     {
-        $profit = app(ProductProfitabilityReportService::class)->run($companyId, $from, $to)['totals'];
-        $expenses = app(ExpenseReportService::class)->run($companyId, $from, $to)['totals'];
+        $profitRun = app(ProductProfitabilityReportService::class)->run($companyId, $from, $to);
+        $profit = $profitRun['totals'];
+        $expenseRun = app(ExpenseReportService::class)->run($companyId, $from, $to);
+        $expenses = $expenseRun['totals'];
+
+        // Each product's sales, cost and profit -- packaged lubricants too -- linked to its statement.
+        $itemByName = [];
+        foreach ($stock as $p) {
+            $itemByName[$p['name']] = $p['id'];
+        }
+        $products = array_map(fn ($r) => [
+            'name' => $r['name'],
+            'unit' => $r['unit'] ?? null,
+            'quantity' => (float) $r['quantity'],
+            'revenue' => (float) $r['revenue'],
+            'cogs' => (float) $r['cogs'],
+            'gross_profit' => (float) $r['gross_profit'],
+            'estimated_cogs' => (bool) ($r['estimated_cogs'] ?? false),
+            'href' => isset($itemByName[$r['name']]) && $slug !== '' ? $this->stockItemLink($slug, $itemByName[$r['name']], $from, $to) : null,
+        ], array_values(array_filter($profitRun['productRows'], fn ($r) => abs((float) $r['revenue']) > 0.005 || abs((float) $r['quantity']) > 0.0001)));
+
+        // Sold straight off the tanker: never through a pump or a close's own sale, so the
+        // profitability figures above miss it. The stock statement has it -- litres, the invoices'
+        // amount, and its cost from the bill's own rate -- so each product takes its share.
+        $direct = [];
+        foreach ($stock as $p) {
+            $q = 0.0; $amount = 0.0; $cost = 0.0;
+            foreach ((array) ($p['rows'] ?? []) as $row) {
+                $q += (float) ($row['sold_direct'] ?? 0);
+                $amount += (float) ($row['direct_amount'] ?? 0);
+                foreach ((array) ($row['bills'] ?? []) as $b) {
+                    if ((float) ($b['direct'] ?? 0) > 0 && (float) ($b['quantity'] ?? 0) > 0) {
+                        $cost += (float) ($b['amount'] ?? 0) * (float) $b['direct'] / (float) $b['quantity'];
+                    }
+                }
+            }
+            if ($q > 0.0001) {
+                $direct[$p['name']] = ['quantity' => $q, 'revenue' => $amount, 'cogs' => round($cost, 2)];
+            }
+        }
+        $directRevenue = array_sum(array_column($direct, 'revenue'));
+        $directCost = array_sum(array_column($direct, 'cogs'));
+        foreach ($products as &$line) {
+            if ($d = $direct[$line['name']] ?? null) {
+                $line['quantity'] += $d['quantity'];
+                $line['revenue'] += $d['revenue'];
+                $line['cogs'] += $d['cogs'];
+                $line['gross_profit'] = $line['revenue'] - $line['cogs'];
+                $line['direct_quantity'] = $d['quantity'];
+                unset($direct[$line['name']]);
+            }
+        }
+        unset($line);
+        foreach ($direct as $name => $d) {
+            $products[] = ['name' => $name, 'unit' => 'L', 'quantity' => $d['quantity'], 'revenue' => $d['revenue'], 'cogs' => $d['cogs'],
+                'gross_profit' => $d['revenue'] - $d['cogs'], 'estimated_cogs' => false, 'direct_quantity' => $d['quantity'],
+                'href' => isset($itemByName[$name]) && $slug !== '' ? $this->stockItemLink($slug, $itemByName[$name], $from, $to) : null];
+        }
+
+        // Expenses by the account they were entered against, each opening its expense statement.
+        $expenseAccounts = array_map(fn ($a) => [
+            'name' => $a['account_name'],
+            'code' => $a['account_code'],
+            'amount' => (float) $a['amount'],
+            'asset' => ($a['account_type'] ?? null) === 'asset',
+            'href' => $slug !== '' ? "/{$slug}/reports/statements?kind=expense&id={$a['account_id']}&from={$from}&to={$to}" : null,
+        ], $expenseRun['accountRows']);
+
+        // What was bought, per product.
+        $purchaseProducts = [];
+        foreach ($stock as $p) {
+            $q = (float) ($p['totals']['received'] ?? 0);
+            if ($q > 0.0001) {
+                $purchaseProducts[] = [
+                    'name' => $p['name'],
+                    'unit' => $p['has_tank'] ? 'L' : ($p['unit'] ?: null),
+                    'quantity' => $q,
+                    'amount' => (float) ($p['totals']['purchase_amount'] ?? 0),
+                    'href' => $slug !== '' ? $this->stockItemLink($slug, $p['id'], $from, $to) : null,
+                ];
+            }
+        }
 
         $sales = [];
         $litres = 0.0;
@@ -554,10 +642,14 @@ class FuelHomeService
 
         return [
             'sales' => $sales,
-            'revenue' => (float) ($profit['revenue'] ?? 0),
-            'cogs' => (float) ($profit['cogs'] ?? 0),
-            'sales_total' => (float) ($profit['revenue'] ?? 0),
-            'gross_profit' => (float) ($profit['gross_profit'] ?? 0),
+            'products' => $products,
+            'expense_accounts' => $expenseAccounts,
+            'purchase_products' => $purchaseProducts,
+            // Pump and close sales plus what went straight off the tanker.
+            'revenue' => (float) ($profit['revenue'] ?? 0) + $directRevenue,
+            'cogs' => (float) ($profit['cogs'] ?? 0) + $directCost,
+            'sales_total' => (float) ($profit['revenue'] ?? 0) + $directRevenue,
+            'gross_profit' => (float) ($profit['gross_profit'] ?? 0) + $directRevenue - $directCost,
             'expenses' => (float) ($expenses['amount'] ?? 0),
             'purchases' => ['liters' => $litres, 'amount' => $amount, 'bills' => $bills],
         ];

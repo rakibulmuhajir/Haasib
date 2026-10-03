@@ -188,6 +188,26 @@ const tableData = computed(() =>
     }))
 )
 
+const currentColumns = [
+  { key: 'fuel', label: 'Fuel', kind: 'text' as const },
+  { key: 'sale', label: 'Sale', kind: 'amount' as const },
+  { key: 'purchase', label: 'Purchase', kind: 'amount' as const },
+  { key: 'margin', label: 'Margin', kind: 'amount' as const },
+  { key: 'since', label: 'Since', kind: 'text' as const },
+]
+const currentRows = computed(() =>
+  currentCards.value.map((c) => ({
+    id: c.item.id,
+    fuel: c.item.name,
+    sale: c.rate ? `${formatMoney(c.rate.sale_rate)} / L` : '—',
+    purchase: c.rate ? `${formatMoney(c.rate.purchase_rate)} / L` : '—',
+    margin: c.rate ? `${formatMoney(spreadFor(c.rate))} / L` : '—',
+    since: !c.rate ? 'No rate' : c.source === 'history' ? formatEffectiveDate(c.rate.effective_date) : 'Product setup',
+    _negative: c.rate ? spreadFor(c.rate) < 0 : false,
+    _card: c,
+  })),
+)
+
 const dialogOpen = ref(false)
 const openCreate = () => {
   form.reset()
@@ -362,27 +382,21 @@ const submit = () => {
             <template #content>Govt (OGRA) sale rate from 00:00 of its date. Purchase rate is a reference for new deliveries; actual cost comes from bills. Click a line to edit.</template>
           </Hint>
         </h2>
-        <div class="overflow-hidden rounded-md border border-rule-default text-sm tabular-nums">
-          <button
-            v-for="c in currentCards"
-            :key="c.item.id"
-            type="button"
-            class="flex w-full flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-rule-default px-3 py-1.5 text-left first:border-t-0 hover:bg-surface-sunken"
-            @click="openCurrent(c)"
-          >
-            <span class="min-w-32 font-medium">{{ c.item.name }}</span>
-            <template v-if="c.rate">
-              <span>Sale {{ formatMoney(c.rate.sale_rate) }}</span>
-              <span>Purchase {{ formatMoney(c.rate.purchase_rate) }}</span>
-              <span :class="spreadFor(c.rate) < 0 ? 'text-status-attention' : ''">Margin {{ formatMoney(spreadFor(c.rate)) }}</span>
-              <span class="text-muted-foreground">{{ c.source === 'history' ? `since ${formatEffectiveDate(c.rate.effective_date)}` : 'product setup' }}</span>
-            </template>
-            <span v-else class="text-muted-foreground">No rate</span>
-          </button>
-          <div v-if="!currentCards.length" class="px-3 py-3 text-muted-foreground">No fuels yet.</div>
-        </div>
+        <!-- One line per fuel, banded like the history below; click a line to edit it. -->
+        <LedgerRegister :data="currentRows" :columns="currentColumns" banded @row-click="(row: any) => openCurrent(row._card)">
+          <template #empty>
+            <div class="px-3 py-3 text-muted-foreground">No fuels yet.</div>
+          </template>
+          <template #cell-margin="{ row }">
+            <span :class="row._negative ? 'text-status-attention' : ''">{{ row.margin }}</span>
+          </template>
+          <template #cell-since="{ row }">
+            <span class="text-muted-foreground">{{ row.since }}</span>
+          </template>
+        </LedgerRegister>
       </section>
 
+      <h2 class="mb-1 text-xs text-muted-foreground">Rate history</h2>
       <div class="flex flex-wrap items-end gap-3">
         <div class="grid gap-1.5">
           <Label>Fuel</Label>

@@ -2423,6 +2423,22 @@ class DailyCloseService
         return $required;
     }
 
+    /**
+     * The accounts a close posts tank losses and gains to -- the same resolution the close uses.
+     *
+     * @return array<int,string>
+     */
+    public function tankVarianceAccountIds(string $companyId): array
+    {
+        try {
+            $accounts = $this->resolveAccounts($companyId);
+        } catch (\RuntimeException) {
+            return [];
+        }
+
+        return array_values(array_filter([$accounts['fuel_shrinkage'] ?? null, $accounts['fuel_variance_gain'] ?? null]));
+    }
+
     private function addGroupedPosting(array &$postings, string $accountId, float $amount, string $label): void
     {
         if ($amount <= 0) {

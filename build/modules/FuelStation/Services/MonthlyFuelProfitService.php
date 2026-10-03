@@ -86,7 +86,13 @@ class MonthlyFuelProfitService
             $totals['fuel_profit'] += $profit;
         }
 
-        $books = $this->bookProfit($companyId, $start->toDateString(), $end->toDateString(), $bookAccountIds);
+        // The method's fuel profit counts the dip, so it already holds the tank losses and gains;
+        // the books keep those on their own accounts. Compare like with like, or they would be
+        // taken off net profit twice. They are one account for all fuels, so only the whole
+        // station can be reconciled.
+        $varianceAccountIds = $product === 'all' ? app(DailyCloseService::class)->tankVarianceAccountIds($companyId) : [];
+        $canReconcile = $canReconcile && $product === 'all';
+        $books = $this->bookProfit($companyId, $start->toDateString(), $end->toDateString(), array_merge($bookAccountIds, $varianceAccountIds));
         // A shared fuel/non-fuel account cannot provide a reliable reconciliation.
         $shared = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')->whereNotIn('id', $itemIds)
             ->where(fn ($q) => $q->whereIn('income_account_id', $bookAccountIds)->orWhereIn('expense_account_id', $bookAccountIds))->exists();

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
-import { Pencil, ArrowLeft, Warehouse, Trash2 } from 'lucide-vue-next'
+import { Pencil, ArrowLeft, Warehouse, Trash2, PackagePlus } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
@@ -140,6 +140,10 @@ const getTypeBadgeVariant = (type: string) => {
         @click="router.get(`/${company.slug}/bills?item_id=${item.id}&needs_receiving=1`)"
       >
         {{ t('receiveStock') }}
+      </Button>
+      <Button v-if="item.track_inventory" variant="outline" @click="router.get(`/${company.slug}/stock/adjustment?item=${item.id}`)">
+        <PackagePlus class="mr-2 h-4 w-4" />
+        Adjust stock
       </Button>
       <Button @click="router.get(`/${company.slug}/items/${item.id}/edit`)">
         <Pencil class="mr-2 h-4 w-4" />

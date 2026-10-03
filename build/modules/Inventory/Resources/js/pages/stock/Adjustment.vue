@@ -41,6 +41,7 @@ const props = defineProps<{
   company: CompanyRef
   warehouses: Warehouse[]
   items: Item[]
+  preselect?: { item_id: string; warehouse_id: string | null } | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -52,8 +53,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 const adjustmentType = ref<'increase' | 'decrease'>('increase')
 
 const form = useForm({
-  warehouse_id: '',
-  item_id: '',
+  warehouse_id: props.preselect?.warehouse_id ?? '',
+  item_id: props.preselect?.item_id ?? '',
   quantity: 0,
   unit_cost: '',
   reason: '',

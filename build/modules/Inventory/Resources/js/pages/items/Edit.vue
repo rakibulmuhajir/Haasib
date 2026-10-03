@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
-import { Save, ArrowLeft } from 'lucide-vue-next'
+import { Save, ArrowLeft, PackagePlus } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -129,6 +129,11 @@ const submit = () => {
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <!-- Stock on hand changes through an adjustment (with its reason), not by editing the product. -->
+      <Button v-if="item.track_inventory" variant="outline" @click="$inertia.get(`/${company.slug}/stock/adjustment?item=${item.id}`)">
+        <PackagePlus class="mr-2 h-4 w-4" />
+        Adjust stock
+      </Button>
       <Button variant="outline" @click="$inertia.get(`/${company.slug}/items/${item.id}`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back

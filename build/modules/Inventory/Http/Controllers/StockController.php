@@ -351,7 +351,7 @@ class StockController extends Controller
         ]);
     }
 
-    public function createAdjustment(): Response
+    public function createAdjustment(\Illuminate\Http\Request $request): Response
     {
         $company = CompanyContext::getCompany();
 
@@ -376,7 +376,20 @@ class StockController extends Controller
             ],
             'warehouses' => $warehouses,
             'items' => $items,
+            // Opened from a product's page: that product, in the warehouse holding most of it.
+            'preselect' => $this->adjustmentPreselect($company->id, (string) $request->query('item', ''), $items),
         ]);
+    }
+
+    private function adjustmentPreselect(string $companyId, string $itemId, $items): ?array
+    {
+        if ($itemId === '' || ! $items->contains('id', $itemId)) {
+            return null;
+        }
+        $warehouseId = StockLevel::where('company_id', $companyId)->where('item_id', $itemId)
+            ->orderByDesc('quantity')->value('warehouse_id');
+
+        return ['item_id' => $itemId, 'warehouse_id' => $warehouseId];
     }
 
     public function storeAdjustment(StoreStockAdjustmentRequest $request): RedirectResponse

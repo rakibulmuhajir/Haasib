@@ -435,10 +435,10 @@ function resolve_route_params(?string $name, ?Company $company, array $companies
             Pump::where('company_id', $fuel->id)->first(), 'pump', 'No pump found for the fuel demo company.'
         ),
         'fuel.receipts.show' => [
-            // FuelReceiptController::show() unconditionally redirects to
-            // /{company}/bills without ever querying the {receipt} value —
-            // confirmed by reading the controller. A placeholder is safe
-            // here specifically because it is provably never dereferenced.
+            // FuelReceiptController::show() redirects to /{company}/bills/{receipt}
+            // (a delivery is its bill) without querying the value -- confirmed
+            // by reading the controller. A placeholder is safe because the
+            // controller never dereferences it.
             ['receipt' => 'unused'], null,
         ],
         'fuel.tank-readings.show' => id_or_skip(

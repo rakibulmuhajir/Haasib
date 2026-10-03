@@ -114,7 +114,7 @@ const quickLinks = computed(() => {
     {
       title: 'Fuel Delivery',
       description: 'Record tanker receipts and update stock.',
-      href: `/${slug}/fuel/receipts/create`,
+      href: `/${slug}/fuel/receipts`,
       icon: Truck,
       tone: 'Stock',
     },

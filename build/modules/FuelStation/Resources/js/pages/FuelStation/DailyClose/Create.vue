@@ -760,6 +760,10 @@ const checkForDraft = (date: string) => {
 // Check for existing draft on mount
 onMounted(() => {
     if (!props.parkedDraft) checkForDraft(props.date);
+    // Opened from home's "Fuel delivery": land on Purchases, where deliveries are entered.
+    if (window.location.hash === '#purchases') {
+        setTimeout(() => document.getElementById('purchases')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+    }
 });
 
 // Auto-save draft every 30 seconds
@@ -3741,7 +3745,7 @@ const cashFlowOut = computed(() => [
                 </Card>
 
                 <!-- Purchases / deliveries: before the meters, so the tanks tab counts them right away -->
-                <Card v-if="canEnterPurchases" class="mb-4">
+                <Card v-if="canEnterPurchases" id="purchases" class="mb-4 scroll-mt-4">
                     <CardHeader class="flex flex-row items-start justify-between gap-4 space-y-0">
                         <div>
                             <CardTitle>Purchases / deliveries today</CardTitle>

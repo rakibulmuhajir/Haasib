@@ -6,9 +6,9 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import Hint from '@/components/Hint.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
-import { CalendarClock, Droplet, Plus, TrendingUp } from 'lucide-vue-next'
+import { Plus, TrendingUp } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
@@ -98,7 +98,7 @@ const currencyCode = computed(() => {
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${companySlug.value}` },
   { title: 'Fuel', href: `/${companySlug.value}/fuel/rates` },
-  { title: 'Rates', href: `/${companySlug.value}/fuel/rates` },
+  { title: 'Fuel prices', href: `/${companySlug.value}/fuel/rates` },
 ])
 
 const formatMoney = (amount: number) => {
@@ -164,11 +164,11 @@ const filteredRates = computed(() => {
 
 const columns = [
   { key: 'effective_date', label: 'Effective', kind: 'date' as const },
-  { key: 'item', label: 'Fuel item', kind: 'text' as const },
-  { key: 'purchase_rate', label: 'Supplier purchase', kind: 'amount' as const },
-  { key: 'sale_rate', label: 'Govt sale', kind: 'amount' as const },
-  { key: 'margin', label: 'Spread', kind: 'amount' as const },
-  { key: 'impact', label: 'Impact', kind: 'text' as const },
+  { key: 'item', label: 'Fuel', kind: 'text' as const },
+  { key: 'purchase_rate', label: 'Purchase', kind: 'amount' as const },
+  { key: 'sale_rate', label: 'Sale', kind: 'amount' as const },
+  { key: 'margin', label: 'Margin', kind: 'amount' as const },
+  { key: 'impact', label: 'Impact', kind: 'amount' as const },
 ]
 
 const tableData = computed(() =>
@@ -179,9 +179,9 @@ const tableData = computed(() =>
       id: r.id,
       effective_date: formatEffectiveDate(r.effective_date),
       item: r.item?.name ?? props.items.find((i) => i.id === r.item_id)?.name ?? '—',
-      purchase_rate: `${formatMoney(r.purchase_rate)} / L`,
-      sale_rate: `${formatMoney(r.sale_rate)} / L`,
-      margin: `${formatMoney(spreadFor(r))} / L`,
+      purchase_rate: formatMoney(r.purchase_rate),
+      sale_rate: formatMoney(r.sale_rate),
+      margin: formatMoney(spreadFor(r)),
       impact: r.stock_quantity_at_change ? `${formatMoney(r.margin_impact ?? 0)} @ ${formatLiters(r.stock_quantity_at_change)}L` : '—',
       _raw: r,
       _isCurrent: byItemCurrent.value.get(r.item_id)?.id === r.id,
@@ -205,6 +205,14 @@ const openEdit = (row: { _raw: RateChangeRow }) => {
   form.purchase_rate = Number(row._raw.purchase_rate)
   form.sale_rate = Number(row._raw.sale_rate)
   dialogOpen.value = true
+}
+
+// A current-rate line opens that fuel's saved rate; a fuel with only product-setup prices
+// starts a new rate change for it.
+const openCurrent = (c: { item: FuelItemRef; rate: RateChangeRow | null; source: string }) => {
+  if (c.rate && c.source === 'history') return openEdit({ _raw: c.rate })
+  openCreate()
+  form.item_id = c.item.id
 }
 
 const closeDialog = () => {
@@ -336,158 +344,81 @@ const submit = () => {
 </script>
 
 <template>
-  <Head title="Fuel Rates" />
+  <Head title="Fuel prices" />
 
-  <PageShell
-    title="Fuel Rates"
-    description="Record OGRA (govt) sale rates by effective date (from 00:00). Supplier purchase rate here is a reference for new deliveries; your actual delivery cost comes from bills."
-    :icon="TrendingUp"
-    :breadcrumbs="breadcrumbs"
-  >
+  <PageShell title="Fuel prices" :icon="TrendingUp" :breadcrumbs="breadcrumbs">
     <template #actions>
       <Button @click="openCreate">
         <Plus class="mr-2 h-4 w-4" />
-        Add Rate Change
+        Add rate change
       </Button>
     </template>
 
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card
-        v-for="{ item, rate, source } in currentCards"
-        :key="item.id"
-        class="relative overflow-hidden border-border/80 bg-surface-sunken"
-      >
-        <CardHeader class="pb-3">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle class="flex items-center gap-2 text-base">
-                <Droplet class="h-4 w-4 text-status-info" />
-                {{ item.name }}
-              </CardTitle>
-              <CardDescription class="mt-1">
-                <span v-if="item.fuel_category">Category: {{ item.fuel_category }}</span>
-                <span v-else>Fuel item</span>
-              </CardDescription>
-            </div>
-            <Badge v-if="rate && source === 'history'" class="bg-status-success text-status-success-contrast hover:bg-status-success">Current</Badge>
-            <Badge v-else-if="rate" variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">Product rate</Badge>
-            <Badge v-else variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">No rate</Badge>
-          </div>
-        </CardHeader>
-
-        <CardContent class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div class="rounded-lg border border-border/70 bg-surface-raised/50 p-3">
-              <p class="text-xs font-medium text-text-tertiary">Supplier purchase (reference)</p>
-              <p class="mt-1 text-sm font-semibold text-text-primary">
-                {{ rate ? `${formatMoney(rate.purchase_rate)} / L` : '—' }}
-              </p>
-            </div>
-            <div class="rounded-lg border border-border/70 bg-surface-raised/50 p-3">
-              <p class="text-xs font-medium text-text-tertiary">Govt sale (OGRA)</p>
-              <p class="mt-1 text-sm font-semibold text-text-primary">
-                {{ rate ? `${formatMoney(rate.sale_rate)} / L` : '—' }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
-            <div class="flex items-center gap-2">
-              <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
-                Spread
-              </Badge>
-              <span class="text-sm font-semibold text-text-primary">
-                {{ rate ? `${formatMoney(spreadFor(rate))} / L` : '—' }}
-              </span>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-text-secondary">
-              <CalendarClock class="h-4 w-4 text-text-tertiary" />
-              <span>{{ rate && source === 'history' ? `${formatEffectiveDate(rate.effective_date)} (from 00:00)` : rate ? 'From product setup' : 'No effective date' }}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-
-    <Card class="border-border/80">
-      <CardHeader class="pb-3">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle class="text-base">Rate History</CardTitle>
-            <CardDescription>Every change is preserved for audit and disputes.</CardDescription>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <Label class="text-sm text-text-secondary">Fuel item</Label>
-            <Select v-model="itemFilter">
-              <SelectTrigger class="w-[220px]">
-                <SelectValue placeholder="All items" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All items</SelectItem>
-                <SelectItem v-for="item in items" :key="item.id" :value="item.id">
-                  {{ item.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <div class="space-y-4">
+      <section>
+        <h2 class="mb-1 text-xs text-muted-foreground">
+          <Hint>
+            Current rates
+            <template #content>Govt (OGRA) sale rate from 00:00 of its date. Purchase rate is a reference for new deliveries; actual cost comes from bills. Click a line to edit.</template>
+          </Hint>
+        </h2>
+        <div class="overflow-hidden rounded-md border border-rule-default text-sm tabular-nums">
+          <button
+            v-for="c in currentCards"
+            :key="c.item.id"
+            type="button"
+            class="flex w-full flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-rule-default px-3 py-1.5 text-left first:border-t-0 hover:bg-surface-sunken"
+            @click="openCurrent(c)"
+          >
+            <span class="min-w-32 font-medium">{{ c.item.name }}</span>
+            <template v-if="c.rate">
+              <span>Sale {{ formatMoney(c.rate.sale_rate) }}</span>
+              <span>Purchase {{ formatMoney(c.rate.purchase_rate) }}</span>
+              <span :class="spreadFor(c.rate) < 0 ? 'text-status-attention' : ''">Margin {{ formatMoney(spreadFor(c.rate)) }}</span>
+              <span class="text-muted-foreground">{{ c.source === 'history' ? `since ${formatEffectiveDate(c.rate.effective_date)}` : 'product setup' }}</span>
+            </template>
+            <span v-else class="text-muted-foreground">No rate</span>
+          </button>
+          <div v-if="!currentCards.length" class="px-3 py-3 text-muted-foreground">No fuels yet.</div>
         </div>
-      </CardHeader>
+      </section>
 
-      <CardContent class="p-0">
-        <LedgerRegister :data="tableData" :columns="columns" banded @row-click="openEdit">
-          <template #empty>
-            <EmptyState
-              title="No rate changes yet"
-              description="Add your first rate change to track margins and preserve history."
-            >
-              <template #actions>
-                <Button @click="openCreate">
-                  <Plus class="mr-2 h-4 w-4" />
-                  Add Rate Change
-                </Button>
-              </template>
-            </EmptyState>
-          </template>
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="grid gap-1.5">
+          <Label>Fuel</Label>
+          <Select v-model="itemFilter">
+            <SelectTrigger class="w-48">
+              <SelectValue placeholder="All fuels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All fuels</SelectItem>
+              <SelectItem v-for="item in items" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-          <template #cell-effective_date="{ row }">
-            <div class="flex items-center gap-2">
-              <Badge
-                v-if="row._isCurrent"
-                class="bg-status-success text-status-success-contrast hover:bg-status-success"
-              >
-                Current
-              </Badge>
-              <span class="font-medium text-text-primary">{{ row.effective_date }}</span>
-            </div>
-          </template>
+      <LedgerRegister :data="tableData" :columns="columns" banded @row-click="openEdit">
+        <template #empty>
+          <EmptyState title="No rate changes yet" description="Add a rate change to start the history.">
+            <template #actions>
+              <Button @click="openCreate"><Plus class="mr-2 h-4 w-4" />Add rate</Button>
+            </template>
+          </EmptyState>
+        </template>
 
-          <template #cell-item="{ row }">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="font-medium text-text-primary">{{ row.item }}</span>
-              <Badge
-                v-if="row._raw.item?.fuel_category"
-                variant="secondary"
-                class="bg-status-info/10 text-status-info hover:bg-status-info/10"
-              >
-                {{ row._raw.item.fuel_category }}
-              </Badge>
-            </div>
-          </template>
+        <template #cell-effective_date="{ row }">
+          <div class="flex items-center gap-2">
+            <Badge v-if="row._isCurrent" class="bg-status-success text-status-success-contrast hover:bg-status-success">Current</Badge>
+            <span>{{ row.effective_date }}</span>
+          </div>
+        </template>
 
-          <template #cell-margin="{ row }">
-<!-- A positive margin is the ordinary case and needs no colour. A
-                 negative one means the pump is selling below what the fuel cost,
-                 which is the rare thing on this page somebody must act on. -->
-            <Badge
-              :class="spreadFor(row._raw) >= 0 ? '' : 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'"
-            >
-              {{ row.margin }}
-            </Badge>
-          </template>
-        </LedgerRegister>
-      </CardContent>
-    </Card>
+        <template #cell-margin="{ row }">
+          <span :class="spreadFor(row._raw) < 0 ? 'text-status-attention' : ''">{{ row.margin }}</span>
+        </template>
+      </LedgerRegister>
+    </div>
 
     <Dialog :open="dialogOpen" @update:open="(v) => (v ? (dialogOpen = true) : closeDialog())">
       <DialogContent class="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-3xl">

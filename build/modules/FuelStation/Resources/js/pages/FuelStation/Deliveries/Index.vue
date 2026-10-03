@@ -10,7 +10,6 @@ import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -200,21 +199,17 @@ const breadcrumbs: BreadcrumbItem[] = [
     </Dialog>
 
     <div class="space-y-4">
-      <Card>
-        <CardContent class="pt-6">
-          <div class="flex flex-wrap items-end gap-3">
-            <div class="grid gap-1.5">
-              <Label for="start_date">From</Label>
-              <Input id="start_date" v-model="startDate" type="date" class="w-40" />
-            </div>
-            <div class="grid gap-1.5">
-              <Label for="end_date">To</Label>
-              <Input id="end_date" v-model="endDate" type="date" class="w-40" />
-            </div>
-            <Button @click="apply">Apply</Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="grid gap-1.5">
+          <Label for="start_date">From</Label>
+          <Input id="start_date" v-model="startDate" type="date" class="w-40" />
+        </div>
+        <div class="grid gap-1.5">
+          <Label for="end_date">To</Label>
+          <Input id="end_date" v-model="endDate" type="date" class="w-40" />
+        </div>
+        <Button @click="apply">Apply</Button>
+      </div>
 
       <div class="overflow-x-auto rounded-md border border-rule-default">
         <table class="w-full text-sm tabular-nums">

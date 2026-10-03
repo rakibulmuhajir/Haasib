@@ -266,6 +266,17 @@ class StockController extends Controller
 
         $movements = $query->paginate(50)->withQueryString();
 
+        // Where each movement came from, in plain words, linked when the source has a page.
+        $txnTypes = DB::table('acct.transactions')
+            ->whereIn('id', $movements->getCollection()->pluck('gl_transaction_id')->filter()->unique()->all())
+            ->pluck('transaction_type', 'id');
+        $movements->through(function (StockMovement $m) use ($company, $txnTypes) {
+            $row = $m->toArray();
+            $row['source'] = $this->movementSource($m, $company->slug, $txnTypes[$m->gl_transaction_id] ?? null);
+
+            return $row;
+        });
+
         $warehouses = Warehouse::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -287,6 +298,36 @@ class StockController extends Controller
                 'date_to' => $request->date_to ?? '',
             ],
         ]);
+    }
+
+    /** @return array{label: string, href: ?string}|null */
+    private function movementSource(StockMovement $m, string $slug, ?string $txnType): ?array
+    {
+        $ref = $m->reference_type;
+        $base = "/{$slug}";
+
+        if ($ref === 'fuel.daily_close' || $txnType === 'fuel_daily_close') {
+            $id = $ref === 'fuel.daily_close' ? ($m->reference_id ?: $m->gl_transaction_id) : $m->gl_transaction_id;
+
+            return ['label' => 'Daily close', 'href' => $id ? "{$base}/fuel/daily-close/{$id}" : null];
+        }
+        if ($ref === 'acct.bills' && $m->reference_id) {
+            return ['label' => 'Bill', 'href' => "{$base}/bills/{$m->reference_id}"];
+        }
+        if ($ref === 'fuel.stock_writedown') {
+            return ['label' => 'Month-end value', 'href' => null];
+        }
+        if ($ref === 'fuel.lubricant_cost' || $txnType === 'fuel_lubricant_cost') {
+            return ['label' => 'Lubricant cost', 'href' => null];
+        }
+        if ($ref === 'inv.stock_adjustments') {
+            return ['label' => 'Adjustment', 'href' => null];
+        }
+        if ($m->movement_type === 'opening') {
+            return ['label' => 'Opening entry', 'href' => null];
+        }
+
+        return null;
     }
 
     public function receipts(Request $request): Response

@@ -73,6 +73,7 @@ export function useNavGroups() {
             isPayrollEnabled: isPayrollEnabled.value,
             currentCompanyRole: authProps.value.currentCompanyRole || null,
             fuelNavigation: authProps.value.fuelNavigation ?? null,
+            settingsMenu: authProps.value.settingsMenu ?? null,
             t,
         }),
     )

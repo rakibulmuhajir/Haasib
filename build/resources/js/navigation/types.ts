@@ -8,6 +8,8 @@ export interface NavContext {
     isPayrollEnabled: boolean;
     currentCompanyRole: string | null;
     fuelNavigation?: { allowed: string[]; hasInvestors: boolean } | null;
+    // What this person may set up, grouped -- the Settings menu (App\Services\SettingsMenu).
+    settingsMenu?: Array<{ title: string; href: string | null; items: Array<{ title: string; description: string; href: string }> }> | null;
     t: (key: string) => string;
 }
 

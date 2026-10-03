@@ -324,7 +324,7 @@ const formatFuelCategory = (category: string | null) => {
   >
     <form novalidate @submit.prevent="submit" class="space-y-6">
       <!-- General Settings -->
-      <Card>
+      <Card id="general" class="scroll-mt-4">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Building2 class="h-5 w-5" />
@@ -388,7 +388,7 @@ const formatFuelCategory = (category: string | null) => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="monthly-profit" class="scroll-mt-4">
         <CardHeader>
           <CardTitle>Monthly fuel profit</CardTitle>
           <CardDescription>Choose how the station performance report values fuel left in the tanks. Locked monthly reports retain the method and values used when they were locked.</CardDescription>
@@ -436,7 +436,7 @@ const formatFuelCategory = (category: string | null) => {
       </Card>
 
       <!-- Payment Channels -->
-      <Card>
+      <Card id="payment-channels" class="scroll-mt-4">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <CreditCard class="h-5 w-5" />
@@ -565,7 +565,7 @@ const formatFuelCategory = (category: string | null) => {
       </Card>
 
       <!-- Account Mappings -->
-      <Card>
+      <Card id="accounts" class="scroll-mt-4">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Wallet class="h-5 w-5" />

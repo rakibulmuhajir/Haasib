@@ -76,10 +76,17 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('bankFeed', 'Bank Feed', '/banking/feed', ArrowLeftRight),
         ...item('bankReconciliation', 'Bank Reconciliation', '/banking/reconciliation', Scale),
       ] },
-      { label: t('settings'), items: [
-        // Everything set up once -- company, station, accounts -- lives on the one Settings page.
-        { title: t('settings'), href: `/${slug}/setup`, icon: Settings },
-      ] },
+      // Settings: each group (Company, Station settings, Accounting...) with what is inside it
+      // as its sub-menu; a group with one entry is a plain link. Built by App\Services\SettingsMenu.
+      { label: t('settings'), items: (context.settingsMenu ?? []).map((section): NavItem =>
+        section.items.length === 1 && !section.href
+          ? { title: section.items[0].title, href: section.items[0].href, icon: Settings }
+          : {
+              title: section.title,
+              href: section.href ?? section.items[0]?.href,
+              icon: Settings,
+              children: section.items.map((i) => ({ title: i.title, href: i.href })),
+            }) },
     ]
     // Favorites: Daily Close always first, then this person's most visited pages.
     const favorites = groups.find(group => group.label === 'Favorites')

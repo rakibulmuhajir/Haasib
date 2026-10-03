@@ -172,6 +172,16 @@ class HandleInertiaRequests extends Middleware
                         ? app(FuelNavigationAccess::class)->forUser($company, $user)
                         : null;
                 },
+                // The Settings menu: what this person may set up, grouped (App\Services\SettingsMenu).
+                'settingsMenu' => function () use ($request) {
+                    $company = app(CurrentCompany::class)->get();
+                    $user = $request->user();
+                    if (! $request->route('company') || ! $company || ! $user) {
+                        return null;
+                    }
+
+                    return app(\App\Services\SettingsMenu::class)->sections($company, $user);
+                },
                 'companies' => fn () => $resolve()['companies']->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
                 'openingBalance' => function () use ($request) {

@@ -275,7 +275,7 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                                             as-child
                                             :class="isActive(child) ? 'font-medium' : ''"
                                         >
-                                            <Link :href="child.href!">{{ child.title }}</Link>
+                                            <Link :href="child.href!" :class="item.href ? 'pl-7' : ''">{{ child.title }}</Link>
                                         </DropdownMenuItem>
                                     </template>
                                 </template>

@@ -6,12 +6,15 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\TaxRate;
+use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\Inventory\Http\Requests\StoreItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemStatusRequest;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Services\ItemDeletionService;
+use App\Modules\Inventory\Services\OpeningStockService;
 use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\JsonResponse;
@@ -153,14 +156,55 @@ class ItemController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $item = app(ProductCatalogService::class)->save(array_merge($request->validated(), [
-            'company_id' => $company->id,
-            'user_id' => $request->user()->id,
-        ]));
+        $data = $request->validated();
+        $this->defaultStockAccounts($data, $company, $request->user()->id);
+        $openingStock = app(OpeningStockService::class);
+
+        $item = DB::transaction(function () use ($data, $company, $request, $openingStock) {
+            $item = app(ProductCatalogService::class)->save(array_merge($data, [
+                'company_id' => $company->id,
+                'user_id' => $request->user()->id,
+            ]));
+
+            if ($item->track_inventory && (float) ($data['opening_quantity'] ?? 0) > 0) {
+                $openingStock->record(
+                    $company->id,
+                    $item,
+                    (float) $data['opening_quantity'],
+                    isset($data['opening_unit_cost']) ? (float) $data['opening_unit_cost'] : null,
+                    $data['opening_date'] ?? null,
+                    null,
+                    $request->user()->id,
+                    null,
+                    false
+                );
+            }
+
+            return $item;
+        });
+        $openingStock->syncLedger($company->id, $request->user()->id);
 
         return redirect()
             ->route('items.show', ['company' => $company->slug, 'item' => $item->id])
             ->with('success', 'Item created successfully.');
+    }
+
+    /**
+     * A stocked, sellable product at a fuel station gets the same stock, sales and cost accounts
+     * the fuel quick add gives a packaged product, so either screen makes the same item (and its
+     * opening stock can reach the books).
+     */
+    private function defaultStockAccounts(array &$data, $company, string $userId): void
+    {
+        $stocked = ($data['track_inventory'] ?? false) && ($data['item_type'] ?? '') === 'product';
+        if (! $stocked || $company->industry_code !== 'fuel_station' || ! empty($data['asset_account_id'])) {
+            return;
+        }
+
+        $accounts = app(FuelProductAccountMapper::class)->resolveAccounts($company->id, 'lubricant_packaged', $userId);
+        $data['asset_account_id'] = $accounts['asset']->id;
+        $data['income_account_id'] ??= $accounts['income']->id;
+        $data['expense_account_id'] ??= $accounts['expense']->id;
     }
 
     public function show(Request $request): Response
@@ -300,16 +344,9 @@ class ItemController extends Controller
         $itemId = $request->route('item');
         $item = Item::where('company_id', $company->id)->findOrFail($itemId);
 
-        // Check if item has stock
-        $hasStock = StockLevel::where('item_id', $item->id)
-            ->where('quantity', '!=', 0)
-            ->exists();
-
-        if ($hasStock) {
-            return back()->with('error', 'Cannot delete item with stock on hand. Adjust stock to zero first.');
+        if (! app(ItemDeletionService::class)->delete($item, $request->user()?->id)) {
+            return back()->with('error', ItemDeletionService::USED_MESSAGE);
         }
-
-        $item->delete();
 
         if ($request->input('return_to') === 'back') {
             return back()->with('success', 'Product deleted successfully.');

@@ -19,6 +19,12 @@ class StoreItemRequest extends BaseFormRequest
 
     protected function prepareForValidation(): void
     {
+        $stocked = $this->boolean('track_inventory')
+            && in_array($this->input('item_type'), ['product', 'bundle'], true);
+        if (! $stocked) {
+            $this->merge(['opening_quantity' => null, 'opening_unit_cost' => null, 'opening_date' => null]);
+        }
+
         if ($this->has('track_inventory') && ! $this->boolean('track_inventory')) {
             $this->merge(['delivery_mode' => 'immediate']);
         }
@@ -59,6 +65,9 @@ class StoreItemRequest extends BaseFormRequest
             'image_url' => 'nullable|string|max:500',
             'is_active' => 'boolean',
             'notes' => 'nullable|string',
+            'opening_quantity' => 'nullable|numeric|min:0',
+            'opening_unit_cost' => 'nullable|numeric|min:0',
+            'opening_date' => 'nullable|date',
         ];
     }
 }

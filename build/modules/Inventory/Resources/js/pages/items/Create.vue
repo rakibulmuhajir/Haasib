@@ -81,6 +81,15 @@ const form = useForm({
   reorder_quantity: 0,
   barcode: '',
   is_active: true,
+  opening_quantity: '' as string | number,
+  opening_unit_cost: 0 as string | number,
+  opening_date: new Date().toISOString().slice(0, 10),
+})
+
+// Cost per unit follows the cost price until it is typed over.
+let unitCostEdited = false
+watch(() => form.cost_price, (value) => {
+  if (!unitCostEdited) form.opening_unit_cost = value
 })
 
 watch(() => form.track_inventory, (value) => {
@@ -283,6 +292,39 @@ const submit = () => {
             <Label for="track_inventory">Track inventory for this item</Label>
           </div>
           <InputError :message="form.errors.track_inventory" />
+
+          <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="space-y-2">
+              <Label for="opening_quantity">Opening stock</Label>
+              <Input
+                id="opening_quantity"
+                v-model="form.opening_quantity"
+                type="number"
+                step="0.001"
+                min="0"
+              />
+              <InputError :message="form.errors.opening_quantity" />
+            </div>
+
+            <div class="space-y-2">
+              <Label for="opening_unit_cost">Cost per unit</Label>
+              <Input
+                id="opening_unit_cost"
+                v-model="form.opening_unit_cost"
+                type="number"
+                step="0.01"
+                min="0"
+                @input="unitCostEdited = true"
+              />
+              <InputError :message="form.errors.opening_unit_cost" />
+            </div>
+
+            <div class="space-y-2">
+              <Label for="opening_date">As of</Label>
+              <Input id="opening_date" v-model="form.opening_date" type="date" />
+              <InputError :message="form.errors.opening_date" />
+            </div>
+          </div>
 
           <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-2">

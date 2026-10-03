@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
-import { Pencil, ArrowLeft, Warehouse } from 'lucide-vue-next'
+import { Pencil, ArrowLeft, Warehouse, Trash2 } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
@@ -84,6 +86,19 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: props.item.name, href: `/${props.company.slug}/items/${props.item.id}` },
 ]
 
+const confirmOpen = ref(false)
+const deleting = ref(false)
+
+const confirmDelete = () => {
+  deleting.value = true
+  router.delete(`/${props.company.slug}/items/${props.item.id}`, {
+    onFinish: () => {
+      deleting.value = false
+      confirmOpen.value = false
+    },
+  })
+}
+
 const formatQuantity = (qty: number) => {
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
@@ -130,7 +145,21 @@ const getTypeBadgeVariant = (type: string) => {
         <Pencil class="mr-2 h-4 w-4" />
         Edit
       </Button>
+      <Button variant="outline" class="text-destructive" @click="confirmOpen = true">
+        <Trash2 class="mr-2 h-4 w-4" />
+        Delete
+      </Button>
     </template>
+
+    <ConfirmDialog
+      v-model:open="confirmOpen"
+      variant="destructive"
+      title="Delete item?"
+      :description="item.name"
+      confirm-text="Delete"
+      :loading="deleting"
+      @confirm="confirmDelete"
+    />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Info -->

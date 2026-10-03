@@ -13,6 +13,7 @@ use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\OpeningStockService;
 use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -293,16 +294,16 @@ class SetupAction implements PaletteAction
                         }
                     }
                 } elseif ($openingQty > 0) {
-                    $warehouse = $this->resolveStandardWarehouse($company->id, $userId);
-                    $this->recordOpeningStockMovement(
+                    app(OpeningStockService::class)->record(
                         $company->id,
-                        $warehouse->id,
-                        $itemId,
-                        $effectiveDate,
+                        $item,
                         $openingQty,
                         $purchaseRate,
+                        $effectiveDate,
+                        null,
                         $userId,
-                        'Opening balance from product setup'
+                        'Opening balance from product setup',
+                        false
                     );
                     $movements++;
                 }
@@ -683,29 +684,6 @@ class SetupAction implements PaletteAction
         return $tank;
     }
 
-    private function resolveStandardWarehouse(string $companyId, ?string $userId): Warehouse
-    {
-        $warehouse = Warehouse::where('company_id', $companyId)
-            ->where('warehouse_type', 'standard')
-            ->where('is_active', true)
-            ->orderByDesc('is_primary')
-            ->orderBy('name')
-            ->first();
-
-        if ($warehouse) {
-            return $warehouse;
-        }
-
-        return Warehouse::create([
-            'company_id' => $companyId,
-            'code' => 'WH-MAIN',
-            'name' => 'Main Warehouse',
-            'warehouse_type' => 'standard',
-            'is_active' => true,
-            'created_by_user_id' => $userId,
-        ]);
-    }
-
     private function recordOpeningTankBalance(
         string $companyId,
         string $tankId,
@@ -746,7 +724,7 @@ class SetupAction implements PaletteAction
             ]);
         }
 
-        $this->recordOpeningStockMovement(
+        app(OpeningStockService::class)->recordMovement(
             $companyId,
             $tankId,
             $itemId,
@@ -756,45 +734,5 @@ class SetupAction implements PaletteAction
             $userId,
             'Opening fuel balance from product setup'
         );
-    }
-
-    private function recordOpeningStockMovement(
-        string $companyId,
-        string $warehouseId,
-        string $itemId,
-        string $date,
-        float $quantity,
-        float $unitCost,
-        ?string $userId,
-        string $notes
-    ): void {
-        $movement = StockMovement::where('company_id', $companyId)
-            ->where('item_id', $itemId)
-            ->where('warehouse_id', $warehouseId)
-            ->where('movement_type', 'opening')
-            ->where('movement_date', $date)
-            ->where('notes', $notes)
-            ->first();
-
-        $payload = [
-            'quantity' => $quantity,
-            'unit_cost' => $unitCost,
-            'total_cost' => $quantity * $unitCost,
-            'movement_date' => $date,
-        ];
-
-        if ($movement) {
-            $movement->update($payload);
-            return;
-        }
-
-        StockMovement::create($payload + [
-            'company_id' => $companyId,
-            'item_id' => $itemId,
-            'warehouse_id' => $warehouseId,
-            'movement_type' => 'opening',
-            'notes' => $notes,
-            'created_by_user_id' => $userId,
-        ]);
     }
 }

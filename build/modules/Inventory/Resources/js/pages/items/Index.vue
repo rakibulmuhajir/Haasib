@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -150,10 +151,27 @@ const handleRowClick = (row: any) => {
   router.get(`/${props.company.slug}/items/${row.id}`)
 }
 
-const handleDelete = (id: string) => {
-  if (confirm('Are you sure you want to delete this item?')) {
-    router.delete(`/${props.company.slug}/items/${id}`)
-  }
+const deleteTarget = ref<ItemRow | null>(null)
+const deleting = ref(false)
+const confirmOpen = computed({
+  get: () => deleteTarget.value !== null,
+  set: (open: boolean) => { if (!open) deleteTarget.value = null },
+})
+
+const handleDelete = (item: ItemRow) => {
+  deleteTarget.value = item
+}
+
+const confirmDelete = () => {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  router.delete(`/${props.company.slug}/items/${deleteTarget.value.id}`, {
+    preserveScroll: true,
+    onFinish: () => {
+      deleting.value = false
+      deleteTarget.value = null
+    },
+  })
 }
 </script>
 
@@ -242,6 +260,7 @@ const handleDelete = (id: string) => {
       </template>
 
       <template #cell-_actions="{ row }">
+        <div @click.stop>
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon" class="h-8 w-8">
@@ -257,13 +276,24 @@ const handleDelete = (id: string) => {
               <Pencil class="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem class="text-destructive" @click="handleDelete(row.id)">
+            <DropdownMenuItem class="text-destructive" @click="handleDelete(row._raw)">
               <Trash2 class="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </template>
     </LedgerRegister>
+
+    <ConfirmDialog
+      v-model:open="confirmOpen"
+      variant="destructive"
+      title="Delete item?"
+      :description="deleteTarget ? deleteTarget.name : ''"
+      confirm-text="Delete"
+      :loading="deleting"
+      @confirm="confirmDelete"
+    />
   </PageShell>
 </template>

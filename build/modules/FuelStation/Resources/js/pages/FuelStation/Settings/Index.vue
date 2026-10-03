@@ -416,7 +416,7 @@ const formatFuelCategory = (category: string | null) => {
               <p class="mt-2 text-xs text-muted-foreground">
                 Example, diesel: sales 14,415,246 + 725 L × 395.80 = 286,955 − 2,671,421 last month − 11,388,054 bought = 642,727.
                 Last month's stock is counted in Bought on the stock statement and month summary.
-                If the new rate is lower than what the stock cost, the books take the drop on the month's last day; a higher rate is never booked until sold.
+                The books value that stock at the new rate on the month's last day, up or down, so their profit matches this.
               </p>
             </template>
             <template v-else>
@@ -427,7 +427,7 @@ const formatFuelCategory = (category: string | null) => {
                 <li>= fuel profit</li>
               </ol>
               <p class="mt-2 text-xs text-muted-foreground">
-                Fuel left over stays at what it cost; rate changes show up only when it is sold. Last month's stock sits on its own Opening line, not in Bought.
+                Fuel left over stays at what it cost, or at the new rate if that is lower; a rise shows up only when it is sold. Last month's stock sits on its own Opening line, not in Bought.
               </p>
             </template>
           </div>

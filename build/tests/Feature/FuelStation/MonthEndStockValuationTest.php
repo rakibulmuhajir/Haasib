@@ -91,6 +91,21 @@ test('a rate at or above cost writes nothing', function () {
         ->and((new FuelCostService())->costForDay($cid, $f['item']->id, '2026-10-02'))->toBe(407.4456);
 });
 
+test('a higher rate writes the stock up when the station values month-end stock at the next month rate', function () {
+    $f = monthEndFixture(450);
+    $cid = $f['company']->id;
+    \App\Modules\FuelStation\Models\StationSettings::forCompany($cid)->update(['month_end_stock_valuation' => 'next_month_purchase_rate']);
+
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    $live = monthEndLive($cid);
+    $gain = round(725 * 407.4456 - 725 * 450, 2);
+    expect($live)->toHaveCount(1)
+        ->and((float) $live->first()->metadata['amount'])->toBe($gain)
+        ->and(app(MonthEndStockValuationService::class)->accountBalance($cid, $f['accounts']['1200']->id, '2026-09-30'))->toBe(round(725 * 450, 2))
+        ->and((new FuelCostService())->costForDay($cid, $f['item']->id, '2026-10-02'))->toBe(450.0);
+});
+
 test('running it again with nothing changed does nothing', function () {
     $f = monthEndFixture(395.80);
     $cid = $f['company']->id;

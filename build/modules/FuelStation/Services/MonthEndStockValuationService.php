@@ -14,12 +14,13 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Lower of cost or new purchase rate, at month end, for tank fuels.
+ * Month-end value of the fuel in the tanks: lower of cost or the next month's purchase rate --
+ * or, when the station values month-end stock at the next month's rate, that rate either way.
  *
  * The fuel left in the tanks on a month's last day is valued at what it cost
  * (FuelCostService), unless the purchase rate in force on the 1st of the next month is lower:
  * then the stock is written down to that rate and the loss lands in the month that held it.
- * Never written up. This is month-end only -- per-rate-change revaluation was removed on
+ * Written up only under that setting. This is month-end only -- per-rate-change revaluation was removed on
  * purpose (RateChangeService), rates change near-daily.
  *
  * The write-down is sized from the books: the fuel's inventory account balance on the last day
@@ -173,8 +174,15 @@ class MonthEndStockValuationService
                     + ($existing ? (float) ($existing->metadata['amount'] ?? 0) : 0.0);
             }
             $cost = $quantity > 0 ? $book / $quantity : 0.0;
-            if ($quantity > 0 && $rate !== null && $rate < $cost) {
-                $desired = round($book - $quantity * $rate, 2);
+            if ($quantity > 0 && $rate !== null) {
+                // Positive: written down to a lower rate. Negative: written up to a higher one --
+                // only when the station values month-end stock at the next month's rate (the
+                // stock is the station's and will be sold at the new prices either way); at
+                // recorded cost a rise waits until the fuel is sold.
+                $difference = round($book - $quantity * $rate, 2);
+                if ($difference > 0 || ($difference < 0 && $this->valuesAtNextRate($companyId))) {
+                    $desired = $difference;
+                }
             }
         }
 
@@ -185,10 +193,10 @@ class MonthEndStockValuationService
         if ($existing && abs($have - $desired) < 0.005) {
             return $row;
         }
-        if (! $existing && $desired <= 0) {
+        if (! $existing && abs($desired) < 0.005) {
             return $row;
         }
-        if ($desired > 0 && (! $item->expense_account_id || ! $item->asset_account_id)) {
+        if (abs($desired) >= 0.005 && (! $item->expense_account_id || ! $item->asset_account_id)) {
             Log::warning('fuel month-end write-down skipped: item has no cost or inventory account', ['item_id' => $item->id, 'month' => $month]);
             $row['action'] = 'skipped (no cost or inventory account on the product)';
 
@@ -200,7 +208,7 @@ class MonthEndStockValuationService
                 $this->undo($existing);
                 $row['action'] = 'reversed';
             }
-            if ($desired > 0) {
+            if (abs($desired) >= 0.005) {
                 $this->post($companyId, $month, $lastDay, $item, $desired, $quantity, $cost, $walkCost, $book, $basis, (float) $rate);
                 $row['action'] = $existing ? 'replaced' : 'posted';
             }
@@ -208,6 +216,12 @@ class MonthEndStockValuationService
         $this->costs->forget();
 
         return $row;
+    }
+
+    private function valuesAtNextRate(string $companyId): bool
+    {
+        return DB::table('fuel.station_settings')->where('company_id', $companyId)
+            ->value('month_end_stock_valuation') === 'next_month_purchase_rate';
     }
 
     /** Debit minus credit on an account up to and including a day, over posted or locked, live transactions. */
@@ -257,9 +271,13 @@ class MonthEndStockValuationService
                 'cost_rate' => round($cost, 4), 'new_rate' => round($rate, 2), 'amount' => $amount,
                 'book_value' => round($book, 2), 'basis' => $basis,
             ],
-        ], [
+        ], $amount > 0 ? [
             ['account_id' => $item->expense_account_id, 'type' => 'debit', 'amount' => $amount, 'description' => $text],
             ['account_id' => $item->asset_account_id, 'type' => 'credit', 'amount' => $amount, 'description' => $text],
+        ] : [
+            // Written up: the stock gains value and the month's cost of fuel goes down by as much.
+            ['account_id' => $item->asset_account_id, 'type' => 'debit', 'amount' => -$amount, 'description' => $text],
+            ['account_id' => $item->expense_account_id, 'type' => 'credit', 'amount' => -$amount, 'description' => $text],
         ]);
 
         $tankId = DB::table('fuel.tank_readings')

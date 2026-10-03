@@ -51,6 +51,7 @@ interface TankRow {
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
+  includeOpeningDefault?: boolean
   payrollReminder?: { month: string; label: string; drafts: number } | null
   summary: {
     month: string
@@ -91,7 +92,7 @@ const openLine = ref<string | null>(null)
 const openTank = ref<string | null>(null)
 // Carry last month's stock into this month's purchases: the opening moves into Bought (at its
 // cost) and the Opening column empties, so each row still reads opening + bought − sold.
-const includeOpening = ref(false)
+const includeOpening = ref(Boolean(props.includeOpeningDefault))
 const tankBought = (t: TankRow) => (includeOpening.value ? (t.opening ?? 0) + (t.delivered ?? 0) : t.delivered)
 const tankPurchases = (t: TankRow) => (includeOpening.value ? (t.opening_value ?? 0) + (t.purchase_amount ?? 0) : t.purchase_amount)
 const tankPurchaseRate = (t: TankRow) => {

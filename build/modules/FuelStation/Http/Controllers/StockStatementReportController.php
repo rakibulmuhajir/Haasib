@@ -58,6 +58,10 @@ class StockStatementReportController extends Controller
                 'start_date' => $startDate->toDateString(),
                 'end_date' => $endDate->toDateString(),
             ],
+            // A station that carries last month's stock into the next (Settings: month-end stock
+            // valuation at the next month's rate) reads its statement with the opening counted in.
+            'includeOpeningDefault' => \Illuminate\Support\Facades\DB::table('fuel.station_settings')
+                ->where('company_id', $company->id)->value('month_end_stock_valuation') === 'next_month_purchase_rate',
             ...$report,
         ]);
     }

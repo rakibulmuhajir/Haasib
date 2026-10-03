@@ -78,6 +78,7 @@ interface Totals {
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { item: string; items?: string[]; start_date: string; end_date: string }
+  includeOpeningDefault?: boolean
   item: { id: string; name: string }
   combined?: boolean
   has_tank?: boolean
@@ -97,7 +98,7 @@ const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 // Off: opening stock sits on its own line and Available = opening + bought shows under the total.
 // On: the opening counts as the first purchase, so Bought and Purchases start from it -- what a
 // month's paperwork shows when last month's stock is carried in.
-const includeOpening = ref(false)
+const includeOpening = ref(Boolean(props.includeOpeningDefault))
 const openingValue = computed(() => (includeOpening.value ? props.totals.opening_value ?? 0 : 0))
 const boughtTotal = computed(() => (includeOpening.value ? props.totals.available : props.totals.received))
 const purchaseTotal = computed(() => (includeOpening.value ? props.totals.available_value ?? props.totals.purchase_amount : props.totals.purchase_amount))

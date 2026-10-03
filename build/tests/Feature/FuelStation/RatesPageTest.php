@@ -46,3 +46,18 @@ test('the fuel prices page renders with its rate, fuel and tank props', function
             ->has('tanks')
             ->has('nozzles'));
 });
+
+test('the month summary and stock statement count opening stock in by default when the station carries stock into the next month', function () {
+    $f = fuelPricesPageFixture();
+    $slug = $f['company']->slug;
+
+    test()->actingAs($f['user'])->get("/{$slug}/fuel/daily-close/month?month=2026-09")
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('includeOpeningDefault', false));
+
+    \App\Modules\FuelStation\Models\StationSettings::forCompany($f['company']->id)->update(['month_end_stock_valuation' => 'next_month_purchase_rate']);
+
+    test()->actingAs($f['user'])->get("/{$slug}/fuel/daily-close/month?month=2026-09")
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('includeOpeningDefault', true));
+    test()->actingAs($f['user'])->get("/{$slug}/fuel/reports/stock-statement")
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('includeOpeningDefault', true));
+});

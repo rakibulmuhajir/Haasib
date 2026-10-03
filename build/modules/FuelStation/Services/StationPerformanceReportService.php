@@ -148,6 +148,10 @@ class StationPerformanceReportService
             ksort($periods);
         }
 
+        // Informational: how purchase-rate changes moved the stock in the tanks. Never booked.
+        $this->applyPriceEffect($companyId, $startDate, $endDate, $groupBy, $product, $periods);
+        ksort($periods);
+
         $rows = array_values($periods);
         foreach ($rows as &$row) {
             $row['gross_margin_percent'] = $row['revenue'] > 0 ? ($row['gross_profit'] / $row['revenue']) * 100 : 0;
@@ -256,6 +260,99 @@ class StationPerformanceReportService
     }
 
     /**
+     * The price effect, per period: what the fuel in the tanks is worth at the next day's purchase
+     * rate beyond its book cost, as it changed since the previous close. Not in the books.
+     *   U(D) = closing dip litres x (purchase rate on D+1 - book cost carried out of D)
+     *   E(D) = U(D) - U(previous close day); a period sums its days' E.
+     * An item with no cost or no rate counts as 0 for that day.
+     *
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function applyPriceEffect(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array &$periods): void
+    {
+        $closeDates = DB::table('acct.transactions')
+            ->where('company_id', $companyId)->where('transaction_type', 'fuel_daily_close')
+            ->whereIn('status', ['posted', 'locked'])->whereNull('deleted_at')->whereNull('reversed_by_id')
+            ->whereDate('transaction_date', '<=', $endDate)
+            ->selectRaw('DISTINCT transaction_date::date AS d')->orderBy('d')->pluck('d')
+            ->map(fn ($d) => substr((string) $d, 0, 10))->all();
+        $inRange = array_values(array_filter($closeDates, fn ($d) => $d >= $startDate));
+        if ($inRange === []) {
+            return;
+        }
+        $before = array_values(array_filter($closeDates, fn ($d) => $d < $startDate));
+        $seed = $before === [] ? null : end($before);
+        $chain = $seed === null ? $inRange : array_merge([$seed], $inRange);
+
+        $items = DB::table('inv.warehouses as w')->join('inv.items as i', 'i.id', '=', 'w.linked_item_id')
+            ->where('w.company_id', $companyId)->where('w.warehouse_type', 'tank')->whereNull('w.deleted_at')
+            ->distinct()->get(['i.id', 'i.name', 'i.fuel_category'])
+            ->filter(fn ($i) => $product === 'all' || ($i->fuel_category ?: str($i->name)->slug('-')->toString()) === $product)
+            ->values();
+        if ($items->isEmpty()) {
+            return;
+        }
+        $itemIds = $items->pluck('id')->all();
+
+        $dips = [];
+        DB::table('fuel.tank_readings')->where('company_id', $companyId)->whereIn('item_id', $itemIds)
+            ->whereDate('reading_date', '>=', $chain[0])->whereDate('reading_date', '<=', $endDate)
+            ->groupBy('item_id', DB::raw('reading_date::date'))
+            ->selectRaw('item_id, reading_date::date AS d, SUM(dip_measurement_liters) AS q')->get()
+            ->each(function ($r) use (&$dips) {
+                $dips[$r->item_id][substr((string) $r->d, 0, 10)] = (float) $r->q;
+            });
+
+        $rates = DB::table('fuel.rate_changes')->where('company_id', $companyId)->whereIn('item_id', $itemIds)
+            ->orderBy('effective_date')->get(['item_id', 'effective_date', 'purchase_rate'])->groupBy('item_id');
+
+        $costs = new FuelCostService();
+        $prevU = array_fill_keys($itemIds, 0.0);
+        $effects = []; // period key => item id => ['effect' => float, 'line' => ?array]
+        foreach ($chain as $day) {
+            $next = Carbon::parse($day)->addDay()->toDateString();
+            foreach ($items as $item) {
+                $q = (float) ($dips[$item->id][$day] ?? 0);
+                $cost = $costs->costAtEndOf($companyId, $item->id, $day);
+                $rate = null;
+                foreach ($rates->get($item->id, collect()) as $r) {
+                    if (substr((string) $r->effective_date, 0, 10) <= $next) {
+                        $rate = (float) $r->purchase_rate;
+                    }
+                }
+                $usable = $cost !== null && $cost > 0 && $rate !== null;
+                $u = $usable ? round($q * ($rate - $cost), 2) : 0.0;
+                $e = $u - $prevU[$item->id];
+                $prevU[$item->id] = $u;
+                if ($day === $seed) {
+                    continue; // the seed day only anchors the first day in range
+                }
+                $key = $this->periodKey(Carbon::parse($day), $groupBy);
+                $effects[$key][$item->id] ??= ['effect' => 0.0, 'line' => null];
+                $effects[$key][$item->id]['effect'] += $e;
+                $effects[$key][$item->id]['line'] = $usable
+                    ? ['name' => $item->name, 'quantity' => $q, 'cost' => $cost, 'rate' => $rate, 'value' => $u]
+                    : null;
+            }
+        }
+
+        foreach ($effects as $key => $perItem) {
+            $periods[$key] ??= $this->emptyPeriodRow($key, $this->periodLabel(Carbon::parse($groupBy === 'month' ? $key.'-01' : $key), $groupBy));
+            $lines = [];
+            foreach ($items as $item) {
+                $slot = $perItem[$item->id] ?? null;
+                if (! $slot || (abs($slot['effect']) < 0.005 && $slot['line'] === null)) {
+                    continue;
+                }
+                $lines[] = ($slot['line'] ?? ['name' => $item->name, 'quantity' => 0.0, 'cost' => 0.0, 'rate' => 0.0, 'value' => 0.0])
+                    + ['effect' => round($slot['effect'], 2)];
+            }
+            $periods[$key]['price_effect'] = round(array_sum(array_column($lines, 'effect')), 2);
+            $periods[$key]['price_effect_lines'] = $lines;
+        }
+    }
+
+    /**
      * Profit per business date from the ledger: income less costs on every posted journal.
      *
      * @return array<string,float>
@@ -355,6 +452,8 @@ class StationPerformanceReportService
             'payroll_payouts' => 0.0,
             'net_station_profit' => 0.0,
             'other' => 0.0,
+            'price_effect' => 0.0,
+            'price_effect_lines' => [],
             'cash_variance' => 0.0,
             'stock_loss' => 0.0,
             'stock_gain' => 0.0,
@@ -383,6 +482,7 @@ class StationPerformanceReportService
             'payroll_payouts' => array_sum(array_column($rows, 'payroll_payouts')),
             'net_station_profit' => array_sum(array_column($rows, 'net_station_profit')),
             'other' => array_sum(array_column($rows, 'other')),
+            'price_effect' => array_sum(array_column($rows, 'price_effect')),
             'cash_variance' => array_sum(array_column($rows, 'cash_variance')),
             'stock_loss' => array_sum(array_column($rows, 'stock_loss')),
             'stock_gain' => array_sum(array_column($rows, 'stock_gain')),

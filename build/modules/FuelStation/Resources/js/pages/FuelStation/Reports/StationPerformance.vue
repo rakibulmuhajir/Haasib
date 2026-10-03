@@ -41,12 +41,15 @@ interface Totals {
   payroll_payouts: number
   net_station_profit: number
   other: number
+  price_effect: number
   cash_variance: number
   stock_loss: number
   stock_gain: number
   purchases_paid: number
   closing_cash: number
 }
+
+interface PriceLine { name: string; quantity: number; cost: number; rate: number; value: number; effect: number }
 
 interface ReportRow {
   key: string
@@ -62,6 +65,8 @@ interface ReportRow {
   payroll_payouts: number
   net_station_profit: number
   other: number
+  price_effect: number
+  price_effect_lines: PriceLine[]
   cash_variance: number
   stock_loss: number
   stock_gain: number
@@ -209,7 +214,7 @@ const setRange = (range: 'today' | 'yesterday' | 'last7' | 'month' | 'lastMonth'
 
 // Each money column opens into the accounts it is made of, from the books (all products only).
 interface BookLine { account_id: string; code: string; name: string; type: string; amount: number }
-type Part = 'sales' | 'cost' | 'expenses' | 'other'
+type Part = 'sales' | 'cost' | 'expenses' | 'other' | 'price'
 const open = ref<{ key: string; part: Part } | null>(null)
 const toggle = (key: string, part: Part) => {
   open.value = open.value?.key === key && open.value.part === part ? null : { key, part }
@@ -217,10 +222,12 @@ const toggle = (key: string, part: Part) => {
 const isOpen = (row: any) => open.value?.key === row.key
 const linesOf = (row: any): BookLine[] => {
   const part = open.value?.part
-  if (!part) return []
+  if (!part || part === 'price') return []
   return (row[{ sales: 'sales_lines', cost: 'cost_lines', expenses: 'expense_lines', other: 'other_lines' }[part]] ?? []) as BookLine[]
 }
-const partTitle: Record<Part, string> = { sales: 'Sales by product account', cost: 'Cost of sales', expenses: 'Expenses', other: 'Other income and costs' }
+const partTitle: Record<Part, string> = { sales: 'Sales by product account', cost: 'Cost of sales', expenses: 'Expenses', other: 'Other income and costs', price: 'Price effect (not in the books)' }
+const priceLinesOf = (row: any): PriceLine[] => (row.price_effect_lines ?? []) as PriceLine[]
+const effectTone = (amount: number) => (amount < 0 ? 'text-status-attention' : amount > 0 ? 'text-status-success' : 'text-text-secondary')
 const rowRange = (row: any) => {
   // A day row's key is its date; a week/month row spans to its end, clipped to the report range.
   const from = props.filters.group_by === 'month' ? `${row.key}-01` : row.key
@@ -251,6 +258,7 @@ const performanceColumns = [
   { key: 'expenses', label: 'Expenses', kind: 'amount' as const },
   { key: 'other', label: 'Other', kind: 'amount' as const },
   { key: 'net_station_profit', label: 'Net', kind: 'amount' as const },
+  { key: 'price_effect', label: 'Price effect', kind: 'amount' as const },
   { key: 'cash_variance', label: 'Cash variance', kind: 'amount' as const },
 ]
 
@@ -450,6 +458,18 @@ const movementCards = computed(() => [
                 <MoneyText v-else :amount="row.other" :currency="company.base_currency" />
               </template>
               <template #cell-net_station_profit="{ row }"><MoneyText :amount="row.net_station_profit" :currency="company.base_currency" /></template>
+              <template #header-price_effect>
+                Price effect
+                <Hint>
+                  <template #content>
+                    <p>Stock in the tanks at the next day's purchase rate, against its cost. Not in the books.</p>
+                  </template>
+                </Hint>
+              </template>
+              <template #cell-price_effect="{ row }">
+                <button v-if="priceLinesOf(row).length" type="button" :class="[cellBtn, effectTone(row.price_effect)]" @click="toggle(row.key, 'price')"><MoneyText :amount="row.price_effect" :currency="company.base_currency" /></button>
+                <span v-else :class="effectTone(row.price_effect)"><MoneyText :amount="row.price_effect" :currency="company.base_currency" /></span>
+              </template>
               <template #cell-cash_variance="{ row }">
                 <span :class="varianceTone(row.cash_variance)"><MoneyText :amount="row.cash_variance" :currency="company.base_currency" /></span>
               </template>
@@ -457,7 +477,13 @@ const movementCards = computed(() => [
               <template #row-detail="{ row }">
                 <div class="px-4 py-2 text-sm">
                   <p class="mb-1 text-xs font-medium text-muted-foreground">{{ open ? partTitle[open.part] : '' }} · {{ row.label }}</p>
-                  <ul class="grid gap-x-8 sm:grid-cols-2">
+                  <ul v-if="open?.part === 'price'" class="grid gap-x-8 sm:grid-cols-2">
+                    <li v-for="l in priceLinesOf(row)" :key="l.name" class="flex items-baseline justify-between gap-3 border-b border-rule-subtle py-1">
+                      <span>{{ l.name }} <span class="text-xs text-muted-foreground">{{ number(l.quantity) }} L × ({{ number(l.rate, 2) }} − {{ number(l.cost, 2) }}) = {{ number(l.value) }}</span></span>
+                      <span class="tabular-nums" :class="effectTone(l.effect)"><MoneyText :amount="l.effect" :currency="company.base_currency" :fraction-digits="0" /></span>
+                    </li>
+                  </ul>
+                  <ul v-else class="grid gap-x-8 sm:grid-cols-2">
                     <li v-for="l in linesOf(row)" :key="l.account_id" class="flex items-baseline justify-between gap-3 border-b border-rule-subtle py-1">
                       <span>{{ l.name }} <span class="text-xs text-muted-foreground">{{ l.code }}</span></span>
                       <Link :href="lineHref(row, l)" class="tabular-nums underline-offset-2 hover:underline" :class="open?.part === 'other' && l.amount < 0 ? 'text-status-attention' : ''">

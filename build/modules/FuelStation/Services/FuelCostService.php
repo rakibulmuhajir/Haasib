@@ -30,12 +30,26 @@ class FuelCostService
         return $this->memo[$key] = $this->walk($companyId, $itemId, $date) ?? $fallback;
     }
 
+    /**
+     * The book cost per litre of the stock carried out of a day: costForDay's walk, plus the
+     * month-end write-down dated on that day itself (costForDay leaves it for the next day).
+     */
+    public function costAtEndOf(string $companyId, string $itemId, string $date): ?float
+    {
+        $key = "end|{$companyId}|{$itemId}|{$date}";
+        if (array_key_exists($key, $this->memo)) {
+            return $this->memo[$key];
+        }
+
+        return $this->memo[$key] = $this->walk($companyId, $itemId, $date, true);
+    }
+
     public function forget(): void
     {
         $this->memo = [];
     }
 
-    private function walk(string $companyId, string $itemId, string $date): ?float
+    private function walk(string $companyId, string $itemId, string $date, bool $includeDayRevaluation = false): ?float
     {
         $opening = DB::table('inv.stock_movements')
             ->where('company_id', $companyId)->where('item_id', $itemId)
@@ -57,7 +71,7 @@ class FuelCostService
         // What was physically in the tanks at the end of each earlier day.
         $dips = DB::table('fuel.tank_readings')
             ->where('company_id', $companyId)->where('item_id', $itemId)
-            ->whereDate('reading_date', '<', $date)
+            ->whereDate('reading_date', $includeDayRevaluation ? '<=' : '<', $date) // end of day: its own dip first, so a write-down that day spreads over what was left
             ->selectRaw('reading_date::date d, SUM(dip_measurement_liters) q')
             ->groupBy(DB::raw('reading_date::date'))
             ->get()->keyBy(fn ($r) => substr((string) $r->d, 0, 10));
@@ -67,7 +81,7 @@ class FuelCostService
         $revaluations = DB::table('inv.stock_movements')
             ->where('company_id', $companyId)->where('item_id', $itemId)
             ->where('movement_type', 'revaluation')
-            ->whereDate('movement_date', '<', $date)
+            ->whereDate('movement_date', $includeDayRevaluation ? '<=' : '<', $date)
             ->selectRaw('movement_date::date d, SUM(total_cost) v')
             ->groupBy(DB::raw('movement_date::date'))
             ->get()->keyBy(fn ($r) => substr((string) $r->d, 0, 10));

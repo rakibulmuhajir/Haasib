@@ -195,6 +195,18 @@ const openCreate = () => {
   dialogOpen.value = true
 }
 
+// A saved rate opens in the same form, filled with what was saved; saving the same fuel and
+// date replaces it (RateChangeService updates the day's row).
+const openEdit = (row: { _raw: RateChangeRow }) => {
+  form.reset()
+  form.clearErrors()
+  form.effective_date = String(row._raw.effective_date).slice(0, 10)
+  form.item_id = row._raw.item_id
+  form.purchase_rate = Number(row._raw.purchase_rate)
+  form.sale_rate = Number(row._raw.sale_rate)
+  dialogOpen.value = true
+}
+
 const closeDialog = () => {
   dialogOpen.value = false
   form.reset()
@@ -247,7 +259,19 @@ const selectedStockLevel = computed(() => {
 
 const lastPurchase = computed(() => (form.item_id ? props.lastPurchasePrices?.[form.item_id] ?? null : null))
 
+// A rate already saved for this fuel on this date: editing it starts from what was saved.
+const savedForDate = computed(() =>
+  form.item_id && form.effective_date
+    ? props.rates.find((r) => r.item_id === form.item_id && String(r.effective_date).slice(0, 10) === form.effective_date) ?? null
+    : null,
+)
+
 const prefillFromCurrent = () => {
+  if (savedForDate.value) {
+    form.purchase_rate = Number(savedForDate.value.purchase_rate)
+    form.sale_rate = Number(savedForDate.value.sale_rate)
+    return
+  }
   // The last bill's price, not the purchase rate on the last rate change (that one goes stale
   // as soon as a delivery comes in at a different price).
   if (form.purchase_rate === null && lastPurchase.value) form.purchase_rate = Number(lastPurchase.value.rate)
@@ -280,6 +304,10 @@ watch(() => form.item_id, () => {
   form.sale_rate = null
   prefillFromCurrent()
   syncSnapshotRows()
+})
+
+watch(() => form.effective_date, () => {
+  if (savedForDate.value) prefillFromCurrent()
 })
 
 const nozzleForSnapshot = (nozzleId: string) => props.nozzles.find((nozzle) => nozzle.id === nozzleId)
@@ -407,7 +435,7 @@ const submit = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <LedgerRegister :data="tableData" :columns="columns" banded>
+        <LedgerRegister :data="tableData" :columns="columns" banded @row-click="openEdit">
           <template #empty>
             <EmptyState
               title="No rate changes yet"

@@ -353,7 +353,7 @@ const props = defineProps<{
     fuelItems: FuelItem[];
     rates: Record<string, { purchase_rate: number; sale_rate: number }>;
     // Fuels whose sale rate changed on this day, with the change against the day before.
-    rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; difference: number }>;
+    rateChangesToday?: Array<{ item_id: string; name: string; sale_rate: number; purchase_rate: number; difference: number }>;
     parkedDates?: string[];
     customerChoices?: Array<{ id: string; name: string; credit_limit: number; current_balance: number; is_credit_blocked: boolean; units?: Array<{ id: string; name: string }> }>;
     lastPurchasePrices?: Record<string, { rate: number; bill_number: string; bill_date: string }>;
@@ -572,14 +572,24 @@ const accountingHints = computed<Record<string, string>>(() =>
  */
 const rateItemId = ref('');
 const newSaleRate = ref<number | null>(null);
+const newPurchaseRate = ref<number | null>(null);
 const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
+// A rate already saved for this day is edited from what was saved; otherwise from the last bill.
+const todaysChange = computed(() => (props.rateChangesToday ?? []).find((c) => c.item_id === rateItemId.value) ?? null);
+const currentPurchaseRate = computed(() =>
+    Number(todaysChange.value?.purchase_rate ?? props.rates?.[rateItemId.value]?.purchase_rate ?? 0),
+);
 // Only fuels whose rate changed today are listed under the picker.
 const changedRateItems = computed(() =>
     props.fuelItems.filter((item) => (props.rateChangesToday ?? []).some((c) => c.item_id === item.id)),
 );
-watch(rateItemId, () => {
-    newSaleRate.value = null;
+watch(rateItemId, (id) => {
+    newSaleRate.value = id ? currentSaleRate.value : null;
+    newPurchaseRate.value = id ? currentPurchaseRate.value : null;
 });
+const rateUnchanged = computed(
+    () => Number(newSaleRate.value) === currentSaleRate.value && Number(newPurchaseRate.value) === currentPurchaseRate.value,
+);
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const applyingRate = ref(false);
 const applyRate = () => {
@@ -593,7 +603,7 @@ const applyRate = () => {
             item_id: itemId,
             effective_date: form.date,
             sale_rate: sale,
-            purchase_rate: Number(props.rates?.[itemId]?.purchase_rate ?? 0),
+            purchase_rate: Number(newPurchaseRate.value) > 0 ? Number(newPurchaseRate.value) : currentPurchaseRate.value,
         },
         {
             preserveScroll: true,
@@ -605,6 +615,7 @@ const applyRate = () => {
                 });
                 rateItemId.value = '';
                 newSaleRate.value = null;
+                newPurchaseRate.value = null;
             },
             // A day already posted cannot take a rate from itself (StoreRateChangeRequest).
             onError: (errors) => {
@@ -3722,24 +3733,27 @@ const cashFlowOut = computed(() => [
                                 </SelectContent>
                             </Select>
                             <template v-if="rateItemId">
-                                <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-9 w-32" placeholder="New rate" aria-label="New sale rate" />
-                                <span class="text-xs text-muted-foreground tabular-nums">was {{ currentSaleRate }} · from {{ formatBaselineDate(form.date) }}</span>
+                                <Label for="rate-new" class="text-xs text-muted-foreground">Sale</Label>
+                                <Input id="rate-new" v-model.number="newSaleRate" type="number" min="0" step="0.01" class="h-9 w-28" placeholder="Sale rate" />
+                                <Label for="rate-purchase" class="text-xs text-muted-foreground">Purchase</Label>
+                                <Input id="rate-purchase" v-model.number="newPurchaseRate" type="number" min="0" step="0.01" class="h-9 w-28" placeholder="Purchase rate" />
+                                <span class="text-xs text-muted-foreground tabular-nums">from {{ formatBaselineDate(form.date) }}</span>
                                 <Button
                                     size="sm"
-                                    :disabled="applyingRate || !(Number(newSaleRate) > 0) || Number(newSaleRate) === currentSaleRate"
+                                    :disabled="applyingRate || !(Number(newSaleRate) > 0) || rateUnchanged"
                                     @click="applyRate"
                                     >Apply</Button
                                 >
                             </template>
                         </div>
                         <div v-if="changedRateItems.length" class="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
-                            <span v-for="item in changedRateItems" :key="item.id">
+                            <button v-for="item in changedRateItems" :key="item.id" type="button" class="text-left hover:underline" @click="rateItemId = item.id">
                                 <span class="font-medium">{{ item.name }}</span>
                                 {{ Number(props.rates?.[item.id]?.sale_rate ?? 0) }}
                                 <template v-for="change in (props.rateChangesToday ?? []).filter((c) => c.item_id === item.id)" :key="change.item_id">
-                                    <span class="text-muted-foreground">({{ signed(change.difference) }})</span>
+                                    <span class="text-muted-foreground">({{ signed(change.difference) }}) · purchase {{ change.purchase_rate }}</span>
                                 </template>
-                            </span>
+                            </button>
                         </div>
                     </CardContent>
                 </Card>

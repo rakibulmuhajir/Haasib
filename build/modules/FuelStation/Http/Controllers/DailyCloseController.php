@@ -984,6 +984,7 @@ class DailyCloseController extends Controller
                 'item_id' => $item->id,
                 'name' => $item->name,
                 'sale_rate' => (float) $today->sale_rate,
+                'purchase_rate' => (float) $today->purchase_rate,
                 'difference' => round((float) $today->sale_rate - (float) ($before?->sale_rate ?? $today->sale_rate), 2),
             ];
         }

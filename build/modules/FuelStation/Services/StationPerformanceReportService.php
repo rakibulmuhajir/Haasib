@@ -207,59 +207,31 @@ class StationPerformanceReportService
     }
 
     /**
-     * The period's money from the books, account by account, in four parts that add up to the
-     * books' profit (the Profit & Loss figure):
-     *  - Sales: income on the products' own sales accounts (items' income account) -- pump, close
-     *    and off-tanker invoiced sales alike.
-     *  - Cost of sales: the products' cost accounts (items' cost account), cost corrections included.
-     *  - Expenses: expense accounts hit by expense entries (Daily Close > Money out > Expenses,
-     *    Record Expense). Fixed assets bought that way are assets, not here.
-     *  - Other: everything else on income and cost accounts -- tank gains and losses, salaries,
-     *    discounts, card charges, short/over, rental income, fines.
+     * The period's money from the books, in four parts that add up to the books' profit (the
+     * Profit & Loss figure). The classification is the profit statement's own
+     * (ProfitStatementService), so this screen and the home page's statement agree:
+     *  - Sales: income on the products' own sales accounts.
+     *  - Cost of sales: the products' cost accounts, cost corrections and month-end write-down
+     *    included, plus tank losses (gains reduce it).
+     *  - Expenses: expense accounts hit by expense entries (Money out > Expenses). Fixed assets
+     *    bought that way are assets, not here.
+     *  - Other: salaries, other income and other costs together (discounts, card charges,
+     *    short/over, rent, fines), signed as income.
      * Reversals count on their own date, as the books have them.
      *
      * @param array<string,array<string,mixed>> $periods
      */
     private function applyBooks(string $companyId, string $startDate, string $endDate, string $groupBy, array &$periods): void
     {
-        $items = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')
-            ->get(['income_account_id', 'expense_account_id']);
-        $salesAccounts = array_flip(array_filter($items->pluck('income_account_id')->all()));
-        $costAccounts = array_flip(array_filter($items->pluck('expense_account_id')->all()));
-
-        $lines = DB::table('acct.journal_entries as je')
-            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
-            ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
-            ->where('t.company_id', $companyId)
-            ->whereIn('t.status', ['posted', 'locked'])
-            ->whereNull('t.deleted_at')
-            ->whereBetween('t.transaction_date', [$startDate, $endDate])
-            ->whereIn('a.type', ['revenue', 'other_income', 'expense', 'cogs', 'other_expense'])
-            ->groupBy(DB::raw('t.transaction_date::date'), 'a.id', 'a.code', 'a.name', 'a.type', 't.transaction_type')
-            ->selectRaw('t.transaction_date::date AS d, a.id AS account_id, a.code, a.name, a.type, t.transaction_type, SUM(je.credit_amount) - SUM(je.debit_amount) AS net')
-            ->get();
-
-        $books = [];
-        foreach ($lines as $l) {
-            $date = Carbon::parse($l->d);
-            $key = $this->periodKey($date, $groupBy);
-            $periods[$key] ??= $this->emptyPeriodRow($key, $this->periodLabel($date, $groupBy));
-            $part = isset($salesAccounts[$l->account_id]) ? 'sales'
-                : (isset($costAccounts[$l->account_id]) ? 'cost'
-                : ($l->type === 'expense' && $l->transaction_type === 'expense' ? 'expenses' : 'other'));
-            // Sales and other read as income (+); cost and expenses as positive costs.
-            $amount = in_array($part, ['cost', 'expenses'], true) ? -(float) $l->net : (float) $l->net;
-            $books[$key][$part][$l->account_id] ??= ['account_id' => $l->account_id, 'code' => $l->code, 'name' => $l->name, 'type' => $l->type, 'amount' => 0.0];
-            $books[$key][$part][$l->account_id]['amount'] += $amount;
+        $books = app(ProfitStatementService::class)->periodBooks(
+            $companyId, $startDate, $endDate, fn (Carbon $date) => $this->periodKey($date, $groupBy),
+        );
+        foreach ($books as $key => $_) {
+            $periods[$key] ??= $this->emptyPeriodRow($key, $this->periodLabel(Carbon::parse($groupBy === 'month' ? $key.'-01' : $key), $groupBy));
         }
 
         foreach ($periods as $key => &$row) {
-            $parts = [];
-            foreach (['sales', 'cost', 'expenses', 'other'] as $part) {
-                $list = array_values(array_filter($books[$key][$part] ?? [], fn ($a) => abs($a['amount']) >= 0.005));
-                usort($list, fn ($a, $b) => abs($b['amount']) <=> abs($a['amount']));
-                $parts[$part] = $list;
-            }
+            $parts = $books[$key] ?? ['sales' => [], 'cost' => [], 'expenses' => [], 'other' => []];
             $sales = array_sum(array_column($parts['sales'], 'amount'));
             $cost = array_sum(array_column($parts['cost'], 'amount'));
             $expenses = array_sum(array_column($parts['expenses'], 'amount'));

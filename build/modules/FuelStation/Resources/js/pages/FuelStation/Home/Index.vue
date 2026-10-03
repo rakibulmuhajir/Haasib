@@ -9,7 +9,9 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
 import HomeBreakdowns from '../../../components/HomeBreakdowns.vue'
-import type { ProductLine, ExpenseLine, PurchaseLine } from '../../../components/HomeBreakdowns.vue'
+import type { PurchaseLine } from '../../../components/HomeBreakdowns.vue'
+import ProfitStatement from '../../../components/ProfitStatement.vue'
+import type { Statement } from '../../../components/ProfitStatement.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -75,8 +77,7 @@ interface Today {
   month: {
     label: string
     sales: SaleLine[]
-    products: ProductLine[]
-    expense_accounts: ExpenseLine[]
+    statement: Statement
     purchase_products: PurchaseLine[]
     sales_total: number
     gross_profit: number
@@ -97,8 +98,7 @@ interface History {
   from: string
   to: string
   sales: SaleLine[]
-  products: ProductLine[]
-  expense_accounts: ExpenseLine[]
+  statement: Statement
   purchase_products: PurchaseLine[]
   sales_total: number
   gross_profit: number
@@ -174,11 +174,8 @@ const moneyRows = (m: Money, today: boolean): Row[] => {
 
 interface Metric { key: string; label: string; amount: number; href: string | null; hint: string[] }
 
-// Sales, gross profit, expenses and short/over for a period, shared by Today and History.
-const metricsFor = (d: { sales_total: number; gross_profit: number; profit: number; expenses: number; short_over: number; revenue: number; cogs: number; short_days: number; over_days: number }, links: { sales: string; profit: string; expenses: string; short_over: string | null }, wording: string): Metric[] => [
-  { key: 'sales', label: 'Sales', amount: d.sales_total, href: links.sales, hint: [`Everything sold ${wording}, as posted at each daily close.`] },
-  { key: 'gp', label: 'Profit', amount: d.profit, href: links.profit, hint: ['Sales + closing stock - opening stock - purchases, from the books. Packaged items at gross profit.', `Gross profit ${amt(d.gross_profit)}.`] },
-  { key: 'expenses', label: 'Expenses', amount: d.expenses, href: links.expenses, hint: ['Entered under Daily Close > Money out > Expenses.'] },
+// Short/over for a period, shared by Today and History. Sales, profit and expenses are the statement's.
+const metricsFor = (d: { short_over: number; short_days: number; over_days: number }, links: { short_over: string | null }): Metric[] => [
   { key: 'short', label: 'Short / over', amount: d.short_over, href: links.short_over, hint: [`${d.short_days} ${d.short_days === 1 ? 'day' : 'days'} short, ${d.over_days} ${d.over_days === 1 ? 'day' : 'days'} over.`, 'Counted cash against what the books expect.'] },
 ]
 
@@ -265,16 +262,12 @@ const todayMoney = computed(() => moneyRows(props.today.money, true))
 const histMoney = computed(() => (h.value ? moneyRows(h.value.money, false) : []))
 const todayMetrics = computed(() => {
   const m = props.today.month
-  return metricsFor(
-    { ...m, short_over: m.short_over },
-    { sales: m.links.month_summary, profit: m.links.profit, expenses: m.links.expenses, short_over: m.links.month_summary },
-    'this month',
-  )
+  return metricsFor(m, { short_over: m.links.month_summary })
 })
 const histMetrics = computed(() => {
   const d = h.value
   if (!d) return []
-  return metricsFor(d, { sales: d.links.profit, profit: d.links.profit, expenses: d.links.expenses, short_over: d.links.short_over }, 'in this period')
+  return metricsFor(d, { short_over: d.links.short_over })
 })
 const rateHint = (r: Today['rates'][number]) => {
   const out: string[] = []
@@ -398,7 +391,8 @@ const quick = computed(() => [
         <Card>
           <CardHeader><CardTitle class="text-base">This month · {{ today.month.label }}</CardTitle></CardHeader>
           <CardContent class="space-y-4">
-            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <ProfitStatement :statement="today.month.statement" :currency="currency" />
+            <div class="flex flex-wrap gap-4">
               <div v-for="m in todayMetrics" :key="m.key">
                 <p class="text-xs text-text-secondary">
                   <Hint>{{ m.label }}<template #content><p v-for="(l, i) in m.hint" :key="i">{{ l }}</p></template></Hint>
@@ -407,7 +401,7 @@ const quick = computed(() => [
                 <MoneyText v-else :amount="m.amount" :currency="currency" :fraction-digits="0" />
               </div>
             </div>
-            <HomeBreakdowns :products="today.month.products" :expense-accounts="today.month.expense_accounts" :purchase-products="today.month.purchase_products" :currency="currency" />
+            <HomeBreakdowns :purchase-products="today.month.purchase_products" :currency="currency" />
             <p class="text-sm tabular-nums text-text-secondary">
               <Hint>Bought<template #content><p v-for="(l, i) in purchasesHint(today.month.purchases)" :key="i">{{ l }}</p></template></Hint>
               <Link :href="today.month.links.stock_statement" :class="lnk"> {{ litres(today.month.purchases.liters) }} L ·
@@ -515,7 +509,8 @@ const quick = computed(() => [
               <p class="text-sm" :class="h.closes.count < h.closes.days ? 'text-status-attention' : 'text-text-secondary'">{{ closesText }}</p>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <ProfitStatement :statement="h.statement" :currency="currency" />
+              <div class="flex flex-wrap gap-4">
                 <div v-for="m in histMetrics" :key="m.key">
                   <p class="text-xs text-text-secondary">
                     <Hint>{{ m.label }}<template #content><p v-for="(l, i) in m.hint" :key="i">{{ l }}</p></template></Hint>
@@ -524,7 +519,7 @@ const quick = computed(() => [
                   <MoneyText v-else :amount="m.amount" :currency="currency" :fraction-digits="0" />
                 </div>
               </div>
-              <HomeBreakdowns :products="h.products" :expense-accounts="h.expense_accounts" :purchase-products="h.purchase_products" :currency="currency" />
+              <HomeBreakdowns :purchase-products="h.purchase_products" :currency="currency" />
               <p class="text-sm tabular-nums text-text-secondary">
                 <Hint>Bought<template #content><p v-for="(l, i) in purchasesHint(h.purchases)" :key="i">{{ l }}</p></template></Hint>
                 <Link :href="h.links.stock_statement" :class="lnk"> {{ litres(h.purchases.liters) }} L ·

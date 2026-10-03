@@ -76,9 +76,9 @@ class StockStatementService
             $date = $d->toDateString();
             $t = $byDate[$date] ?? null;
             $dayBills = $bought[$date] ?? [];
-            $dayBought = array_sum(array_column($dayBills, 'quantity'));
-            $dayDirect = array_sum(array_column($dayBills, 'direct'));
-            $dayPurchase = array_sum(array_column($dayBills, 'amount'));
+            $dayBought = (float) array_sum(array_column($dayBills, 'quantity'));
+            $dayDirect = (float) array_sum(array_column($dayBills, 'direct'));
+            $dayPurchase = (float) array_sum(array_column($dayBills, 'amount'));
             $dayPurchaseRate = $dayBought > 0 ? round($dayPurchase / $dayBought, 2) : null;
             $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
             if (! $t) {
@@ -134,7 +134,7 @@ class StockStatementService
             $dip = array_sum(array_map(fn ($tk) => $n($tk['physical_liters'] ?? 0), $tanks));
 
             if ($first) {
-                $prevDip = $this->openingBefore($companyId, $startDate, $date, $tankIds);
+                $prevDip = $this->openingBefore($companyId, $startDate, $date, $tankIds, $itemId);
                 $openingTotal = $prevDip;
             }
             $opening = $prevDip;
@@ -246,7 +246,7 @@ class StockStatementService
     }
 
     /** Litres in the product's tanks as the first row's day opens: the last count before the range, else opening stock. */
-    private function openingBefore(string $companyId, string $rangeStart, string $firstDate, array $tankIds): ?float
+    private function openingBefore(string $companyId, string $rangeStart, string $firstDate, array $tankIds, string $itemId): ?float
     {
         $found = [];
         $earlier = $this->liveCloses($companyId)
@@ -270,6 +270,8 @@ class StockStatementService
             $stock = DB::table('inv.stock_movements')
                 ->where('company_id', $companyId)
                 ->where('movement_type', 'opening')
+                // Only this product's opening: another item's opening entry may sit in the same tank.
+                ->where('item_id', $itemId)
                 ->whereIn('warehouse_id', $missing)
                 ->where('movement_date', '<', $firstDate)
                 ->groupBy('warehouse_id')
@@ -426,9 +428,9 @@ class StockStatementService
             $date = $d->toDateString();
             $t = $byDate[$date] ?? null;
             $dayBills = $bought[$date] ?? [];
-            $dayBought = array_sum(array_column($dayBills, 'quantity'));
-            $dayDirect = array_sum(array_column($dayBills, 'direct'));
-            $dayPurchase = array_sum(array_column($dayBills, 'amount'));
+            $dayBought = (float) array_sum(array_column($dayBills, 'quantity'));
+            $dayDirect = (float) array_sum(array_column($dayBills, 'direct'));
+            $dayPurchase = (float) array_sum(array_column($dayBills, 'amount'));
             $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
 
             $soldClose = 0.0;

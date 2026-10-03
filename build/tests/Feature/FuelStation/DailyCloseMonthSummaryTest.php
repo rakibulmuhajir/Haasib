@@ -13,10 +13,28 @@ use App\Modules\FuelStation\Services\DailyCloseMonthSummaryService;
 const MONTH_TANK = '11111111-1111-4111-8111-111111111111';
 const MONTH_NOZZLE = '22222222-2222-4222-8222-222222222222';
 
+/** The fiscal year and the month's period a close on $date must sit in (made once, reused). */
+function monthPeriodFor(Company|string $company, string $date): array
+{
+    $companyId = is_string($company) ? $company : $company->id;
+    $day = \Carbon\Carbon::parse($date);
+    $fy = \App\Modules\Accounting\Models\FiscalYear::firstOrCreate(
+        ['company_id' => $companyId, 'name' => '2026'],
+        ['start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']
+    );
+    $period = \App\Modules\Accounting\Models\AccountingPeriod::firstOrCreate(
+        ['company_id' => $companyId, 'fiscal_year_id' => $fy->id, 'period_number' => $day->month],
+        ['name' => $day->format('F'), 'start_date' => $day->copy()->startOfMonth()->toDateString(), 'end_date' => $day->copy()->endOfMonth()->toDateString()]
+    );
+
+    return ['fiscal_year_id' => $fy->id, 'period_id' => $period->id, 'base_currency' => 'PKR'];
+}
+
 function monthClose(Company $company, string $date, array $meta, string $suffix = ''): Transaction
 {
     return Transaction::create([
         'company_id' => $company->id,
+        ...monthPeriodFor($company, $date),
         'transaction_number' => 'DC-'.$date.$suffix.'-'.str()->random(4),
         'transaction_type' => 'fuel_daily_close',
         'transaction_date' => $date,
@@ -28,6 +46,17 @@ function monthClose(Company $company, string $date, array $meta, string $suffix 
         'status' => 'posted',
         'metadata' => $meta,
     ]);
+}
+
+/** A posted close is immutable; the reopen bypass (scoped to this one row) lets a fixture shape it, as DailyCloseReopenTest does. */
+function monthShapePostedClose(Transaction $close, callable $change): void
+{
+    \Illuminate\Support\Facades\DB::select("SELECT set_config('app.reopening_close_id', ?, false)", [$close->id]);
+    try {
+        $change($close);
+    } finally {
+        \Illuminate\Support\Facades\DB::select("SELECT set_config('app.reopening_close_id', '', false)");
+    }
 }
 
 function monthMeta(float $opening, float $in, float $out, float $variance, float $dip, float $litres, float $revenue): array
@@ -75,13 +104,15 @@ test('a month adds up its live closes and skips deleted and reversed ones', func
     monthClose($company, '2026-09-02', monthMeta(129500, 60000, 10000, 300, 3200, 800, 60000));
 
     // An older version of 1 Sep, soft-deleted when the day was edited.
-    monthClose($company, '2026-09-01', monthMeta(1, 999999, 1, 0, 1, 9999, 999999), 'old')->delete();
+    monthShapePostedClose(monthClose($company, '2026-09-01', monthMeta(1, 999999, 1, 0, 1, 9999, 999999), 'old'), fn ($c) => $c->delete());
 
     // A reversed close.
     $live = Transaction::where('company_id', $company->id)->whereDate('transaction_date', '2026-09-02')->first();
     $reversed = monthClose($company, '2026-09-03', monthMeta(1, 888888, 1, 0, 1, 7777, 888888));
-    $reversed->reversed_by_id = $live->id;
-    $reversed->save();
+    monthShapePostedClose($reversed, function ($c) use ($live) {
+        $c->reversed_by_id = $live->id;
+        $c->save();
+    });
 
     $s = app(DailyCloseMonthSummaryService::class)->run($company->id, '2026-09');
 

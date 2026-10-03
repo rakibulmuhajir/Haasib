@@ -32,6 +32,9 @@ function booksFixture(): array
         'power' => $acct('6110', 'Electricity', 'expense', 'debit'),
         'salary' => $acct('6150', 'Salaries & Wages', 'expense', 'debit'),
     ];
+    $fyId = (string) str()->uuid();
+    DB::table('acct.fiscal_years')->insert(['id' => $fyId, 'company_id' => $company->id, 'name' => '2026', 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('acct.accounting_periods')->insert(['id' => (string) str()->uuid(), 'company_id' => $company->id, 'fiscal_year_id' => $fyId, 'name' => 'September', 'period_number' => 9, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30', 'created_at' => now(), 'updated_at' => now()]);
     DB::table('inv.items')->insert([
         'id' => (string) str()->uuid(), 'company_id' => $company->id, 'sku' => 'PET-'.str()->random(5), 'name' => 'Petrol',
         'item_type' => 'product', 'unit_of_measure' => 'liter', 'currency' => 'PKR', 'fuel_category' => 'petrol',
@@ -47,8 +50,9 @@ function booksEntry(Company $company, string $date, string $type, array $lines):
     $total = array_sum(array_map(fn ($l) => $l[1], array_filter($lines, fn ($l) => $l[2] === 'debit')));
     DB::table('acct.transactions')->insert([
         'id' => $id, 'company_id' => $company->id, 'transaction_number' => strtoupper($type).'-'.str()->random(6),
-        'transaction_type' => $type, 'transaction_date' => $date, 'posting_date' => $date, 'description' => $type,
-        'currency' => 'PKR', 'total_debit' => $total, 'total_credit' => $total, 'status' => 'posted',
+        'fiscal_year_id' => DB::table('acct.fiscal_years')->where('company_id', $company->id)->value('id'),
+        'period_id' => DB::table('acct.accounting_periods')->where('company_id', $company->id)->value('id'), 'transaction_type' => $type, 'transaction_date' => $date, 'posting_date' => $date, 'description' => $type,
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'total_debit' => $total, 'total_credit' => $total, 'status' => 'posted',
         'created_at' => now(), 'updated_at' => now(),
     ]);
     foreach ($lines as $i => [$account, $amount, $side]) {

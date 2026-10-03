@@ -14,6 +14,8 @@ require_once __DIR__.'/PendingDeliveryFixtures.php';
 test('a delivery added on its own is a bill that waits for its day\'s close', function () {
     test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = pendingDeliveryFixture();
+    $f['company']->enableModule('fuel_station');
+    $f['tank']->update(['warehouse_type' => 'tank', 'capacity' => 20000]);
 
     test()->actingAs($f['user'])->post("/{$f['company']->slug}/fuel/receipts", [
         'date' => '2026-09-15',
@@ -38,10 +40,12 @@ test('a delivery added on its own is a bill that waits for its day\'s close', fu
 test('a delivery dated on a closed day is refused', function () {
     test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = pendingDeliveryFixture();
+    $f['company']->enableModule('fuel_station');
+    $f['tank']->update(['warehouse_type' => 'tank', 'capacity' => 20000]);
     Transaction::create([
-        'company_id' => $f['company']->id, 'transaction_number' => 'DC-2026-09-14-'.str()->random(4),
+        'company_id' => $f['company']->id, ...fixtureYearAndPeriod($f['company']->id), 'transaction_number' => 'DC-2026-09-14-'.str()->random(4),
         'transaction_type' => 'fuel_daily_close', 'transaction_date' => '2026-09-14', 'posting_date' => '2026-09-14',
-        'description' => 'Daily close 2026-09-14', 'currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0,
+        'description' => 'Daily close 2026-09-14', 'currency' => 'PKR', 'base_currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0,
         'status' => 'posted', 'metadata' => [],
     ]);
 

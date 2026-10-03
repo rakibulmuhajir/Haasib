@@ -32,10 +32,28 @@ function statementFixture(): array
     return [$company, $itemId, $tankId];
 }
 
+/** The fiscal year and the month's period a close on $date must sit in (made once, reused). */
+function statementPeriodFor(Company|string $company, string $date): array
+{
+    $companyId = is_string($company) ? $company : $company->id;
+    $day = \Carbon\Carbon::parse($date);
+    $fy = \App\Modules\Accounting\Models\FiscalYear::firstOrCreate(
+        ['company_id' => $companyId, 'name' => '2026'],
+        ['start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']
+    );
+    $period = \App\Modules\Accounting\Models\AccountingPeriod::firstOrCreate(
+        ['company_id' => $companyId, 'fiscal_year_id' => $fy->id, 'period_number' => $day->month],
+        ['name' => $day->format('F'), 'start_date' => $day->copy()->startOfMonth()->toDateString(), 'end_date' => $day->copy()->endOfMonth()->toDateString()]
+    );
+
+    return ['fiscal_year_id' => $fy->id, 'period_id' => $period->id, 'base_currency' => 'PKR'];
+}
+
 function statementClose(Company $company, string $itemId, string $tankId, string $date, float $expected, float $dip, float $sold, float $rate, string $suffix = ''): Transaction
 {
     return Transaction::create([
         'company_id' => $company->id,
+        ...statementPeriodFor($company, $date),
         'transaction_number' => 'DC-'.$date.$suffix.'-'.str()->random(4),
         'transaction_type' => 'fuel_daily_close',
         'transaction_date' => $date,
@@ -59,6 +77,17 @@ function statementClose(Company $company, string $itemId, string $tankId, string
             ],
         ],
     ]);
+}
+
+/** A posted close is immutable; the reopen bypass (scoped to this one row) lets a fixture shape it, as DailyCloseReopenTest does. */
+function statementShapePostedClose(Transaction $close, callable $change): void
+{
+    \Illuminate\Support\Facades\DB::select("SELECT set_config('app.reopening_close_id', ?, false)", [$close->id]);
+    try {
+        $change($close);
+    } finally {
+        \Illuminate\Support\Facades\DB::select("SELECT set_config('app.reopening_close_id', '', false)");
+    }
 }
 
 function statementBill(Company $company, string $itemId, string $tankId, string $date, float $quantity, float $direct = 0): string
@@ -99,11 +128,13 @@ test('opening comes from the close before the range; bought comes from the bills
     DB::table('acct.bills')->where('id', statementBill($company, $itemId, $tankId, '2026-09-02', 9999))->update(['status' => 'draft']);
 
     // Soft-deleted older version of 1 Sep, and a reversed close on 3 Sep: neither counts.
-    statementClose($company, $itemId, $tankId, '2026-09-01', 1, 1, 9999, 1, 'old')->delete();
+    statementShapePostedClose(statementClose($company, $itemId, $tankId, '2026-09-01', 1, 1, 9999, 1, 'old'), fn ($c) => $c->delete());
     $live = Transaction::where('company_id', $company->id)->whereDate('transaction_date', '2026-09-02')->first();
     $reversed = statementClose($company, $itemId, $tankId, '2026-09-03', 1, 1, 7777, 1);
-    $reversed->reversed_by_id = $live->id;
-    $reversed->save();
+    statementShapePostedClose($reversed, function ($c) use ($live) {
+        $c->reversed_by_id = $live->id;
+        $c->save();
+    });
 
     $r = app(StockStatementService::class)->run($company->id, $itemId, '2026-09-01', '2026-09-03');
 
@@ -140,7 +171,7 @@ test('opening comes from the close before the range; bought comes from the bills
         ->and($b['rates'])->toBe([406.0]);
 
     // The reversed close leaves 3 Sep as a visible gap.
-    expect($c)->toBe(['date' => '2026-09-03', 'missing' => true]);
+    expect($c['date'])->toBe('2026-09-03')->and($c['missing'])->toBeTrue()->and($c['received'])->toBe(0.0);
 
     expect($r['totals']['opening'])->toBe(5000.0)
         ->and($r['totals']['received'])->toBe(1300.0)
@@ -206,8 +237,10 @@ function statementOtherSale(Transaction $close, string $itemId, float $quantity,
 {
     $m = $close->metadata;
     $m['other_sales_details'] = [['item_id' => $itemId, 'quantity' => $quantity, 'unit_price' => $price, 'amount' => $quantity * $price]];
-    $close->metadata = $m;
-    $close->save();
+    statementShapePostedClose($close, function ($c) use ($m) {
+        $c->metadata = $m;
+        $c->save();
+    });
 }
 
 function statementPackagedBill(Company $company, string $oilId, string $tankId, string $date, float $quantity): string

@@ -56,3 +56,12 @@ function creditClosePost(array $f): array
     return app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
 }
 
+
+/** The year and period creditCloseFixture() made, for a hand-built transaction row in that company. */
+function fixtureYearAndPeriod(string $companyId): array
+{
+    $fy = FiscalYear::where('company_id', $companyId)->firstOrFail();
+    $period = AccountingPeriod::where('company_id', $companyId)->where('fiscal_year_id', $fy->id)->firstOrFail();
+
+    return ['fiscal_year_id' => $fy->id, 'period_id' => $period->id, 'base_currency' => 'PKR'];
+}

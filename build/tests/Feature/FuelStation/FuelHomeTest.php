@@ -45,10 +45,28 @@ function fuelHomeFixture(bool $fuelStation = true): array
     return compact('company', 'user');
 }
 
+/** The fiscal year and the month's period a close on $date must sit in (made once, reused). */
+function fuelHomePeriodFor(Company|string $company, string $date): array
+{
+    $companyId = is_string($company) ? $company : $company->id;
+    $day = \Carbon\Carbon::parse($date);
+    $fy = \App\Modules\Accounting\Models\FiscalYear::firstOrCreate(
+        ['company_id' => $companyId, 'name' => '2026'],
+        ['start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'status' => 'open']
+    );
+    $period = \App\Modules\Accounting\Models\AccountingPeriod::firstOrCreate(
+        ['company_id' => $companyId, 'fiscal_year_id' => $fy->id, 'period_number' => $day->month],
+        ['name' => $day->format('F'), 'start_date' => $day->copy()->startOfMonth()->toDateString(), 'end_date' => $day->copy()->endOfMonth()->toDateString()]
+    );
+
+    return ['fiscal_year_id' => $fy->id, 'period_id' => $period->id, 'base_currency' => 'PKR'];
+}
+
 function fuelHomeClose(Company $company, string $date): Transaction
 {
     return Transaction::create([
         'company_id' => $company->id,
+        ...fuelHomePeriodFor($company, $date),
         'transaction_number' => 'DC-'.$date.'-'.str()->random(4),
         'transaction_type' => 'fuel_daily_close',
         'transaction_date' => $date,

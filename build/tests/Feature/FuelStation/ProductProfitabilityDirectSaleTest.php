@@ -18,6 +18,8 @@ function offTankerFixture(): array
 {
     test()->travelTo(\Carbon\Carbon::parse('2026-09-20 09:00:00'));
     $f = pendingDeliveryFixture();
+    // The stock statement reads only tanks, which is where off-tanker litres are found.
+    $f['tank']->update(['warehouse_type' => 'tank', 'capacity' => 20000]);
 
     // 100 L through the pump on 15 Sep.
     creditClosePost($f);

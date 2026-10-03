@@ -44,9 +44,15 @@ class FuelNavigationAccess
             'openingBalances' => Permissions::OPENING_BALANCE_VIEW,
         ];
 
+        $allowed = array_keys(array_filter($permissions,
+            fn (string $permission): bool => $user->isGodMode() || $user->hasCompanyPermission($permission)));
+        // Products & stock replaced Stock Overview, so whoever could see stock still reaches it.
+        if (in_array('stock', $allowed, true) && ! in_array('products', $allowed, true)) {
+            $allowed[] = 'products';
+        }
+
         return [
-            'allowed' => array_keys(array_filter($permissions,
-                fn (string $permission): bool => $user->isGodMode() || $user->hasCompanyPermission($permission))),
+            'allowed' => $allowed,
             'hasInvestors' => (bool) StationSettings::where('company_id', $company->id)->value('has_investors'),
         ];
     }

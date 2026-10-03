@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\CompanyController;
 use App\Modules\FuelStation\Http\Controllers\AmanatController;
 use App\Modules\FuelStation\Http\Controllers\CollectionController;
 use App\Modules\FuelStation\Http\Controllers\CreditCustomerController;
@@ -19,6 +18,7 @@ use App\Modules\FuelStation\Http\Controllers\PumpController;
 use App\Modules\FuelStation\Http\Controllers\PumpReadingController;
 use App\Modules\FuelStation\Http\Controllers\RateChangeController;
 use App\Modules\FuelStation\Http\Controllers\StationPerformanceReportController;
+use App\Modules\FuelStation\Http\Controllers\StationProductsController;
 use App\Modules\FuelStation\Http\Controllers\StationSettingsController;
 use App\Modules\FuelStation\Http\Controllers\StockStatementReportController;
 use App\Modules\FuelStation\Http\Controllers\StockVarianceReportController;
@@ -54,8 +54,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::post('onboarding/initial-stock', [FuelStationOnboardingController::class, 'setupInitialStock'])->name('fuel.onboarding.initial-stock');
     Route::post('onboarding/complete', [FuelStationOnboardingController::class, 'complete'])->name('fuel.onboarding.complete');
 
-    // Product and tank setup: what the company home showed before a station got its own.
-    Route::get('products', [CompanyController::class, 'products'])->name('fuel.products');
+    // Products & stock: the register of what the station sells, with product quick add.
+    Route::get('products', [StationProductsController::class, 'index'])->name('fuel.products');
 
     // Dashboard
     Route::get('dashboard', [FuelDashboardController::class, 'index'])->name('fuel.dashboard');

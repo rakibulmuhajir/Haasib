@@ -308,12 +308,6 @@ class CompanyController extends Controller
         return $this->renderShow($request);
     }
 
-    /** What a fuel station's old home showed: product and tank setup plus the generic dashboard. */
-    public function products(Request $request): Response|RedirectResponse
-    {
-        return $this->renderShow($request);
-    }
-
     /** The History tab's range: ?from & ?to as dates, last month when absent or unreadable. */
     private function historyRange(mixed $from, mixed $to): array
     {
@@ -556,45 +550,6 @@ class CompanyController extends Controller
             || ($company->industry_code ?? null) === 'fuel_station'
             || ($company->industry ?? null) === 'fuel_station';
 
-        $fuelDashboard = null;
-        $productDashboardDate = Carbon::today()->toDateString();
-        if ($request->filled('product_date')) {
-            try {
-                $productDashboardDate = Carbon::parse((string) $request->input('product_date'))->toDateString();
-            } catch (\Throwable) {
-                $productDashboardDate = Carbon::today()->toDateString();
-            }
-        }
-        if ($isFuelStation) {
-            try {
-                $fuelDashboard = app(FuelDashboardService::class)->getHomeCards($company->id, Carbon::parse($productDashboardDate));
-            } catch (\Throwable $e) {
-                Log::warning('Fuel dashboard home cards failed', [
-                    'company_id' => $company->id,
-                    'error' => $e->getMessage(),
-                ]);
-                $fuelDashboard = null;
-            }
-        }
-
-        $fuelTanks = [];
-        if ($isFuelStation) {
-            try {
-                $fuelTanks = Warehouse::where('company_id', $company->id)
-                    ->where('warehouse_type', 'tank')
-                    ->where('is_active', true)
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'code', 'capacity', 'linked_item_id'])
-                    ->toArray();
-            } catch (\Throwable $e) {
-                Log::warning('Fuel tanks lookup failed', [
-                    'company_id' => $company->id,
-                    'error' => $e->getMessage(),
-                ]);
-                $fuelTanks = [];
-            }
-        }
-
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -647,9 +602,6 @@ class CompanyController extends Controller
             ],
             'isFuelStation' => $isFuelStation,
             'isUmrah' => $isUmrah,
-            'fuelDashboard' => $fuelDashboard,
-            'productDashboardDate' => $productDashboardDate,
-            'fuelTanks' => $fuelTanks,
         ]);
     }
 

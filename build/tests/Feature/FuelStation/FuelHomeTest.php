@@ -10,7 +10,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 /**
  * A fuel station's company home is its own page (Today / History); the old product and tank setup
- * page it used to open on moved to /fuel/products. Other companies keep company/Show.
+ * page it used to open on became Products & stock at /fuel/products. Other companies keep company/Show.
  */
 function fuelHomeFixture(bool $fuelStation = true): array
 {
@@ -105,15 +105,16 @@ test('a fuel station home renders the station home with today props', function (
             ->missing('history'));
 });
 
-test('the product setup page lives at fuel products', function () {
+test('products and stock live at fuel products', function () {
     $f = fuelHomeFixture();
 
     test()->actingAs($f['user'])
         ->get("/{$f['company']->slug}/fuel/products")
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('company/Show')
-            ->where('isFuelStation', true));
+            ->component('FuelStation/Products/Index')
+            ->has('rows')
+            ->has('summary'));
 });
 
 test('a company that is not a fuel station still opens company show', function () {

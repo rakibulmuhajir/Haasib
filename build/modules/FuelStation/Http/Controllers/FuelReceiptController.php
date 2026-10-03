@@ -3,6 +3,8 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\FuelStation\Http\Requests\StoreFuelDeliveryRequest;
+use App\Modules\FuelStation\Services\DailyCloseEntryService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -101,18 +103,59 @@ class FuelReceiptController extends Controller
                 'owed' => $rows->unique('bill_id')->sum('bill_balance'),
             ],
             'nextCloseDate' => $nextClose ? Carbon::parse($nextClose)->addDay()->toDateString() : now()->toDateString(),
+            // For "Add delivery": who from, what into which tank, paid from where.
+            'suppliers' => DB::table('acct.vendors')->where('company_id', $company->id)->whereNull('deleted_at')
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'products' => DB::table('inv.warehouses as w')->join('inv.items as i', 'i.id', '=', 'w.linked_item_id')
+                ->where('w.company_id', $company->id)->where('w.warehouse_type', 'tank')->where('w.is_active', true)
+                ->orderBy('i.name')->orderBy('w.name')
+                ->get(['i.id as item_id', 'i.name as item_name', 'w.id as tank_id', 'w.name as tank_name']),
+            'paymentAccounts' => DB::table('acct.accounts')->where('company_id', $company->id)
+                ->whereIn('subtype', ['cash', 'bank'])->where('is_active', true)->whereNull('deleted_at')
+                ->orderByRaw("case when subtype = 'cash' then 0 else 1 end")->orderBy('code')
+                ->get(['id', 'code', 'name']),
         ]);
     }
 
-    /** A new delivery is entered in the close that receives it. */
     public function create(Request $request): RedirectResponse
     {
         return redirect()->route('fuel.receipts.index', ['company' => app(CurrentCompany::class)->get()->slug]);
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * A delivery entered on its own: the same bill the close makes for a purchase, but its litres
+     * are not received yet -- that day's close shows them as delivered and receives them when it
+     * is posted. Paid now from a cash account shows in that day's close as cash out too.
+     */
+    public function store(StoreFuelDeliveryRequest $request): RedirectResponse
     {
-        return $this->create($request);
+        $company = app(CurrentCompany::class)->get();
+        $data = $request->validated();
+
+        try {
+            $result = DB::transaction(fn () => app(DailyCloseEntryService::class)->purchase($company->id, $data['date'], [
+                'supplier_id' => $data['supplier_id'],
+                'supplier_invoice_number' => $data['supplier_invoice_number'] ?? null,
+                'paid_now' => (bool) ($data['paid_now'] ?? false),
+                'payment_account_id' => $data['payment_account_id'] ?? null,
+                'lines' => [[
+                    'item_id' => $data['item_id'],
+                    'tank_id' => $data['tank_id'] ?? null,
+                    'quantity' => $data['quantity'],
+                    'direct_quantity' => $data['direct_quantity'] ?? null,
+                    'unit_cost' => $data['unit_cost'] ?? null,
+                    'line_total' => $data['line_total'] ?? null,
+                ]],
+            ], $request->user(), receive: false));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        $number = DB::table('acct.bills')->where('id', $result['bill_id'])->value('bill_number');
+
+        return back()->with('success', "{$number} added. Received into the tank when the ".Carbon::parse($data['date'])->format('j M').' close is posted.');
     }
 
     /** A delivery is its bill. */

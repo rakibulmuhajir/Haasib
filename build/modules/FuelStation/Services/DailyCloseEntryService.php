@@ -131,7 +131,13 @@ class DailyCloseEntryService
             && ! empty($line['item_id']) && (float) ($line['quantity'] ?? 0) > 0));
     }
 
-    public function purchase(string $companyId, string $date, array $purchase, User $user): array
+    /**
+     * $receive false: a delivery entered on its own (Fuel deliveries) -- the bill is made but its
+     * litres wait for that day's close, which shows them as delivered and receives them on posting.
+     * A purchase may name the account it was paid from (payment_account_id); the close's own
+     * "paid now" is the station cash.
+     */
+    public function purchase(string $companyId, string $date, array $purchase, User $user, bool $receive = true): array
     {
         $company = Company::findOrFail($companyId);
         $lineItems = [];
@@ -197,7 +203,7 @@ class DailyCloseEntryService
             ->values()
             ->all();
 
-        if (!empty($receiveLines)) {
+        if ($receive && !empty($receiveLines)) {
             app(CommandBus::class)->dispatch('bill.receive_goods', [
                 'id' => $bill->id,
                 'receipt_date' => $date,
@@ -209,17 +215,18 @@ class DailyCloseEntryService
         $paymentTransactionId = null;
 
         if (filter_var($purchase['paid_now'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
-            $cashId = app(DailyCloseService::class)->cashAccountId($companyId);
+            $cashId = ($purchase['payment_account_id'] ?? null) ?: app(DailyCloseService::class)->cashAccountId($companyId);
             if (!$cashId) {
                 throw new \RuntimeException('No cash account is configured for this company.');
             }
+            $paidFromSubtype = \App\Modules\Accounting\Models\Account::where('company_id', $companyId)->whereKey($cashId)->value('subtype');
             $paymentResult = app(CommandBus::class)->dispatch('bill_payment.create', [
                 'vendor_id' => $bill->vendor_id,
                 'payment_date' => $date,
                 'amount' => (float) $bill->total_amount,
                 'currency' => $bill->currency,
                 'base_currency' => $bill->base_currency,
-                'payment_method' => 'cash',
+                'payment_method' => $paidFromSubtype === 'bank' ? 'bank_transfer' : 'cash',
                 'payment_account_id' => $cashId,
                 'ap_account_id' => $bill->vendor?->ap_account_id,
                 'allocations' => [['bill_id' => $bill->id, 'amount_allocated' => (float) $bill->total_amount]],

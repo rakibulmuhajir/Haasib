@@ -276,8 +276,7 @@ const rateHint = (r: Today['rates'][number]) => {
 
 const quick = computed(() => [
   { label: 'Start close', href: `/${slug.value}/fuel/daily-close`, icon: ClipboardCheck },
-  // Deliveries are entered in the close that receives them: open the next close at its Purchases.
-  { label: 'Fuel delivery', href: `/${slug.value}/fuel/daily-close?date=${props.today.close.next_date}#purchases`, icon: Droplets },
+  { label: 'Fuel delivery', href: `/${slug.value}/fuel/receipts`, icon: Droplets },
   { label: 'Record expense', href: `/${slug.value}/expenses`, icon: Receipt },
   { label: 'Change rate', href: `/${slug.value}/fuel/rates`, icon: TrendingUp },
 ])

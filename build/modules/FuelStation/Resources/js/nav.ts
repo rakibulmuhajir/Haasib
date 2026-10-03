@@ -1,5 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
+import { mostVisited } from '@/navigation/visits'
 import { House, ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
@@ -17,7 +18,7 @@ export const fuelStationNav: ModuleNavConfig = {
     const groups: NavGroup[] = [
       // The station's home (Today | History) -- where the app opens; one click back to it.
       { label: 'Home', items: [{ title: 'Home', href: `/${slug}`, icon: House }] },
-      { label: 'Daily Close', items: [
+      { label: 'Favorites', items: [
         // Opens the history; a new close starts from its button.
         ...(allowed.has('closeHistory')
           ? item('closeHistory', 'Daily Close', '/fuel/daily-close/history', ClipboardCheck)
@@ -80,6 +81,18 @@ export const fuelStationNav: ModuleNavConfig = {
         { title: t('settings'), href: `/${slug}/setup`, icon: Settings },
       ] },
     ]
+    // Favorites: Daily Close always first, then this person's most visited pages.
+    const favorites = groups.find(group => group.label === 'Favorites')
+    if (favorites) {
+      const pinned = new Set([`/${slug}`, ...favorites.items.map(i => String(i.href))])
+      const candidates = groups
+        .filter(group => group !== favorites)
+        .flatMap(group => group.items)
+        .filter(i => i.href && !pinned.has(String(i.href)))
+      const byHref = new Map(candidates.map(i => [String(i.href), i]))
+      for (const href of mostVisited(slug, [...byHref.keys()], 6)) favorites.items.push(byHref.get(href)!)
+    }
+
     return groups.filter(group => group.items.length > 0)
   },
 }

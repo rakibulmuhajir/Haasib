@@ -41,6 +41,7 @@ import { getInitials } from '@/composables/useInitials';
 import { useNavGroups } from '@/composables/useNavGroups';
 import { usePaletteVisibility } from '@/composables/usePaletteVisibility';
 import { activeNavHref } from '@/navigation/active';
+import { recordVisit } from '@/navigation/visits';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItemType, NavGroup, NavItem } from '@/types';
@@ -70,9 +71,15 @@ const { navGroups, isFuelStationCompany } = useNavGroups();
 const mobileNavOpen = ref(false);
 watch(() => page.url, () => { mobileNavOpen.value = false; });
 const mobileShortcuts = computed(() => isFuelStationCompany.value
-    ? navGroups.value.filter(group => ['Home', 'Daily Close', 'Stock'].includes(group.label)).map(group => ({ ...group.items[0], title: group.label, group }))
+    ? navGroups.value.filter(group => ['Home', 'Favorites', 'Stock'].includes(group.label)).map(group => ({ ...group.items[0], title: group.label === 'Favorites' ? group.items[0].title : group.label, group }))
     : []);
 const { currentCompany } = useCompanySwitcher();
+// Count each menu page opened, for the Favorites menu (this browser only).
+watch(() => page.url, (url) => {
+    const slug = currentCompany.value?.slug;
+    const href = activeNavHref(navGroups.value, url);
+    if (slug && href && href !== `/${slug}`) recordVisit(slug, href);
+}, { immediate: true });
 const { appearance, isDark, appearanceLabel, toggleAppearance, setSystem } =
     useAppearanceToggle();
 const { open: openPalette } = usePaletteVisibility();
@@ -88,7 +95,7 @@ const groupIsActive = (group: NavGroup) => group.items.some(isActive);
  * a dropdown to find its only item is a click spent on nothing.
  */
 const isDirectLink = (group: NavGroup) =>
-    group.items.length === 1 && !group.items[0].children?.length && !!group.items[0].href;
+    group.label !== 'Favorites' && group.items.length === 1 && !group.items[0].children?.length && !!group.items[0].href;
 
 // The palette's shortcut, spelled the way the reader's keyboard spells it.
 const shortcut = computed(() =>

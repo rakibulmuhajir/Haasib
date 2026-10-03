@@ -297,7 +297,7 @@ const rateChangeColumns = [
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <Percent class="h-4 w-4 text-status-success" />
-            {{ percent(totals.gross_margin_percent) }} margin
+            {{ percent(totals.gross_margin_percent) }} margin on books
           </CardContent>
         </Card>
 

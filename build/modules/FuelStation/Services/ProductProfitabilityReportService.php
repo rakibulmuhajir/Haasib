@@ -451,6 +451,10 @@ class ProductProfitabilityReportService
             $opening = $valuation->accountBalance($companyId, $accountId, $dayBefore);
             $closing = $valuation->accountBalance($companyId, $accountId, $endDate);
             $row['book_profit'] = round($row['revenue'] + $closing - $opening - $purchases, 2);
+            // Margins follow the books where the books have the figure (tank gains and losses,
+            // later costs and the month-end write-down all in); elsewhere they stay on gross profit.
+            $row['margin_per_unit'] = $row['quantity'] > 0 ? $row['book_profit'] / $row['quantity'] : 0;
+            $row['gross_margin_percent'] = $row['revenue'] > 0 ? ($row['book_profit'] / $row['revenue']) * 100 : 0;
         }
         unset($row);
     }
@@ -651,8 +655,10 @@ class ProductProfitabilityReportService
         $book = array_filter(array_column($rows, 'book_profit'), fn ($v) => $v !== null);
         $totals['book_profit'] = $book === [] ? null : round(array_sum($book), 2);
 
-        $totals['gross_margin_percent'] = $totals['revenue'] > 0 ? ($totals['gross_profit'] / $totals['revenue']) * 100 : 0;
-        $totals['margin_per_unit'] = $totals['quantity'] > 0 ? ($totals['gross_profit'] / $totals['quantity']) : 0;
+        // Each product's own basis: the books' profit where there is one, gross profit otherwise.
+        $profit = array_sum(array_map(fn ($r) => $r['book_profit'] ?? $r['gross_profit'], $rows));
+        $totals['gross_margin_percent'] = $totals['revenue'] > 0 ? ($profit / $totals['revenue']) * 100 : 0;
+        $totals['margin_per_unit'] = $totals['quantity'] > 0 ? ($profit / $totals['quantity']) : 0;
 
         return $totals;
     }

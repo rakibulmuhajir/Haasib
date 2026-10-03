@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 class ProductProfitabilityReportService
 {
+    /** @var array<string,array<string,mixed>> StockStatementService::run results of this run, by item id. */
+    private array $statements = [];
+
     /**
      * @return array{
      *   filters: array<string,string>,
@@ -23,6 +26,7 @@ class ProductProfitabilityReportService
     public function run(string $companyId, string $startDate, string $endDate, string $groupBy = 'day', string $product = 'all'): array
     {
         $groupBy = in_array($groupBy, ['day', 'week', 'month'], true) ? $groupBy : 'day';
+        $this->statements = [];
         $items = $this->items($companyId);
         $transactions = Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')
@@ -108,6 +112,7 @@ class ProductProfitabilityReportService
             $this->finishProductRow($row);
         }
         unset($row);
+        $this->addBookProfit($companyId, $startDate, $endDate, $items, $productRows);
         usort($productRows, fn (array $a, array $b) => $b['revenue'] <=> $a['revenue']);
 
         // A period with a delivery but no posted close is added after the others; keep date order.
@@ -138,12 +143,26 @@ class ProductProfitabilityReportService
      */
     private function items(string $companyId): array
     {
-        return Item::where('company_id', $companyId)
+        // A category names one product (the closes key fuel sales by it). When several share one --
+        // packaged lubricants marked 'lubricant' beside the open drum -- the one with a tank keeps
+        // the category and the rest go by their own id, or they would overwrite each other here
+        // and their sales would lose their cost.
+        $tankItems = DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')
+            ->whereNotNull('linked_item_id')->pluck('linked_item_id')->all();
+        $all = Item::where('company_id', $companyId)
             ->where('is_sellable', true)
             ->whereNull('deleted_at')
-            ->get(['id', 'sku', 'name', 'fuel_category', 'avg_cost', 'cost_price', 'unit_of_measure'])
-            ->mapWithKeys(function (Item $item) {
-                $key = $this->itemKey($item->id, [], $item->name, $item->fuel_category);
+            ->get(['id', 'sku', 'name', 'fuel_category', 'avg_cost', 'cost_price', 'unit_of_measure', 'asset_account_id']);
+        $sharing = $all->whereNotNull('fuel_category')->groupBy('fuel_category')->filter(fn ($g) => $g->count() > 1);
+        $categoryOwner = $sharing->map(fn ($g) => ($g->first(fn ($i) => in_array($i->id, $tankItems, true)) ?? $g->first())->id);
+
+        return $all
+            ->mapWithKeys(function (Item $item) use ($categoryOwner) {
+                $category = $item->fuel_category;
+                if ($category && isset($categoryOwner[$category]) && $categoryOwner[$category] !== $item->id) {
+                    $category = null;
+                }
+                $key = $this->itemKey($item->id, [], $item->name, $category);
 
                 return [$key => [
                     'id' => $item->id,
@@ -152,6 +171,7 @@ class ProductProfitabilityReportService
                     'fuel_category' => $item->fuel_category,
                     'avg_cost' => (float) ($item->avg_cost ?: $item->cost_price ?: 0),
                     'unit' => $item->unit_of_measure ?: 'L',
+                    'asset_account_id' => $item->asset_account_id,
                 ]];
             })
             ->all();
@@ -349,7 +369,6 @@ class ProductProfitabilityReportService
             ->pluck('linked_item_id')
             ->all();
 
-        $statement = app(StockStatementService::class);
         foreach ($items as $key => $item) {
             if (! in_array($item['id'], $tankItemIds, true)) {
                 continue;
@@ -358,7 +377,7 @@ class ProductProfitabilityReportService
                 continue;
             }
 
-            foreach ($statement->run($companyId, (string) $item['id'], $startDate, $endDate)['rows'] as $row) {
+            foreach ($this->statement($companyId, (string) $item['id'], $startDate, $endDate)['rows'] as $row) {
                 $bills = (array) ($row['bills'] ?? []);
                 // A day without a close has no sold_direct; its bills still say how much went off the tanker.
                 $quantity = (float) ($row['sold_direct'] ?? array_sum(array_column($bills, 'direct')));
@@ -389,6 +408,51 @@ class ProductProfitabilityReportService
                 $periods[$periodKey]['cogs'] += $cogs;
             }
         }
+    }
+
+    /** The stock statement for an item over the range, run once per report. */
+    private function statement(string $companyId, string $itemId, string $startDate, string $endDate): array
+    {
+        return $this->statements[$itemId] ??= app(StockStatementService::class)->run($companyId, $itemId, $startDate, $endDate);
+    }
+
+    /**
+     * The station manager's formula from the books, per tank fuel: sales + closing stock - opening
+     * stock - purchases, where stock is the item's inventory account balance (opening: the day
+     * before the range, closing: the range end) and purchases are the fuel bills of the range (the
+     * stock statement's purchase_amount). Null for anything else, and for a fuel whose inventory
+     * account is shared with another product, since its balance isn't the fuel's own.
+     *
+     * @param array<string,array<string,mixed>> $items
+     * @param array<int,array<string,mixed>> $productRows
+     */
+    private function addBookProfit(string $companyId, string $startDate, string $endDate, array $items, array &$productRows): void
+    {
+        $tankItemIds = DB::table('inv.warehouses')
+            ->where('company_id', $companyId)->where('warehouse_type', 'tank')
+            ->whereNotNull('linked_item_id')->whereNull('deleted_at')
+            ->distinct()->pluck('linked_item_id')->all();
+        $valuation = app(MonthEndStockValuationService::class);
+        $dayBefore = Carbon::parse($startDate)->subDay()->toDateString();
+
+        foreach ($productRows as &$row) {
+            $item = $items[$row['key']] ?? null;
+            $accountId = $item['asset_account_id'] ?? null;
+            if (! $item || ! $accountId || ! in_array($item['id'], $tankItemIds, true)) {
+                continue;
+            }
+            $shared = DB::table('inv.items')
+                ->where('company_id', $companyId)->where('asset_account_id', $accountId)
+                ->where('id', '!=', $item['id'])->whereNull('deleted_at')->exists();
+            if ($shared) {
+                continue;
+            }
+            $purchases = (float) ($this->statement($companyId, (string) $item['id'], $startDate, $endDate)['totals']['purchase_amount'] ?? 0);
+            $opening = $valuation->accountBalance($companyId, $accountId, $dayBefore);
+            $closing = $valuation->accountBalance($companyId, $accountId, $endDate);
+            $row['book_profit'] = round($row['revenue'] + $closing - $opening - $purchases, 2);
+        }
+        unset($row);
     }
 
     /**
@@ -530,6 +594,7 @@ class ProductProfitabilityReportService
             'direct_quantity' => 0.0,
             'direct_revenue' => 0.0,
             'writedown' => 0.0,
+            'book_profit' => null,
             'stock_loss_quantity' => 0.0,
             'stock_loss_value' => 0.0,
             'stock_gain_quantity' => 0.0,
@@ -565,7 +630,7 @@ class ProductProfitabilityReportService
 
     /**
      * @param array<int,array<string,mixed>> $rows
-     * @return array<string,float|int>
+     * @return array<string,float|int|null>
      */
     private function totals(array $rows): array
     {
@@ -582,6 +647,9 @@ class ProductProfitabilityReportService
             'stock_gain_quantity' => array_sum(array_column($rows, 'stock_gain_quantity')),
             'stock_gain_value' => array_sum(array_column($rows, 'stock_gain_value')),
         ];
+
+        $book = array_filter(array_column($rows, 'book_profit'), fn ($v) => $v !== null);
+        $totals['book_profit'] = $book === [] ? null : round(array_sum($book), 2);
 
         $totals['gross_margin_percent'] = $totals['revenue'] > 0 ? ($totals['gross_profit'] / $totals['revenue']) * 100 : 0;
         $totals['margin_per_unit'] = $totals['quantity'] > 0 ? ($totals['gross_profit'] / $totals['quantity']) : 0;

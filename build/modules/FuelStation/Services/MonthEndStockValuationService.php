@@ -22,9 +22,14 @@ use Illuminate\Support\Str;
  * Never written up. This is month-end only -- per-rate-change revaluation was removed on
  * purpose (RateChangeService), rates change near-daily.
  *
+ * The write-down is sized from the books: the fuel's inventory account balance on the last day
+ * (before this write-down) less Q x R, so the account closes at exactly Q x R, which is what the
+ * station manager's profit formula (sales + closing stock - opening stock - purchases) reads. A
+ * fuel whose inventory account is shared with another product falls back to the cost walk.
+ *
  * One journal per (month, fuel): DR the fuel's cost-of-fuel account, CR its inventory account,
- * dated the month's last day, plus a quantity-0 'revaluation' stock movement of -amount so the
- * cost walk starts the next month at the new rate. sync() is idempotent: it works out what
+ * dated the month's last day, plus a quantity-0 'revaluation' stock movement so the cost walk
+ * starts the next month at the new rate. sync() is idempotent: it works out what
  * should exist and, if the live journal differs, reverses it on its own date and posts the
  * right one.
  */
@@ -139,29 +144,43 @@ class MonthEndStockValuationService
 
     private function syncItem(string $companyId, string $month, string $lastDay, string $nextFirst, object $item, bool $closed, ?Transaction $existing): array
     {
-        $quantity = $cost = 0.0;
+        $quantity = $cost = $walkCost = $book = 0.0;
         $rate = null;
         $desired = 0.0;
+        $basis = 'books';
 
         if ($closed) {
             // The same dip the cost walk reads: what was in the tanks at the end of the day.
             $quantity = (float) DB::table('fuel.tank_readings')
                 ->where('company_id', $companyId)->where('item_id', $item->id)
                 ->whereDate('reading_date', $lastDay)->sum('dip_measurement_liters');
-            $cost = $this->costs->costForDay($companyId, $item->id, $lastDay);
+            $walkCost = $this->costs->costForDay($companyId, $item->id, $lastDay);
             $latest = DB::table('fuel.rate_changes')
                 ->where('company_id', $companyId)->where('item_id', $item->id)
                 ->whereDate('effective_date', '<=', $nextFirst)
                 ->orderByDesc('effective_date')->first(['purchase_rate']);
             $rate = $latest ? (float) $latest->purchase_rate : null;
-            if ($quantity > 0 && $cost > 0 && $rate !== null && $rate < $cost) {
-                $desired = round($quantity * ($cost - $rate), 2);
+
+            $shared = ! $item->asset_account_id || DB::table('inv.items')
+                ->where('company_id', $companyId)->where('asset_account_id', $item->asset_account_id)
+                ->where('id', '!=', $item->id)->whereNull('deleted_at')->exists();
+            if ($shared) {
+                $basis = 'cost_walk';
+                $book = $quantity * $walkCost;
+            } else {
+                // The account's value before this month's own write-down (a reversed pair nets to zero by itself).
+                $book = $this->accountBalance($companyId, $item->asset_account_id, $lastDay)
+                    + ($existing ? (float) ($existing->metadata['amount'] ?? 0) : 0.0);
+            }
+            $cost = $quantity > 0 ? $book / $quantity : 0.0;
+            if ($quantity > 0 && $rate !== null && $rate < $cost) {
+                $desired = round($book - $quantity * $rate, 2);
             }
         }
 
         $have = $existing ? round((float) ($existing->metadata['amount'] ?? 0), 2) : 0.0;
         $row = ['item_id' => $item->id, 'item' => $item->name, 'quantity' => $quantity, 'cost' => $cost, 'rate' => $rate,
-            'writedown' => $desired, 'existing' => $have, 'action' => 'none'];
+            'writedown' => $desired, 'existing' => $have, 'action' => 'none', 'book' => round($book, 2), 'basis' => $basis];
 
         if ($existing && abs($have - $desired) < 0.005) {
             return $row;
@@ -176,19 +195,35 @@ class MonthEndStockValuationService
             return $row;
         }
 
-        AccountingWriteTransaction::run(function () use ($companyId, $month, $lastDay, $item, $existing, $desired, $quantity, $cost, $rate, &$row) {
+        AccountingWriteTransaction::run(function () use ($companyId, $month, $lastDay, $item, $existing, $desired, $quantity, $cost, $walkCost, $book, $basis, $rate, &$row) {
             if ($existing) {
                 $this->undo($existing);
                 $row['action'] = 'reversed';
             }
             if ($desired > 0) {
-                $this->post($companyId, $month, $lastDay, $item, $desired, $quantity, $cost, (float) $rate);
+                $this->post($companyId, $month, $lastDay, $item, $desired, $quantity, $cost, $walkCost, $book, $basis, (float) $rate);
                 $row['action'] = $existing ? 'replaced' : 'posted';
             }
         });
         $this->costs->forget();
 
         return $row;
+    }
+
+    /** Debit minus credit on an account up to and including a day, over posted or locked, live transactions. */
+    public function accountBalance(string $companyId, string $accountId, string $upTo): float
+    {
+        $row = DB::table('acct.journal_entries as je')
+            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->where('t.company_id', $companyId)
+            ->where('je.account_id', $accountId)
+            ->whereIn('t.status', ['posted', 'locked'])
+            ->whereNull('t.deleted_at')
+            ->whereDate('t.transaction_date', '<=', $upTo)
+            ->selectRaw('COALESCE(SUM(je.debit_amount), 0) as d, COALESCE(SUM(je.credit_amount), 0) as c')
+            ->first();
+
+        return round((float) $row->d - (float) $row->c, 2);
     }
 
     /** Reverses a write-down on its own date and takes its value change out of the cost walk. */
@@ -202,7 +237,7 @@ class MonthEndStockValuationService
             ->delete();
     }
 
-    private function post(string $companyId, string $month, string $lastDay, object $item, float $amount, float $quantity, float $cost, float $rate): void
+    private function post(string $companyId, string $month, string $lastDay, object $item, float $amount, float $quantity, float $cost, float $walkCost, float $book, string $basis, float $rate): void
     {
         $currency = DB::table('auth.companies')->where('id', $companyId)->value('base_currency') ?: 'PKR';
         $litres = rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
@@ -220,6 +255,7 @@ class MonthEndStockValuationService
             'metadata' => [
                 'month' => $month, 'item_id' => $item->id, 'quantity' => round($quantity, 3),
                 'cost_rate' => round($cost, 4), 'new_rate' => round($rate, 2), 'amount' => $amount,
+                'book_value' => round($book, 2), 'basis' => $basis,
             ],
         ], [
             ['account_id' => $item->expense_account_id, 'type' => 'debit', 'amount' => $amount, 'description' => $text],
@@ -241,7 +277,9 @@ class MonthEndStockValuationService
             'movement_type' => 'revaluation',
             'quantity' => 0,
             'unit_cost' => null,
-            'total_cost' => -$amount,
+            // The walk carries its own cost, which can differ from the books: this lands it exactly on
+            // the new rate (Q x R) the next day, whatever the write-down (W) turned out to be.
+            'total_cost' => round($quantity * $rate - $quantity * $walkCost, 2),
             'gl_transaction_id' => $transaction->id,
             'reference_type' => 'fuel.stock_writedown',
             'reference_id' => $transaction->id,

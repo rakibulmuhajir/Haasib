@@ -50,7 +50,7 @@ class FuelMonthEndValuation extends Command
             try {
                 $context->withContext($company, function () use ($company, $month, $valuation) {
                     foreach ($valuation->sync($company->id, $month) as $r) {
-                        $this->line(sprintf('  %s  Q %s L  C %s  R %s  W %s  -> %s', $r['item'], number_format($r['quantity'], 3), number_format($r['cost'], 4),
+                        $this->line(sprintf('  %s  Q %s L  B %s  C %s  R %s  W %s  -> %s', $r['item'], number_format($r['quantity'], 3), number_format($r['book'], 2), number_format($r['cost'], 4),
                             $r['rate'] === null ? '-' : number_format($r['rate'], 2), number_format($r['writedown'], 2), $r['action']));
                     }
                 });

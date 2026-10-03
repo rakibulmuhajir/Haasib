@@ -35,6 +35,7 @@ interface Totals {
   revenue: number
   cogs: number
   gross_profit: number
+  book_profit: number | null
   gross_margin_percent: number
   margin_per_unit: number
   stock_loss_quantity: number
@@ -52,6 +53,7 @@ interface ProductRow {
   revenue: number
   cogs: number
   gross_profit: number
+  book_profit?: number | null
   gross_margin_percent: number
   avg_rate: number
   avg_cost: number
@@ -179,6 +181,7 @@ const productColumns = [
   { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
   { key: 'cogs', label: 'COGS', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
+  { key: 'book_profit', label: 'Profit (books)', kind: 'amount' as const },
   { key: 'margin_per_unit', label: 'Margin/unit', kind: 'amount' as const },
   { key: 'gross_margin_percent', label: 'Margin %', kind: 'amount' as const },
   { key: 'stock_variance', label: 'Stock variance', kind: 'amount' as const },
@@ -356,6 +359,13 @@ const rateChangeColumns = [
               <div class="text-xs text-muted-foreground"><MoneyText :amount="row.avg_cost" :currency="company.base_currency" />/{{ row.unit }}</div>
             </template>
             <template #cell-gross_profit="{ row }"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></template>
+            <template #header-book_profit="{ column }">
+              <Hint side="bottom">
+                {{ column.label }}
+                <template #content>Sales + closing stock − opening stock − purchases, from the books.</template>
+              </Hint>
+            </template>
+            <template #cell-book_profit="{ row }"><MoneyText v-if="row.book_profit != null" :amount="row.book_profit" :currency="company.base_currency" /></template>
             <template #cell-margin_per_unit="{ row }"><MoneyText :amount="row.margin_per_unit" :currency="company.base_currency" /></template>
             <template #cell-gross_margin_percent="{ row }">{{ percent(row.gross_margin_percent) }}</template>
 

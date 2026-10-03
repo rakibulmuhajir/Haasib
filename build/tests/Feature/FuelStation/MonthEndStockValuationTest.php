@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Support\Facades\DB;
 
 require_once __DIR__.'/PendingDeliveryFixtures.php';
+require_once __DIR__.'/StockBooksFixtures.php';
 
 /*
  * Month-end "lower of cost or new purchase rate": the litres in the tank on a month's last day
@@ -38,6 +39,10 @@ function monthEndFixture(float $octoberRate = 395.80): array
         'transaction_number' => 'DC-2026-09-30-'.str()->random(4), 'transaction_type' => 'fuel_daily_close',
         'transaction_date' => '2026-09-30', 'posting_date' => '2026-09-30', 'description' => 'Daily close 2026-09-30',
         'currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0, 'status' => 'posted', 'metadata' => ['fuel_sales' => []],
+    ]);
+    // The stock account holds what the 725 L cost (the write-down is sized from the books).
+    stockBooksEntry($cid, '2026-09-01', 'opening_balance', [
+        [$f['accounts']['1200']->id, round(725 * 407.4456, 2), 'debit'], [$f['accounts']['4100']->id, round(725 * 407.4456, 2), 'credit'],
     ]);
     RateChange::create(['company_id' => $cid, 'item_id' => $f['item']->id, 'effective_date' => '2026-10-01', 'purchase_rate' => $octoberRate, 'sale_rate' => 450]);
 
@@ -156,4 +161,34 @@ test('the profitability report counts the write-down in the product cost and its
         ->and(round($petrol['gross_profit'], 2))->toBe(-$expected)
         ->and(round($report['periodRows'][0]['cogs'], 2))->toBe($expected)
         ->and(round($report['totals']['cogs'], 2))->toBe($expected);
+});
+
+test('the write-down is sized from the stock account, so it ends at exactly litres times the new rate', function () {
+    $f = monthEndFixture(395.80);
+    $cid = $f['company']->id;
+    $stock = $f['accounts']['1200']->id;
+    // The account holds 337 more than the cost walk says the 725 L cost.
+    stockBooksEntry($cid, '2026-09-20', 'manual', [[$stock, 337, 'debit'], [$f['accounts']['4100']->id, 337, 'credit']]);
+    $service = app(MonthEndStockValuationService::class);
+    $before = round(725 * 407.4456, 2) + 337;
+
+    $result = $service->sync($cid, '2026-09');
+
+    $writedown = round($before - 725 * 395.80, 2);
+    $tx = monthEndLive($cid)->first();
+    expect($result[0]['book'])->toBe($before)
+        ->and($result[0]['basis'])->toBe('books')
+        ->and((float) $tx->metadata['amount'])->toBe($writedown)
+        ->and($tx->metadata['basis'])->toBe('books')
+        ->and((float) $tx->metadata['cost_rate'])->toBe(round($before / 725, 4))
+        ->and($service->accountBalance($cid, $stock, '2026-09-30'))->toBe(round(725 * 395.80, 2));
+
+    // The walk lands on the new rate from its own cost, not from -W.
+    $movement = StockMovement::where('company_id', $cid)->where('movement_type', 'revaluation')->sole();
+    expect((float) $movement->total_cost)->toBe(round(725 * 395.80 - 725 * 407.4456, 2))
+        ->and((new FuelCostService())->costForDay($cid, $f['item']->id, '2026-10-02'))->toBe(395.8);
+
+    // Again: nothing changes, and the account still ends at Q x R.
+    expect($service->sync($cid, '2026-09')[0]['action'])->toBe('none')
+        ->and($service->accountBalance($cid, $stock, '2026-09-30'))->toBe(round(725 * 395.80, 2));
 });

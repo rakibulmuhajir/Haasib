@@ -1,6 +1,6 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
-import { ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays } from 'lucide-vue-next'
+import { House, ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -15,6 +15,8 @@ export const fuelStationNav: ModuleNavConfig = {
       enabled && allowed.has(key) ? [{ title, href: `/${slug}${path}`, icon }] : []
 
     const groups: NavGroup[] = [
+      // The station's home (Today | History) -- where the app opens; one click back to it.
+      { label: 'Home', items: [{ title: 'Home', href: `/${slug}`, icon: House }] },
       { label: 'Daily Close', items: [
         // Opens the history; a new close starts from its button.
         ...(allowed.has('closeHistory')

@@ -70,7 +70,7 @@ const { navGroups, isFuelStationCompany } = useNavGroups();
 const mobileNavOpen = ref(false);
 watch(() => page.url, () => { mobileNavOpen.value = false; });
 const mobileShortcuts = computed(() => isFuelStationCompany.value
-    ? navGroups.value.filter(group => ['Daily Close', 'Stock'].includes(group.label)).map(group => ({ ...group.items[0], title: group.label, group }))
+    ? navGroups.value.filter(group => ['Home', 'Daily Close', 'Stock'].includes(group.label)).map(group => ({ ...group.items[0], title: group.label, group }))
     : []);
 const { currentCompany } = useCompanySwitcher();
 const { appearance, isDark, appearanceLabel, toggleAppearance, setSystem } =

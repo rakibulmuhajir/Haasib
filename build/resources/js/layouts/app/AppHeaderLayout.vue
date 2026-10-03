@@ -10,6 +10,7 @@
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import Sonner from '@/components/ui/sonner/Sonner.vue'
+import SettingsSectionTabs from '@/components/SettingsSectionTabs.vue'
 import type { BreadcrumbItemType } from '@/types'
 
 withDefaults(
@@ -51,6 +52,7 @@ withDefaults(
         <section
           class="flex flex-1 flex-col rounded-md border border-rule-default bg-surface-raised p-4"
         >
+          <SettingsSectionTabs class="mb-4" />
           <slot />
         </section>
       </div>

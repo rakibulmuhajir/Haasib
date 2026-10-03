@@ -41,20 +41,24 @@ class FuelHomeService
         $summary = app(DailyCloseMonthSummaryService::class)->run($id, $today->format('Y-m'));
         $closes = $this->close($company, $summary);
         $payroll = $this->payroll($company);
-        $money = $this->money($company, $todayDate);
-        $tanks = $this->tanks($company, $closes['last_date']);
+        $money = $this->money($company, $monthStart, $todayDate);
+        $tanks = $this->tanks($company, $closes['last_date'], $closes['last_id'], $monthStart, $todayDate);
         $stock = $this->stockRuns($id, $monthStart, $todayDate);
         $fig = $this->figures($id, $monthStart, $todayDate, $stock);
-        $overdue = $this->overdueCustomers($id, $todayDate);
+        $overdue = $money['overdue'];
 
         $month = [
             'label' => $today->format('F Y'),
-            'sales' => $fig['sales'],
+            'sales' => $this->saleLinks($slug, $fig['sales'], $monthStart, $todayDate),
             'sales_total' => (float) ($summary['sales_total'] ?? 0),
             'gross_profit' => $fig['gross_profit'],
             'expenses' => $fig['expenses'],
             'short_over' => (float) ($summary['cash']['short_over'] ?? 0),
             'purchases' => $fig['purchases'],
+            'revenue' => $fig['revenue'],
+            'cogs' => $fig['cogs'],
+            'short_days' => (int) ($summary['cash']['short_days'] ?? 0),
+            'over_days' => (int) ($summary['cash']['over_days'] ?? 0),
             'links' => [
                 'month_summary' => "/{$slug}/fuel/daily-close/month?month=".$today->format('Y-m'),
                 'stock_statement' => $this->stockLink($slug, $monthStart, $todayDate),
@@ -70,7 +74,7 @@ class FuelHomeService
             'money' => $money,
             'tanks' => $tanks,
             'month' => $month,
-            'rates' => $this->rates($id, $todayDate),
+            'rates' => $this->rates($company, $todayDate),
             'attention' => $this->attention($company, $closes, $payroll, $tanks, $stock, $overdue, $monthStart, $todayDate),
         ];
     }
@@ -93,10 +97,17 @@ class FuelHomeService
             $byDate[Carbon::parse($t->transaction_date)->toDateString()] = $t;
         }
         $shortOver = 0.0;
+        $shortDays = 0;
+        $overDays = 0;
         foreach ($byDate as $t) {
             $m = (array) ($t->metadata ?? []);
-            $shortOver += (float) (($m['posting_snapshot']['totals']['variance'] ?? null) ?? ($m['variance'] ?? 0));
+            $v = (float) (($m['posting_snapshot']['totals']['variance'] ?? null) ?? ($m['variance'] ?? 0));
+            $shortOver += $v;
+            $shortDays += round($v) < 0 ? 1 : 0;
+            $overDays += round($v) > 0 ? 1 : 0;
         }
+        $lastInRange = $byDate ? end($byDate) : null;
+        $sameMonth = Carbon::parse($from)->format('Y-m') === Carbon::parse($to)->format('Y-m');
 
         $lastDay = Carbon::parse($to)->min($today);
         $days = Carbon::parse($from)->gt($lastDay) ? 0 : (int) Carbon::parse($from)->diffInDays($lastDay) + 1;
@@ -104,16 +115,22 @@ class FuelHomeService
         return [
             'from' => $from,
             'to' => $to,
-            'sales' => $fig['sales'],
+            'sales' => $this->saleLinks($slug, $fig['sales'], $from, $to),
             'sales_total' => $fig['sales_total'],
             'gross_profit' => $fig['gross_profit'],
             'expenses' => $fig['expenses'],
             'short_over' => $shortOver,
+            'short_days' => $shortDays,
+            'over_days' => $overDays,
+            'revenue' => $fig['revenue'],
+            'cogs' => $fig['cogs'],
             'purchases' => $fig['purchases'],
-            'stock' => $this->stockTable($stock),
-            'money' => $this->money($company, $to),
+            'stock' => $this->stockTable($stock, $slug, $from, $to, $lastInRange ? "/{$slug}/fuel/daily-close/{$lastInRange->id}" : null),
+            'money' => $this->money($company, $from, $to),
             'closes' => ['count' => count($byDate), 'days' => $days],
             'links' => [
+                'short_over' => $sameMonth ? "/{$slug}/fuel/daily-close/month?month=".Carbon::parse($from)->format('Y-m') : null,
+                'stock_variance' => "/{$slug}/fuel/reports/stock-variance?start_date={$from}&end_date={$to}",
                 'month_summary' => "/{$slug}/fuel/daily-close/month?month=".Carbon::parse($from)->format('Y-m'),
                 'stock_statement' => $this->stockLink($slug, $from, $to),
                 'expenses' => "/{$slug}/fuel/reports/expenses?start_date={$from}&end_date={$to}",
@@ -131,7 +148,7 @@ class FuelHomeService
         $today = Carbon::today();
 
         $last = $this->liveCloses($id)->orderByDesc('transaction_date')->orderByDesc('created_at')
-            ->first(['id', 'transaction_date']);
+            ->first(['id', 'transaction_date', 'metadata', 'posted_at', 'posted_by_user_id']);
         $first = $this->liveCloses($id)->min('transaction_date');
         $lastDate = $last ? Carbon::parse($last->transaction_date)->toDateString() : null;
         $nextDate = $lastDate ? Carbon::parse($lastDate)->addDay()->toDateString() : $today->toDateString();
@@ -149,9 +166,23 @@ class FuelHomeService
             fn ($d) => $d < $today->toDateString() && $d > $firstDate,
         ));
 
+        $lastMeta = (array) ($last?->metadata ?? []);
+        $counted = ($lastMeta['posting_snapshot']['totals']['closing_cash'] ?? null) ?? ($lastMeta['closing_cash'] ?? null);
+        $postedBy = null;
+        if ($last?->posted_by_user_id) {
+            try {
+                $postedBy = DB::table('auth.users')->where('id', $last->posted_by_user_id)->value('name');
+            } catch (\Throwable $e) {
+                $postedBy = null;
+            }
+        }
+
         return [
             'last_date' => $lastDate,
             'last_id' => $last?->id,
+            'last_posted_at' => $last?->posted_at ? Carbon::parse($last->posted_at)->format('Y-m-d H:i') : null,
+            'last_posted_by' => $postedBy,
+            'last_counted_cash' => $counted !== null ? (float) $counted : null,
             'first_date' => $firstDate,
             'next_date' => $nextDate,
             'next_has_close' => $nextHas,
@@ -163,7 +194,7 @@ class FuelHomeService
 
     private function payroll(Company $company): array
     {
-        $out = ['enabled' => false, 'reminder' => null, 'owed_count' => 0, 'owed_total' => 0.0];
+        $out = ['enabled' => false, 'reminder' => null, 'owed_count' => 0, 'owed_total' => 0.0, 'owed' => [], 'owed_month' => null];
         if (! $company->isModuleEnabled('payroll')) {
             return $out;
         }
@@ -178,6 +209,13 @@ class FuelHomeService
                 ->where('net_pay', '>', 0);
             $out['owed_count'] = (clone $owed)->count();
             $out['owed_total'] = (float) (clone $owed)->sum('net_pay');
+            $list = (clone $owed)->with(['employee:id,first_name,last_name', 'payrollPeriod:id,period_start'])->get();
+            $out['owed'] = $list->map(fn ($p) => [
+                'name' => trim(($p->employee?->first_name ?? '').' '.($p->employee?->last_name ?? '')) ?: 'Employee',
+                'amount' => (float) $p->net_pay,
+            ])->sortByDesc('amount')->values()->all();
+            $oldest = $list->map(fn ($p) => $p->payrollPeriod?->period_start)->filter()->map(fn ($d) => Carbon::parse($d))->sort()->first();
+            $out['owed_month'] = $oldest?->format('Y-m');
         } catch (\Throwable $e) {
             Log::warning('Fuel home payroll block failed', ['company_id' => $company->id, 'error' => $e->getMessage()]);
         }
@@ -185,10 +223,14 @@ class FuelHomeService
         return $out;
     }
 
-    /** Cash, each bank, what customers owe, what is owed to suppliers, amanat held, all as of a date. */
-    private function money(Company $company, string $asOf): array
+    /**
+     * Cash, each bank, what customers owe, what is owed to suppliers, amanat held, all as of a date.
+     * $from is where the statements the figures link to begin.
+     */
+    private function money(Company $company, string $from, string $asOf): array
     {
         $id = $company->id;
+        $slug = $company->slug;
 
         $cashId = app(DailyCloseService::class)->cashAccountId($id);
         $banks = Account::where('company_id', $id)->whereNull('deleted_at')->where('is_active', true)
@@ -199,25 +241,58 @@ class FuelHomeService
         $ids = array_values(array_filter(array_merge([$cashId, $amanatId], $banks->pluck('id')->all())));
         $balance = $this->ledgerBalances($id, $ids, $asOf);
 
+        $range = "from={$from}&to={$asOf}";
+        $statement = fn (string $kind, string $partyId) => "/{$slug}/reports/statements?kind={$kind}&id={$partyId}&{$range}";
+
         // The aging reports read each invoice's / bill's current balance, so as of a past date
         // they show what was then billed and is still unpaid today, not a time-travelled ledger.
+        $receivables = app(ReceivablesAgingReportService::class)->run($id, $asOf);
+        $payables = app(PayablesAgingReportService::class)->run($id, $asOf);
+
+        $unpaid = DB::table('acct.bills')->where('company_id', $id)->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->where('balance', '>', 0)
+            ->whereDate('bill_date', '<=', $asOf);
+        $oldest = (clone $unpaid)->orderBy('bill_date')->orderBy('created_at')->first(['id', 'bill_number', 'bill_date']);
+
+        $holders = (int) DB::table('fuel.customer_profiles')->where('company_id', $id)
+            ->where('is_amanat_holder', true)->count();
+
         return [
             'as_of' => $asOf,
             'cash' => $cashId ? ($balance[$cashId] ?? 0.0) : null,
+            'cash_href' => $cashId ? $statement('bank', $cashId) : null,
             'banks' => $banks->map(fn ($b) => [
                 'id' => $b->id,
                 'name' => $b->name,
+                'code' => $b->code,
                 'balance' => $balance[$b->id] ?? 0.0,
+                'href' => $statement('bank', $b->id),
             ])->values()->all(),
-            'receivable' => (float) app(ReceivablesAgingReportService::class)->run($id, $asOf)['totals']['total'],
-            'payable' => (float) app(PayablesAgingReportService::class)->run($id, $asOf)['totals']['total'],
+            'receivable' => (float) $receivables['totals']['total'],
+            'receivable_href' => $statement('customer', 'all'),
+            'receivable_aging_href' => "/{$slug}/reports/receivables-aging",
+            'receivable_customers' => count($receivables['rows']),
+            'overdue' => $this->overdueCustomers($receivables),
+            'payable' => (float) $payables['totals']['total'],
+            'payable_href' => $statement('supplier', 'all'),
+            'payable_aging_href' => "/{$slug}/reports/payables-aging",
+            'unpaid_bills' => (int) (clone $unpaid)->count(),
+            'oldest_bill' => $oldest ? [
+                'number' => $oldest->bill_number,
+                'date' => substr((string) $oldest->bill_date, 0, 10),
+                'href' => "/{$slug}/bills/{$oldest->id}",
+            ] : null,
             'amanat' => $amanatId ? ($balance[$amanatId] ?? 0.0) : null,
+            'amanat_href' => $statement('amanat', 'all'),
+            'amanat_holders' => $holders,
         ];
     }
 
-    private function tanks(Company $company, ?string $lastCloseDate): array
+    private function tanks(Company $company, ?string $lastCloseDate, ?string $lastCloseId, string $from, string $to): array
     {
         $id = $company->id;
+        $slug = $company->slug;
         $tanks = Warehouse::where('company_id', $id)->where('warehouse_type', 'tank')->where('is_active', true)
             ->orderBy('name')->get(['id', 'name', 'capacity', 'linked_item_id']);
         if ($tanks->isEmpty()) {
@@ -274,18 +349,24 @@ class FuelHomeService
         $today = Carbon::today()->toDateString();
         $dailyService = app(DailyCloseService::class);
 
-        return $tanks->map(function ($tank) use ($levels, $sold, $closeCount, $itemNames, $lastCloseDate, $today, $id, $dailyService) {
+        return $tanks->map(function ($tank) use ($levels, $sold, $closeCount, $itemNames, $lastCloseDate, $lastCloseId, $today, $id, $slug, $from, $to, $dailyService) {
             $level = $levels[$tank->id] ?? null;
             $capacity = (float) $tank->capacity;
             $average = $closeCount > 0 && isset($sold[$tank->id]) ? $sold[$tank->id] / $closeCount : null;
             $average = $average !== null && $average > 0 ? $average : null;
 
             $pending = 0.0;
+            $pendingBills = [];
             if ($tank->linked_item_id) {
                 try {
-                    $pending = (float) $dailyService
-                        ->pendingDeliveries($id, $tank->id, $tank->linked_item_id, $lastCloseDate, $today)
-                        ->sum('remaining');
+                    $deliveries = $dailyService
+                        ->pendingDeliveries($id, $tank->id, $tank->linked_item_id, $lastCloseDate, $today);
+                    $pending = (float) $deliveries->sum('remaining');
+                    $pendingBills = $deliveries->groupBy('bill_id')->map(fn ($rows, $billId) => [
+                        'number' => $rows->first()['bill_number'],
+                        'liters' => (float) $rows->sum('remaining'),
+                        'href' => "/{$slug}/bills/{$billId}",
+                    ])->values()->all();
                 } catch (\Throwable $e) {
                     Log::warning('Fuel home pending deliveries failed', ['tank_id' => $tank->id, 'error' => $e->getMessage()]);
                 }
@@ -301,19 +382,26 @@ class FuelHomeService
                 'avg_daily_sold' => $average,
                 'days_left' => $level !== null && $average !== null ? round(max(0, $level) / $average, 1) : null,
                 'pending_liters' => $pending,
+                'pending_bills' => $pendingBills,
+                'level_href' => $lastCloseId ? "/{$slug}/fuel/daily-close/{$lastCloseId}" : null,
+                'stock_href' => $tank->linked_item_id ? $this->stockItemLink($slug, $tank->linked_item_id, $from, $to) : null,
             ];
         })->values()->all();
     }
 
-    private function rates(string $companyId, string $date): array
+    private function rates(Company $company, string $date): array
     {
+        $companyId = $company->id;
+        $slug = $company->slug;
         $items = DB::table('inv.items')->where('company_id', $companyId)->whereNotNull('fuel_category')
             ->whereNull('deleted_at')->orderBy('name')->get(['id', 'name']);
+        $lastBills = app(RateChangeService::class)->lastPurchasePrices($companyId, $date);
 
-        return $items->map(function ($item) use ($companyId, $date) {
+        return $items->map(function ($item) use ($companyId, $date, $slug, $lastBills) {
             $rate = RateChange::getRateForDate($companyId, $item->id, $date);
             $sale = $rate ? (float) $rate->sale_rate : null;
             $purchase = $rate ? (float) $rate->purchase_rate : null;
+            $bill = $lastBills[$item->id] ?? null;
 
             return [
                 'item_id' => $item->id,
@@ -322,11 +410,18 @@ class FuelHomeService
                 'purchase_rate' => $purchase,
                 'margin' => $sale !== null && $purchase !== null ? round($sale - $purchase, 2) : null,
                 'effective_date' => $rate?->effective_date ? Carbon::parse($rate->effective_date)->toDateString() : null,
+                'sale_href' => "/{$slug}/fuel/rates",
+                'cost_bill' => $bill ? [
+                    'number' => $bill['bill_number'],
+                    'date' => $bill['bill_date'],
+                    'rate' => $bill['rate'],
+                    'href' => "/{$slug}/bills/{$bill['bill_id']}",
+                ] : null,
             ];
         })->values()->all();
     }
 
-    /** @return array<int, array{label:string, detail:?string, href:string}> */
+    /** @return array<int, array{label:string, detail:?string, href:string, hint?:array<int,string>}> */
     private function attention(Company $company, array $close, array $payroll, array $tanks, array $stock, array $overdue, string $from, string $to): array
     {
         $slug = $company->slug;
@@ -337,6 +432,7 @@ class FuelHomeService
             $n = count($close['missing_dates']);
             $items[] = [
                 'label' => $plural($n, 'close missing', 'closes missing'),
+                'hint' => [implode(', ', array_map(fn ($d) => Carbon::parse($d)->format('j M'), array_slice($close['missing_dates'], 0, 10))).($n > 10 ? ' and '.($n - 10).' more' : '')],
                 'detail' => 'This month',
                 'href' => "/{$slug}/fuel/daily-close/month?month=".Carbon::parse($to)->format('Y-m'),
             ];
@@ -345,6 +441,7 @@ class FuelHomeService
             $n = count($close['parked_dates']);
             $items[] = [
                 'label' => $plural($n, 'parked close', 'parked closes'),
+                'hint' => [implode(', ', array_map(fn ($d) => Carbon::parse($d)->format('j M'), $close['parked_dates']))],
                 'detail' => 'Not posted yet',
                 'href' => "/{$slug}/fuel/daily-close",
             ];
@@ -359,8 +456,9 @@ class FuelHomeService
         if (($payroll['owed_count'] ?? 0) > 0) {
             $items[] = [
                 'label' => 'Salaries owed',
+                'hint' => $this->topList(array_map(fn ($o) => [$o['name'], $o['amount']], (array) ($payroll['owed'] ?? []))),
                 'detail' => $plural((int) $payroll['owed_count'], 'payslip', 'payslips').' · '.number_format((float) $payroll['owed_total'], 0),
-                'href' => "/{$slug}/payroll",
+                'href' => "/{$slug}/payroll".(! empty($payroll['owed_month']) ? '?month='.$payroll['owed_month'] : ''),
             ];
         }
 
@@ -369,6 +467,7 @@ class FuelHomeService
             $n = count($negative);
             $items[] = [
                 'label' => $n.' '.($n === 1 ? 'product' : 'products').': purchases not recorded',
+                'hint' => $this->topList(array_map(fn ($p) => [$p['name'], (float) $p['totals']['closing']], array_values($negative)), ' short '),
                 'detail' => 'Stock below zero',
                 'href' => $this->stockLink($slug, $from, $to),
             ];
@@ -376,6 +475,7 @@ class FuelHomeService
         if ($overdue['count'] > 0) {
             $items[] = [
                 'label' => $plural($overdue['count'], 'customer overdue', 'customers overdue').' 30+ days',
+                'hint' => $this->topList($overdue['top']),
                 'detail' => number_format($overdue['total'], 0),
                 'href' => "/{$slug}/reports/receivables-aging",
             ];
@@ -384,6 +484,7 @@ class FuelHomeService
             if ($t['days_left'] !== null && $t['days_left'] < 1) {
                 $items[] = [
                     'label' => $t['name'].': under a day left',
+                    'hint' => [number_format((float) $t['level'], 0).' L left, about '.number_format((float) $t['avg_daily_sold'], 0).' L sold a day'],
                     'detail' => $t['item_name'],
                     'href' => "/{$slug}/fuel/receipts",
                 ];
@@ -425,7 +526,11 @@ class FuelHomeService
         $sales = [];
         $litres = 0.0;
         $amount = 0.0;
+        $fuelIds = [];
         foreach ($stock as $p) {
+            if ($p['has_tank']) {
+                $fuelIds[] = $p['id'];
+            }
             $litres += (float) ($p['totals']['received'] ?? 0) * ($p['has_tank'] ? 1 : 0);
             $amount += (float) ($p['totals']['purchase_amount'] ?? 0);
             if ($p['has_tank'] && (float) ($p['totals']['sold'] ?? 0) > 0) {
@@ -438,17 +543,28 @@ class FuelHomeService
             }
         }
 
+        // Bills that brought fuel in over the range, counted the way the stock statement receives them.
+        $bills = $fuelIds ? (int) DB::table('acct.bill_line_items as l')
+            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)->whereNull('b.deleted_at')
+            ->whereNotIn('b.status', ['void', 'cancelled', 'draft'])
+            ->whereIn('l.item_id', $fuelIds)
+            ->whereDate('b.bill_date', '>=', $from)->whereDate('b.bill_date', '<=', $to)
+            ->distinct()->count('b.id') : 0;
+
         return [
             'sales' => $sales,
+            'revenue' => (float) ($profit['revenue'] ?? 0),
+            'cogs' => (float) ($profit['cogs'] ?? 0),
             'sales_total' => (float) ($profit['revenue'] ?? 0),
             'gross_profit' => (float) ($profit['gross_profit'] ?? 0),
             'expenses' => (float) ($expenses['amount'] ?? 0),
-            'purchases' => ['liters' => $litres, 'amount' => $amount],
+            'purchases' => ['liters' => $litres, 'amount' => $amount, 'bills' => $bills],
         ];
     }
 
     /** The stock table: one row per product that had any stock or movement in the range. */
-    private function stockTable(array $stock): array
+    private function stockTable(array $stock, string $slug, string $from, string $to, ?string $lastCloseHref): array
     {
         $rows = [];
         foreach ($stock as $p) {
@@ -467,21 +583,50 @@ class FuelHomeService
                 'sold' => (float) ($t['sold'] ?? 0),
                 'closing' => $t['closing'] !== null ? (float) $t['closing'] : null,
                 'variance' => $p['has_tank'] ? (float) ($t['variance'] ?? 0) : null,
+                'href' => $this->stockItemLink($slug, $p['id'], $from, $to),
+                'closing_href' => $lastCloseHref,
             ];
         }
 
         return $rows;
     }
 
-    /** Customers whose oldest unpaid invoice is more than 30 days past due. */
-    private function overdueCustomers(string $companyId, string $asOf): array
+    /** Customers whose oldest unpaid invoice is more than 30 days past due, from an aging report. */
+    private function overdueCustomers(array $report): array
     {
-        $rows = array_filter(
-            app(ReceivablesAgingReportService::class)->run($companyId, $asOf)['rows'],
+        $rows = array_values(array_filter(
+            $report['rows'],
             fn ($r) => (int) $r['oldest_days_past_due'] > 30,
-        );
+        ));
 
-        return ['count' => count($rows), 'total' => (float) array_sum(array_column($rows, 'total'))];
+        return [
+            'count' => count($rows),
+            'total' => (float) array_sum(array_column($rows, 'total')),
+            'top' => array_map(fn ($r) => [$r['customer_name'], (float) $r['total']], $rows),
+        ];
+    }
+
+    /**
+     * "Name amount" lines, the five biggest then "and N more".
+     *
+     * @param  array<int, array{0:string,1:float}>  $pairs
+     * @return array<int, string>
+     */
+    private function topList(array $pairs, string $glue = ' · '): array
+    {
+        usort($pairs, fn ($a, $b) => abs($b[1]) <=> abs($a[1]));
+        $lines = array_map(fn ($p) => $p[0].$glue.number_format(abs($p[1]), 0), array_slice($pairs, 0, 5));
+        if (count($pairs) > 5) {
+            $lines[] = 'and '.(count($pairs) - 5).' more';
+        }
+
+        return $lines;
+    }
+
+    /** @param array<int, array<string,mixed>> $sales */
+    private function saleLinks(string $slug, array $sales, string $from, string $to): array
+    {
+        return array_map(fn ($s) => $s + ['href' => $this->stockItemLink($slug, $s['item_id'], $from, $to)], $sales);
     }
 
     // ---- helpers ------------------------------------------------------------------------------
@@ -528,6 +673,11 @@ class FuelHomeService
         }
 
         return $out;
+    }
+
+    private function stockItemLink(string $slug, string $itemId, string $from, string $to): string
+    {
+        return "/{$slug}/fuel/reports/stock-statement?item={$itemId}&start_date={$from}&end_date={$to}";
     }
 
     private function stockLink(string $slug, string $from, string $to): string

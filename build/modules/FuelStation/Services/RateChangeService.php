@@ -148,7 +148,7 @@ class RateChangeService
      * $date (every item when $date is null): what a new purchase rate should start from,
      * rather than the purchase rate stored on the last rate change, which goes stale.
      *
-     * @return array<string, array{rate: float, bill_number: string, bill_date: string}>
+     * @return array<string, array{rate: float, bill_id: string, bill_number: string, bill_date: string}>
      */
     public function lastPurchasePrices(string $companyId, ?string $date = null): array
     {
@@ -162,12 +162,13 @@ class RateChangeService
             ->when($date, fn ($q) => $q->whereDate('b.bill_date', '<=', $date))
             ->orderByDesc('b.bill_date')
             ->orderByDesc('b.created_at')
-            ->get(['l.item_id', 'l.unit_price', 'b.bill_number', 'b.bill_date']);
+            ->get(['l.item_id', 'l.unit_price', 'b.id as bill_id', 'b.bill_number', 'b.bill_date']);
 
         $prices = [];
         foreach ($rows as $row) {
             $prices[$row->item_id] ??= [
                 'rate' => round((float) $row->unit_price, 4),
+                'bill_id' => $row->bill_id,
                 'bill_number' => $row->bill_number,
                 'bill_date' => substr((string) $row->bill_date, 0, 10),
             ];

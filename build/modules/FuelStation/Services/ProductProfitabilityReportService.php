@@ -39,6 +39,9 @@ class ProductProfitabilityReportService
 
         // Posted cost corrections (fuel:recost-closes) laid over each close's own figures.
         app(DailyCloseCostCorrectionService::class)->applyTo($companyId, $transactions);
+        // Month-end lubricant cost corrections (fuel:lubricant-cost): unit cost per item, by month,
+        // for other-sale lines a close posted without a cost.
+        $lubricantCosts = app(LubricantCostService::class)->unitCostsByMonth($companyId);
 
         $products = [];
         $periods = [];
@@ -59,7 +62,7 @@ class ProductProfitabilityReportService
                 $this->addPeriodSale($periods, $date, $groupBy, $row, $transaction->id, $transaction->transaction_number);
             }
 
-            foreach ($this->otherSalesRows($metadata['other_sales_details'] ?? [], $items) as $row) {
+            foreach ($this->otherSalesRows($metadata['other_sales_details'] ?? [], $items, $lubricantCosts[$date->format('Y-m')] ?? []) as $row) {
                 if ($product !== 'all' && $row['key'] !== $product) {
                     continue;
                 }
@@ -215,7 +218,7 @@ class ProductProfitabilityReportService
      * @param array<string,array<string,mixed>> $items
      * @return array<int,array<string,mixed>>
      */
-    private function otherSalesRows(mixed $otherSales, array $items): array
+    private function otherSalesRows(mixed $otherSales, array $items, array $correctedUnitCosts = []): array
     {
         if (!is_array($otherSales)) {
             return [];
@@ -230,7 +233,14 @@ class ProductProfitabilityReportService
             $key = $this->itemKey($sale['item_id'] ?? null, $items, $sale['item_name'] ?? null);
             $quantity = (float) ($sale['quantity'] ?? 0);
             $revenue = (float) ($sale['amount'] ?? 0);
-            $unitCost = (float) ($items[$key]['avg_cost'] ?? 0);
+            // The cost the close recorded when it posted; else the month's posted correction;
+            // else today's average cost as an estimate.
+            $recorded = (float) ($sale['cost'] ?? 0);
+            $corrected = (float) ($correctedUnitCosts[(string) ($sale['item_id'] ?? '')] ?? 0);
+            $estimated = $recorded <= 0 && $corrected <= 0;
+            $cogs = $recorded > 0
+                ? round($recorded, 2)
+                : round($quantity * ($corrected > 0 ? $corrected : (float) ($items[$key]['avg_cost'] ?? 0)), 2);
 
             $rows[] = [
                 'key' => $key,
@@ -238,8 +248,8 @@ class ProductProfitabilityReportService
                 'unit' => (string) ($items[$key]['unit'] ?? 'unit'),
                 'quantity' => $quantity,
                 'revenue' => $revenue,
-                'cogs' => round($quantity * $unitCost, 2),
-                'estimated_cogs' => true,
+                'cogs' => $cogs,
+                'estimated_cogs' => $estimated,
                 'source' => 'other_sale',
             ];
         }

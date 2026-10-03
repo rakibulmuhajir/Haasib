@@ -537,6 +537,10 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
             $otherSalesTotal = 0;
             $otherSalesDetails = [];
+            $otherSalesCogsPostings = [];
+            $otherSalesInventoryPostings = [];
+            $otherSalesStockMovements = [];
+            $tankItemIds = Warehouse::where('company_id', $companyId)->whereNotNull('linked_item_id')->pluck('linked_item_id')->all();
             if (!empty($data['other_sales'])) {
                 foreach ($data['other_sales'] as $sale) {
                     // Derived here, never taken from the request.
@@ -576,7 +580,38 @@ class DailyCloseService
                         );
                     }
 
-                    // Stored from the same three numbers that were posted, so the line can
+                    // What the sold units cost. A packaged item comes off the shelf at its
+                    // average cost and leaves stock; an open item sold out of a tank costs what
+                    // that tank's fuel cost that day and needs no movement (the dip counts it,
+                    // as for fuel). An item with no cost or no accounts is left uncosted rather
+                    // than failing the close.
+                    $unitCost = 0.0;
+                    $lineCost = 0.0;
+                    if ($item && $quantity > 0 && $item->expense_account_id && $item->asset_account_id) {
+                        $fromTank = in_array($item->id, $tankItemIds, true);
+                        $fallback = (float) ($item->avg_cost ?: $item->cost_price ?: 0);
+                        $unitCost = $fromTank
+                            ? app(FuelCostService::class)->costForDay($companyId, $item->id, $date, $fallback)
+                            : $fallback;
+                        $lineCost = round($quantity * $unitCost, 2);
+                        if ($lineCost > 0) {
+                            $this->addGroupedPosting($otherSalesCogsPostings, $item->expense_account_id, $lineCost, $label);
+                            $this->addGroupedPosting($otherSalesInventoryPostings, $item->asset_account_id, $lineCost, $label);
+                            if (! $fromTank && $item->track_inventory) {
+                                $otherSalesStockMovements[] = [
+                                    'item_id' => $item->id,
+                                    'quantity' => $quantity,
+                                    'unit_cost' => $unitCost,
+                                    'total_cost' => $lineCost,
+                                    'label' => $label,
+                                ];
+                            }
+                        } else {
+                            $unitCost = 0.0;
+                        }
+                    }
+
+                    // Stored from the same numbers that were posted, so the line can
                     // always be re-derived from what it records.
                     $otherSalesDetails[] = [
                         'item_id' => $sale['item_id'],
@@ -584,6 +619,8 @@ class DailyCloseService
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
                         'amount' => $amount,
+                        'unit_cost' => round($unitCost, 4),
+                        'cost' => $lineCost,
                     ];
                 }
             }
@@ -1602,6 +1639,24 @@ class DailyCloseService
                 ];
             }
 
+            // Cost of the other sales (packaged lubricants, shop items, open drums).
+            foreach ($otherSalesCogsPostings as $posting) {
+                $entries[] = [
+                    'account_id' => $posting['account_id'],
+                    'type' => 'debit',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Cost of goods sold - ' . implode(', ', $posting['labels']),
+                ];
+            }
+            foreach ($otherSalesInventoryPostings as $posting) {
+                $entries[] = [
+                    'account_id' => $posting['account_id'],
+                    'type' => 'credit',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Inventory reduction - ' . implode(', ', $posting['labels']),
+                ];
+            }
+
             // Cash on hand (net change)
             $accountingInvoicesIncluded = [];
             foreach ($creditDetails as $credit) {
@@ -1977,6 +2032,34 @@ class DailyCloseService
                 ]);
             }
 
+            // Packaged items sold leave stock. Linked to the close, so Edit day removes them with
+            // the rest of its stock movements (DailyCloseReopenService::reverseStockReconciliations).
+            $fallbackWarehouseId = null;
+            foreach ($otherSalesStockMovements as $line) {
+                $warehouseId = StockLevel::where('company_id', $companyId)->where('item_id', $line['item_id'])
+                    ->orderByDesc('quantity')->value('warehouse_id');
+                if (! $warehouseId) {
+                    $fallbackWarehouseId ??= app(\App\Modules\Inventory\Services\OpeningStockService::class)
+                        ->resolveStandardWarehouse($companyId, $user->id)->id;
+                    $warehouseId = $fallbackWarehouseId;
+                }
+                StockMovement::create([
+                    'company_id' => $companyId,
+                    'warehouse_id' => $warehouseId,
+                    'item_id' => $line['item_id'],
+                    'movement_date' => $date,
+                    'movement_type' => 'sale',
+                    'quantity' => -$line['quantity'],
+                    'unit_cost' => $line['unit_cost'],
+                    'total_cost' => $line['total_cost'],
+                    'gl_transaction_id' => $transaction->id,
+                    'reference_type' => 'fuel.daily_close',
+                    'reference_id' => $transaction->id,
+                    'reason' => 'Other sale - '.$line['label'],
+                    'created_by_user_id' => $user->id,
+                ]);
+            }
+
             // ─────────────────────────────────────────────────────────────────
             // 7. Save Nozzle Readings and update nozzle last_closing_reading
             // ─────────────────────────────────────────────────────────────────
@@ -2044,6 +2127,8 @@ class DailyCloseService
             // A month's last day also settles that month's stock value (lower of cost or the new
             // purchase rate); inside this transaction so the books stay in step with the close.
             app(MonthEndStockValuationService::class)->syncForCloseDate($companyId, $date);
+            // A month already given a lubricant cost correction: this close now carries its own.
+            app(LubricantCostService::class)->syncWithin($companyId, $date);
 
             return [
                 'transaction_number' => $transactionNumber,

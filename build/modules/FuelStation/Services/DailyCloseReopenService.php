@@ -149,6 +149,7 @@ class DailyCloseReopenService
 
             // No live close left on a month's last day: that month's stock write-down goes with it.
             app(MonthEndStockValuationService::class)->syncForCloseDate($companyId, $businessDate);
+            app(LubricantCostService::class)->syncWithin($companyId, $businessDate);
 
             return ['parked_date' => $businessDate, 'warnings' => $warnings];
         });

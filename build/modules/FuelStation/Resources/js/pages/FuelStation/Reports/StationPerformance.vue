@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import MoneyText from '@/components/MoneyText.vue'
+import Hint from '@/components/Hint.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Banknote, BarChart3, ClipboardCheck, Droplets, Fuel, ReceiptText, WalletCards } from 'lucide-vue-next'
 
@@ -206,11 +207,46 @@ const setRange = (range: 'today' | 'yesterday' | 'last7' | 'month' | 'lastMonth'
   applyFilters()
 }
 
+// Each money column opens into the accounts it is made of, from the books (all products only).
+interface BookLine { account_id: string; code: string; name: string; type: string; amount: number }
+type Part = 'sales' | 'cost' | 'expenses' | 'other'
+const open = ref<{ key: string; part: Part } | null>(null)
+const toggle = (key: string, part: Part) => {
+  open.value = open.value?.key === key && open.value.part === part ? null : { key, part }
+}
+const isOpen = (row: any) => open.value?.key === row.key
+const linesOf = (row: any): BookLine[] => {
+  const part = open.value?.part
+  if (!part) return []
+  return (row[{ sales: 'sales_lines', cost: 'cost_lines', expenses: 'expense_lines', other: 'other_lines' }[part]] ?? []) as BookLine[]
+}
+const partTitle: Record<Part, string> = { sales: 'Sales by product account', cost: 'Cost of sales', expenses: 'Expenses', other: 'Other income and costs' }
+const rowRange = (row: any) => {
+  // A day row's key is its date; a week/month row spans to its end, clipped to the report range.
+  const from = props.filters.group_by === 'month' ? `${row.key}-01` : row.key
+  const start = new Date(`${from}T00:00:00`)
+  const end = props.filters.group_by === 'day' ? start
+    : props.filters.group_by === 'week' ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+    : new Date(start.getFullYear(), start.getMonth() + 1, 0)
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const f = iso(start) < props.filters.start_date ? props.filters.start_date : iso(start)
+  const t = iso(end) > props.filters.end_date ? props.filters.end_date : iso(end)
+  return { f, t }
+}
+const lineHref = (row: any, l: BookLine) => {
+  const { f, t } = rowRange(row)
+  return l.type === 'expense'
+    ? `/${props.company.slug}/reports/statements?kind=expense&id=${l.account_id}&from=${f}&to=${t}`
+    : `/${props.company.slug}/accounts/${l.account_id}`
+}
+const hasLines = (row: any, key: string) => Array.isArray(row[key]) && row[key].length > 0
+const cellBtn = 'tabular-nums underline decoration-dotted underline-offset-2 hover:decoration-solid'
+
 const performanceColumns = [
   { key: 'label', label: 'Period', kind: 'text' as const },
   { key: 'liters', label: 'Liters', kind: 'amount' as const },
-  { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
-  { key: 'cogs', label: 'COGS', kind: 'amount' as const },
+  { key: 'revenue', label: 'Sales', kind: 'amount' as const },
+  { key: 'cogs', label: 'Cost of sales', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
   { key: 'expenses', label: 'Expenses', kind: 'amount' as const },
   { key: 'other', label: 'Other', kind: 'amount' as const },
@@ -362,12 +398,20 @@ const movementCards = computed(() => [
           <CardHeader>
             <CardTitle class="text-base">Performance by {{ groupBy }}</CardTitle>
             <CardDescription>
-              Net is the ledger's profit for the day. Other = tank gains/losses, discounts, card charges, other income.
+              From the books; click a figure to see its accounts.
+              <Hint>
+                What adds up
+                <template #content>
+                  <p>Sales - cost of sales = gross profit.</p>
+                  <p>Gross profit - expenses + other = net, the Profit &amp; Loss figure.</p>
+                  <p>Expenses: entered under Money out › Expenses. Other: tank gains and losses, salaries, discounts, card charges, rental and other income.</p>
+                </template>
+              </Hint>
               <Link :href="`/${company.slug}/fuel/reports/product-profitability`" class="text-primary underline-offset-4 hover:underline">Profit by fuel</Link>
             </CardDescription>
           </CardHeader>
           <CardContent class="p-0">
-            <LedgerRegister :data="rows" :columns="performanceColumns">
+            <LedgerRegister :data="rows" :columns="performanceColumns" key-field="key" :expanded="(row: any) => isOpen(row)">
               <template #empty>No posted Daily Close records found for this range.</template>
 
               <template #cell-label="{ row }">
@@ -385,17 +429,43 @@ const movementCards = computed(() => [
               </template>
 
               <template #cell-liters="{ row }">{{ number(row.liters) }}</template>
-              <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
-              <template #cell-cogs="{ row }"><MoneyText :amount="row.cogs" :currency="company.base_currency" /></template>
+              <template #cell-revenue="{ row }">
+                <button v-if="hasLines(row, 'sales_lines')" type="button" :class="cellBtn" @click="toggle(row.key, 'sales')"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></button>
+                <MoneyText v-else :amount="row.revenue" :currency="company.base_currency" />
+              </template>
+              <template #cell-cogs="{ row }">
+                <button v-if="hasLines(row, 'cost_lines')" type="button" :class="cellBtn" @click="toggle(row.key, 'cost')"><MoneyText :amount="row.cogs" :currency="company.base_currency" /></button>
+                <MoneyText v-else :amount="row.cogs" :currency="company.base_currency" />
+              </template>
               <template #cell-gross_profit="{ row }">
                 <div class="font-medium"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></div>
                 <div class="text-xs text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
               </template>
-              <template #cell-expenses="{ row }"><MoneyText :amount="row.expenses" :currency="company.base_currency" /></template>
-              <template #cell-other="{ row }"><MoneyText :amount="row.other" :currency="company.base_currency" /></template>
+              <template #cell-expenses="{ row }">
+                <button v-if="hasLines(row, 'expense_lines')" type="button" :class="cellBtn" @click="toggle(row.key, 'expenses')"><MoneyText :amount="row.expenses" :currency="company.base_currency" /></button>
+                <MoneyText v-else :amount="row.expenses" :currency="company.base_currency" />
+              </template>
+              <template #cell-other="{ row }">
+                <button v-if="hasLines(row, 'other_lines')" type="button" :class="cellBtn" @click="toggle(row.key, 'other')"><MoneyText :amount="row.other" :currency="company.base_currency" /></button>
+                <MoneyText v-else :amount="row.other" :currency="company.base_currency" />
+              </template>
               <template #cell-net_station_profit="{ row }"><MoneyText :amount="row.net_station_profit" :currency="company.base_currency" /></template>
               <template #cell-cash_variance="{ row }">
                 <span :class="varianceTone(row.cash_variance)"><MoneyText :amount="row.cash_variance" :currency="company.base_currency" /></span>
+              </template>
+              <!-- The opened column's accounts, each linked to its statement. -->
+              <template #row-detail="{ row }">
+                <div class="px-4 py-2 text-sm">
+                  <p class="mb-1 text-xs font-medium text-muted-foreground">{{ open ? partTitle[open.part] : '' }} · {{ row.label }}</p>
+                  <ul class="grid gap-x-8 sm:grid-cols-2">
+                    <li v-for="l in linesOf(row)" :key="l.account_id" class="flex items-baseline justify-between gap-3 border-b border-rule-subtle py-1">
+                      <span>{{ l.name }} <span class="text-xs text-muted-foreground">{{ l.code }}</span></span>
+                      <Link :href="lineHref(row, l)" class="tabular-nums underline-offset-2 hover:underline" :class="open?.part === 'other' && l.amount < 0 ? 'text-status-attention' : ''">
+                        <MoneyText :amount="l.amount" :currency="company.base_currency" :fraction-digits="0" />
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
               </template>
             </LedgerRegister>
           </CardContent>

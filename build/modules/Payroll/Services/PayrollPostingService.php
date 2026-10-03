@@ -721,7 +721,8 @@ class PayrollPostingService
 
                     app(DocumentDateLock::class)->assertOpen($payslip->company_id, $accrualDate, 'This payslip');
 
-                    $this->reversalService->reverseTransaction($transaction, 'Payslip deleted');
+                    // On the entry's own date, so the month it belonged to nets to zero.
+                    $this->reversalService->reverseTransaction($transaction, 'Payslip deleted', $transaction->transaction_date);
                 }
             }
 
@@ -757,7 +758,9 @@ class PayrollPostingService
 
                 $transaction = Transaction::where('company_id', $payslip->company_id)
                     ->findOrFail($transactionId);
-                $this->reversalService->reverseTransaction($transaction, $reason);
+                // On the entry's own date: undoing September's approval must take the salary out
+                // of September, not put a negative salary into the month the undo happened in.
+                $this->reversalService->reverseTransaction($transaction, $reason, $transaction->transaction_date);
             }
 
             SalaryAdvanceRecovery::where('company_id', $payslip->company_id)

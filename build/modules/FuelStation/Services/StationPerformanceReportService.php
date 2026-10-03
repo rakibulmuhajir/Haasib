@@ -142,6 +142,12 @@ class StationPerformanceReportService
             $this->addMovements($movementTotals, $metadata);
         }
 
+        // All products: every money column from the books, so each row adds up by construction.
+        if ($product === 'all') {
+            $this->applyBooks($companyId, $startDate, $endDate, $groupBy, $periods);
+            ksort($periods);
+        }
+
         $rows = array_values($periods);
         foreach ($rows as &$row) {
             $row['gross_margin_percent'] = $row['revenue'] > 0 ? ($row['gross_profit'] / $row['revenue']) * 100 : 0;
@@ -175,6 +181,78 @@ class StationPerformanceReportService
             'cashRows' => $cashRows,
             'movementTotals' => $movementTotals,
         ];
+    }
+
+    /**
+     * The period's money from the books, account by account, in four parts that add up to the
+     * books' profit (the Profit & Loss figure):
+     *  - Sales: income on the products' own sales accounts (items' income account) -- pump, close
+     *    and off-tanker invoiced sales alike.
+     *  - Cost of sales: the products' cost accounts (items' cost account), cost corrections included.
+     *  - Expenses: expense accounts hit by expense entries (Daily Close > Money out > Expenses,
+     *    Record Expense). Fixed assets bought that way are assets, not here.
+     *  - Other: everything else on income and cost accounts -- tank gains and losses, salaries,
+     *    discounts, card charges, short/over, rental income, fines.
+     * Reversals count on their own date, as the books have them.
+     *
+     * @param array<string,array<string,mixed>> $periods
+     */
+    private function applyBooks(string $companyId, string $startDate, string $endDate, string $groupBy, array &$periods): void
+    {
+        $items = DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')
+            ->get(['income_account_id', 'expense_account_id']);
+        $salesAccounts = array_flip(array_filter($items->pluck('income_account_id')->all()));
+        $costAccounts = array_flip(array_filter($items->pluck('expense_account_id')->all()));
+
+        $lines = DB::table('acct.journal_entries as je')
+            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
+            ->where('t.company_id', $companyId)
+            ->whereIn('t.status', ['posted', 'locked'])
+            ->whereNull('t.deleted_at')
+            ->whereBetween('t.transaction_date', [$startDate, $endDate])
+            ->whereIn('a.type', ['revenue', 'other_income', 'expense', 'cogs', 'other_expense'])
+            ->groupBy(DB::raw('t.transaction_date::date'), 'a.id', 'a.code', 'a.name', 'a.type', 't.transaction_type')
+            ->selectRaw('t.transaction_date::date AS d, a.id AS account_id, a.code, a.name, a.type, t.transaction_type, SUM(je.credit_amount) - SUM(je.debit_amount) AS net')
+            ->get();
+
+        $books = [];
+        foreach ($lines as $l) {
+            $date = Carbon::parse($l->d);
+            $key = $this->periodKey($date, $groupBy);
+            $periods[$key] ??= $this->emptyPeriodRow($key, $this->periodLabel($date, $groupBy));
+            $part = isset($salesAccounts[$l->account_id]) ? 'sales'
+                : (isset($costAccounts[$l->account_id]) ? 'cost'
+                : ($l->type === 'expense' && $l->transaction_type === 'expense' ? 'expenses' : 'other'));
+            // Sales and other read as income (+); cost and expenses as positive costs.
+            $amount = in_array($part, ['cost', 'expenses'], true) ? -(float) $l->net : (float) $l->net;
+            $books[$key][$part][$l->account_id] ??= ['account_id' => $l->account_id, 'code' => $l->code, 'name' => $l->name, 'type' => $l->type, 'amount' => 0.0];
+            $books[$key][$part][$l->account_id]['amount'] += $amount;
+        }
+
+        foreach ($periods as $key => &$row) {
+            $parts = [];
+            foreach (['sales', 'cost', 'expenses', 'other'] as $part) {
+                $list = array_values(array_filter($books[$key][$part] ?? [], fn ($a) => abs($a['amount']) >= 0.005));
+                usort($list, fn ($a, $b) => abs($b['amount']) <=> abs($a['amount']));
+                $parts[$part] = $list;
+            }
+            $sales = array_sum(array_column($parts['sales'], 'amount'));
+            $cost = array_sum(array_column($parts['cost'], 'amount'));
+            $expenses = array_sum(array_column($parts['expenses'], 'amount'));
+            $other = array_sum(array_column($parts['other'], 'amount'));
+            $row['revenue'] = $sales;
+            $row['cogs'] = $cost;
+            $row['gross_profit'] = $sales - $cost;
+            $row['expenses'] = $expenses;
+            $row['other'] = $other;
+            $row['net_station_profit'] = $sales - $cost - $expenses + $other;
+            $row['sales_lines'] = $parts['sales'];
+            $row['cost_lines'] = $parts['cost'];
+            $row['expense_lines'] = $parts['expenses'];
+            $row['other_lines'] = $parts['other'];
+        }
+        unset($row);
     }
 
     /**

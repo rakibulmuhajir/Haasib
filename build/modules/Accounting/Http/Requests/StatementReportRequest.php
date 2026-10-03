@@ -31,6 +31,7 @@ class StatementReportRequest extends BaseFormRequest
             'id' => ['nullable', 'regex:/^(all|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/'],
             // Several people of the kind, comma-separated: a group, or any the user ticked.
             'ids' => ['nullable', 'string', 'regex:/^[0-9a-fA-F-]{36}(,[0-9a-fA-F-]{36})*$/'],
+            'reversed' => ['nullable', 'boolean'],
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
         ];

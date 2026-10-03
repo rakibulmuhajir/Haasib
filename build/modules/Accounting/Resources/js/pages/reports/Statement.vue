@@ -41,7 +41,7 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
-  filters: { kind: Kind; id: string | null; ids?: string[]; from: string; to: string }
+  filters: { kind: Kind; id: string | null; ids?: string[]; from: string; to: string; reversed?: boolean }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; groups?: { id: string; name: string; member_ids: string[] }[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
@@ -52,6 +52,8 @@ const props = defineProps<{
     to: string
     account?: string | null
     party?: string | null
+    // Entries undone by a reversal, and the reversals, in this range (hidden unless asked for).
+    reversed_count?: number
     // Everyone of the kind in one list ('all'): each row names its person.
     combined?: boolean
     // Employee statements: the period's totals, for the summary above the rows.
@@ -72,6 +74,7 @@ const to = ref(props.filters.to)
 const search = ref('')
 // Several people in one statement: a customer group, or any the user ticks.
 const picked = ref<string[]>(props.filters.ids ?? [])
+const showReversed = ref(Boolean(props.filters.reversed))
 const picking = ref(false)
 
 watch(() => props.filters, (f) => {
@@ -121,7 +124,12 @@ const reload = () => {
     ids: partyId.value === 'some' && picked.value.length ? picked.value.join(',') : undefined,
     from: from.value,
     to: to.value,
+    reversed: showReversed.value ? 1 : undefined,
   }, { preserveState: true, preserveScroll: true })
+}
+const toggleReversed = (v: boolean | 'indeterminate') => {
+  showReversed.value = v === true
+  reload()
 }
 
 // A fuel station's stock statement is a statement too: its tab opens that page.
@@ -268,6 +276,11 @@ const statementTitle = computed(() => (props.statement.combined
 
           <div class="flex items-center gap-2">
             <Button @click="reload">Apply</Button>
+            <!-- An entry and its reversal cancel out, so they are hidden; the balance is the same. -->
+            <label v-if="(statement.reversed_count ?? 0) > 0 || showReversed" class="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox :model-value="showReversed" @update:model-value="toggleReversed" />
+              Show reversed ({{ statement.reversed_count ?? 0 }})
+            </label>
             <Button variant="outline" @click="printStatement">
               <Printer class="h-4 w-4" />
               Print

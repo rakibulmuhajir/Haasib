@@ -682,3 +682,30 @@ test('the expense statement lists any expense account alone, several together, o
         ->where('statement.closing_balance', 12500)
     );
 });
+
+test('an entry and its reversal inside the range are hidden unless asked for, and the balance is the same either way', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+
+    postJournal($f, '2026-09-05', [
+        ['account_id' => $f['cash']->id, 'type' => 'debit', 'amount' => 2000],
+        ['account_id' => $f['ap']->id, 'type' => 'credit', 'amount' => 2000],
+    ]);
+    postJournal($f, '2026-09-10', [
+        ['account_id' => $f['cash']->id, 'type' => 'debit', 'amount' => 700],
+        ['account_id' => $f['ap']->id, 'type' => 'credit', 'amount' => 700],
+    ]);
+    $undone = \App\Modules\Accounting\Models\Transaction::where('company_id', $f['company']->id)->whereDate('transaction_date', '2026-09-10')->sole();
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Modules\Accounting\Services\PostingService::class)->reverseTransaction($undone, 'Entered twice', '2026-09-12'));
+
+    $run = fn (bool $show) => app(CompanyContextService::class)->withContext($f['company'], fn () => app(AccountStatementService::class)->statement($f['cash']->fresh(), '2026-09-01', '2026-09-24', $show));
+    $hidden = $run(false);
+    $shown = $run(true);
+    $moves = fn ($s) => collect($s['rows'])->whereNotIn('type', ['opening_balance', 'closing_balance'])->count();
+
+    expect($moves($hidden))->toBe(1)
+        ->and($moves($shown))->toBe(3)
+        ->and($hidden['reversed_count'])->toBe(2)
+        ->and($hidden['closing_balance'])->toBe(2000.0)
+        ->and($shown['closing_balance'])->toBe(2000.0);
+});

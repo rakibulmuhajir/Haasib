@@ -47,7 +47,7 @@ class AccountStatementService
      *   account: string,
      * }
      */
-    public function statement(Account $account, string $from, string $to): array
+    public function statement(Account $account, string $from, string $to, bool $showReversed = false): array
     {
         $isDebitNormal = $account->normal_balance !== 'credit';
 
@@ -83,9 +83,20 @@ class AccountStatementService
             ->select([
                 't.id as transaction_id', 't.transaction_date', 't.transaction_number',
                 't.transaction_type', 't.description', 't.reference_type', 't.reference_id',
+                't.reversal_of_id', 't.reversed_by_id',
                 'je.debit_amount', 'je.credit_amount',
             ])
             ->get();
+
+        // An entry and its reversal cancel out. When both fall inside the range they are left out
+        // unless asked for -- the balance is the same either way. A pair split by the range start
+        // stays, or the running balance would no longer add up.
+        $inRange = $lines->pluck('transaction_id')->flip();
+        $reversed = $lines->filter(fn ($l) => ($l->reversal_of_id && $inRange->has($l->reversal_of_id))
+            || ($l->reversed_by_id && $inRange->has($l->reversed_by_id)))->pluck('transaction_id')->unique();
+        if (! $showReversed) {
+            $lines = $lines->reject(fn ($l) => $reversed->contains($l->transaction_id))->values();
+        }
 
         $running = $opening;
         $rows = [[
@@ -127,6 +138,7 @@ class AccountStatementService
             'from' => $from,
             'to' => $to,
             'account' => $account->name,
+            'reversed_count' => $reversed->count(),
         ];
     }
 

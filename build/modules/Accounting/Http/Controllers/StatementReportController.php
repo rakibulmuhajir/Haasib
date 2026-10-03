@@ -25,6 +25,9 @@ use Inertia\Response;
  */
 class StatementReportController extends Controller
 {
+    /** Entries undone by a reversal (and the reversal) are hidden unless ?reversed=1. */
+    private bool $showReversed = false;
+
     public function index(StatementReportRequest $request): Response
     {
         $company = CompanyContext::getCompany();
@@ -33,6 +36,7 @@ class StatementReportController extends Controller
         $from = $request->validated('from');
         $to = $request->validated('to');
         $ids = array_values(array_filter(explode(',', (string) $request->validated('ids'))));
+        $this->showReversed = (bool) $request->validated('reversed');
 
         $bankAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash'])
@@ -111,7 +115,7 @@ class StatementReportController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
-            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'from' => $from, 'to' => $to],
+            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'from' => $from, 'to' => $to, 'reversed' => $this->showReversed],
             'options' => [
                 'bank' => $bankAccounts,
                 'customer' => $customers,
@@ -200,7 +204,7 @@ class StatementReportController extends Controller
         }
 
         return [
-            app(AccountStatementService::class)->statement(Account::find($pick->id), $from, $to),
+            app(AccountStatementService::class)->statement(Account::find($pick->id), $from, $to, $this->showReversed),
             $columns,
             $pick->id,
         ];
@@ -224,7 +228,7 @@ class StatementReportController extends Controller
         }
 
         return [
-            app(AccountStatementService::class)->statement($account, $from, $to),
+            app(AccountStatementService::class)->statement($account, $from, $to, $this->showReversed),
             ['money_in' => 'Money in', 'money_out' => 'Money out', 'balance' => 'Balance'],
             $account->id,
         ];

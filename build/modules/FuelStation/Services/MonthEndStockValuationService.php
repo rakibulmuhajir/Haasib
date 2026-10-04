@@ -62,18 +62,20 @@ class MonthEndStockValuationService
 
         $existing = $this->liveWritedowns($companyId, $month)->keyBy(fn ($t) => $t->metadata['item_id'] ?? '');
 
-        $itemIds = DB::table('inv.warehouses')
+        $tankItemIds = DB::table('inv.warehouses')
             ->where('company_id', $companyId)->where('warehouse_type', 'tank')
             ->whereNotNull('linked_item_id')->whereNull('deleted_at')
-            ->distinct()->pluck('linked_item_id')
-            ->merge($existing->keys())->filter()->unique()->values();
+            ->distinct()->pluck('linked_item_id');
+        $itemIds = $tankItemIds->merge($existing->keys())->filter()->unique()->values();
 
         $items = DB::table('inv.items')->where('company_id', $companyId)->whereIn('id', $itemIds)
             ->get(['id', 'name', 'expense_account_id', 'asset_account_id']);
 
         $results = [];
         foreach ($items as $item) {
-            $results[] = $this->syncItem($companyId, $month, $lastDay, $nextFirst, $item, $closed, $existing->get($item->id));
+            // Only fuels in a tank are valued from a dip; one taken out of its tank (counted by sales
+            // now) keeps nothing, so a write-down left from before is reversed.
+            $results[] = $this->syncItem($companyId, $month, $lastDay, $nextFirst, $item, $closed && $tankItemIds->contains($item->id), $existing->get($item->id));
         }
 
         $this->costs->forget();

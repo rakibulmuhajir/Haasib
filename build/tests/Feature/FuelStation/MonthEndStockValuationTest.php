@@ -217,3 +217,16 @@ test('a zero rate is no rate: nothing is written up or down, whatever the method
 
     expect(monthEndLive($cid))->toHaveCount(0);
 });
+
+test('a product taken out of its tank keeps no write-down', function () {
+    $f = monthEndFixture();
+    $cid = $f['company']->id;
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+    expect(monthEndLive($cid))->toHaveCount(1);
+
+    \Illuminate\Support\Facades\DB::table('inv.warehouses')->where('company_id', $cid)->where('warehouse_type', 'tank')
+        ->update(['warehouse_type' => 'standard', 'linked_item_id' => null]);
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    expect(monthEndLive($cid))->toHaveCount(0);
+});

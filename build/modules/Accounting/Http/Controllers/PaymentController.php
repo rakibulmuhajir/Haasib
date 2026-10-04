@@ -73,6 +73,13 @@ class PaymentController extends Controller
             $query->where('customer_id', $request->customer_id);
         }
 
+        if ($request->filled('from')) {
+            $query->whereDate('payment_date', '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('payment_date', '<=', $request->to);
+        }
+
         if ($request->has('payment_method') && $request->payment_method) {
             $query->where('payment_method', $request->payment_method);
         }
@@ -90,6 +97,8 @@ class PaymentController extends Controller
             'filters' => [
                 'search' => $request->search ?? '',
                 'customer_id' => $request->customer_id ?? '',
+                'from' => $request->from ?? '',
+                'to' => $request->to ?? '',
                 'payment_method' => $request->payment_method ?? '',
                 'show_voided' => $showVoided,
             ],

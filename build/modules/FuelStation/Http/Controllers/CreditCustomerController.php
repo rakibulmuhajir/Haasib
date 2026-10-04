@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\ApplyPaymentCreditRequest;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\CustomerStatementService;
+use App\Modules\FuelStation\Http\Requests\CustomerPeriodSummaryRequest;
 use App\Modules\FuelStation\Http\Requests\UpdateCustomerFuelDiscountsRequest;
+use App\Modules\FuelStation\Services\CustomerPeriodSummaryService;
 use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\Inventory\Models\Item;
 use App\Services\CommandBus;
@@ -79,7 +81,7 @@ class CreditCustomerController extends Controller
     /**
      * Show credit customer details with transaction history.
      */
-    public function show(Request $request, string $company, string $customer): Response
+    public function show(CustomerPeriodSummaryRequest $request, string $company, string $customer): Response
     {
         $companyModel = app(CurrentCompany::class)->get();
 
@@ -145,7 +147,11 @@ class CreditCustomerController extends Controller
             ];
         })->values();
 
+        [$from, $to] = $request->range();
+        $summary = app(CustomerPeriodSummaryService::class)->run($companyModel->id, $customerData->id, $from, $to, $companyModel->slug);
+
         return Inertia::render('FuelStation/CreditCustomers/Show', [
+            'summary' => $summary,
             'consolidatedInvoices' => app(\App\Modules\Accounting\Services\ConsolidatedInvoiceService::class)->forCustomer($companyModel->id, $customerData->id),
             'customer' => [
                 'id' => $customerData->id,

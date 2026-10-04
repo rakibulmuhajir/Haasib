@@ -114,6 +114,7 @@ class FuelSaleService
                 'company_id' => $company->id,
                 'invoice_id' => $invoice->id,
                 'line_number' => 1,
+                'item_id' => $data['item_id'] ?? null,
                 'description' => $data['description'] ?? 'Fuel sale - '.($data['item_id'] ?? 'Unknown'),
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,

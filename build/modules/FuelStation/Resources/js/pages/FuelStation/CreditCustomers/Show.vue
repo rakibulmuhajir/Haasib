@@ -26,6 +26,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import InputError from '@/components/InputError.vue'
 import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
 import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
+import Hint from '@/components/Hint.vue'
 import CustomerUnitsCard from '@/components/CustomerUnitsCard.vue'
 import type { CustomerUnit } from '@/components/CustomerUnitsCard.vue'
 
@@ -69,7 +70,35 @@ interface StatementRow {
   balance: number
 }
 
+interface SummaryProduct {
+  item_id: string | null
+  name: string
+  unit: string | null
+  quantity: number
+  gross: number
+  discount: number
+  net: number
+  link: string
+}
+
+interface PeriodSummary {
+  from: string
+  to: string
+  products: SummaryProduct[]
+  totals: { gross: number; discount: number; net: number }
+  money: {
+    opening: number
+    bought: number
+    paid: number
+    payment_count: number
+    payments_link: string
+    other: number
+    closing: number
+  }
+}
+
 const props = defineProps<{
+  summary: PeriodSummary
   consolidatedInvoices?: SentDocument[]
   customer: Customer
   statement: StatementRow[]
@@ -183,6 +212,17 @@ const tableData = computed(() => {
     _raw: row,
   }))
 })
+
+// Summary period: the page reloads with ?from=&to= (other cards do not depend on it).
+const range = useForm({ from: props.summary.from, to: props.summary.to })
+const applyRange = () => {
+  router.get(`/${companySlug.value}/fuel/credit-customers/${props.customer.id}`, { from: range.from, to: range.to }, {
+    preserveScroll: true,
+    preserveState: true,
+    only: ['summary'],
+  })
+}
+const formatQty = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 const goBack = () => {
   router.get(`/${companySlug.value}/fuel/credit-customers`)
@@ -301,6 +341,90 @@ const goBack = () => {
         </CardContent>
       </Card>
     </div>
+
+    <!-- Period summary -->
+    <Card class="border-border/80">
+      <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <CardTitle class="text-base">Summary</CardTitle>
+        <form novalidate class="flex flex-wrap items-end gap-2" @submit.prevent="applyRange">
+          <div class="space-y-1">
+            <Label for="summary-from">From</Label>
+            <Input id="summary-from" v-model="range.from" type="date" class="h-8 w-40" />
+          </div>
+          <div class="space-y-1">
+            <Label for="summary-to">To</Label>
+            <Input id="summary-to" v-model="range.to" type="date" class="h-8 w-40" />
+          </div>
+          <Button type="submit" size="sm" variant="outline" :disabled="!range.from || !range.to">Apply</Button>
+        </form>
+      </CardHeader>
+      <CardContent class="space-y-6">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm tabular-nums">
+            <thead>
+              <tr class="border-b border-rule-emphasis text-left text-xs text-text-secondary">
+                <th class="py-1.5 pr-3 font-medium">Product</th>
+                <th class="px-3 py-1.5 text-right font-medium">Qty</th>
+                <th class="px-3 py-1.5 text-right font-medium">Gross</th>
+                <th class="px-3 py-1.5 text-right font-medium">Discount</th>
+                <th class="py-1.5 pl-3 text-right font-medium">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!summary.products.length">
+                <td colspan="5" class="py-4 text-center text-muted-foreground">No purchases in this period</td>
+              </tr>
+              <tr v-for="p in summary.products" :key="p.item_id ?? 'other'" class="border-b border-rule-subtle">
+                <td class="py-1.5 pr-3"><Link :href="p.link" class="underline-offset-2 hover:underline">{{ p.name }}</Link></td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right">{{ formatQty(p.quantity) }}<span v-if="p.unit" class="ml-1 text-text-secondary">{{ p.unit }}</span></td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="p.gross" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="p.discount" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap py-1.5 pl-3 text-right"><MoneyText :amount="p.net" :currency="props.currency" /></td>
+              </tr>
+            </tbody>
+            <tfoot v-if="summary.products.length">
+              <tr class="border-t border-rule-emphasis font-semibold">
+                <td class="py-1.5 pr-3">Total</td>
+                <td class="px-3 py-1.5" />
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="summary.totals.gross" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="summary.totals.discount" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap py-1.5 pl-3 text-right"><MoneyText :amount="summary.totals.net" :currency="props.currency" /></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <ul class="max-w-md space-y-1 text-sm tabular-nums">
+          <li class="flex items-baseline justify-between gap-3">
+            <span>Opening</span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.opening" :currency="props.currency" /></span>
+          </li>
+          <li class="flex items-baseline justify-between gap-3">
+            <span>+ Bought</span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.bought" :currency="props.currency" /></span>
+          </li>
+          <li class="flex items-baseline justify-between gap-3">
+            <span>
+              − Paid
+              <Link :href="summary.money.payments_link" class="ml-1 text-text-secondary underline-offset-2 hover:underline">
+                ({{ summary.money.payment_count }} {{ summary.money.payment_count === 1 ? 'payment' : 'payments' }})
+              </Link>
+            </span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.paid" :currency="props.currency" /></span>
+          </li>
+          <li v-if="summary.money.other !== 0" class="flex items-baseline justify-between gap-3">
+            <span>
+              <Hint>± Other<template #content>Credit notes, refunds and corrections: whatever bought and paid do not explain.</template></Hint>
+            </span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.other" :currency="props.currency" /></span>
+          </li>
+          <li class="flex items-baseline justify-between gap-3 border-t border-rule-emphasis pt-1 font-semibold">
+            <span>= Owes at {{ formatDate(summary.to) }}</span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.closing" :currency="props.currency" /></span>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
 
     <!-- Customer Details & Transactions -->
     <div class="grid gap-6 lg:grid-cols-3">

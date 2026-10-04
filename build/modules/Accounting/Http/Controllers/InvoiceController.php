@@ -48,6 +48,13 @@ class InvoiceController extends Controller
             $query->where('customer_id', $request->customer_id);
         }
 
+        if ($request->filled('from')) {
+            $query->whereDate('invoice_date', '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('invoice_date', '<=', $request->to);
+        }
+
         $showVoided = $request->boolean('show_voided', false);
         if (! $showVoided) {
             $query->whereNotIn('status', ['void', 'cancelled']);
@@ -67,6 +74,8 @@ class InvoiceController extends Controller
                 'search' => $request->search ?? '',
                 'status' => $request->status ?? 'all',
                 'customer_id' => $request->customer_id ?? '',
+                'from' => $request->from ?? '',
+                'to' => $request->to ?? '',
                 'show_voided' => $showVoided,
             ],
         ]);

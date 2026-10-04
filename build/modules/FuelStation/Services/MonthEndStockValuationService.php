@@ -174,7 +174,8 @@ class MonthEndStockValuationService
                     + ($existing ? (float) ($existing->metadata['amount'] ?? 0) : 0.0);
             }
             $cost = $quantity > 0 ? $book / $quantity : 0.0;
-            if ($quantity > 0 && $rate !== null) {
+            // A zero or missing rate is no rate known (e.g. a drum never priced): never revalue to it.
+            if ($quantity > 0 && $rate !== null && $rate > 0) {
                 // Positive: written down to a lower rate. Negative: written up to a higher one --
                 // only when the station values month-end stock at the next month's rate (the
                 // stock is the station's and will be sold at the new prices either way); at

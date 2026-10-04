@@ -571,6 +571,8 @@ const accountingHints = computed<Record<string, string>>(() =>
  * the current one is sent unchanged. The day's changes read "Petrol: +3.5 · Diesel: -4.3".
  */
 const rateItemId = ref('');
+// Only fuels whose price changes day to day; lubricants keep their price on the product page.
+const rateFuels = computed(() => props.fuelItems.filter((item: any) => (item.fuel_category ?? '') !== 'lubricant'));
 const newSaleRate = ref<number | null>(null);
 const newPurchaseRate = ref<number | null>(null);
 const currentSaleRate = computed(() => Number(props.rates?.[rateItemId.value]?.sale_rate ?? 0));
@@ -3729,7 +3731,7 @@ const cashFlowOut = computed(() => [
                             <Select v-model="rateItemId">
                                 <SelectTrigger id="rate-fuel" class="h-9 w-44"><SelectValue placeholder="Select fuel" /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem v-for="item in fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
+                                    <SelectItem v-for="item in rateFuels" :key="item.id" :value="item.id">{{ item.name }}</SelectItem>
                                 </SelectContent>
                             </Select>
                             <template v-if="rateItemId">

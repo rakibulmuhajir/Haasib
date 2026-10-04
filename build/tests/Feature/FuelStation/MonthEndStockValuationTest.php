@@ -207,3 +207,13 @@ test('the write-down is sized from the stock account, so it ends at exactly litr
     expect($service->sync($cid, '2026-09')[0]['action'])->toBe('none')
         ->and($service->accountBalance($cid, $stock, '2026-09-30'))->toBe(round(725 * 395.80, 2));
 });
+
+test('a zero rate is no rate: nothing is written up or down, whatever the method', function () {
+    $f = monthEndFixture(0);
+    $cid = $f['company']->id;
+    \App\Modules\FuelStation\Models\StationSettings::forCompany($cid)->update(['month_end_stock_valuation' => 'next_month_purchase_rate']);
+
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    expect(monthEndLive($cid))->toHaveCount(0);
+});

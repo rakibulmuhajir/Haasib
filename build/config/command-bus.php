@@ -13,6 +13,10 @@ return [
     'company.delete' => \App\Modules\Accounting\Actions\Company\DeleteAction::class,
     'company.modules.update' => \App\Actions\Company\UpdateModulesAction::class,
 
+    // Inventory
+    'item_price.save' => \App\Modules\Inventory\Actions\SaveItemPriceAction::class,
+    'item_price.delete' => \App\Modules\Inventory\Actions\DeleteItemPriceAction::class,
+
     // Payroll
     'payroll.salary-advance.create' => \App\Modules\Payroll\Actions\CreateSalaryAdvanceAction::class,
 

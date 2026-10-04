@@ -400,6 +400,8 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{company}/items/{item}', [ItemController::class, 'update'])->whereUuid('item')->name('items.update');
             Route::patch('/{company}/items/{item}/status', [ItemController::class, 'updateStatus'])->whereUuid('item')->name('items.update-status');
             Route::delete('/{company}/items/{item}', [ItemController::class, 'destroy'])->whereUuid('item')->name('items.destroy');
+            Route::post('/{company}/items/{item}/prices', [ItemController::class, 'savePrice'])->whereUuid('item')->name('items.prices.save');
+            Route::delete('/{company}/items/{item}/prices/{price}', [ItemController::class, 'deletePrice'])->whereUuid(['item', 'price'])->name('items.prices.destroy');
 
             // Item Categories
             Route::get('/{company}/item-categories', [ItemCategoryController::class, 'index'])->name('item-categories.index');

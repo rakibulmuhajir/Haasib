@@ -103,4 +103,37 @@ class DailyCloseLockService
             return $count;
         });
     }
+
+    /**
+     * Months (Y-m) in which at least one live fuel daily close is locked. A locked close is how a
+     * month is closed for the owner, so anything dated in such a month is settled history.
+     *
+     * @return array<int,string>
+     */
+    public function lockedMonths(string $companyId): array
+    {
+        return Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->where('is_locked', true)
+            ->where('lock_reason', 'month_end')
+            ->whereNull('deleted_at')
+            ->pluck('transaction_date')
+            ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m'))
+            ->unique()->values()->all();
+    }
+
+    /** True when $date falls in a month that has a locked daily close. */
+    public function isDateInLockedMonth(string $companyId, \DateTimeInterface|string $date): bool
+    {
+        $start = \Carbon\Carbon::parse($date)->startOfMonth();
+
+        return Transaction::where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->where('is_locked', true)
+            // Lock month locks the whole month; a single day locked on its own does not freeze it.
+            ->where('lock_reason', 'month_end')
+            ->whereNull('deleted_at')
+            ->whereBetween('transaction_date', [$start->toDateString(), $start->copy()->endOfMonth()->toDateString()])
+            ->exists();
+    }
 }

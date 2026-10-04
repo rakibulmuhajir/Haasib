@@ -114,6 +114,25 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - Barcode must be unique if provided.
   - income_account_id for revenue; expense_account_id for COGS; asset_account_id for inventory.
 
+### inv.item_prices
+- Purpose: sale price history for ordinary products. A price has only an effective-from date; the price on a day is the latest live entry dated on or before it, and a later entry ends the earlier one. Fuels keep `fuel.rate_changes` (the item page only displays them).
+- Columns:
+  - `id` uuid PK (default `public.gen_random_uuid()`); `company_id` uuid FK -> `auth.companies.id`; `item_id` uuid FK -> `inv.items.id` (CASCADE).
+  - `effective_date` date not null; `sale_price` numeric(15,4) not null >= 0; `purchase_price` numeric(15,4) null >= 0 (reference only, never stock cost); `notes` varchar(255) null.
+  - `created_by_user_id`, `updated_by_user_id` uuid null; `created_at`, `updated_at`; `deleted_at` (soft delete).
+- Constraints/Indexes: unique (`company_id`, `item_id`, `effective_date`) WHERE `deleted_at IS NULL` (saving a date again replaces the entry); index (`company_id`, `item_id`, `effective_date`).
+- RLS: forced; `item_prices_company_isolation` (NULLIF-guarded `app.current_company_id`) + `item_prices_super_admin`.
+- Rules:
+  - Entries dated in a month with a locked `fuel_daily_close` transaction cannot be added, changed or deleted (`DailyCloseLockService::isDateInLockedMonth`). Message: "August 2026 is locked."
+  - After any change `inv.items.selling_price` (and `cost_price`, when that entry has a `purchase_price`) are set to the entry in force today, so readers of `items.selling_price` are unchanged.
+  - Not for fuel items (`fuel_category` set).
+- Commands: `item_price.save` (create or replace by date), `item_price.delete` (permission `item.update`). Service: `Inventory\Services\ItemPriceService` (also `timeline()`, the read model on the item page: sale prices or fuel rates, purchase bill lines, `fuel_lubricant_cost` month corrections).
+
+### inv.item_price_changes
+- Purpose: append-only trail of price entries added, changed or deleted (the app has no general audit table; same pattern as `fuel.daily_close_unlocks`).
+- Columns: `id` uuid PK; `company_id`, `item_id` uuid FKs; `effective_date` date; `action` varchar(10) `created|updated|deleted`; `old_sale_price`, `new_sale_price`, `old_purchase_price`, `new_purchase_price` numeric(15,4) null; `changed_by_user_id` uuid null; `changed_at` timestamp.
+- Update/delete is blocked by trigger `prevent_item_price_change_mutation` (cascade from item/company delete allowed). RLS forced, same policies as above.
+
 ### inv.warehouses
 - Purpose: storage locations.
 - Columns:

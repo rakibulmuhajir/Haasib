@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
+use App\Modules\Inventory\Http\Requests\SaveItemPriceRequest;
 use App\Modules\Inventory\Http\Requests\StoreItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemStatusRequest;
@@ -14,8 +15,10 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Services\ItemDeletionService;
+use App\Modules\Inventory\Services\ItemPriceService;
 use App\Modules\Inventory\Services\OpeningStockService;
 use App\Modules\Inventory\Services\ProductCatalogService;
+use App\Services\CommandBus;
 use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -254,6 +257,10 @@ class ItemController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'item' => $item,
+            'priceHistory' => [
+                'rows' => app(ItemPriceService::class)->timeline($item, $company->slug),
+                'is_fuel' => (bool) $item->fuel_category,
+            ],
             'stockLevels' => $stockLevels,
             'pendingReceiptsCount' => $pendingReceiptsCount,
             'pendingReceiptsQuantity' => $pendingReceiptsQuantity,
@@ -262,6 +269,35 @@ class ItemController extends Controller
                 'total_available' => (float) $totalAvailable,
             ],
         ]);
+    }
+
+    public function savePrice(SaveItemPriceRequest $request): RedirectResponse
+    {
+        try {
+            app(CommandBus::class)->dispatch('item_price.save', [
+                ...$request->validated(),
+                'item_id' => $request->route('item'),
+                'user_id' => $request->user()->id,
+            ], $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
+
+        return back()->with('success', 'Price saved.');
+    }
+
+    public function deletePrice(Request $request): RedirectResponse
+    {
+        try {
+            app(CommandBus::class)->dispatch('item_price.delete', [
+                'price_id' => $request->route('price'),
+                'user_id' => $request->user()->id,
+            ], $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return back()->with('success', 'Price removed.');
     }
 
     public function edit(Request $request): Response

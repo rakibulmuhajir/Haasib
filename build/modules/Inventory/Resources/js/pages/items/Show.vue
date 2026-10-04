@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,14 @@ import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { Pencil, ArrowLeft, Warehouse, Trash2, PackagePlus } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import Hint from '@/components/Hint.vue'
+import InputError from '@/components/InputError.vue'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { MoreHorizontal, Plus } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -66,9 +74,27 @@ interface Item {
   created_at: string
 }
 
+interface PriceRow {
+  id: string
+  date: string
+  kind: 'sale_price' | 'fuel_rate' | 'purchase_bill' | 'month_correction'
+  label: string
+  price: number
+  quantity: number | null
+  detail: string | null
+  source_label: string | null
+  source_url: string | null
+  in_force: boolean
+  editable: boolean
+  price_id: string | null
+  purchase_price: number | null
+  notes: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   item: Item
+  priceHistory: { rows: PriceRow[]; is_fuel: boolean }
   stockLevels: StockLevelRow[]
   pendingReceiptsCount: number
   pendingReceiptsQuantity: number
@@ -95,6 +121,67 @@ const confirmDelete = () => {
     onFinish: () => {
       deleting.value = false
       confirmOpen.value = false
+    },
+  })
+}
+
+const priceColumns = [
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'label', label: 'What', kind: 'text' as const },
+  { key: 'price', label: 'Price', kind: 'amount' as const },
+  { key: 'detail', label: 'Detail', kind: 'text' as const },
+  { key: 'source', label: 'Source', kind: 'text' as const },
+  { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+]
+
+const priceOpen = ref(false)
+const editingPriceId = ref<string | null>(null)
+const priceForm = useForm({ effective_date: '', sale_price: '', purchase_price: '', notes: '' })
+
+const openAddPrice = () => {
+  editingPriceId.value = null
+  priceForm.reset()
+  priceForm.clearErrors()
+  priceForm.effective_date = new Date().toISOString().slice(0, 10)
+  priceOpen.value = true
+}
+
+const openEditPrice = (row: PriceRow) => {
+  editingPriceId.value = row.price_id
+  priceForm.clearErrors()
+  priceForm.effective_date = row.date
+  priceForm.sale_price = String(row.price)
+  priceForm.purchase_price = row.purchase_price === null ? '' : String(row.purchase_price)
+  priceForm.notes = row.notes ?? ''
+  priceOpen.value = true
+}
+
+const savePrice = () => {
+  priceForm.post(`/${props.company.slug}/items/${props.item.id}/prices`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      priceOpen.value = false
+    },
+  })
+}
+
+const priceToDelete = ref<PriceRow | null>(null)
+const priceDeleteOpen = ref(false)
+const priceDeleting = ref(false)
+
+const askDeletePrice = (row: PriceRow) => {
+  priceToDelete.value = row
+  priceDeleteOpen.value = true
+}
+
+const confirmDeletePrice = () => {
+  if (!priceToDelete.value?.price_id) return
+  priceDeleting.value = true
+  router.delete(`/${props.company.slug}/items/${props.item.id}/prices/${priceToDelete.value.price_id}`, {
+    preserveScroll: true,
+    onFinish: () => {
+      priceDeleting.value = false
+      priceDeleteOpen.value = false
     },
   })
 }
@@ -165,6 +252,52 @@ const getTypeBadgeVariant = (type: string) => {
       @confirm="confirmDelete"
     />
 
+    <ConfirmDialog
+      v-model:open="priceDeleteOpen"
+      variant="destructive"
+      title="Delete price?"
+      :description="priceToDelete ? `${priceToDelete.date} · ${priceToDelete.price}` : ''"
+      confirm-text="Delete"
+      :loading="priceDeleting"
+      @confirm="confirmDeletePrice"
+    />
+
+    <Dialog v-model:open="priceOpen">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader><DialogTitle>{{ editingPriceId ? 'Change price' : 'Add price' }}</DialogTitle></DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-1.5">
+            <Label for="price-date">
+              <Hint>From<template #content>The price applies from this date until a later one. A date already priced is replaced.</template></Hint>
+            </Label>
+            <Input id="price-date" v-model="priceForm.effective_date" type="date" />
+            <InputError :message="priceForm.errors.effective_date" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="price-sale">Sale price</Label>
+            <Input id="price-sale" v-model="priceForm.sale_price" type="number" step="0.01" min="0" class="text-right tabular-nums" />
+            <InputError :message="priceForm.errors.sale_price" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="price-purchase">
+              <Hint>Purchase price (optional)<template #content>For reference only. Stock cost still comes from bills.</template></Hint>
+            </Label>
+            <Input id="price-purchase" v-model="priceForm.purchase_price" type="number" step="0.01" min="0" class="text-right tabular-nums" />
+            <InputError :message="priceForm.errors.purchase_price" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="price-notes">Note</Label>
+            <Input id="price-notes" v-model="priceForm.notes" maxlength="255" />
+            <InputError :message="priceForm.errors.notes" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="priceOpen = false">Cancel</Button>
+          <Button :disabled="priceForm.processing || !priceForm.effective_date || priceForm.sale_price === ''" @click="savePrice">Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Info -->
       <div class="lg:col-span-2 space-y-6">
@@ -208,6 +341,54 @@ const getTypeBadgeVariant = (type: string) => {
                 <p class="font-medium">{{ item.tax_rate ? `${item.tax_rate.name} (${item.tax_rate.rate}%)` : '-' }}</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <!-- Price history -->
+        <Card variant="detail">
+          <CardHeader>
+            <div class="flex items-center justify-between gap-2">
+              <CardTitle>
+                <Hint>Price history<template #content>A price runs from its date until the next one. Months with a locked daily close cannot be changed.</template></Hint>
+              </CardTitle>
+              <Button v-if="priceHistory.is_fuel" variant="outline" size="sm" @click="router.get(`/${company.slug}/fuel/rates`)">
+                Fuel prices
+              </Button>
+              <Button v-else size="sm" @click="openAddPrice">
+                <Plus class="mr-2 h-4 w-4" />
+                Add price
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <LedgerRegister :data="priceHistory.rows" :columns="priceColumns" key-field="id">
+              <template #empty>No prices yet.</template>
+              <template #cell-label="{ row }">
+                <span>{{ row.label }}</span>
+                <Badge v-if="row.in_force" variant="success" class="ml-2">In force</Badge>
+              </template>
+              <template #cell-price="{ row }">
+                <MoneyText :amount="row.price" :currency="item.currency" />
+                <span v-if="row.quantity !== null" class="ml-1 text-xs text-muted-foreground">× {{ formatQuantity(row.quantity) }}</span>
+              </template>
+              <template #cell-detail="{ row }">{{ row.detail ?? row.notes ?? '' }}</template>
+              <template #cell-source="{ row }">
+                <a v-if="row.source_url" :href="row.source_url" class="underline" @click.prevent="router.get(row.source_url)">{{ row.source_label }}</a>
+              </template>
+              <template #cell-actions="{ row }">
+                <div v-if="row.kind === 'sale_price' && row.editable" class="flex justify-end">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="ghost" size="icon" aria-label="Price actions"><MoreHorizontal class="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem @click="openEditPrice(row)"><Pencil class="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                      <DropdownMenuItem class="text-destructive" @click="askDeletePrice(row)"><Trash2 class="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
 

@@ -250,6 +250,72 @@ class StockStatementService
             'variance' => $tot['variance'],
         ];
 
+        return $this->withStockValues($companyId, $itemId, $startDate, $endDate, $result);
+    }
+
+    /**
+     * What the stock was worth at the end of each day, beside its balance. A product with a stock
+     * account of its own reads it from the books: the account's balance that night (purchases in,
+     * cost of sales and tank gains/losses out, the month-end valuation on its day). A shared
+     * account cannot say what one product's part is worth, so there it is balance x the product's
+     * cost.
+     */
+    private function withStockValues(string $companyId, string $itemId, string $startDate, string $endDate, array $result): array
+    {
+        if (empty($result['rows'])) {
+            return $result;
+        }
+        $item = DB::table('inv.items')->where('company_id', $companyId)->where('id', $itemId)
+            ->first(['asset_account_id', 'avg_cost', 'cost_price']);
+        $accountId = $item->asset_account_id ?? null;
+        $ownAccount = $accountId && ! DB::table('inv.items')->where('company_id', $companyId)
+            ->where('asset_account_id', $accountId)->where('id', '!=', $itemId)->whereNull('deleted_at')->exists();
+
+        if ($ownAccount) {
+            $running = app(MonthEndStockValuationService::class)->accountBalance($companyId, $accountId, Carbon::parse($startDate)->subDay()->toDateString());
+            $daily = DB::table('acct.journal_entries as je')->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                ->where('t.company_id', $companyId)->where('je.account_id', $accountId)
+                ->whereIn('t.status', ['posted', 'locked'])->whereNull('t.deleted_at')
+                ->whereBetween('t.transaction_date', [$startDate, $endDate])
+                ->groupBy(DB::raw('t.transaction_date::date'))
+                ->selectRaw('t.transaction_date::date AS d, SUM(je.debit_amount) - SUM(je.credit_amount) AS net')
+                ->pluck('net', 'd');
+            $result['totals']['opening_stock_value'] = $running;
+            $byDay = [];
+            for ($d = Carbon::parse($startDate), $e = Carbon::parse($endDate); $d->lte($e); $d->addDay()) {
+                $running = round($running + (float) ($daily[$d->toDateString()] ?? 0), 2);
+                $byDay[$d->toDateString()] = $running;
+            }
+            foreach ($result['rows'] as &$row) {
+                if (isset($byDay[$row['date']])) {
+                    $row['stock_value'] = $byDay[$row['date']];
+                }
+            }
+            unset($row);
+            $result['totals']['closing_value'] = end($byDay);
+            $result['stock_value_basis'] = 'books';
+
+            return $result;
+        }
+
+        $unit = (float) ($item->avg_cost ?: $item->cost_price ?: 0);
+        if ($unit <= 0) {
+            return $result;
+        }
+        foreach ($result['rows'] as &$row) {
+            if (isset($row['dip']) && $row['dip'] !== null) {
+                $row['stock_value'] = round((float) $row['dip'] * $unit, 2);
+            }
+        }
+        unset($row);
+        if (($result['totals']['closing'] ?? null) !== null) {
+            $result['totals']['closing_value'] = round((float) $result['totals']['closing'] * $unit, 2);
+        }
+        if (($result['totals']['opening'] ?? null) !== null) {
+            $result['totals']['opening_stock_value'] = round((float) $result['totals']['opening'] * $unit, 2);
+        }
+        $result['stock_value_basis'] = 'cost';
+
         return $result;
     }
 
@@ -559,7 +625,7 @@ class StockStatementService
             'variance' => 0.0,
         ];
 
-        return $result;
+        return $this->withStockValues($companyId, (string) $item->id, $startDate, $endDate, $result);
     }
 
     /**

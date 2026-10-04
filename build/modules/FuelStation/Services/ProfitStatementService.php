@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Log;
  *  - Sales          income on the items' sales accounts
  *  - Cost of sales  the items' cost accounts (month-end write-down included) plus the tank
  *                   loss and gain accounts (a gain reduces cost)
- *  - Expenses       expense accounts hit by 'expense' entries (Money out > Expenses)
- *  - Salaries       expense accounts hit by payroll entries
+ *  - Expenses       every expense account (running costs), however the entry was made --
+ *                   Money out, a bill or a close -- so one account is always on one line
+ *  - Salaries       expense accounts payroll posts to
  *  - Other income   every other income account (rent, interest ...)
- *  - Other costs    every other cost account (cash short/over, card charges, discounts ...)
+ *  - Other costs    every other cost account that is not a running expense (transit loss ...)
  *
  * Profit by day reads the same classification through periodBooks(), so both screens agree.
  */
@@ -204,6 +205,13 @@ class ProfitStatementService
             'sales_items' => $salesItems,
             'cost_items' => $costItems,
             'items' => $items,
+            // Expense accounts payroll posts to: Salaries & wages, wherever else they are used.
+            'payroll' => array_fill_keys(DB::table('acct.journal_entries as je')
+                ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
+                ->where('t.company_id', $companyId)->where('a.type', 'expense')
+                ->where('t.transaction_type', 'like', 'payroll%')
+                ->distinct()->pluck('je.account_id')->all(), true),
         ];
     }
 
@@ -218,11 +226,10 @@ class ProfitStatementService
         if (isset($ctx['cost'][$line->account_id])) {
             return 'cost';
         }
-        if ($line->type === 'expense' && $line->transaction_type === 'expense') {
-            return 'expenses';
-        }
-        if ($line->type === 'expense' && str_starts_with((string) $line->transaction_type, 'payroll')) {
-            return 'salaries';
+        // By account, not by how the entry was made: POS charges from a bill and from Money out
+        // are the same cost and belong on the same line.
+        if ($line->type === 'expense') {
+            return isset($ctx['payroll'][$line->account_id]) ? 'salaries' : 'expenses';
         }
 
         if (in_array($line->type, self::INCOME_TYPES, true)) {

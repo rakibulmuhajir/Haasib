@@ -84,7 +84,7 @@ test('a per-litre customer discount and a card channel charge book end to end at
     $profit = app(ProfitStatementService::class)->run($companyId, '2026-09-01', '2026-09-30');
     $lines = collect($profit['lines'])->keyBy('key');
     $discountRow = collect($lines['sales']['details'])->firstWhere('name', 'Discounts given');
-    $chargeRow = collect($lines['other_costs']['details'])->firstWhere('account_id', $chargesAccount->id);
+    $chargeRow = collect($lines['expenses']['details'])->firstWhere('account_id', $chargesAccount->id);
     expect($discountRow)->not->toBeNull()
         ->and((float) $discountRow['amount'])->toBe(-70.0)
         ->and($chargeRow)->not->toBeNull()

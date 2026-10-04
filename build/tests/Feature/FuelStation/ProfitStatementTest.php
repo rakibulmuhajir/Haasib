@@ -87,10 +87,11 @@ test('every line comes from the ledger and net profit is the ledger profit', fun
         // 70,000 sold + 1,000 write-down + 800 tank loss - 300 tank gain.
         ->and($line('cost_of_sales')['amount'])->toBe(71500.0)
         ->and($line('gross_profit')['amount'])->toBe(28500.0)
-        ->and($line('expenses')['amount'])->toBe(2000.0)
+        // Electricity 2,000 and the cash short 120: running costs, by account, however entered.
+        ->and($line('expenses')['amount'])->toBe(2120.0)
         ->and($line('salaries')['amount'])->toBe(1500.0)
         ->and($line('other_income')['amount'])->toBe(400.0)
-        ->and($line('other_costs')['amount'])->toBe(120.0)
+        ->and($line('other_costs')['amount'])->toBe(0.0)
         ->and($line('net_profit')['amount'])->toBe(25280.0)
         ->and($s['net_profit'])->toBe(25280.0)
         ->and($s['ledger_total'])->toBe(25280.0)
@@ -114,15 +115,16 @@ test('every line comes from the ledger and net profit is the ledger profit', fun
         ->and($gross[0]['amount'])->toBe(28500.0)
         ->and($gross[0]['working']['used'])->toBe(71500.0);
 
-    $expense = $line('expenses')['details'];
-    expect($expense)->toHaveCount(1)
-        ->and($expense[0]['name'])->toBe('Electricity')
-        ->and($expense[0]['account_id'])->toBe($a['power'])
-        ->and($expense[0]['href'])->toBe("/{$slug}/reports/statements?kind=expense&id={$a['power']}&from=2026-09-01&to=2026-09-30");
+    $expense = collect($line('expenses')['details'])->sortBy('name')->values()->all();
+    expect($expense)->toHaveCount(2)
+        ->and($expense[0]['name'])->toBe('Cash Over/Short')
+        ->and($expense[1]['name'])->toBe('Electricity')
+        ->and($expense[1]['account_id'])->toBe($a['power'])
+        ->and($expense[1]['href'])->toBe("/{$slug}/reports/statements?kind=expense&id={$a['power']}&from=2026-09-01&to=2026-09-30");
     expect($line('salaries')['details'][0]['name'])->toBe('Salaries & Wages');
     $rent = $line('other_income')['details'][0];
     expect($rent['name'])->toBe('Shop Rent')->and($rent['href'])->toBe("/{$slug}/accounts/{$a['rent']}");
-    expect($line('other_costs')['details'][0]['name'])->toBe('Cash Over/Short');
+    expect($line('other_costs')['details'])->toBe([]);
 });
 
 test('profit by day agrees with the statement', function () {
@@ -133,9 +135,9 @@ test('profit by day agrees with the statement', function () {
 
     expect($row['revenue'])->toBe(100000.0)
         ->and($row['cogs'])->toBe(71500.0)
-        ->and($row['expenses'])->toBe(2000.0)
-        // Salaries -1,500, rent +400, cash short -120.
-        ->and($row['other'])->toBe(-1220.0)
+        ->and($row['expenses'])->toBe(2120.0)
+        // Salaries -1,500, rent +400 (the cash short is a running expense now).
+        ->and($row['other'])->toBe(-1100.0)
         ->and($row['net_station_profit'])->toBe($statement['net_profit']);
 });
 

@@ -79,6 +79,15 @@ const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { item: string; items?: string[]; start_date: string; end_date: string }
   includeOpeningDefault?: boolean
+  // One tank fuel: how its profit is worked out, from the books (StockStatementService::profitWorking).
+  profitWorking?: {
+    method: 'inventory_cost' | 'next_month_purchase_rate'
+    opening_litres: number; bought_litres: number; sold_litres: number
+    should_be_left: number; closing_litres: number; variance_litres: number
+    sales: number; closing_value: number; closing_rate: number | null
+    opening_value: number; opening_rate: number | null
+    purchases: number; profit: number; variance_value: number | null
+  } | null
   item: { id: string; name: string }
   combined?: boolean
   has_tank?: boolean
@@ -370,6 +379,56 @@ const apply = () => {
           </tbody>
         </table>
       </div>
+      <!-- How this fuel's profit is worked out: the litres, then the money, every figure from the books. -->
+      <section v-if="profitWorking" class="max-w-2xl rounded-md border border-rule-default p-4 text-sm tabular-nums">
+        <h3 class="mb-3 font-semibold">
+          How {{ item.name }}'s profit is worked out
+          <span class="ml-1 text-xs font-normal text-muted-foreground">
+            · {{ profitWorking.method === 'next_month_purchase_rate' ? "stock at next month's purchase rate" : 'stock at recorded cost' }} (Station settings)
+          </span>
+        </h3>
+        <p class="mb-1 text-xs font-medium text-muted-foreground">Litres</p>
+        <p class="mb-1">
+          Opening {{ litres(profitWorking.opening_litres) }} + bought {{ litres(profitWorking.bought_litres) }} − sold {{ litres(profitWorking.sold_litres) }}
+          = <strong>{{ litres(profitWorking.should_be_left) }} L</strong> should be left
+        </p>
+        <p class="mb-4">
+          Dip found <strong>{{ litres(profitWorking.closing_litres) }} L</strong>
+          → tank {{ profitWorking.variance_litres >= 0 ? 'gain' : 'loss' }}
+          <span :class="profitWorking.variance_litres < 0 ? 'text-status-attention' : ''">{{ signed(profitWorking.variance_litres) }} L</span>
+        </p>
+        <p class="mb-1 text-xs font-medium text-muted-foreground">Money</p>
+        <table class="w-full">
+          <tbody>
+            <tr><td class="py-0.5 pr-3 w-6"></td><td class="py-0.5">Sales</td><td></td><td class="py-0.5 text-right"><MoneyText :amount="profitWorking.sales" :currency="currency" :fraction-digits="0" /></td></tr>
+            <tr>
+              <td class="py-0.5 pr-3">+</td><td class="py-0.5">Closing stock (dip)</td>
+              <td class="py-0.5 pr-3 text-right text-muted-foreground">{{ litres(profitWorking.closing_litres) }} L × {{ profitWorking.closing_rate === null ? '—' : fmt.format(profitWorking.closing_rate) }}</td>
+              <td class="py-0.5 text-right"><MoneyText :amount="profitWorking.closing_value" :currency="currency" :fraction-digits="0" /></td>
+            </tr>
+            <tr>
+              <td class="py-0.5 pr-3">−</td><td class="py-0.5">Opening stock</td>
+              <td class="py-0.5 pr-3 text-right text-muted-foreground">{{ litres(profitWorking.opening_litres) }} L × {{ profitWorking.opening_rate === null ? '—' : fmt.format(profitWorking.opening_rate) }}</td>
+              <td class="py-0.5 text-right"><MoneyText :amount="profitWorking.opening_value" :currency="currency" :fraction-digits="0" /></td>
+            </tr>
+            <tr>
+              <td class="py-0.5 pr-3">−</td><td class="py-0.5">Bought</td>
+              <td class="py-0.5 pr-3 text-right text-muted-foreground">{{ litres(profitWorking.bought_litres) }} L (bills)</td>
+              <td class="py-0.5 text-right"><MoneyText :amount="profitWorking.purchases" :currency="currency" :fraction-digits="0" /></td>
+            </tr>
+            <tr class="border-t border-rule-default font-semibold">
+              <td class="pt-1.5 pr-3">=</td><td class="pt-1.5">Profit</td><td></td>
+              <td class="pt-1.5 text-right"><MoneyText :amount="profitWorking.profit" :currency="currency" :fraction-digits="0" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="profitWorking.variance_value !== null && Math.abs(profitWorking.variance_litres) >= 0.5" class="mt-2 text-xs text-muted-foreground">
+          Includes the tank {{ profitWorking.variance_litres >= 0 ? 'gain' : 'loss' }}:
+          {{ signed(profitWorking.variance_litres) }} L × {{ fmt.format(profitWorking.closing_rate ?? 0) }} ≈
+          <MoneyText :amount="profitWorking.variance_value" :currency="currency" :fraction-digits="0" />
+        </p>
+      </section>
+
       <p v-if="products.length" class="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
         <span>{{ item.name }} · {{ combined ? 'units' : unitLabel === 'L' ? 'litres' : unitLabel }}</span>
         <Link :href="`/${company.slug}/fuel/reports/stock-variance?start_date=${filters.start_date}&end_date=${filters.end_date}`" class="underline underline-offset-2">Tank gains &amp; losses</Link>

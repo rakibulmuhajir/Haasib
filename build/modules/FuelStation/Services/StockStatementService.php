@@ -16,6 +16,52 @@ use Illuminate\Support\Facades\DB;
  */
 class StockStatementService
 {
+    /**
+     * How a tank fuel's profit over the range is worked out, from the books: sales + closing stock
+     * - opening stock - bought, with the litres behind it and the tank gain or loss the closing dip
+     * holds. Null for anything but a tank fuel with a stock account of its own (shared accounts
+     * cannot say what this one fuel's stock is worth).
+     *
+     * @param  array<string,mixed>  $report  this item's run() result
+     * @return array<string,mixed>|null
+     */
+    public function profitWorking(string $companyId, string $itemId, string $startDate, string $endDate, array $report): ?array
+    {
+        if (empty($report['has_tank']) || ! empty($report['combined'])) {
+            return null;
+        }
+        $accountId = DB::table('inv.items')->where('company_id', $companyId)->where('id', $itemId)->value('asset_account_id');
+        if (! $accountId || DB::table('inv.items')->where('company_id', $companyId)->where('asset_account_id', $accountId)
+            ->where('id', '!=', $itemId)->whereNull('deleted_at')->exists()) {
+            return null;
+        }
+        $t = $report['totals'];
+        $books = app(MonthEndStockValuationService::class);
+        $openingValue = $books->accountBalance($companyId, $accountId, Carbon::parse($startDate)->subDay()->toDateString());
+        $closingValue = $books->accountBalance($companyId, $accountId, $endDate);
+        $opening = (float) ($t['opening'] ?? 0);
+        $bought = (float) ($t['received'] ?? 0);
+        $sold = (float) ($t['sold'] ?? 0);
+        $closing = (float) ($t['closing'] ?? 0);
+        $sales = round((float) ($t['sale_amount'] ?? 0), 2);
+        $purchases = round((float) ($t['purchase_amount'] ?? 0), 2);
+        $closingRate = $closing > 0 ? $closingValue / $closing : null;
+        $shouldBeLeft = $opening + $bought - $sold;
+        $variance = round($closing - $shouldBeLeft, 3);
+
+        return [
+            'method' => DB::table('fuel.station_settings')->where('company_id', $companyId)->value('month_end_stock_valuation') ?: 'inventory_cost',
+            'opening_litres' => $opening, 'bought_litres' => $bought, 'sold_litres' => $sold,
+            'should_be_left' => round($shouldBeLeft, 3), 'closing_litres' => $closing, 'variance_litres' => $variance,
+            'sales' => $sales,
+            'closing_value' => $closingValue, 'closing_rate' => $closingRate !== null ? round($closingRate, 4) : null,
+            'opening_value' => $openingValue, 'opening_rate' => $opening > 0 ? round($openingValue / $opening, 4) : null,
+            'purchases' => $purchases,
+            'profit' => round($sales + $closingValue - $openingValue - $purchases, 2),
+            'variance_value' => $closingRate !== null ? round($variance * $closingRate, 2) : null,
+        ];
+    }
+
     public function run(string $companyId, string $itemId, string $startDate, string $endDate): array
     {
         $n = fn ($v) => (float) ($v ?? 0);

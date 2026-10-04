@@ -1,7 +1,7 @@
 import type { ModuleNavConfig } from '@/navigation/types'
 import type { NavGroup, NavItem } from '@/types'
 import { mostVisited } from '@/navigation/visits'
-import { House, ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays } from 'lucide-vue-next'
+import { House, ClipboardCheck, CreditCard, Fuel, Droplets, HandCoins, ReceiptText, Banknote, Users, UsersRound, Truck, Warehouse, BarChart3, Package, Settings, TrendingUp, Landmark, UserCog, FileMinus, ArrowLeftRight, Scale, Clock, ScrollText, CalendarDays, Calculator } from 'lucide-vue-next'
 
 export const fuelStationNav: ModuleNavConfig = {
   id: 'fuel_station',
@@ -57,7 +57,7 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('investors', 'Investors', '/fuel/investors', UsersRound, fuelNavigation?.hasInvestors === true),
       ] },
       { label: t('reports'), items: [
-        // Eight, not twelve: the rest open from inside these pages -- the stock statement is a
+        // Eight reports, not twelve: the rest open from inside these pages -- the stock statement is a
         // Statements tab, Tank Gains & Losses and Expenses link from Month Summary and the stock
         // statement, Trial Balance from the Balance Sheet, Journal Entries from all three
         // accounting reports.
@@ -69,6 +69,8 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),
         ...item('reports', 'What We Owe', '/reports/payables-aging', Clock),
         ...item('reports', 'Statements', '/reports/statements', ScrollText),
+        // Not a report: a formula over the books, same report.view gate.
+        ...item('reports', 'Calculator', '/fuel/calculator', Calculator),
       ] },
       { label: 'Banking', items: [
         ...item('banking', t('bankAccounts'), '/banking/accounts', Landmark),

@@ -1064,3 +1064,20 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
   corrections, late canonical activity captured in `fuel.daily_close_activity`) — nothing
   about that mechanism changed. What was removed is the alternate, unused path of reversing
   the whole close and re-posting a correction transaction linked via `corrects_transaction_id`.
+
+### fuel.calculator_formulas (2026-10-04)
+- Saved Calculator formulas. The Calculator (Reports > Calculator, `/{company}/fuel/calculator`) is read only: it combines figures that existing reports already produce and never writes to the books.
+- UUID `id` PK (default `public.gen_random_uuid()`); `company_id` UUID FK auth.companies cascade; `user_id` UUID FK auth.users cascade (the creator); `name` varchar(120); `formula` jsonb; `is_shared` boolean default false; timestamps.
+- Indexes (company_id, user_id) and (company_id, is_shared). Company RLS (ENABLE + FORCE) with the NULLIF guard and the super-admin bypass policy.
+- Visibility: personal by default; `is_shared` makes it visible to everyone in the company. List = own + shared. Only the creator may update or delete (a shared one of someone else's answers 403, a personal one of someone else's 404). Enforced by the `calculator.save` / `calculator.delete` CommandBus actions, not by RLS.
+- `formula` is a JSON tree evaluated server side only (never eval): `{type:'value', metric, collection:{type,id?}, when:{...}}` | `{type:'number', value}` | `{type:'op', op:'+|-|*|/', left, right}` | `{type:'group', inner}`. Limits: 25 values, 200 nodes, depth 60. `when` is `{preset}` (`today`, `yesterday`, `this_month`, `last_month`, `this_year`, `last_n_days` with `n`), `{from,to}` or `{on}`; a single-day metric takes `{on}` or `today`/`yesterday`/`month_end_last`. Presets are resolved on every run.
+- Collection types: `product` (a fuel is a product), `all_fuels`, `all_products`, `account`, `customer`, `channel` (a payment channel code), `none`.
+- Metrics, each delegating to the service that builds the matching report (`App\Modules\FuelStation\Services\Calculator\MetricCatalog`):
+  - sales, litres_sold, cost_of_sales, gross_profit, profit_books: `ProductProfitabilityReportService` product rows (revenue, quantity, cogs, gross_profit, book_profit).
+  - discounts, net_profit, expenses, salaries, other_income: `ProfitStatementService` lines ("Discounts given" as a positive amount).
+  - expense_account, income_account, card_charges, cash_short_over, tank_gain_loss: an account's `AccountStatementService` closing less opening (card charges = the account `DailyCloseService::cardChargesAccountId` resolves; tank = gains less losses on `tankVarianceAccountIds`).
+  - purchases_amount, purchases_qty, stock_qty, stock_value: `StockStatementService::run` totals (purchase_amount, received, closing, closing_value).
+  - sale_rate, purchase_rate (on a day): `RateChange::getRateForDate` for a fuel, `ItemPriceService::inForce` otherwise.
+  - customer_bought, customer_paid, customer_owed (on a day): `CustomerPeriodSummaryService` money block.
+  - card_swipes: posted daily closes' metadata `payment_receipts[channel code]`, or `card_swipes` for all channels.
+- Each evaluation returns `{value, unit, source_href}`; a missing figure is null with a note, and a formula that reads one has no result. Units follow the arithmetic (Rs / L is Rs/L); mixing units with + or - computes with a warning; division by zero returns no result ("Division by zero").

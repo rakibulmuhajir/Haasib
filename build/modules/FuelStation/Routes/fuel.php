@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\FuelStation\Http\Controllers\AmanatController;
+use App\Modules\FuelStation\Http\Controllers\CalculatorController;
 use App\Modules\FuelStation\Http\Controllers\CollectionController;
 use App\Modules\FuelStation\Http\Controllers\CreditCustomerController;
 use App\Modules\FuelStation\Http\Controllers\CreditSaleController;
@@ -155,6 +156,13 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('reports/expenses', [ExpenseReportController::class, 'index'])->name('fuel.reports.expenses');
     Route::get('reports/stock-statement', [StockStatementReportController::class, 'index'])->name('fuel.reports.stock-statement');
     Route::get('reports/stock-variance', [StockVarianceReportController::class, 'index'])->name('fuel.reports.stock-variance');
+
+    // Calculator: a formula over the books (read only). Evaluate answers with the same page.
+    Route::get('calculator', [CalculatorController::class, 'index'])->name('fuel.calculator.index');
+    Route::post('calculator/evaluate', [CalculatorController::class, 'evaluate'])->name('fuel.calculator.evaluate');
+    Route::post('calculator/formulas', [CalculatorController::class, 'store'])->name('fuel.calculator.formulas.store');
+    Route::put('calculator/formulas/{formula}', [CalculatorController::class, 'update'])->name('fuel.calculator.formulas.update');
+    Route::delete('calculator/formulas/{formula}', [CalculatorController::class, 'destroy'])->name('fuel.calculator.formulas.destroy');
 
     // Credit Customers
     Route::get('credit-customers', [CreditCustomerController::class, 'index'])->name('fuel.credit-customers.index');

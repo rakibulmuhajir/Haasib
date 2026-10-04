@@ -218,7 +218,7 @@ class DailyCloseService
      * station settings first, then account code 1050, then any active cash-subtype account.
      */
     /** The expense a card / wallet channel's bank charge posts to: POS / bank charges (6160). */
-    private function cardChargesAccountId(string $companyId): string
+    public function cardChargesAccountId(string $companyId): string
     {
         $id = Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)
             ->where('type', 'expense')

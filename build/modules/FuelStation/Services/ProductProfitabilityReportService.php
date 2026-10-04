@@ -142,6 +142,21 @@ class ProductProfitabilityReportService
     }
 
     /**
+     * The key this report files an item's row under (a fuel's category, else the item id), or null
+     * when the item is not sellable. The Calculator reads a product's row through it.
+     */
+    public function keyForItem(string $companyId, string $itemId): ?string
+    {
+        foreach ($this->items($companyId) as $key => $item) {
+            if (($item['id'] ?? null) === $itemId) {
+                return (string) $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return array<string,array<string,mixed>>
      */
     private function items(string $companyId): array

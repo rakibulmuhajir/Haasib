@@ -59,6 +59,9 @@ class StockStatementService
             'purchases' => $purchases,
             'profit' => round($sales + $closingValue - $openingValue - $purchases, 2),
             'variance_value' => $closingRate !== null ? round($variance * $closingRate, 2) : null,
+            // Litres in the tank the books give no value to (an opening never valued): the
+            // profit above would count that stock as free, so the page says so instead.
+            'unvalued' => ($opening > 0.0001 && abs($openingValue) < 0.005) || ($closing > 0.0001 && abs($closingValue) < 0.005),
         ];
     }
 

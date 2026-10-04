@@ -87,6 +87,7 @@ const props = defineProps<{
     sales: number; closing_value: number; closing_rate: number | null
     opening_value: number; opening_rate: number | null
     purchases: number; profit: number; variance_value: number | null
+    unvalued: boolean
   } | null
   item: { id: string; name: string }
   combined?: boolean
@@ -396,6 +397,10 @@ const apply = () => {
           Dip found <strong>{{ litres(profitWorking.closing_litres) }} L</strong>
           → tank {{ profitWorking.variance_litres >= 0 ? 'gain' : 'loss' }}
           <span :class="profitWorking.variance_litres < 0 ? 'text-status-attention' : ''">{{ signed(profitWorking.variance_litres) }} L</span>
+        </p>
+        <p v-if="profitWorking.unvalued" class="mb-3 rounded-md border border-status-attention/40 bg-status-attention/10 px-3 py-2 text-xs">
+          Stock in the tank has no value in the books, so this profit counts it as free.
+          Give it its value in <Link :href="`/${company.slug}/accounting/opening-balances`" class="underline underline-offset-2">Opening balances</Link>.
         </p>
         <p class="mb-1 text-xs font-medium text-muted-foreground">Money</p>
         <table class="w-full">

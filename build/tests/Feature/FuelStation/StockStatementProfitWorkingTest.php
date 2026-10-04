@@ -34,7 +34,8 @@ test('a tank fuel with its own stock account works out its profit from the books
         ->and($w['closing_rate'])->toBe(320.0)
         // 850,000 + 160,000 - 300,000 - 620,000
         ->and($w['profit'])->toBe(90000.0)
-        ->and($w['variance_value'])->toBe(6400.0);
+        ->and($w['variance_value'])->toBe(6400.0)
+        ->and($w['unvalued'])->toBeFalse();
 });
 
 test('no working when the fuel shares its stock account or is not in a tank', function () {

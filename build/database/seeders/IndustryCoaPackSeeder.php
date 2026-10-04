@@ -712,6 +712,8 @@ class IndustryCoaPackSeeder extends Seeder
 
             // Commission & Loss Expenses (6200-6299)
             ['code' => '6200', 'name' => 'Investor Commission', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6220', 'name' => 'Fines & Penalties', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Penalties from government regulators or the fuel supplier (failed inspections, rule breaches); not tax-deductible'],
+            ['code' => '6230', 'name' => 'Licences & Inspection Fees', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Licence renewals, certificates, inspection and verification visit fees'],
 
             // Shrinkage & Loss (6300-6399)
             ['code' => '6300', 'name' => 'Fuel Shrinkage - Petrol', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Petrol evaporation/loss'],

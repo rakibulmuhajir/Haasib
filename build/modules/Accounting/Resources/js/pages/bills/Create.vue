@@ -17,6 +17,7 @@ import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import { billTotals, type OverallDiscountType } from './overallDiscount'
 
 interface CompanyRef {
   id: string
@@ -176,6 +177,8 @@ const form = useForm({
   notes: '',
   internal_notes: '',
   ap_account_id: 'company_default',
+  overall_discount_type: 'amount' as OverallDiscountType,
+  overall_discount_value: null as number | null,
   line_items: [lineItemTemplate()],
 })
 
@@ -208,19 +211,7 @@ watch([() => form.bill_date, () => form.payment_terms], () => {
   }
 })
 
-const totals = computed(() => {
-  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.line_total) || 0), 0)
-  const tax = form.line_items.reduce((sum, li) => {
-    const lineTotal = Number(li.line_total) || 0
-    return sum + lineTotal * ((Number(li.tax_rate) || 0) / 100)
-  }, 0)
-  const discount = form.line_items.reduce((sum, li) => {
-    const lineTotal = Number(li.line_total) || 0
-    return sum + lineTotal * ((Number(li.discount_rate) || 0) / 100)
-  }, 0)
-  const total = subtotal + tax - discount
-  return { subtotal, tax, discount, total }
-})
+const totals = computed(() => billTotals(form.line_items, form.overall_discount_type, form.overall_discount_value))
 
 const addLine = () => form.line_items.push(lineItemTemplate())
 const removeLine = (idx: number) => {
@@ -609,12 +600,25 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
               <span><MoneyText :amount="totals.subtotal" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
-              <span>Tax:</span>
-              <span><MoneyText :amount="totals.tax" :currency="form.currency || 'USD'" /></span>
+              <span>Line discounts:</span>
+              <span class="text-destructive">-<MoneyText :amount="totals.lineDiscounts" :currency="form.currency || 'USD'" /></span>
+            </div>
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span>Overall discount:</span>
+              <div class="flex items-center gap-1">
+                <Button type="button" size="sm" :variant="form.overall_discount_type === 'amount' ? 'default' : 'outline'" @click="form.overall_discount_type = 'amount'">Rs</Button>
+                <Button type="button" size="sm" :variant="form.overall_discount_type === 'percent' ? 'default' : 'outline'" @click="form.overall_discount_type = 'percent'">%</Button>
+                <Input v-model.number="form.overall_discount_value" type="number" min="0" step="0.01" placeholder="0" class="w-28 text-right" />
+              </div>
+            </div>
+            <InputError :message="form.errors.overall_discount_value" />
+            <div v-if="totals.overall > 0" class="flex justify-between text-sm">
+              <span></span>
+              <span class="text-destructive">-<MoneyText :amount="totals.overall" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
-              <span>Discount:</span>
-              <span class="text-destructive">-<MoneyText :amount="totals.discount" :currency="form.currency || 'USD'" /></span>
+              <span>Tax:</span>
+              <span><MoneyText :amount="totals.tax" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-lg font-semibold pt-2 border-t">
               <span>Total:</span>

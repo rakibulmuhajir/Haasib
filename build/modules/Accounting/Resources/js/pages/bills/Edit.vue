@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import { billTotals, type OverallDiscountType } from './overallDiscount'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,6 +43,8 @@ interface LineItem {
 }
 
 interface BillRef {
+  overall_discount_type?: 'amount' | 'percent' | null
+  overall_discount_value?: number | string | null
   id: string
   vendor_id: string
   bill_date: string
@@ -124,6 +127,8 @@ const form = useForm({
   notes: props.bill.notes ?? '',
   internal_notes: props.bill.internal_notes ?? '',
   ap_account_id: props.bill.ap_account_id ?? '',
+  overall_discount_type: (props.bill.overall_discount_type ?? 'amount') as OverallDiscountType,
+  overall_discount_value: (Number(props.bill.overall_discount_value) || null) as number | null,
   // Loaded amount-driven, with the stored line_total as the Amount: re-saving an
   // untouched line must reproduce the exact figure already posted, not a total
   // recomputed from quantity * a rate that only carries 6 decimals of precision.
@@ -194,19 +199,7 @@ const isTrackedItem = (itemId: string | null | undefined) => {
   return props.items.find(i => i.id === itemId)?.track_inventory === true
 }
 
-const totals = computed(() => {
-  const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.line_total) || 0), 0)
-  const tax = form.line_items.reduce((sum, li) => {
-    const lineTotal = Number(li.line_total) || 0
-    return sum + lineTotal * ((Number(li.tax_rate) || 0) / 100)
-  }, 0)
-  const discount = form.line_items.reduce((sum, li) => {
-    const lineTotal = Number(li.line_total) || 0
-    return sum + lineTotal * ((Number(li.discount_rate) || 0) / 100)
-  }, 0)
-  const total = subtotal + tax - discount
-  return { subtotal, tax, discount, total }
-})
+const totals = computed(() => billTotals(form.line_items, form.overall_discount_type, form.overall_discount_value))
 
 const addLine = () => form.line_items.push({
   item_id: null,
@@ -537,12 +530,25 @@ const handleSubmit = () => {
           <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
-          <span>{{ t('tax') }}</span>
-          <MoneyText :amount="totals.tax" :currency="form.currency" />
+          <span>Line discounts</span>
+          <MoneyText :amount="totals.lineDiscounts" :currency="form.currency" />
+        </div>
+        <div class="flex items-center justify-between gap-3 text-sm">
+          <span>Overall discount</span>
+          <div class="flex items-center gap-1">
+            <Button type="button" size="sm" :variant="form.overall_discount_type === 'amount' ? 'default' : 'outline'" @click="form.overall_discount_type = 'amount'">Rs</Button>
+            <Button type="button" size="sm" :variant="form.overall_discount_type === 'percent' ? 'default' : 'outline'" @click="form.overall_discount_type = 'percent'">%</Button>
+            <Input v-model.number="form.overall_discount_value" type="number" min="0" step="0.01" placeholder="0" class="w-28 text-right" />
+          </div>
+        </div>
+        <InputError :message="form.errors.overall_discount_value" />
+        <div v-if="totals.overall > 0" class="flex justify-between text-sm">
+          <span></span>
+          <span>-<MoneyText :amount="totals.overall" :currency="form.currency" /></span>
         </div>
         <div class="flex justify-between text-sm">
-          <span>{{ t('discount') }}</span>
-          <MoneyText :amount="totals.discount" :currency="form.currency" />
+          <span>{{ t('tax') }}</span>
+          <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-base font-semibold">
           <span>{{ t('total') }}</span>

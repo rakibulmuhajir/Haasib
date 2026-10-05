@@ -79,6 +79,9 @@ interface BillRef {
   subtotal: number
   tax_amount: number
   discount_amount: number
+  overall_discount_amount?: number
+  overall_discount_type?: 'amount' | 'percent' | null
+  overall_discount_value?: number | string | null
   total_amount: number
   paid_amount: number
   balance: number
@@ -454,6 +457,10 @@ const documentTotals = computed<DocumentTotal[]>(() => {
   const totals: DocumentTotal[] = [{ label: t('subtotal'), amount: props.bill.subtotal }]
   if (props.bill.discount_amount > 0) {
     totals.push({ label: t('discount'), amount: props.bill.discount_amount, sign: '−' })
+  }
+  if (Number(props.bill.overall_discount_amount) > 0) {
+    const pct = props.bill.overall_discount_type === 'percent' ? ` (${Number(props.bill.overall_discount_value)}%)` : ''
+    totals.push({ label: `Overall discount${pct}`, amount: Number(props.bill.overall_discount_amount), sign: '−' })
   }
   if (props.bill.tax_amount > 0) {
     totals.push({ label: t('tax'), amount: props.bill.tax_amount, sign: '+' })

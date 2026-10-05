@@ -32,6 +32,7 @@ class BillLineItem extends Model
         'unit_price',
         'tax_rate',
         'discount_rate',
+        'overall_discount_share',
         'line_total',
         'tax_amount',
         'total',
@@ -54,6 +55,7 @@ class BillLineItem extends Model
         'unit_price' => 'decimal:6',
         'tax_rate' => 'decimal:2',
         'discount_rate' => 'decimal:2',
+        'overall_discount_share' => 'decimal:6',
         'line_total' => 'decimal:6',
         'tax_amount' => 'decimal:6',
         'total' => 'decimal:6',
@@ -64,6 +66,22 @@ class BillLineItem extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * What one unit really cost: unit_price less this line's share of the bill's
+     * overall discount. Stock is received and revalued at this, so inventory value
+     * matches the (discounted) debit the bill posted for the line.
+     */
+    public function effectiveUnitCost(): float
+    {
+        $quantity = (float) $this->quantity;
+        $unit = (float) $this->unit_price;
+        if ($quantity <= 0) {
+            return $unit;
+        }
+
+        return round($unit - ((float) $this->overall_discount_share / $quantity), 6);
+    }
 
     public function bill()
     {

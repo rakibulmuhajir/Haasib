@@ -297,7 +297,7 @@ class ReceiveGoodsAction implements PaletteAction
         $received = (float) $lineData['received_quantity'];
         $varianceQty = round($received - $expected, 3);
 
-        $unitCost = (float) $line->unit_price;
+        $unitCost = $line->effectiveUnitCost();
         $totalCost = round($received * $unitCost, 2);
         $varianceCost = round($varianceQty * $unitCost, 2);
 

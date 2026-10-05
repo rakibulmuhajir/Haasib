@@ -35,6 +35,8 @@ class CreateAction implements PaletteAction
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
+            'overall_discount_type' => 'nullable|string|in:amount,percent',
+            'overall_discount_value' => 'nullable|numeric|min:0|decimal:0,6',
             'line_items' => 'required|array|min:1',
             'line_items.*.item_id' => 'nullable|uuid',
             'line_items.*.warehouse_id' => 'nullable|uuid',
@@ -89,12 +91,19 @@ class CreateAction implements PaletteAction
             $this->assertLineAccountsValid($normalizedLines);
             $this->assertDirectQuantityValid($normalizedLines);
 
-            $lineTotals = collect($normalizedLines)->map(fn ($item) => BillLineTotals::compute($item));
+            $overallType = ! empty($params['overall_discount_value']) && (float) $params['overall_discount_value'] > 0
+                ? ($params['overall_discount_type'] ?? 'amount')
+                : null;
+            $overallValue = $overallType ? (float) $params['overall_discount_value'] : 0.0;
+            BillLineTotals::assertOverallDiscountValid($overallType, $overallValue, $normalizedLines);
 
-            $subtotal = $lineTotals->sum('line_total');
-            $taxAmount = $lineTotals->sum('tax_amount');
-            $discountAmount = $lineTotals->sum('discount_amount');
-            $totalAmount = $lineTotals->sum('total');
+            $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
+            $lineTotals = collect($computed['lines']);
+
+            $subtotal = $computed['subtotal'];
+            $taxAmount = $computed['tax_amount'];
+            $discountAmount = $computed['discount_amount'];
+            $totalAmount = $computed['total'];
             $baseAmount = round($totalAmount * ($exchangeRate ?? 1), 2);
 
             $bill = Bill::create([
@@ -111,6 +120,9 @@ class CreateAction implements PaletteAction
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
                 'discount_amount' => $discountAmount,
+                'overall_discount_type' => $overallType,
+                'overall_discount_value' => $overallValue,
+                'overall_discount_amount' => $computed['overall_discount_amount'],
                 'total_amount' => $totalAmount,
                 'paid_amount' => 0,
                 'balance' => $totalAmount,
@@ -136,6 +148,7 @@ class CreateAction implements PaletteAction
                     'unit_price' => $source['unit_price'],
                     'tax_rate' => $source['tax_rate'] ?? 0,
                     'discount_rate' => $source['discount_rate'] ?? 0,
+                    'overall_discount_share' => $line['overall_discount_share'],
                     'line_total' => $line['line_total'],
                     'tax_amount' => $line['tax_amount'],
                     'total' => $line['total'],

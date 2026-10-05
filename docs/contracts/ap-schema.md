@@ -101,6 +101,10 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `subtotal` numeric(18,6) not null default 0.00 (transaction currency).
   - `tax_amount` numeric(18,6) not null default 0.00 (transaction currency).
   - `discount_amount` numeric(18,6) not null default 0.00 (transaction currency).
+  - `overall_discount_type` varchar null — 'amount' | 'percent' (a discount on the whole bill, besides line discounts).
+  - `overall_discount_value` numeric null — the amount, or the percent (0–100), as entered.
+  - `overall_discount_amount` numeric not null default 0 — the overall discount in money; total = subtotal − line discounts − overall discount + tax.
+  - (bill_line_items) `overall_discount_share` numeric not null default 0 — this line's pro-rata part of the overall discount (by line net, last line takes rounding); the line posts and receives stock at its net less this share.
   - `total_amount` numeric(18,6) not null default 0.00 (transaction currency).
   - `paid_amount` numeric(18,6) not null default 0.00 (transaction currency).
   - `balance` numeric(18,6) not null default 0.00 (transaction currency).

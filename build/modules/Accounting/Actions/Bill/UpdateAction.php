@@ -26,6 +26,8 @@ class UpdateAction implements PaletteAction
             'vendor_invoice_number' => 'nullable|string|max:100',
             'bill_date' => 'nullable|date',
             'due_date' => 'nullable|date',
+            'overall_discount_type' => 'nullable|string|in:amount,percent',
+            'overall_discount_value' => 'nullable|numeric|min:0|decimal:0,6',
             'line_items' => 'nullable|array|min:1',
             'line_items.*.item_id' => 'nullable|uuid',
             'line_items.*.warehouse_id' => 'nullable|uuid',
@@ -118,13 +120,28 @@ class UpdateAction implements PaletteAction
                 $this->assertLineAccountsValid($normalizedLines);
                 $this->assertDirectQuantityValid($normalizedLines);
 
-                $totals = collect($normalizedLines)->map(fn ($item) => BillLineTotals::compute($item));
+                // The overall discount is part of the same form submit as the lines; a
+                // submit that leaves it out keeps what the bill already has.
+                if (array_key_exists('overall_discount_value', $params) || array_key_exists('overall_discount_type', $params)) {
+                    $overallValue = (float) ($params['overall_discount_value'] ?? 0);
+                    $overallType = $overallValue > 0 ? ($params['overall_discount_type'] ?? 'amount') : null;
+                } else {
+                    $overallType = $bill->overall_discount_type;
+                    $overallValue = (float) $bill->overall_discount_value;
+                }
+                BillLineTotals::assertOverallDiscountValid($overallType, $overallValue, $normalizedLines);
+
+                $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
+                $totals = collect($computed['lines']);
+
+                $overallChanged = $overallType !== $bill->overall_discount_type
+                    || abs($overallValue - (float) $bill->overall_discount_value) > 0.0000001;
 
                 // Compare against the derived unit_price (line_total / quantity when a
                 // line_total was submitted), not the raw request value, so a line
                 // resubmitted amount-driven is compared on the same figure that will
                 // actually be stored.
-                $journalRelevantChanged = $this->lineItemsChanged($bill, $totals->pluck('source')->all()) || $journalRelevantChanged;
+                $journalRelevantChanged = $this->lineItemsChanged($bill, $totals->pluck('source')->all()) || $overallChanged || $journalRelevantChanged;
 
                 if ((float) $bill->paid_amount > 0.000001 && $totals->sum('total') < (float) $bill->paid_amount - 0.000001) {
                     throw ValidationException::withMessages([
@@ -155,6 +172,7 @@ class UpdateAction implements PaletteAction
                             'unit_price' => $src['unit_price'],
                             'tax_rate' => $src['tax_rate'] ?? 0,
                             'discount_rate' => $src['discount_rate'] ?? 0,
+                            'overall_discount_share' => $line['overall_discount_share'],
                             'line_total' => $line['line_total'],
                             'tax_amount' => $line['tax_amount'],
                             'total' => $line['total'],
@@ -164,10 +182,13 @@ class UpdateAction implements PaletteAction
                     }
                 }
 
-                $bill->subtotal = $totals->sum('line_total');
-                $bill->tax_amount = $totals->sum('tax_amount');
-                $bill->discount_amount = $totals->sum('discount_amount');
-                $bill->total_amount = $totals->sum('total');
+                $bill->subtotal = $computed['subtotal'];
+                $bill->tax_amount = $computed['tax_amount'];
+                $bill->discount_amount = $computed['discount_amount'];
+                $bill->overall_discount_type = $overallType;
+                $bill->overall_discount_value = $overallValue;
+                $bill->overall_discount_amount = $computed['overall_discount_amount'];
+                $bill->total_amount = $computed['total'];
                 $bill->base_amount = round($bill->total_amount * ($bill->exchange_rate ?? 1), 2);
 
                 // Same paid/partial bookkeeping BillPayment\CreateAction and
@@ -219,7 +240,7 @@ class UpdateAction implements PaletteAction
     {
         $oldLines = BillLineItem::where('bill_id', $bill->id)
             ->orderBy('line_number')
-            ->get(['line_number', 'quantity', 'direct_quantity', 'unit_price', 'tax_rate', 'discount_rate', 'expense_account_id'])
+            ->get(['line_number', 'quantity', 'direct_quantity', 'unit_price', 'tax_rate', 'discount_rate', 'overall_discount_share', 'expense_account_id'])
             ->map(fn ($li) => [
                 'line_number' => (int) $li->line_number,
                 'quantity' => round((float) $li->quantity, 6),
@@ -227,6 +248,7 @@ class UpdateAction implements PaletteAction
                 'unit_price' => round((float) $li->unit_price, 6),
                 'tax_rate' => round((float) $li->tax_rate, 4),
                 'discount_rate' => round((float) $li->discount_rate, 4),
+                'overall_discount_share' => round((float) $li->overall_discount_share, 2),
                 'expense_account_id' => $li->expense_account_id,
             ])->values()->all();
 
@@ -238,6 +260,7 @@ class UpdateAction implements PaletteAction
                 'unit_price' => round((float) ($item['unit_price'] ?? 0), 6),
                 'tax_rate' => round((float) ($item['tax_rate'] ?? 0), 4),
                 'discount_rate' => round((float) ($item['discount_rate'] ?? 0), 4),
+                'overall_discount_share' => round((float) ($item['overall_discount_share'] ?? 0), 2),
                 'expense_account_id' => $item['expense_account_id'] ?? null,
             ])
             ->sortBy('line_number')
@@ -298,8 +321,8 @@ class UpdateAction implements PaletteAction
             $lineModel = $stored[$index];
             $src = $line['source'];
 
-            $oldUnitPrice = (float) $lineModel->unit_price;
-            $newUnitPrice = (float) $src['unit_price'];
+            // Stock is valued at unit_price less the line's share of the overall discount.
+            $oldUnitPrice = $lineModel->effectiveUnitCost();
 
             // Litres re-marked as sold directly after the line was received: whatever no
             // longer fits (received + direct > quantity) comes back out of the tank. Lowering
@@ -314,11 +337,13 @@ class UpdateAction implements PaletteAction
             }
 
             $lineModel->unit_price = $src['unit_price'];
+            $lineModel->overall_discount_share = $line['overall_discount_share'];
             $lineModel->line_total = $line['line_total'];
             $lineModel->tax_amount = $line['tax_amount'];
             $lineModel->total = $line['total'];
             $lineModel->updated_by_user_id = Auth::id();
             $lineModel->save();
+            $newUnitPrice = $lineModel->effectiveUnitCost();
 
             if ((float) $lineModel->quantity_received > 0 && abs($newUnitPrice - $oldUnitPrice) > 0.0000001) {
                 app(InventoryService::class)->revalueReceivedLine($lineModel, $oldUnitPrice, $newUnitPrice);

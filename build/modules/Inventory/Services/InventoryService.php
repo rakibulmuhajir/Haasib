@@ -36,7 +36,7 @@ class InventoryService
             return null;
         }
 
-        $unitCost = (float) $line->unit_price;
+        $unitCost = $line->effectiveUnitCost();
         $totalCost = $quantity * $unitCost;
 
         $movement = StockMovement::create([

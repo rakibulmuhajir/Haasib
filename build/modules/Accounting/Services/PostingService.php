@@ -637,7 +637,9 @@ class PostingService
                 throw new \RuntimeException('Expense account is required' . ($lineNumber ? " on bill line {$lineNumber}." : '.'));
             }
 
-            $lineTotal = round((float) $line->line_total, 2);
+            // Net of this line's share of the bill's overall discount; the line's own
+            // discount_rate is still credited to Discount received below, as before.
+            $lineTotal = round((float) $line->line_total - (float) $line->overall_discount_share, 2);
             $quantity = (float) $line->quantity;
             $directQuantity = (float) $line->direct_quantity;
 

@@ -58,6 +58,8 @@ class StoreBillRequest extends BaseFormRequest
             'payment_terms' => ['integer', 'min:0', 'max:365'],
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
+            'overall_discount_type' => ['nullable', 'string', 'in:amount,percent'],
+            'overall_discount_value' => ['nullable', 'numeric', 'min:0', 'decimal:0,6', Rule::when($this->input('overall_discount_type') === 'percent', ['max:100'])],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.item_id' => ['nullable', 'uuid', Rule::exists(Item::class, 'id')],
             'line_items.*.warehouse_id' => ['nullable', 'uuid', Rule::exists(Warehouse::class, 'id')],

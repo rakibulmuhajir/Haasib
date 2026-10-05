@@ -119,6 +119,8 @@ const props = withDefaults(
          * for a final document of a ticked type; null/undefined renders nothing.
          */
         stamp?: DocumentStampData | null
+        /** A centred heading over the lines, e.g. "Vehicle: GBE-315" -- what the lines are for. */
+        linesHeading?: string | null
     }>(),
     {
         docNumber: undefined,
@@ -233,6 +235,7 @@ const partyLines = (party: DocumentParty) =>
         </section>
 
         <section class="lines">
+            <p v-if="linesHeading" class="lines-heading">{{ linesHeading }}</p>
             <!-- A document with its own columns (a statement's invoice list) brings its own table. -->
             <slot name="lines">
             <LedgerRegister
@@ -496,6 +499,13 @@ const partyLines = (party: DocumentParty) =>
 
 .lines {
     padding-top: 24px;
+}
+
+.lines-heading {
+    margin: 0 0 8px;
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
 .line__desc {

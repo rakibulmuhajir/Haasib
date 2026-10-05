@@ -211,7 +211,6 @@ const documentDates = computed(() =>
       value: props.invoice.payment_terms ? `${props.invoice.payment_terms} days` : null,
     },
     { label: 'Reference', value: props.invoice.reference ?? null },
-    { label: 'Vehicle', value: props.invoice.unit?.name ?? null },
   ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
 )
 
@@ -357,6 +356,7 @@ const voidInvoice = () => {
         :bill-to="billTo"
         :dates="documentDates"
         :lines="documentLines"
+        :lines-heading="invoice.unit ? `Vehicle: ${invoice.unit.name}` : null"
         :totals="documentTotals"
         grand-total-label="Invoice total"
         :grand-total-amount="invoice.total_amount"

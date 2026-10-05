@@ -113,7 +113,13 @@
             </tr>
         </thead>
         <tbody>
+            @php $groupStart = true; @endphp
             @foreach ($doc['lines'] as $line)
+                {{-- Each vehicle's lines start under a centred heading naming it. --}}
+                @if (($doc['show_vehicle'] ?? false) && ! ($line['is_subtotal'] ?? false) && $groupStart)
+                    <tr><td colspan="{{ $subtotalColspan + 3 }}" style="text-align:center;font-weight:bold;padding-top:8px;">Vehicle: {{ $line['vehicle'] ?: '—' }}</td></tr>
+                @endif
+                @php $groupStart = (bool) ($line['is_subtotal'] ?? false); @endphp
                 @if ($line['is_subtotal'] ?? false)
                     <tr>
                         <td class="mono" colspan="{{ $subtotalColspan }}"><strong>{{ $line['unit'] ?: '—' }} subtotal</strong></td>

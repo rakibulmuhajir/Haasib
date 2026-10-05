@@ -120,7 +120,12 @@ const print = () => window.print()
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(line, i) in document.lines" :key="i" :class="{ 'font-semibold': line.is_subtotal }">
+            <template v-for="(line, i) in document.lines" :key="i">
+            <!-- Each vehicle's lines start under a centred heading naming it. -->
+            <tr v-if="document.show_vehicle && !line.is_subtotal && (i === 0 || document.lines[i - 1]?.is_subtotal)" class="ci-group">
+              <td :colspan="5 + (document.show_reference ? 1 : 0) + (document.show_vehicle ? 1 : 0) + (document.show_physical ? 1 : 0)">Vehicle: {{ line.vehicle || '—' }}</td>
+            </tr>
+            <tr :class="{ 'font-semibold': line.is_subtotal }">
               <template v-if="line.is_subtotal">
                 <td :colspan="2 + (document.show_reference ? 1 : 0) + (document.show_vehicle ? 1 : 0) + (document.show_physical ? 1 : 0)">{{ line.unit || '—' }} subtotal</td>
                 <td class="num">{{ number(line.quantity) }}</td>
@@ -138,6 +143,7 @@ const print = () => window.print()
               <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
               </template>
             </tr>
+            </template>
           </tbody>
         </table>
       </template>
@@ -162,4 +168,9 @@ const print = () => window.print()
 .ci-billed-by { margin-top: 40px; width: 240px; border-top: 1px solid currentColor; padding-top: 4px; font-size: 12px; }
 .ci-billed-by__label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
 .ci-billed-by__name { font-weight: 600; }
+.ci-group td {
+  text-align: center;
+  font-weight: 600;
+  padding-top: 10px;
+}
 </style>

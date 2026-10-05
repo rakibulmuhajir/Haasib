@@ -140,3 +140,24 @@ test('the period summary splits by vehicle, with No vehicle last, only for a cus
     $plain = Customer::create(['company_id' => $company->id, 'customer_number' => 'C-3', 'name' => 'No units', 'base_currency' => 'PKR', 'ar_account_id' => $f['accounts']['1100']->id, 'is_active' => true]);
     expect(app(CustomerPeriodSummaryService::class)->run($company->id, $plain->id, '2026-09-01', '2026-09-30', $company->slug)['vehicles'])->toBe([]);
 });
+
+test('the vehicle can be named on a posted close invoice afterwards, but only one of that customer', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $unit = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'name' => 'GBE-930']);
+
+    // The close's invoice guard lets the vehicle through: a label, no money.
+    app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Services\CommandBus::class)->dispatch('invoice.set_unit', ['id' => $invoice->id, 'unit_id' => $unit->id], $f['user'], true));
+    expect($invoice->fresh()->unit_id)->toBe($unit->id);
+
+    $other = Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'C-9', 'name' => 'Other', 'base_currency' => 'PKR', 'ar_account_id' => $f['accounts']['1100']->id, 'is_active' => true]);
+    $foreign = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $other->id, 'name' => 'X-1']);
+    expect(fn () => app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Services\CommandBus::class)->dispatch('invoice.set_unit', ['id' => $invoice->id, 'unit_id' => $foreign->id], $f['user'], true)))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    // Money on it is still guarded.
+    expect(fn () => \Illuminate\Support\Facades\DB::table('acct.invoices')->where('id', $invoice->id)->update(['subtotal' => 1]))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+});

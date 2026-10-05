@@ -181,6 +181,8 @@ class InvoiceController extends Controller
                 'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'invoice' => $invoiceRecord,
+            // The customer's vehicles, to name or correct the one this invoice was for.
+            'customerUnits' => \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $company->id)->where('customer_id', $invoiceRecord->customer_id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             // Corrections: who it can be moved to, and what was corrected before.
             'canCorrect' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::INVOICE_UPDATE),
             'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
@@ -386,5 +388,15 @@ class InvoiceController extends Controller
                 ->with('error', $e->getMessage())
                 ->withInput();
         }
+    }
+
+    public function setUnit(\App\Modules\Accounting\Http\Requests\SetInvoiceUnitRequest $request): \Illuminate\Http\RedirectResponse
+    {
+        app(\App\Services\CommandBus::class)->dispatch('invoice.set_unit', [
+            'id' => $request->route('invoice'),
+            'unit_id' => $request->validated('unit_id'),
+        ], $request->user());
+
+        return back()->with('success', 'Vehicle saved');
     }
 }

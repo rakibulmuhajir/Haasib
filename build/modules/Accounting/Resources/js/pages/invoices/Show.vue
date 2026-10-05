@@ -36,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import {
@@ -117,7 +118,13 @@ const props = defineProps<{
   corrections?: Correction[]
   appliedPayments?: { number: string; party: string | null; amount: number | string }[]
   appliedCredits?: { number: string; reason: string | null; amount: number | string }[]
+  // The customer's vehicles: name or correct the one this invoice was for.
+  customerUnits?: { id: string; name: string }[]
 }>()
+
+const setVehicle = (unitId: string) => {
+  router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/unit`, { unit_id: unitId === 'none' ? null : unitId }, { preserveScroll: true })
+}
 
 const correcting = ref(false)
 
@@ -292,6 +299,13 @@ const voidInvoice = () => {
 
   <PageShell :title="`Invoice ${invoice.invoice_number}`" :breadcrumbs="breadcrumbs">
     <template #actions>
+      <Select v-if="customerUnits?.length" :model-value="invoice.unit?.id ?? 'none'" @update:model-value="(v) => setVehicle(String(v))">
+        <SelectTrigger class="h-9 w-44" aria-label="Vehicle"><SelectValue placeholder="Vehicle" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No vehicle</SelectItem>
+          <SelectItem v-for="u in customerUnits" :key="u.id" :value="u.id">{{ u.name }}</SelectItem>
+        </SelectContent>
+      </Select>
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back

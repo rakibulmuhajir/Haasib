@@ -22,7 +22,9 @@ class Invoice extends Model
             // discount cannot exceed the balance) rather than by this guard. The DB-level
             // fuel.protect_close_credit_invoice() trigger enforces the same invariants as a
             // backstop -- see the 2026_09_26_010000 migration.
-            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount'];
+            // unit_id (the customer's vehicle) is a label, no money: it may be named or corrected
+            // after the close too (SetUnitAction; the DB guard allows it since 2026_10_05_000005).
+            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount', 'unit_id'];
             // total/discount only count as settlement when they move together as a discount:
             // the discount grows and the total falls by exactly that much. Any other change to
             // them is a change of principal and goes through assertMutable like everything else.

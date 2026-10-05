@@ -61,6 +61,7 @@ return [
     'invoice.void' => \App\Modules\Accounting\Actions\Invoice\VoidAction::class,
     'invoice.duplicate' => \App\Modules\Accounting\Actions\Invoice\DuplicateAction::class,
     'invoice.update' => \App\Modules\Accounting\Actions\Invoice\UpdateAction::class,
+    'invoice.set_unit' => \App\Modules\Accounting\Actions\Invoice\SetUnitAction::class,
     'invoice.delete' => \App\Modules\Accounting\Actions\Invoice\DeleteAction::class,
 
     // Payment

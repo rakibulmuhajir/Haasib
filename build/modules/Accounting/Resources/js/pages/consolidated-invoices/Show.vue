@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { Head, Link } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 import type { DocumentIssuer } from '@/components/LedgerDocument.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ const props = defineProps<{
     labels: Record<string, string>
     file_name: string
     issuer: DocumentIssuer
+    stamp?: DocumentStampData | null
   }
 }>()
 
@@ -93,6 +95,7 @@ const print = () => window.print()
       :doc-type="document.title"
       :doc-number="document.number"
       :issuer="document.issuer"
+      :stamp="document.stamp"
       :bill-to="billTo"
       bill-to-label="Bill to"
       :dates="[{ label: 'Date', value: document.date }]"

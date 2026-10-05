@@ -39,13 +39,13 @@ class LogoUploadService
      * this service wrote, that file is removed. An external URL someone
      * typed in before is left alone -- it is not ours to delete.
      */
-    public function store(UploadedFile $file, string $directory, ?string $replacing = null): string
+    public function store(UploadedFile $file, string $directory, ?string $replacing = null, string $field = 'logo'): string
     {
         $image = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
 
         if ($image === false) {
             throw ValidationException::withMessages([
-                'logo' => 'That file could not be read as an image. Upload a PNG, JPG or WebP.',
+                $field => 'That file could not be read as an image. Upload a PNG, JPG or WebP.',
             ]);
         }
 
@@ -67,7 +67,7 @@ class LogoUploadService
 
         $path = trim($directory, '/').'/'.Str::uuid().'.png';
         if (! Storage::disk('public')->put($path, $png)) {
-            throw ValidationException::withMessages(['logo' => 'The logo could not be saved. Please try again.']);
+            throw ValidationException::withMessages([$field => 'The image could not be saved. Please try again.']);
         }
 
         $this->deleteIfOurs($replacing);

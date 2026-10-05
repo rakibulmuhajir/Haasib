@@ -9,6 +9,8 @@
 import { computed, ref, watch } from 'vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import DocumentStamp from '@/components/DocumentStamp.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +47,8 @@ const props = defineProps<{
   filters: { kind: Kind; id: string | null; ids?: string[]; category_id?: string | null; from: string; to: string; reversed?: boolean }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[]; categories?: { id: string; name: string }[] }
   columns: { money_in: string; money_out: string; balance: string }
+  // Company stamp + signature; sent only for a customer statement when ticked.
+  stamp?: DocumentStampData | null
   statement: {
     rows: Row[]
     opening_balance: number
@@ -397,6 +401,8 @@ const statementTitle = computed(() => (props.statement.combined
           <MoneyText :amount="row.balance" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" />
         </template>
       </LedgerRegister>
+
+      <DocumentStamp :stamp="stamp" />
     </div>
   </PageShell>
 </template>

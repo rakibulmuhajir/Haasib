@@ -23,6 +23,7 @@ class Company extends Model
     protected $casts = [
         'settings' => 'array',
         'address' => 'array',
+        'stamp_documents' => 'array',
         'created_by_user_id' => 'string',
         'is_active' => 'boolean',
         'tax_registered' => 'boolean',
@@ -83,10 +84,37 @@ class Company extends Model
         'transit_gain_account_id',
         'settings',
         'logo_url',
+        'stamp_path',
+        'signature_path',
+        'signer_name',
+        'signer_title',
+        'stamp_documents',
         'created_by_user_id',
         'default_drawing_limit_period',
         'default_drawing_limit_amount',
     ];
+
+    /** Document types a stamp can appear on, and whether each is ticked by default. */
+    public const STAMP_DEFAULTS = [
+        'invoice' => true,
+        'consolidated_invoice' => true,
+        'statement' => true,
+        'payment_receipt' => true,
+        'credit_note' => true,
+        'bill_payment' => false,
+    ];
+
+    /** The stamp's tick boxes, with defaults filling anything never saved. @return array<string, bool> */
+    public function stampDocumentFlags(): array
+    {
+        $saved = is_array($this->stamp_documents) ? $this->stamp_documents : [];
+        $flags = [];
+        foreach (self::STAMP_DEFAULTS as $key => $default) {
+            $flags[$key] = array_key_exists($key, $saved) ? (bool) $saved[$key] : $default;
+        }
+
+        return $flags;
+    }
 
     protected function industry(): Attribute
     {

@@ -58,6 +58,11 @@
     .grand-label { text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #777; }
     .grand-amount { text-align: right; font-family: 'Zilla Slab', serif; font-size: 20px; font-weight: 700; border-top: 3px double #1c1c1c; padding-top: 6px; }
 
+    .stamp-block { width: 100%; margin-top: 28px; }
+    .stamp-cell { text-align: right; }
+    .stamp-cell img.stamp { max-width: 120px; max-height: 120px; opacity: 0.85; }
+    .stamp-cell img.signature { max-width: 160px; max-height: 60px; }
+    .stamp-line { display: inline-block; min-width: 180px; border-top: 1px solid #1c1c1c; padding-top: 4px; text-align: center; }
     .billed-by { margin-top: 44px; width: 240px; border-top: 1px solid #1c1c1c; padding-top: 5px; }
 </style>
 </head>
@@ -148,6 +153,16 @@
             @if (!empty($billedBy['phone']))<div class="party-line">{{ $billedBy['phone'] }}</div>@endif
             @if (!empty($billedBy['address']))<div class="party-line">{{ $billedBy['address'] }}</div>@endif
         </div>
+    @endif
+    @if (!empty($doc['stamp_data']) || !empty($doc['signature_data']))
+        <table class="stamp-block"><tr><td class="stamp-cell">
+            @if (!empty($doc['stamp_data']))<div><img class="stamp" src="{{ $doc['stamp_data'] }}" alt=""></div>@endif
+            @if (!empty($doc['signature_data']))<div><img class="signature" src="{{ $doc['signature_data'] }}" alt=""></div>@endif
+            <div class="stamp-line">
+                @if (!empty($doc['stamp']['signerName']))<div class="party-name">{{ $doc['stamp']['signerName'] }}</div>@endif
+                @if (!empty($doc['stamp']['signerTitle']))<div class="party-line">{{ $doc['stamp']['signerTitle'] }}</div>@endif
+            </div>
+        </td></tr></table>
     @endif
 </body>
 </html>

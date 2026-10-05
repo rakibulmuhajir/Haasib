@@ -12,6 +12,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -51,6 +52,11 @@ interface Company {
     country?: string;
     base_currency: string;
     logo_url?: string | null;
+    stamp_url?: string | null;
+    signature_url?: string | null;
+    signer_name?: string | null;
+    signer_title?: string | null;
+    stamp_documents?: Record<string, boolean>;
     address?: CompanyAddress | null;
     language?: string | null;
     locale?: string | null;
@@ -104,6 +110,18 @@ const companyCurrencies = props.companyCurrencies || [];
 const availableCurrencies = props.availableCurrencies || [];
 const users = (props.users || []) as CompanyUser[];
 const logoPreview = ref(company.value.logo_url || '');
+const stampPreview = ref(company.value.stamp_url || '');
+const signaturePreview = ref(company.value.signature_url || '');
+
+// Documents the stamp can appear on (final ones only; the server decides which are final).
+const stampDocumentOptions = [
+    { key: 'invoice', label: 'Invoices' },
+    { key: 'consolidated_invoice', label: 'Consolidated invoices' },
+    { key: 'statement', label: 'Customer statements' },
+    { key: 'payment_receipt', label: 'Payment receipts' },
+    { key: 'credit_note', label: 'Credit notes' },
+    { key: 'bill_payment', label: 'Bill payment slips' },
+];
 const expandedUserId = ref<string | null>(null);
 
 /**
@@ -236,6 +254,18 @@ const initialTab = (() => {
 const generalForm = useForm({
     name: company.value.name,
     logo: null as File | null,
+    stamp: null as File | null,
+    signature: null as File | null,
+    remove_stamp: false,
+    remove_signature: false,
+    signer_name: company.value.signer_name || '',
+    signer_title: company.value.signer_title || '',
+    stamp_documents: Object.fromEntries(
+        ['invoice', 'consolidated_invoice', 'statement', 'payment_receipt', 'credit_note', 'bill_payment'].map((key) => [
+            key,
+            company.value.stamp_documents?.[key] ?? key !== 'bill_payment',
+        ]),
+    ) as Record<string, boolean>,
     contact_email: company.value.settings?.contact_email || '',
     contact_phone: company.value.settings?.contact_phone || '',
     website: company.value.settings?.website || '',
@@ -309,6 +339,32 @@ const selectLogo = (event: Event) => {
     if (file) logoPreview.value = URL.createObjectURL(file);
 };
 
+const selectStamp = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0] || null;
+    generalForm.stamp = file;
+    generalForm.remove_stamp = false;
+    if (file) stampPreview.value = URL.createObjectURL(file);
+};
+
+const removeStamp = () => {
+    generalForm.stamp = null;
+    generalForm.remove_stamp = true;
+    stampPreview.value = '';
+};
+
+const selectSignature = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0] || null;
+    generalForm.signature = file;
+    generalForm.remove_signature = false;
+    if (file) signaturePreview.value = URL.createObjectURL(file);
+};
+
+const removeSignature = () => {
+    generalForm.signature = null;
+    generalForm.remove_signature = true;
+    signaturePreview.value = '';
+};
+
 const saveGeneralSettings = () =>
     generalForm
         .transform((data) => ({ ...data, _method: 'patch' }))
@@ -317,6 +373,10 @@ const saveGeneralSettings = () =>
             preserveScroll: true,
             onSuccess: () => {
                 generalForm.logo = null;
+                generalForm.stamp = null;
+                generalForm.signature = null;
+                generalForm.remove_stamp = false;
+                generalForm.remove_signature = false;
             },
         });
 
@@ -702,6 +762,62 @@ const createUser = () =>
                                         >
                                             {{ generalForm.errors.logo }}
                                         </p>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <Label for="company-stamp">Company stamp</Label>
+                                        <div class="flex items-center gap-4 rounded-lg bg-muted/40 p-3">
+                                            <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background ring-1 ring-border">
+                                                <img v-if="stampPreview" :src="stampPreview" alt="Company stamp preview" class="h-full w-full object-contain" />
+                                                <Building2 v-else class="h-6 w-6 text-muted-foreground" />
+                                            </div>
+                                            <div class="min-w-0 flex-1 space-y-2">
+                                                <Input id="company-stamp" type="file" accept="image/png,image/jpeg,image/webp" :disabled="!company.can_manage_company" @change="selectStamp" />
+                                                <Button v-if="stampPreview && company.can_manage_company" type="button" variant="outline" size="sm" @click="removeStamp">Remove</Button>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">PNG, JPG or WebP, up to 1 MB. Transparent PNG works best.</p>
+                                        <p v-if="generalForm.errors.stamp" class="text-xs text-destructive">{{ generalForm.errors.stamp }}</p>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <Label for="company-signature">Signature (optional)</Label>
+                                        <div class="flex items-center gap-4 rounded-lg bg-muted/40 p-3">
+                                            <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background ring-1 ring-border">
+                                                <img v-if="signaturePreview" :src="signaturePreview" alt="Signature preview" class="h-full w-full object-contain" />
+                                                <Building2 v-else class="h-6 w-6 text-muted-foreground" />
+                                            </div>
+                                            <div class="min-w-0 flex-1 space-y-2">
+                                                <Input id="company-signature" type="file" accept="image/png,image/jpeg,image/webp" :disabled="!company.can_manage_company" @change="selectSignature" />
+                                                <Button v-if="signaturePreview && company.can_manage_company" type="button" variant="outline" size="sm" @click="removeSignature">Remove</Button>
+                                            </div>
+                                        </div>
+                                        <p v-if="generalForm.errors.signature" class="text-xs text-destructive">{{ generalForm.errors.signature }}</p>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <Label for="signer-name">Signer name</Label>
+                                        <Input id="signer-name" v-model="generalForm.signer_name" :disabled="!company.can_manage_company" />
+                                        <p v-if="generalForm.errors.signer_name" class="text-xs text-destructive">{{ generalForm.errors.signer_name }}</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="signer-title">Signer title</Label>
+                                        <Input id="signer-title" v-model="generalForm.signer_title" :disabled="!company.can_manage_company" />
+                                        <p v-if="generalForm.errors.signer_title" class="text-xs text-destructive">{{ generalForm.errors.signer_title }}</p>
+                                    </div>
+
+                                    <div class="space-y-2 md:col-span-2">
+                                        <Label>Stamp on</Label>
+                                        <div class="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                                            <label v-for="option in stampDocumentOptions" :key="option.key" class="flex items-center gap-2 text-sm">
+                                                <Checkbox
+                                                    :checked="generalForm.stamp_documents[option.key]"
+                                                    :disabled="!company.can_manage_company"
+                                                    @update:checked="(value: boolean) => (generalForm.stamp_documents[option.key] = value)"
+                                                />
+                                                {{ option.label }}
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                                 <div

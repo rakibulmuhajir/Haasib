@@ -300,6 +300,8 @@ class ConsolidatedInvoiceService
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
+            // A saved consolidated invoice is final.
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice'),
             // The headings it was sent with; older documents saved none, so they get today's defaults.
             'file_name' => self::fileName(['title' => $doc->title, 'number' => $doc->number, 'date' => substr((string) $doc->created_at, 0, 10), 'customer_name' => $doc->customer_name]),
             'labels' => array_merge(self::labels($company), array_filter(
@@ -327,6 +329,15 @@ class ConsolidatedInvoiceService
         $document['logo_data'] = $path && is_file($path)
             ? 'data:'.(mime_content_type($path) ?: 'image/png').';base64,'.base64_encode((string) file_get_contents($path))
             : null;
+
+        // Same for the stamp and signature: embed as data.
+        foreach (['stampUrl' => 'stamp_data', 'signatureUrl' => 'signature_data'] as $key => $out) {
+            $url = (string) parse_url((string) ($document['stamp'][$key] ?? ''), PHP_URL_PATH);
+            $file = str_starts_with($url, '/storage/') ? storage_path('app/public/'.substr($url, strlen('/storage/'))) : null;
+            $document[$out] = $file && is_file($file)
+                ? 'data:'.(mime_content_type($file) ?: 'image/png').';base64,'.base64_encode((string) file_get_contents($file))
+                : null;
+        }
 
         $html = view()->file(base_path('modules/Accounting/Resources/views/consolidated-invoice.blade.php'), ['doc' => $document])->render();
 

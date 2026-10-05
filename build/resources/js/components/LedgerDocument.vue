@@ -34,6 +34,8 @@ import { computed } from 'vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import DocumentStamp from '@/components/DocumentStamp.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 
 export interface DocumentParty {
     name: string
@@ -112,6 +114,11 @@ const props = withDefaults(
          * Left unset, the Rate column keeps its original MoneyText rendering.
          */
         unitPriceFractionDigits?: number
+        /**
+         * Company stamp and signature, bottom right. The server sends it only
+         * for a final document of a ticked type; null/undefined renders nothing.
+         */
+        stamp?: DocumentStampData | null
     }>(),
     {
         docNumber: undefined,
@@ -128,6 +135,7 @@ const props = withDefaults(
         overprint: null,
         showQuantity: true,
         unitPriceFractionDigits: undefined,
+        stamp: null,
     },
 )
 
@@ -319,6 +327,8 @@ const partyLines = (party: DocumentParty) =>
                 </div>
             </div>
         </section>
+
+        <DocumentStamp :stamp="stamp" />
 
         <footer v-if="$slots.terms || $slots.footer" class="colophon">
             <div v-if="$slots.terms" class="terms">

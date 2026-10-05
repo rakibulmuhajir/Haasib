@@ -18,6 +18,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import RelatedActions from '@/components/RelatedActions.vue'
 import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 import type { DocumentIssuer, DocumentLine, DocumentTotal } from '@/components/LedgerDocument.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import MetaChip from '@/components/MetaChip.vue'
@@ -113,6 +114,8 @@ interface CompanyRef {
 const props = defineProps<{
   company: CompanyRef
   invoice: Invoice
+  // Company stamp + signature; the server sends it only for a final invoice when ticked.
+  stamp?: DocumentStampData | null
   canCorrect?: boolean
   correctionCustomers?: { id: string; name: string }[]
   corrections?: Correction[]
@@ -362,6 +365,7 @@ const voidInvoice = () => {
         :currency="invoice.currency"
         locale="en-PK"
         :overprint="overprint"
+        :stamp="stamp"
       >
         <template v-if="invoice.notes" #terms>
           <p dir="auto">{{ invoice.notes }}</p>

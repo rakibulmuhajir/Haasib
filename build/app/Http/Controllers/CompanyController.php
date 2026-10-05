@@ -243,6 +243,11 @@ class CompanyController extends Controller
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
                 'logo_url' => $company->logo_url,
+                'stamp_url' => $company->stamp_path ? '/storage/'.$company->stamp_path : null,
+                'signature_url' => $company->signature_path ? '/storage/'.$company->signature_path : null,
+                'signer_name' => $company->signer_name,
+                'signer_title' => $company->signer_title,
+                'stamp_documents' => $company->stampDocumentFlags(),
                 'address' => $company->address,
                 'language' => $company->language,
                 'locale' => $company->locale,
@@ -633,6 +638,29 @@ class CompanyController extends Controller
                 Storage::disk('public')->delete(str_replace('/storage/', '', $company->logo_url));
             }
             $directUpdates['logo_url'] = Storage::url($path);
+        }
+        // Stamp and signature: re-encoded to PNG (the PDF renderer cannot read WebP), old file removed.
+        $logos = app(\App\Services\LogoUploadService::class);
+        foreach (['stamp' => 'company-stamps', 'signature' => 'company-signatures'] as $field => $directory) {
+            $column = $field.'_path';
+            if ($request->hasFile($field)) {
+                $url = $logos->store($request->file($field), "{$directory}/{$company->id}", $company->{$column} ? '/storage/'.$company->{$column} : null, $field);
+                $directUpdates[$column] = substr($url, strlen('/storage/'));
+            } elseif (! empty($validated['remove_'.$field]) && $company->{$column}) {
+                $logos->deleteIfOurs('/storage/'.$company->{$column});
+                $directUpdates[$column] = null;
+            }
+        }
+        foreach (['signer_name', 'signer_title'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $directUpdates[$field] = filled($validated[$field]) ? trim($validated[$field]) : null;
+            }
+        }
+        if (array_key_exists('stamp_documents', $validated)) {
+            $directUpdates['stamp_documents'] = collect($validated['stamp_documents'])
+                ->only(array_keys(Company::STAMP_DEFAULTS))
+                ->map(fn ($v) => (bool) $v)
+                ->all();
         }
         if (isset($validated['language'])) {
             $directUpdates['language'] = $validated['language'];

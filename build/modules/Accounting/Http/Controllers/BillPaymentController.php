@@ -11,6 +11,7 @@ use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
+use App\Services\CompanyLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -256,6 +257,7 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'bill_payment'),
             'unappliedAmount' => round((float) $groupPayments->sum(fn ($p) => $p->unappliedAmount()), 2),
             'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,

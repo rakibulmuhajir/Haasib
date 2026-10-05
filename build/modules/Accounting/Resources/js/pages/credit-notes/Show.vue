@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 import type { DocumentIssuer, DocumentLine } from '@/components/LedgerDocument.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -63,6 +64,7 @@ interface CompanyRef {
 const props = defineProps<{
   company: CompanyRef
   credit_note: CreditNote
+  stamp?: DocumentStampData | null
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -171,6 +173,7 @@ const isEditable = computed(() => {
           :currency="credit_note.base_currency"
           locale="en-PK"
           :overprint="overprint"
+          :stamp="stamp"
           :show-quantity="false"
         >
           <template v-if="credit_note.terms" #terms>

@@ -29,6 +29,9 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `email_verified_at` timestamp nullable.  
   - `password` string not null.  
   - `system_role` string default `user`.  
+  - `stamp_path` string(500) nullable, `signature_path` string(500) nullable. Public-disk paths (`company-stamps/{company_id}/{uuid}.png`, `company-signatures/{company_id}/{uuid}.png`); served at `/storage/{path}`. Uploads are re-encoded to PNG.  
+  - `signer_name` string(120) nullable, `signer_title` string(120) nullable. Printed under the signature line.  
+  - `stamp_documents` jsonb nullable. Map of document type => bool for where the stamp appears: `invoice`, `consolidated_invoice`, `statement` (customer statements), `payment_receipt`, `credit_note`, `bill_payment`. Missing keys use defaults (all true except `bill_payment`). Never on bills.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
   - `settings` json nullable.  
@@ -77,6 +80,9 @@ Authentication does not require email verification. `email_verified_at` is retai
     - `sales_tax_payable_account_id`, `purchase_tax_receivable_account_id`,
     - `transit_loss_account_id`, `transit_gain_account_id`.
   - `logo_url` string(500) nullable. Stores either a legacy HTTPS logo URL or the public `/storage/company-logos/...` path produced by company settings image upload.
+  - `stamp_path` string(500) nullable, `signature_path` string(500) nullable. Public-disk paths (`company-stamps/{company_id}/{uuid}.png`, `company-signatures/{company_id}/{uuid}.png`); served at `/storage/{path}`. Uploads are re-encoded to PNG.  
+  - `signer_name` string(120) nullable, `signer_title` string(120) nullable. Printed under the signature line.  
+  - `stamp_documents` jsonb nullable. Map of document type => bool for where the stamp appears: `invoice`, `consolidated_invoice`, `statement` (customer statements), `payment_receipt`, `credit_note`, `bill_payment`. Missing keys use defaults (all true except `bill_payment`). Never on bills.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
   - `created_at`, `updated_at`.  
@@ -90,8 +96,8 @@ Authentication does not require email verification. `email_verified_at` is retai
 - Laravel model (canonical):  
   - `$connection = 'pgsql';`  
   - `$table = 'auth.companies';`  
-  - `$fillable = ['name', 'industry', 'country', 'country_id', 'address', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id', 'ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id', 'sales_tax_payable_account_id', 'purchase_tax_receivable_account_id', 'transit_loss_account_id', 'transit_gain_account_id'];`  
-  - `$casts = ['settings' => 'array', 'address' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean', 'ar_account_id' => 'string', 'ap_account_id' => 'string', 'income_account_id' => 'string', 'expense_account_id' => 'string', 'bank_account_id' => 'string', 'retained_earnings_account_id' => 'string', 'sales_tax_payable_account_id' => 'string', 'purchase_tax_receivable_account_id' => 'string', 'transit_loss_account_id' => 'string', 'transit_gain_account_id' => 'string'];`
+  - `$fillable = ['name', 'industry', 'country', 'country_id', 'address', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'stamp_path', 'signature_path', 'signer_name', 'signer_title', 'stamp_documents', 'created_by_user_id', 'ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id', 'sales_tax_payable_account_id', 'purchase_tax_receivable_account_id', 'transit_loss_account_id', 'transit_gain_account_id'];`  
+  - `$casts = ['settings' => 'array', 'address' => 'array', 'stamp_documents' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean', 'ar_account_id' => 'string', 'ap_account_id' => 'string', 'income_account_id' => 'string', 'expense_account_id' => 'string', 'bank_account_id' => 'string', 'retained_earnings_account_id' => 'string', 'sales_tax_payable_account_id' => 'string', 'purchase_tax_receivable_account_id' => 'string', 'transit_loss_account_id' => 'string', 'transit_gain_account_id' => 'string'];`
 - Relationships:  
   - belongsToMany User via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  
   - belongsTo User as creator via `created_by_user_id`.  
@@ -99,7 +105,8 @@ Authentication does not require email verification. `email_verified_at` is retai
 - Validation/DTO expectations:  
   - Required: `name` (<=255), `base_currency` (exactly 3 uppercase chars).  
   - Optional: `industry`, `country`, `language` (<=10), `locale` (<=10), `settings` (json), `address` (object; each key a string <=255).  
-  - Company settings accepts `logo` as PNG/JPEG/WebP, maximum 2 MB, stores it on the public disk, and writes its public path to `logo_url`.
+  - Company settings accepts `logo` as PNG/JPEG/WebP, maximum 2 MB, stores it on the public disk, and writes its public path to `logo_url`.  
+  - Company settings accepts `stamp` and `signature` as PNG/JPEG/WebP, maximum 1 MB each, plus `remove_stamp`, `remove_signature` (boolean), `signer_name`, `signer_title` (<=120) and `stamp_documents` (object of the keys above => boolean). `CompanyLetterhead::forCompany` returns `stampUrl`, `signatureUrl`, `signerName`, `signerTitle`, `stampDocuments`; `CompanyLetterhead::stampFor()` returns the block for one document only when it is final (not draft/void/cancelled/reversed), its type is ticked, and an image exists. Pages receive it as the `stamp` prop and render it through `DocumentStamp` / `LedgerDocument`.
   - Slug: server-generated; do not accept from UI/clients.  
   - Uniqueness: `slug` unique; (`name`, `country`) pair unique.  
   - Keep payload key as `base_currency` (not `currency`).

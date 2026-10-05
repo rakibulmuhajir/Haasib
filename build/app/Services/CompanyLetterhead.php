@@ -47,12 +47,56 @@ class CompanyLetterhead
                 ? $company->name
                 : null,
             'logoUrl' => $company->logo_url,
+            'stampUrl' => $this->publicUrl($company->stamp_path),
+            'signatureUrl' => $this->publicUrl($company->signature_path),
+            'signerName' => $company->signer_name,
+            'signerTitle' => $company->signer_title,
+            'stampDocuments' => $company->stampDocumentFlags(),
             'lines' => $this->addressLines($company->address),
             'email' => $settings['contact_email'] ?? null,
             'phone' => $settings['contact_phone'] ?? null,
             'taxId' => $registration?->registration_number,
             'taxIdLabel' => $this->taxLabel($registration?->registration_type),
         ];
+    }
+
+    /**
+     * The stamp block for ONE document, or null. Only a final document (not
+     * draft / void / cancelled / reversed) of a ticked type carries it, so the
+     * rule lives here and every page asks the same question. $docType is a key
+     * of Company::STAMP_DEFAULTS.
+     *
+     * @return array{stampUrl: ?string, signatureUrl: ?string, signerName: ?string, signerTitle: ?string}|null
+     */
+    public function stampFor(Company $company, string $docType, bool $final = true): ?array
+    {
+        if (! $final || ! ($company->stampDocumentFlags()[$docType] ?? false)) {
+            return null;
+        }
+
+        $stamp = $this->publicUrl($company->stamp_path);
+        $signature = $this->publicUrl($company->signature_path);
+        if (! $stamp && ! $signature) {
+            return null;
+        }
+
+        return [
+            'stampUrl' => $stamp,
+            'signatureUrl' => $signature,
+            'signerName' => $company->signer_name,
+            'signerTitle' => $company->signer_title,
+        ];
+    }
+
+    /** Statuses a document cannot be stamped in. */
+    public static function isFinalStatus(?string $status): bool
+    {
+        return ! in_array($status, ['draft', 'void', 'voided', 'cancelled', 'reversed'], true);
+    }
+
+    private function publicUrl(?string $path): ?string
+    {
+        return $path ? '/storage/'.ltrim($path, '/') : null;
     }
 
     /**

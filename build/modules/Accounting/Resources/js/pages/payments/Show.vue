@@ -20,6 +20,7 @@ import type {
     DocumentLine,
 } from '@/components/LedgerDocument.vue';
 import LedgerDocument from '@/components/LedgerDocument.vue';
+import type { DocumentStampData } from '@/components/DocumentStamp.vue';
 import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -95,6 +96,7 @@ interface CompanyRef {
 const props = defineProps<{
     company: CompanyRef;
     payment: Payment;
+    stamp?: DocumentStampData | null;
     openInvoices?: Array<{ id: string; invoice_number: string; invoice_date: string; balance: number | string }>;
     canApply?: boolean;
     canCorrect?: boolean;
@@ -297,6 +299,7 @@ const summaryItems = computed(() => [
                     :currency="payment.currency"
                     locale="en-PK"
                     :show-quantity="false"
+                    :stamp="stamp"
                 />
 
                 <Card v-if="payment.notes" variant="detail">

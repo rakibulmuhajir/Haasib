@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import DateTimeText from '@/components/DateTimeText.vue';
+import DocumentStamp from '@/components/DocumentStamp.vue';
+import type { DocumentStampData } from '@/components/DocumentStamp.vue';
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -55,6 +57,7 @@ interface PaymentRef {
 const props = defineProps<{
     company: CompanyRef;
     payment: PaymentRef;
+    stamp?: DocumentStampData | null;
     groupPayments?: PaymentRef[];
     journalTransactionId?: string | null;
     editLock?: string | null;
@@ -278,6 +281,8 @@ const groupedCashMovement = computed(
         <div class="mt-6">
             <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
         </div>
+
+        <DocumentStamp :stamp="stamp" />
 
         <CorrectRecordDialog
             v-if="canCorrect"

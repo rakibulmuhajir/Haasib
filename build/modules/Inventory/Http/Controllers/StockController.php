@@ -417,6 +417,9 @@ class StockController extends Controller
             ],
             'warehouses' => $warehouses,
             'items' => $items,
+            'expenseAccounts' => \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+                ->where('type', 'expense')->where('is_active', true)->orderBy('code')
+                ->get(['id', 'code', 'name']),
             // Opened from a product's page: that product, in the warehouse holding most of it.
             'preselect' => $this->adjustmentPreselect($company->id, (string) $request->query('item', ''), $items),
         ]);

@@ -5,6 +5,7 @@ import { Head, useForm } from '@inertiajs/vue3'
 import InputError from '@/components/InputError.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
+import Hint from '@/components/Hint.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,6 +42,7 @@ const props = defineProps<{
   company: CompanyRef
   warehouses: Warehouse[]
   items: Item[]
+  expenseAccounts: { id: string; code: string; name: string }[]
   preselect?: { item_id: string; warehouse_id: string | null } | null
 }>()
 
@@ -58,6 +60,7 @@ const form = useForm({
   quantity: 0,
   unit_cost: '',
   reason: '',
+  expense_account_id: '',
   notes: '',
   movement_date: localToday(),
 })
@@ -87,12 +90,21 @@ const estimatedValue = computed(() => {
   return quantity * unitCost
 })
 
-const accountingHint = computed(() => {
-  if (adjustmentType.value === 'increase') {
-    return 'Accounts: Inventory increases; stock gain/adjustment income increases.'
-  }
+const increaseReasons = [
+  { value: 'already_had', label: 'Stock we already had', hint: 'Stock you owned but never recorded. Goes to opening balance, not income.' },
+  { value: 'gain', label: 'Stock gain', hint: 'Found or counted more than the books. Counts as income.' },
+]
+const decreaseReasons = [
+  { value: 'lost_damaged', label: 'Lost / damaged / expired', hint: 'Counts as a stock loss.' },
+  { value: 'own_use', label: 'Own use', hint: 'Used by the station. Goes to the expense account you pick.' },
+  { value: 'counted_less', label: 'Counted less than the books', hint: 'Counts as a stock loss.' },
+]
+const reasonOptions = computed(() => (adjustmentType.value === 'increase' ? increaseReasons : decreaseReasons))
 
-  return 'Accounts: Stock loss/adjustment expense increases; inventory decreases.'
+// A reason from the other direction no longer applies: clear it so a choice is forced.
+watch(adjustmentType, () => {
+  form.reason = ''
+  form.expense_account_id = ''
 })
 
 const submit = () => {
@@ -101,18 +113,10 @@ const submit = () => {
     ...data,
     quantity: qty,
     unit_cost: data.unit_cost === '' ? null : data.unit_cost,
+    expense_account_id: data.reason === 'own_use' ? data.expense_account_id : null,
   })).post(`/${props.company.slug}/stock/adjustment`)
 }
 
-const reasons = [
-  'Physical count adjustment',
-  'Damaged goods',
-  'Theft/loss',
-  'Found inventory',
-  'Correction after tank dip',
-  'Opening balance correction',
-  'Other',
-]
 </script>
 
 <template>
@@ -187,7 +191,6 @@ const reasons = [
                 </Label>
               </div>
             </RadioGroup>
-            <p class="text-sm text-muted-foreground">{{ accountingHint }}</p>
           </div>
 
           <!-- Quantity -->
@@ -238,7 +241,7 @@ const reasons = [
 
           <!-- Date -->
           <div class="space-y-2">
-            <Label for="movement_date">Date</Label>
+            <Label for="movement_date">{{ form.reason === 'already_had' ? 'As of' : 'Date' }}</Label>
             <Input
               id="movement_date"
               v-model="form.movement_date"
@@ -248,20 +251,40 @@ const reasons = [
             <InputError :message="form.errors.movement_date" />
           </div>
 
-          <!-- Reason -->
-          <div class="space-y-2">
-            <Label for="reason">Reason</Label>
-            <Select v-model="form.reason">
-              <SelectTrigger>
-                <SelectValue placeholder="Select reason" />
+          <!-- Why -->
+          <div class="space-y-3">
+            <Label>Why *</Label>
+            <RadioGroup v-model="form.reason" class="space-y-2">
+              <div v-for="r in reasonOptions" :key="r.value" class="flex items-center space-x-2">
+                <RadioGroupItem :value="r.value" :id="`reason-${r.value}`" />
+                <Label :for="`reason-${r.value}`" class="cursor-pointer">
+                  <Hint>
+                    {{ r.label }}
+                    <template #content>{{ r.hint }}</template>
+                  </Hint>
+                </Label>
+              </div>
+            </RadioGroup>
+            <p v-if="adjustmentType === 'increase'" class="text-sm text-muted-foreground">
+              Received without a bill? Enter it under
+              <a :href="`/${company.slug}/bills/create`" class="underline">Purchases, Bills</a>.
+            </p>
+            <InputError :message="form.errors.reason" />
+          </div>
+
+          <div v-if="form.reason === 'own_use'" class="space-y-2">
+            <Label for="expense_account">Expense account *</Label>
+            <Select v-model="form.expense_account_id">
+              <SelectTrigger id="expense_account" :class="{ 'border-destructive': form.errors.expense_account_id }">
+                <SelectValue placeholder="Select account" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="reason in reasons" :key="reason" :value="reason">
-                  {{ reason }}
+                <SelectItem v-for="a in expenseAccounts" :key="a.id" :value="a.id">
+                  {{ a.code }} - {{ a.name }}
                 </SelectItem>
               </SelectContent>
             </Select>
-            <InputError :message="form.errors.reason" />
+            <InputError :message="form.errors.expense_account_id" />
           </div>
 
           <!-- Notes -->

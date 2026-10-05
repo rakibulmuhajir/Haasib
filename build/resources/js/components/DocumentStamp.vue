@@ -31,7 +31,8 @@ defineProps<{ stamp?: DocumentStampData | null }>()
 
 <style scoped>
 .doc-stamp {
-    display: flex;
+    /* Print only: the stamp is for documents that are sent, not the screen. */
+    display: none;
     justify-content: flex-end;
     margin-top: 32px;
     /* A page break through the stamp splits it from the signature line. */
@@ -77,6 +78,10 @@ defineProps<{ stamp?: DocumentStampData | null }>()
 }
 
 @media print {
+    .doc-stamp {
+        display: flex;
+    }
+
     .doc-stamp__stamp,
     .doc-stamp__signature {
         print-color-adjust: exact;

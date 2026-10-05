@@ -11,6 +11,8 @@ import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Save } from 'lucide-vue-next'
 
 export interface InvoiceRow {
@@ -62,9 +64,11 @@ const form = useForm({
   billed_by: { name: '', designation: '', phone: '', address: '' },
 })
 const picked = ref<Record<string, boolean>>({})
+const vehicle = ref('all')
 
 // Start from the customer and the company's signer, nothing ticked: the user picks what to bill.
 watch(() => [props.rows, props.billTo, props.billedBy], () => {
+  vehicle.value = 'all'
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, false]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
@@ -74,10 +78,21 @@ watch(() => [props.rows, props.billTo, props.billedBy], () => {
   form.billed_by = { name: props.billedBy?.name ?? '', designation: props.billedBy?.designation ?? '', phone: props.billedBy?.phone ?? '', address: props.billedBy?.address ?? '' }
 }, { immediate: true })
 
+// One vehicle's lines only (e.g. everything the generator took): choosing it lists and ticks
+// just those lines; 'none' is the lines that name no vehicle.
+const vehicles = computed(() => [...new Set(props.rows.map((r) => r.vehicle).filter((v): v is string => !!v))].sort())
+const hasUnnamed = computed(() => props.rows.some((r) => !r.vehicle))
+const shown = computed(() => (vehicle.value === 'all' ? props.rows : props.rows.filter((r) => (r.vehicle || 'none') === vehicle.value)))
+const pickVehicle = (value: string) => {
+  vehicle.value = value
+  const keys = new Set(shown.value.map((r) => r.key))
+  picked.value = Object.fromEntries(props.rows.map((r) => [r.key, value !== 'all' && keys.has(r.key)]))
+}
+
 const selected = computed(() => props.rows.filter((r) => picked.value[r.key]))
 const total = computed(() => selected.value.reduce((sum, r) => sum + r.amount, 0))
-const allPicked = computed(() => props.rows.length > 0 && props.rows.every((r) => picked.value[r.key]))
-const pickAll = (on: boolean) => props.rows.forEach((r) => { picked.value[r.key] = on })
+const allPicked = computed(() => shown.value.length > 0 && shown.value.every((r) => picked.value[r.key]))
+const pickAll = (on: boolean) => shown.value.forEach((r) => { picked.value[r.key] = on })
 
 // Heading order on the paper; the numeric ones sit on the right.
 const headingKeys = ['date', 'reference', 'physical', 'item', 'quantity', 'rate', 'amount']
@@ -126,6 +141,18 @@ const save = () => {
         </fieldset>
       </div>
 
+      <div v-if="vehicles.length" class="flex items-center gap-2">
+        <Label for="ci-vehicle" class="text-sm">Vehicle</Label>
+        <Select :model-value="vehicle" @update:model-value="(v) => pickVehicle(String(v))">
+          <SelectTrigger id="ci-vehicle" class="h-8 w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All vehicles</SelectItem>
+            <SelectItem v-for="v in vehicles" :key="v" :value="v">{{ v }}</SelectItem>
+            <SelectItem v-if="hasUnnamed" value="none">No vehicle</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div class="overflow-auto rounded-md border">
         <table class="w-full text-sm">
           <thead class="sticky top-0 z-10 bg-background text-left text-xs text-muted-foreground">
@@ -137,7 +164,7 @@ const save = () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.key" class="border-b last:border-0" :class="picked[row.key] ? '' : 'text-muted-foreground'">
+            <tr v-for="row in shown" :key="row.key" class="border-b last:border-0" :class="picked[row.key] ? '' : 'text-muted-foreground'">
               <td class="px-3 py-1.5"><Checkbox v-model="picked[row.key]" :aria-label="`Include ${row.invoice_number}`" /></td>
               <td class="whitespace-nowrap px-2 py-1.5">
                 <span class="tabular-nums">{{ row.date }}</span>

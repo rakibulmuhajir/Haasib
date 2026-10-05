@@ -110,7 +110,8 @@ class FuelSaleService
                 'customer_id' => $this->resolveCustomerId($company, $saleType, $data),
                 'invoice_number' => $this->generateInvoiceNumber($company->id),
                 'unit_id' => $unit?->id,
-                'reference' => $unit?->name,
+                // The slip number; the vehicle has its own field (unit_id).
+                'reference' => $data['reference'] ?? null,
                 'invoice_date' => $data['sale_date'] ?? now()->toDateString(),
                 'due_date' => $this->calculateDueDate($saleType, $data),
                 'subtotal' => $lineTotal,

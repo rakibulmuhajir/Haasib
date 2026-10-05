@@ -119,6 +119,8 @@ class DailyCloseReopenService
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
             $this->removeCostCorrections($companyId, $close->id);
 
+            // Read before the invoices go: a vehicle named on one after the close was posted.
+            $vehicles = $this->creditSaleVehicles($companyId, $metadata);
             $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
             $this->reverseDirectSales($companyId, $metadata, $keptDirectSales);
             $this->reversePaymentsReceived($companyId, $metadata);
@@ -144,6 +146,7 @@ class DailyCloseReopenService
             $formInput = $metadata['form_input'] ?? [];
             $formInput['date'] = $businessDate;
             $formInput['credit_sales'] = $this->markKeptCreditRows($formInput['credit_sales'] ?? [], $metadata, $keptInvoices);
+            $formInput['credit_sales'] = $this->carryVehicles($formInput['credit_sales'], $metadata, $vehicles);
             $formInput = $this->markKeptDocuments($formInput, $metadata, $keptBills, $keptDirectSales, $keptAdvances);
             app(DailyCloseReconciliationService::class)->park($companyId, $formInput, $user->id);
 
@@ -638,6 +641,48 @@ class DailyCloseReopenService
     }
 
     /** Point each draft credit row whose invoice was kept at that invoice (matched by customer, amount, reference). */
+    /** Each typed credit row's invoice => the vehicle (unit) it names now. */
+    private function creditSaleVehicles(string $companyId, array $metadata): array
+    {
+        $ids = collect($metadata['credit_sale_details'] ?? [])
+            ->filter(fn ($c) => ($c['source'] ?? 'manual') === 'manual' && ! empty($c['invoice_id']))
+            ->pluck('invoice_id')->all();
+
+        return $ids ? Invoice::where('company_id', $companyId)->whereIn('id', $ids)->whereNotNull('unit_id')->pluck('unit_id', 'id')->all() : [];
+    }
+
+    /**
+     * Put each invoice's vehicle back on the credit row it came from, matched as markKeptCreditRows
+     * matches (customer, amount, reference), so re-posting the day does not drop a vehicle that was
+     * named on the invoice after the close was posted. A row that already names one keeps it.
+     */
+    private function carryVehicles(array $rows, array $metadata, array $vehicles): array
+    {
+        $used = [];
+        foreach ($metadata['credit_sale_details'] ?? [] as $credit) {
+            $unitId = $vehicles[$credit['invoice_id'] ?? ''] ?? null;
+            if (! $unitId) {
+                continue;
+            }
+            foreach ($rows as $i => $row) {
+                if (isset($used[$i])) {
+                    continue;
+                }
+                if (($row['customer_id'] ?? null) === $credit['customer_id']
+                    && round((float) ($row['amount'] ?? 0), 2) === round((float) $credit['amount'], 2)
+                    && ($row['reference'] ?? null) === ($credit['reference'] ?? null)) {
+                    $used[$i] = true;
+                    if (empty($row['unit_id'])) {
+                        $rows[$i]['unit_id'] = $unitId;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
     private function markKeptCreditRows(array $rows, array $metadata, array $keptInvoices): array
     {
         foreach ($metadata['credit_sale_details'] ?? [] as $credit) {

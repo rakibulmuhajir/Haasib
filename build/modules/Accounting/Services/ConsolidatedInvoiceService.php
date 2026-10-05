@@ -52,12 +52,15 @@ class ConsolidatedInvoiceService
         // What each line sold, as the invoice line records it; blank when it does not.
         $itemName = DB::table('inv.items')->where('company_id', $companyId)->pluck('name', 'id');
 
+        // A customer with vehicles keeps the reference for the slip number, so only a customer
+        // with none still groups by it (the old free-hand way of naming a vehicle).
+        $hasUnits = \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $companyId)->where('customer_id', $customerId)->exists();
+
         $rows = [];
         foreach ($invoices as $invoice) {
             $reference = $invoice->reference;
-            // Which unit this sale was for, for grouping -- the unit's name when the invoice
-            // named one, else the free-hand reference (the old way of saying the same thing).
-            $unit = $invoice->unit?->name ?? $reference;
+            // Which unit this sale was for, for grouping: the vehicle the invoice names.
+            $unit = $invoice->unit?->name ?? ($hasUnits ? null : $reference);
             $last = $sent[$invoice->id] ?? null;
             foreach ($invoice->lineItems->sortBy('line_number') as $line) {
                 $rows[] = [

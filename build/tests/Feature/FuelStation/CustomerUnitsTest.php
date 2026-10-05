@@ -45,7 +45,8 @@ test('a fuel sale outside the close stores the picked unit on the invoice, and r
     $f = vehicleFuelFixture();
 
     $invoice = Invoice::where('company_id', $f['company']->id)->where('unit_id', $f['unitB']->id)->sole();
-    expect($invoice->reference)->toBe('TLF-866')
+    // The vehicle is its own field; the reference is left for the slip number.
+    expect($invoice->reference)->toBeNull()
         ->and(Invoice::where('company_id', $f['company']->id)->whereNull('unit_id')->count())->toBe(1);
 
     $other = Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'C-2', 'name' => 'Other', 'base_currency' => 'PKR', 'ar_account_id' => $f['accounts']['1100']->id, 'is_active' => true]);
@@ -160,4 +161,42 @@ test('the vehicle can be named on a posted close invoice afterwards, but only on
     // Money on it is still guarded.
     expect(fn () => \Illuminate\Support\Facades\DB::table('acct.invoices')->where('id', $invoice->id)->update(['subtotal' => 1]))
         ->toThrow(\Illuminate\Database\QueryException::class);
+});
+
+test('a fuel sale keeps the slip number as its reference, next to the vehicle', function () {
+    $f = vehicleFuelFixture();
+    app(FuelSaleService::class)->createSale([
+        'sale_type' => 'credit', 'customer_id' => $f['customer']->id, 'item_id' => $f['diesel']->id,
+        'quantity' => 70, 'sale_date' => '2026-09-18', 'unit_id' => $f['unitA']->id, 'reference' => '110',
+    ]);
+
+    $invoice = Invoice::where('company_id', $f['company']->id)->whereDate('invoice_date', '2026-09-18')->sole();
+    expect($invoice->reference)->toBe('110')->and($invoice->unit_id)->toBe($f['unitA']->id);
+});
+
+test('a consolidated line with no vehicle is not grouped by its slip number when the customer has vehicles', function () {
+    $f = vehicleFuelFixture();
+    app(FuelSaleService::class)->createSale([
+        'sale_type' => 'credit', 'customer_id' => $f['customer']->id, 'item_id' => $f['diesel']->id,
+        'quantity' => 5, 'sale_date' => '2026-09-18', 'reference' => '306',
+    ]);
+
+    $row = collect(app(ConsolidatedInvoiceService::class)->rowsFor($f['company']->id, $f['customer']->id, '2026-09-01', '2026-09-30'))
+        ->firstWhere('reference', '306');
+    expect($row['unit'])->toBeNull()->and($row['vehicle'])->toBeNull();
+});
+
+test('reopening a close keeps a vehicle named on its invoice after posting', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $unit = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'name' => 'GENERATOR']);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('invoice.set_unit', ['id' => $invoice->id, 'unit_id' => $unit->id], $f['user'], true));
+
+    $close = \App\Modules\Accounting\Models\Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->sole();
+    app(\App\Modules\FuelStation\Services\DailyCloseReopenService::class)->reopen($close, $f['user'], 'Split the credit sale by vehicle.');
+
+    $draft = json_decode(DB::table('fuel.daily_close_drafts')->where('company_id', $f['company']->id)->value('payload'), true);
+    expect($draft['credit_sales'][0]['unit_id'])->toBe($unit->id);
 });

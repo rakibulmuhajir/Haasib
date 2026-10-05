@@ -93,6 +93,8 @@ const saleType = ref<'retail' | 'bulk' | 'amanat' | 'investor' | 'credit' | 'par
 const selectedCustomer = ref<Customer | null>(null)
 // The picked customer's own unit (a vehicle), for a customer who keeps them.
 const selectedUnitId = ref<string>('')
+// The slip number off the paper receipt.
+const slipNo = ref('')
 const customerUnits = computed(() => selectedCustomer.value?.units ?? [])
 const selectedInvestor = ref(null)
 const discountPerLiter = ref<number | null>(null)
@@ -249,6 +251,7 @@ const resetForm = () => {
   saleType.value = 'retail'
   selectedCustomer.value = null
   selectedUnitId.value = ''
+  slipNo.value = ''
   discountPerLiter.value = null
   discountPercent.value = null
   discountTouched.value = false
@@ -303,6 +306,7 @@ const submitDirectSale = () => {
   router.post(`/${companySlug.value}/fuel/sales/direct`, {
     customer_id: selectedCustomer.value?.id ?? null,
     unit_id: selectedUnitId.value || null,
+    reference: slipNo.value.trim() || null,
     item_id: selectedFuelItem.value!.id,
     quantity: quantity.value!,
     unit_price: directRate.value!,
@@ -332,6 +336,7 @@ const submitSale = () => {
     sale_type: saleType.value,
     customer_id: selectedCustomer.value?.id || null,
     unit_id: selectedUnitId.value || null,
+    reference: slipNo.value.trim() || null,
     investor_id: selectedInvestor.value?.id || null,
     discount_per_liter: discountPerLiter.value || null,
     discount_percent: discountPercent.value || null,
@@ -540,6 +545,11 @@ rememberEntryDate(companySlug.value, saleDate)
                   </SelectContent>
                 </Select>
                 <InputError :message="formErrors.unit_id?.[0]" />
+              </div>
+              <div v-if="selectedCustomer" class="space-y-1.5">
+                <Label for="sale-slip">Slip no.</Label>
+                <Input id="sale-slip" v-model="slipNo" maxlength="100" placeholder="Optional" />
+                <InputError :message="formErrors.reference?.[0]" />
               </div>
             </div>
 

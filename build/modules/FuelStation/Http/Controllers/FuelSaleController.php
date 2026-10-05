@@ -154,6 +154,7 @@ class FuelSaleController extends Controller
                     'payment_terms' => $paidInCash ? 0 : null,
                     'is_direct_delivery' => true,
                     'unit_id' => ! empty($data['customer_id']) ? ($data['unit_id'] ?? null) : null,
+                    'reference' => $data['reference'] ?? null,
                     'line_items' => [[
                         'description' => rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
                         'quantity' => $data['quantity'],

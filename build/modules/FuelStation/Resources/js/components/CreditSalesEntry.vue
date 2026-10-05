@@ -59,8 +59,8 @@ const props = defineProps<{
     customerChoices?: Array<{ id: string; units?: Array<{ id: string; name: string }> }>
 }>()
 
-// This row's customer's active units, if they use them; empty for a customer with none, and
-// the reference stays free-text.
+// This row's customer's active units (vehicles), if they use them; empty for a customer with none.
+// The reference is the slip number either way.
 const unitsFor = (row: { customer_id: string }): Array<{ id: string; name: string }> =>
     props.customerChoices?.find((c) => c.id === row.customer_id)?.units ?? []
 
@@ -88,13 +88,6 @@ const discountAmount = (row: { amount: number; litres?: number; item_id?: string
 type Row = (typeof rows.value)[number]
 const rateFor = (row: Row): number => (row.item_id ? Number(props.rates?.[row.item_id]?.sale_rate ?? 0) : 0)
 const round2 = (n: number) => Math.round(n * 100) / 100
-
-// Picking a unit fills the reference with its name, only when the row has none yet -- typing
-// one by hand still wins.
-const onUnitChange = (row: Row) => {
-    const unit = unitsFor(row).find((u) => u.id === row.unit_id)
-    if (unit && !row.reference) row.reference = unit.name
-}
 
 // Litres drive the amount at the day's rate; typing an amount instead works back to litres,
 // so either figure off the slip can be entered. With no fuel (or no rate) the amount is manual.
@@ -234,8 +227,8 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
           </p>
         </div>
         <div v-if="unitsFor(row).length">
-          <Select v-model="row.unit_id" :disabled="disabled" @update:model-value="onUnitChange(row)">
-            <SelectTrigger class="h-9" :aria-label="`Unit, row ${index + 1}`"><SelectValue placeholder="Unit" /></SelectTrigger>
+          <Select v-model="row.unit_id" :disabled="disabled">
+            <SelectTrigger class="h-9" :aria-label="`Vehicle, row ${index + 1}`"><SelectValue placeholder="Vehicle" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="unit in unitsFor(row)" :key="unit.id" :value="unit.id">{{ unit.name }}</SelectItem>
             </SelectContent>
@@ -244,7 +237,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
         </div>
         <div v-else />
         <div>
-          <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Reference" :aria-label="`Reference, row ${index + 1}`" :disabled="disabled" />
+          <Input class="h-9" v-model="row.reference" maxlength="100" placeholder="Slip no." :aria-label="`Slip number, row ${index + 1}`" :disabled="disabled" />
           <InputError :message="errors[`credit_sales.${index}.reference`]" />
         </div>
         <Button type="button" variant="ghost" size="icon" class="h-9 w-9" aria-label="Remove sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>

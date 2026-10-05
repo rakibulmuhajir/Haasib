@@ -30,6 +30,7 @@ class StoreFuelSaleRequest extends BaseFormRequest
             'customer_id' => ['nullable', 'uuid', Rule::exists(Customer::class, 'id')],
             // One of the buyer's own units (a vehicle); FuelSaleService checks it is theirs.
             'unit_id' => ['nullable', 'uuid'],
+            'reference' => ['nullable', 'string', 'max:100'],
             'investor_id' => ['nullable', 'uuid', Rule::exists(Investor::class, 'id')],
             'description' => ['nullable', 'string', 'max:255'],
             'discount_per_liter' => ['nullable', 'numeric', 'min:0'],

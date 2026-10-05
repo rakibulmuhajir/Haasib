@@ -29,6 +29,7 @@ class StoreDirectFuelSaleRequest extends BaseFormRequest
             // Optional for a cash sale (walk-in customer); someone has to owe a credit sale.
             'customer_id' => ['nullable', 'required_if:paid_in_cash,false,0', 'uuid', Rule::exists(Customer::class, 'id')->where('company_id', $companyId)->where('is_active', true)],
             'unit_id' => ['nullable', 'uuid'],
+            'reference' => ['nullable', 'string', 'max:100'],
             'item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')->where('company_id', $companyId)],
             'quantity' => ['required', 'numeric', 'min:0.01'],
             'unit_price' => ['required', 'numeric', 'min:0.01'],

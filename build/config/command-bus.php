@@ -62,6 +62,7 @@ return [
     'invoice.duplicate' => \App\Modules\Accounting\Actions\Invoice\DuplicateAction::class,
     'invoice.update' => \App\Modules\Accounting\Actions\Invoice\UpdateAction::class,
     'invoice.set_unit' => \App\Modules\Accounting\Actions\Invoice\SetUnitAction::class,
+    'invoice.set_reference' => \App\Modules\Accounting\Actions\Invoice\SetReferenceAction::class,
     'invoice.delete' => \App\Modules\Accounting\Actions\Invoice\DeleteAction::class,
 
     // Payment

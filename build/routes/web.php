@@ -191,6 +191,7 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{company}/invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
         Route::post('/{company}/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
         Route::patch('/{company}/invoices/{invoice}/unit', [InvoiceController::class, 'setUnit'])->name('invoices.unit');
+        Route::patch('/{company}/invoices/{invoice}/reference', [InvoiceController::class, 'setReference'])->name('invoices.reference');
         Route::post('/{company}/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
         Route::post('/{company}/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
         Route::post('/{company}/invoices/{invoice}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'invoice'])->name('invoices.correct');

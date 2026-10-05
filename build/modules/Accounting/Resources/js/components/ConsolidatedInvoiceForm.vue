@@ -95,7 +95,7 @@ const allPicked = computed(() => shown.value.length > 0 && shown.value.every((r)
 const pickAll = (on: boolean) => shown.value.forEach((r) => { picked.value[r.key] = on })
 
 // Heading order on the paper; the numeric ones sit on the right.
-const headingKeys = ['date', 'reference', 'physical', 'item', 'quantity', 'rate', 'amount']
+const headingKeys = ['date', 'reference', 'item', 'quantity', 'rate', 'amount']
 const numeric = ['quantity', 'rate', 'amount']
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
@@ -175,7 +175,6 @@ const save = () => {
                 </div>
               </td>
               <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Reference for ${row.invoice_number}`" /></td>
-              <td class="px-2 py-1"><Input v-model="form.physical[row.key]" class="h-7 w-28 text-xs" placeholder="Optional" :aria-label="`Physical invoice number for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1">
                 <span v-if="row.item">{{ row.item }}</span>
                 <Input v-else v-model="form.fills[row.key].item" class="h-7 w-24 text-xs" :aria-label="`${form.headings.item} for ${row.invoice_number}`" />

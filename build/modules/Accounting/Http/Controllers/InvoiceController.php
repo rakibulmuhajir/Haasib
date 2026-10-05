@@ -401,4 +401,14 @@ class InvoiceController extends Controller
 
         return back()->with('success', 'Vehicle saved');
     }
+
+    public function setReference(\App\Modules\Accounting\Http\Requests\SetInvoiceReferenceRequest $request): \Illuminate\Http\RedirectResponse
+    {
+        app(\App\Services\CommandBus::class)->dispatch('invoice.set_reference', [
+            'id' => $request->route('invoice'),
+            'reference' => $request->validated('reference'),
+        ], $request->user());
+
+        return back()->with('success', 'Reference saved');
+    }
 }

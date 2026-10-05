@@ -258,3 +258,16 @@ test('a vehicle share must be one of that customer vehicles', function () {
         ],
     ], $f['user'], true)))->toThrow(\Illuminate\Validation\ValidationException::class);
 });
+
+test('the slip number can be written on a posted close invoice afterwards, its money still guarded', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('invoice.set_reference', ['id' => $invoice->id, 'reference' => ' 422 '], $f['user'], true));
+    expect($invoice->fresh()->reference)->toBe('422');
+
+    expect(fn () => DB::table('acct.invoices')->where('id', $invoice->id)->update(['subtotal' => 1]))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+});

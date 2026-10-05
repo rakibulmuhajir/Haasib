@@ -13,7 +13,7 @@
  * document rather than *on* it — the actions, the history, the currency
  * conversion — sits beside it in the rail.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import RelatedActions from '@/components/RelatedActions.vue'
@@ -30,6 +30,7 @@ import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue'
 import CorrectionHistory from '../../components/CorrectionHistory.vue'
 import type { Correction } from '../../components/CorrectionHistory.vue'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
@@ -124,6 +125,14 @@ const props = defineProps<{
   // The customer's vehicles: name or correct the one this invoice was for.
   customerUnits?: { id: string; name: string }[]
 }>()
+
+// The slip number off the paper receipt, saved on Enter or leaving the box.
+const slipNo = ref(props.invoice.reference ?? '')
+watch(() => props.invoice.reference, (value) => { slipNo.value = value ?? '' })
+const saveSlip = () => {
+  if ((slipNo.value.trim() || null) === (props.invoice.reference ?? null)) return
+  router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/reference`, { reference: slipNo.value.trim() || null }, { preserveScroll: true })
+}
 
 const setVehicle = (unitId: string) => {
   router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/unit`, { unit_id: unitId === 'none' ? null : unitId }, { preserveScroll: true })
@@ -308,6 +317,7 @@ const voidInvoice = () => {
           <SelectItem v-for="u in customerUnits" :key="u.id" :value="u.id">{{ u.name }}</SelectItem>
         </SelectContent>
       </Select>
+      <Input v-if="invoice.status !== 'void'" v-model="slipNo" class="h-9 w-28" maxlength="100" placeholder="Slip no." aria-label="Slip number" @keydown.enter="saveSlip" @blur="saveSlip" />
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back

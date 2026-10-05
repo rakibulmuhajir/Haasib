@@ -180,9 +180,10 @@ class CreateAction implements PaletteAction
                 // `description` is the old single-field name kept working for
                 // the command palette, which still sends it.
                 'notes' => $params['notes'] ?? null,
+                // The slip number; the vehicle has its own field (unit_id).
                 'reference' => isset($params['reference']) && trim((string) $params['reference']) !== ''
                     ? trim((string) $params['reference'])
-                    : ($customerUnit?->name ?? null),
+                    : null,
                 'unit_id' => $customerUnit?->id,
                 'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
                 'created_by_user_id' => Auth::id(),

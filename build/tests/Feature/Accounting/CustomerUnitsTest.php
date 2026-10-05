@@ -81,7 +81,7 @@ test('a unit can be deactivated without changing its name', function () {
     expect($unit->fresh()->is_active)->toBeFalse();
 });
 
-test('invoice.create with a unit_id sets it on the invoice and defaults the reference to the unit name', function () {
+test('invoice.create with a unit_id sets it on the invoice and leaves the reference for the slip number', function () {
     $f = customerUnitsFixture();
     $unit = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'name' => 'GAL-1804']);
 
@@ -93,7 +93,7 @@ test('invoice.create with a unit_id sets it on the invoice and defaults the refe
 
     $invoice = Invoice::findOrFail($result['data']['id']);
     expect($invoice->unit_id)->toBe($unit->id)
-        ->and($invoice->reference)->toBe('GAL-1804');
+        ->and($invoice->reference)->toBeNull();
 });
 
 test('a given reference is kept over the unit name when both are sent', function () {

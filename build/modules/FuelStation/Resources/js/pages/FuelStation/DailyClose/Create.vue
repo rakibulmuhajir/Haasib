@@ -520,14 +520,14 @@ const selectZeroValue = (event: FocusEvent) => {
 const ACCOUNTING_HINTS: Record<string, string> = {
     fuelSales:
         'Posting: Dr Cash/Bank/Clearing · Cr Fuel Sales. Cost also posts Dr Fuel COGS · Cr Fuel Inventory.',
-    partnerDeposit: 'Posting: Dr Cash on Hand · Cr Partner Deposits.',
+    partnerDeposit: "Posting: Dr Cash on Hand · Cr the partner's Capital account.",
     amanatDeposit:
         'Posting: Dr Cash on Hand · Cr Amanat Deposits, and the depositor balance is increased.',
     otherDeposit:
         'Posting: Dr Cash on Hand · Cr selected income/liability account.',
     nonCashReceipt: 'Posting: Dr destination bank/clearing · Cr Fuel Sales.',
     bankDeposit: 'Posting: Dr Bank · Cr Cash on Hand.',
-    partnerWithdrawal: 'Posting: Dr Partner Drawings · Cr Cash on Hand.',
+    partnerWithdrawal: "Posting: Dr the partner's Drawings account · Cr Cash on Hand.",
     employeeAdvance: 'Posting: Dr Employee Advances · Cr Cash on Hand.',
     payrollPayout: 'Posting: Dr Payroll Payable · Cr Cash on Hand.',
     billPayment:
@@ -1623,6 +1623,20 @@ const employeeMonthHint = (employeeId: string) => {
     // Daily wages, or no salary set: no limit to measure against, so just what was taken.
     if (e.pay_frequency === 'daily' || salary <= 0) return `Taken this month ${money(taken)}`;
     return `Salary ${money(salary)} · Taken ${money(taken)} · Left ${money(salary - taken)}`;
+};
+// Beside a partner withdrawal: what is left of their drawing limit this period once the rows typed
+// here are counted, or by how much it is passed. A notice only; the close still posts.
+const partnerLimitHint = (row: any) => {
+    const p = props.partners.find((x) => x.id === row.partner_id);
+    if (!p || p.drawing_limit_amount === null || p.drawing_limit_period === 'none') return null;
+    const typed = form.partner_withdrawals
+        .filter((r: any) => r.partner_id === p.id)
+        .reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+    const left = Number(p.drawing_limit_amount) - Number(p.current_period_withdrawn) - typed;
+    const money = (n: number) => formatMoneyText(n, currencyCode.value);
+    return left < 0
+        ? `Over ${p.name}'s ${p.drawing_limit_period} limit by ${money(-left)}`
+        : `${p.drawing_limit_period} limit left ${money(left)}`;
 };
 const holderBalance = (row: any) => {
     const holder = props.amanatHolders.find((h) => h.id === row.customer_id);
@@ -5515,6 +5529,7 @@ const cashFlowOut = computed(() => [
                             <CloseEntryList
                                 v-model="form.partner_withdrawals"
                                 :party="{ key: 'partner_id', nameKey: 'partner_name', label: 'Partner', options: partnerOptions }"
+                                :hint="partnerLimitHint"
                                 errors-prefix="partner_withdrawals"
                                 :errors="form.errors as Record<string, string>"
                                 :disabled="submitting || form.processing"

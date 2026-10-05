@@ -26,7 +26,7 @@ class StatementReportRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'kind' => ['required', Rule::in(['bank', 'customer', 'supplier', 'amanat', 'employee', 'expense'])],
+            'kind' => ['required', Rule::in(['bank', 'customer', 'supplier', 'amanat', 'employee', 'expense', 'partner'])],
             // One account or person, or 'all' for everyone of that kind.
             'id' => ['nullable', 'regex:/^(all|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/'],
             // Several people of the kind, comma-separated: a group, or any the user ticked.

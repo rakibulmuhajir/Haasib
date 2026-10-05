@@ -39,9 +39,17 @@ interface Partner {
   total_invested: number
   total_withdrawn: number
   net_capital: number
+  profit_shares: number
   remaining_drawing_limit: number | null
   current_period_withdrawn: number
   is_active: boolean
+}
+
+interface CashAccount {
+  id: string
+  code: string
+  name: string
+  subtype: string
 }
 
 interface Transaction {
@@ -58,6 +66,7 @@ interface Transaction {
 const props = defineProps<{
   partner: Partner
   transactions: Transaction[]
+  cashAccounts: CashAccount[]
   currency: string
 }>()
 
@@ -82,11 +91,14 @@ const investForm = useForm({
   transaction_date: localToday(),
   description: '',
   reference: '',
-  payment_method: 'cash',
+  account_id: '',
 })
+
+const defaultAccount = () => props.cashAccounts.find((a) => a.subtype === 'cash')?.id ?? props.cashAccounts[0]?.id ?? ''
 
 const openInvestDialog = () => {
   investForm.reset()
+  investForm.account_id = defaultAccount()
   investForm.transaction_date = localToday()
   investDialogOpen.value = true
 }
@@ -107,11 +119,12 @@ const withdrawForm = useForm({
   transaction_date: localToday(),
   description: '',
   reference: '',
-  payment_method: 'cash',
+  account_id: '',
 })
 
 const openWithdrawDialog = () => {
   withdrawForm.reset()
+  withdrawForm.account_id = defaultAccount()
   withdrawForm.transaction_date = localToday()
   withdrawDialogOpen.value = true
 }
@@ -145,6 +158,9 @@ const tableData = computed(() => {
   }))
 })
 
+const typeLabel = (type: string) =>
+  ({ investment: 'Investment', withdrawal: 'Withdrawal', profit_share: 'Profit share', adjustment: 'Adjustment' })[type] ?? type
+
 const goBack = () => {
   router.get(`/${companySlug.value}/partners`)
 }
@@ -171,7 +187,7 @@ const goBack = () => {
     </template>
 
     <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Net Capital</CardDescription>
@@ -183,7 +199,7 @@ const goBack = () => {
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Wallet class="h-4 w-4" />
-            <span>Current balance</span>
+            <span>Capital less drawings</span>
           </div>
         </CardContent>
       </Card>
@@ -197,6 +213,19 @@ const goBack = () => {
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <TrendingUp class="h-4 w-4 text-status-success" />
             <span>All time</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="border-border/80">
+        <CardHeader class="pb-2">
+          <CardDescription>Profit Shares</CardDescription>
+          <CardTitle class="text-2xl"><MoneyText :amount="partner.profit_shares" :currency="props.currency" /></CardTitle>
+        </CardHeader>
+        <CardContent class="pt-0">
+          <div class="flex items-center gap-2 text-sm text-text-secondary">
+            <Wallet class="h-4 w-4" />
+            <span>Added monthly</span>
           </div>
         </CardContent>
       </Card>
@@ -219,6 +248,7 @@ const goBack = () => {
           <CardDescription>Drawing Limit</CardDescription>
           <CardTitle class="text-2xl">
             <template v-if="partner.drawing_limit_period === 'none'">No Limit</template>
+            <template v-else-if="(partner.remaining_drawing_limit ?? 0) < 0"><span class="text-status-attention">Over by <MoneyText :amount="-(partner.remaining_drawing_limit ?? 0)" :currency="props.currency" /></span></template>
             <template v-else><MoneyText :amount="partner.remaining_drawing_limit ?? 0" :currency="props.currency" /></template>
           </CardTitle>
         </CardHeader>
@@ -280,7 +310,7 @@ const goBack = () => {
       <Card class="lg:col-span-2">
         <CardHeader>
           <CardTitle class="text-base">Transaction History</CardTitle>
-          <CardDescription>All investments and withdrawals for this partner.</CardDescription>
+          <CardDescription>Money in, profit shares and money out.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
           <LedgerRegister :data="tableData" :columns="columns">
@@ -292,18 +322,18 @@ const goBack = () => {
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.transaction_type === 'investment' ? 'bg-status-success/15 text-status-success' : 'bg-status-attention/15 text-status-attention'"
+                :class="row._raw.transaction_type === 'withdrawal' ? 'bg-status-attention/15 text-status-attention' : 'bg-status-success/15 text-status-success'"
               >
-                {{ row._raw.transaction_type === 'investment' ? 'Investment' : 'Withdrawal' }}
+                {{ typeLabel(row._raw.transaction_type) }}
               </Badge>
             </template>
 
             <template #cell-amount="{ row }">
-              <span :class="row._raw.transaction_type === 'investment' ? 'text-status-success' : 'text-status-attention'" class="font-medium">
+              <span :class="row._raw.transaction_type === 'withdrawal' || row._raw.amount < 0 ? 'text-status-attention' : 'text-status-success'" class="font-medium">
                 <MoneyText
-                  :amount="row._raw.amount"
+                  :amount="Math.abs(row._raw.amount)"
                   :currency="props.currency"
-                  :direction="row._raw.transaction_type === 'investment' ? 'inflow' : 'outflow'"
+                  :direction="row._raw.transaction_type === 'withdrawal' || row._raw.amount < 0 ? 'outflow' : 'inflow'"
                 />
               </span>
             </template>
@@ -356,17 +386,16 @@ const goBack = () => {
           </div>
 
           <div class="space-y-2">
-            <Label for="invest_payment_method">Payment Method</Label>
-            <Select v-model="investForm.payment_method">
-              <SelectTrigger>
-                <SelectValue />
+            <Label for="invest_account">Paid into <span class="text-destructive">*</span></Label>
+            <Select v-model="investForm.account_id">
+              <SelectTrigger id="invest_account" :class="{ 'border-destructive': investForm.errors.account_id }">
+                <SelectValue placeholder="Cash or bank account" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                <SelectItem value="cheque">Cheque</SelectItem>
+                <SelectItem v-for="a in cashAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="investForm.errors.account_id" class="text-sm text-destructive">{{ investForm.errors.account_id }}</p>
           </div>
 
           <div class="space-y-2">
@@ -432,17 +461,16 @@ const goBack = () => {
           </div>
 
           <div class="space-y-2">
-            <Label for="withdraw_payment_method">Payment Method</Label>
-            <Select v-model="withdrawForm.payment_method">
-              <SelectTrigger>
-                <SelectValue />
+            <Label for="withdraw_account">Paid from <span class="text-destructive">*</span></Label>
+            <Select v-model="withdrawForm.account_id">
+              <SelectTrigger id="withdraw_account" :class="{ 'border-destructive': withdrawForm.errors.account_id }">
+                <SelectValue placeholder="Cash or bank account" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                <SelectItem value="cheque">Cheque</SelectItem>
+                <SelectItem v-for="a in cashAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="withdrawForm.errors.account_id" class="text-sm text-destructive">{{ withdrawForm.errors.account_id }}</p>
           </div>
 
           <div class="space-y-2">

@@ -22,7 +22,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
 
-type Kind = 'bank' | 'customer' | 'supplier' | 'amanat' | 'employee' | 'expense'
+type Kind = 'bank' | 'customer' | 'supplier' | 'amanat' | 'employee' | 'expense' | 'partner'
 
 type Row = {
   date: string | null
@@ -42,7 +42,7 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; ids?: string[]; from: string; to: string; reversed?: boolean }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; groups?: { id: string; name: string; member_ids: string[] }[] }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -99,6 +99,9 @@ const currentOptions = computed<{ id: string; label: string; sublabel?: string }
   }
   if (kind.value === 'expense') {
     return (props.options.expense ?? []).map((a) => ({ id: a.id, label: a.name, sublabel: a.code }))
+  }
+  if (kind.value === 'partner') {
+    return (props.options.partner ?? []).map((p) => ({ id: p.id, label: p.name }))
   }
   if (kind.value === 'employee') {
     return (props.options.employee ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number ?? undefined }))
@@ -179,6 +182,7 @@ const partyLabel = computed(() => {
   if (kind.value === 'amanat') return 'Holder'
   if (kind.value === 'employee') return 'Employee'
   if (kind.value === 'expense') return 'Account'
+  if (kind.value === 'partner') return 'Partner'
   return 'Supplier'
 })
 
@@ -200,7 +204,7 @@ const openRow = (row: Row) => {
 const printStatement = () => window.print()
 
 
-const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', expense: 'All expense accounts', bank: '' })[kind.value])
+const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' })[kind.value])
 const pickedLabel = computed(() => {
   const group = (props.options.groups ?? []).find((g) => g.member_ids.length === picked.value.length && g.member_ids.every((id) => picked.value.includes(id)))
   return group ? `${group.name} · group` : `${picked.value.length} ${partyLabel.value.toLowerCase()}${picked.value.length === 1 ? '' : 's'}`
@@ -230,6 +234,7 @@ const statementTitle = computed(() => (props.statement.combined
               <TabsTrigger v-if="(options.amanat ?? []).length > 0" value="amanat">Amanat</TabsTrigger>
               <TabsTrigger v-if="(options.employee ?? []).length > 0" value="employee">Employee</TabsTrigger>
               <TabsTrigger v-if="(options.expense ?? []).length > 0" value="expense">Expense</TabsTrigger>
+              <TabsTrigger v-if="(options.partner ?? []).length > 0" value="partner">Partner</TabsTrigger>
               <TabsTrigger v-if="isFuelStation" value="stock">Stock</TabsTrigger>
             </TabsList>
           </Tabs>

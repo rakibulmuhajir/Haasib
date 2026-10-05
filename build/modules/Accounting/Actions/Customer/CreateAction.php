@@ -39,6 +39,7 @@ class CreateAction implements PaletteAction
             'shipping_address.zip' => 'nullable|string|max:20',
             'shipping_address.country' => 'nullable|string|max:2',
             'logo_url' => 'nullable|string|max:500',
+            'category_id' => 'nullable|uuid',
         ];
     }
 
@@ -62,8 +63,14 @@ class CreateAction implements PaletteAction
             }
         }
 
+        $categoryId = $params['category_id'] ?? null;
+        if ($categoryId && ! \App\Modules\Accounting\Models\CustomerCategory::where('company_id', $company->id)->whereKey($categoryId)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['category_id' => 'Choose a category of this company.']);
+        }
+
         $customer = Customer::create([
             'company_id' => $company->id,
+            'category_id' => $categoryId,
             'customer_number' => $this->generateCustomerNumber($company->id),
             'name' => trim($params['name']),
             'customer_type' => $params['customer_type'] ?? Customer::TYPE_WALK_IN,

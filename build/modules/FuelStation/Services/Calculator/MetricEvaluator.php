@@ -8,7 +8,7 @@ namespace App\Modules\FuelStation\Services\Calculator;
  */
 abstract class MetricEvaluator
 {
-    public const COLLECTIONS = ['product', 'fuel', 'all_fuels', 'all_products', 'account', 'customer', 'channel', 'none'];
+    public const COLLECTIONS = ['product', 'fuel', 'all_fuels', 'all_products', 'account', 'customer', 'channel', 'category', 'customer_category', 'none'];
 
     /**
      * @param  array<int,string>  $collections  What it accepts; the first is the default shown in the builder.

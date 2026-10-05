@@ -4,6 +4,7 @@ namespace App\Modules\FuelStation\Services;
 
 use App\Models\Partner;
 use App\Models\PartnerTransaction;
+use App\Services\PartnerLedgerService;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
@@ -853,23 +854,21 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
             $openingCash = (float) $data['opening_cash'];
 
-            // Partner deposits (add to cash)
+            // Partner deposits (add to cash). Each lands in that partner's own Capital account
+            // (see PartnerLedgerService); the cash side stays in the close's journal.
+            $partnerLedger = app(PartnerLedgerService::class);
+            $partnerCapitalLines = [];
+            $partnerDrawingsLines = [];
             $partnerDepositsTotal = 0;
             if (!empty($data['partner_deposits'])) {
                 foreach ($data['partner_deposits'] as $deposit) {
+                    $partner = Partner::where('company_id', $companyId)->findOrFail($deposit['partner_id']);
                     $partnerDepositsTotal += (float) $deposit['amount'];
 
-                    // Record partner investment
-                    $createdPartners[] = PartnerTransaction::create([
-                        'company_id' => $companyId,
-                        'partner_id' => $deposit['partner_id'],
-                        'transaction_date' => $date,
-                        'transaction_type' => 'investment',
-                        'amount' => $deposit['amount'],
-                        'description' => 'Daily deposit',
-                        'payment_method' => 'cash',
-                        'recorded_by_user_id' => $user->id,
-                    ]);
+                    $createdPartners[] = $partnerLedger->recordCloseMovement($partner, 'investment', (float) $deposit['amount'], $date, $user->id);
+                    $capitalId = $partnerLedger->accountsFor($partner)['capital']->id;
+                    $partnerCapitalLines[$capitalId]['amount'] = ($partnerCapitalLines[$capitalId]['amount'] ?? 0) + (float) $deposit['amount'];
+                    $partnerCapitalLines[$capitalId]['name'] = $partner->name;
                 }
             }
             $metadata['partner_deposits'] = $partnerDepositsTotal;
@@ -1260,35 +1259,30 @@ class DailyCloseService
             $metadata['bank_deposits'] = $bankDepositsTotal;
             $metadata['bank_deposits_by_account'] = $bankDepositsByAccount;
 
-            // Partner withdrawals
+            // Partner withdrawals. Each lands in that partner's own Drawings account. Going over
+            // the drawing limit is allowed: it is noted on the close (and flashed), never blocking.
             $partnerWithdrawalsTotal = 0;
+            $partnerLimitWarnings = [];
             if (!empty($data['partner_withdrawals'])) {
+                $withdrawnBy = [];
                 foreach ($data['partner_withdrawals'] as $withdrawal) {
                     $amount = (float) $withdrawal['amount'];
+                    $partner = Partner::where('company_id', $companyId)->findOrFail($withdrawal['partner_id']);
                     $partnerWithdrawalsTotal += $amount;
 
-                    // Record partner withdrawal
-                    $partner = Partner::find($withdrawal['partner_id']);
-                    if ($partner) {
-                        // Note: Drawing limit is informational only, not a blocker
-                        // The limit is shown in UI for awareness but doesn't prevent withdrawal
-
-                        $createdPartners[] = PartnerTransaction::create([
-                            'company_id' => $companyId,
-                            'partner_id' => $withdrawal['partner_id'],
-                            'transaction_date' => $date,
-                            'transaction_type' => 'withdrawal',
-                            'amount' => $amount,
-                            'description' => 'Daily withdrawal',
-                            'payment_method' => 'cash',
-                            'recorded_by_user_id' => $user->id,
-                        ]);
-
-                        // Update current period withdrawn
-                        $partner->increment('current_period_withdrawn', $amount);
+                    $createdPartners[] = $partnerLedger->recordCloseMovement($partner, 'withdrawal', $amount, $date, $user->id);
+                    $drawingsId = $partnerLedger->accountsFor($partner)['drawings']->id;
+                    $partnerDrawingsLines[$drawingsId]['amount'] = ($partnerDrawingsLines[$drawingsId]['amount'] ?? 0) + $amount;
+                    $partnerDrawingsLines[$drawingsId]['name'] = $partner->name;
+                    $withdrawnBy[$partner->id] = $partner;
+                }
+                foreach ($withdrawnBy as $partner) {
+                    if ($warning = $partnerLedger->limitWarning($partner->refresh(), $date)) {
+                        $partnerLimitWarnings[] = $warning;
                     }
                 }
             }
+            $metadata['partner_limit_warnings'] = $partnerLimitWarnings;
             $metadata['partner_withdrawals'] = $partnerWithdrawalsTotal;
 
             // Employee advances
@@ -1762,16 +1756,13 @@ class DailyCloseService
                 }
             }
 
-            // Partner deposits (capital contributions)
-            if ($partnerDepositsTotal > 0) {
-                if (!$accounts['partner_deposits']) {
-                    throw new \RuntimeException('Partner deposits account missing. Set up account 2210 (Investor Deposits) or update station settings.');
-                }
+            // Partner deposits: Cr each partner's own Capital account
+            foreach ($partnerCapitalLines as $accountId => $line) {
                 $entries[] = [
-                    'account_id' => $accounts['partner_deposits'],
+                    'account_id' => $accountId,
                     'type' => 'credit',
-                    'amount' => round($partnerDepositsTotal, 2),
-                    'description' => 'Partner deposits',
+                    'amount' => round($line['amount'], 2),
+                    'description' => "Partner deposit - {$line['name']}",
                 ];
             }
 
@@ -1797,13 +1788,13 @@ class DailyCloseService
                 ];
             }
 
-            // Partner withdrawals (drawings)
-            if ($partnerWithdrawalsTotal > 0 && $accounts['partner_drawings']) {
+            // Partner withdrawals: Dr each partner's own Drawings account
+            foreach ($partnerDrawingsLines as $accountId => $line) {
                 $entries[] = [
-                    'account_id' => $accounts['partner_drawings'],
+                    'account_id' => $accountId,
                     'type' => 'debit',
-                    'amount' => round($partnerWithdrawalsTotal, 2),
-                    'description' => 'Partner withdrawals',
+                    'amount' => round($line['amount'], 2),
+                    'description' => "Partner withdrawal - {$line['name']}",
                 ];
             }
 
@@ -2008,10 +1999,7 @@ class DailyCloseService
             foreach ($createdAdvances as $record) {
                 $record->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $accounts['employee_advances'])->value('id')]);
             }
-            foreach ($createdPartners as $record) {
-                $accountId = $record->transaction_type === 'investment' ? $accounts['partner_deposits'] : $accounts['partner_drawings'];
-                $record->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $accountId)->value('id')]);
-            }
+            $partnerLedger->linkClose($createdPartners, $transaction);
 
             foreach ($stockReconciliations as $reconciliation) {
                 StockMovement::create([
@@ -2134,6 +2122,7 @@ class DailyCloseService
                 'transaction_number' => $transactionNumber,
                 'transaction_id' => $transaction->id,
                 'metadata' => $metadata,
+                'warnings' => $partnerLimitWarnings,
             ];
         });
     }
@@ -2440,13 +2429,6 @@ class DailyCloseService
 
         $amanatDeposits = $byCode->get('2200')?->id;
 
-        $partnerDeposits = $byCode->get('2210')?->id;
-
-        // Partner drawings - from settings or fallback
-        $partnerDrawings = $stationSettings?->partner_drawings_account_id
-            ?? $byCode->get('3200')?->id
-            ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('type', 'equity')->orderByDesc('code')->value('id');
-
         // Employee advances - from settings or fallback
         $employeeAdvances = $stationSettings?->employee_advances_account_id
             ?? $byCode->get('1150')?->id
@@ -2491,8 +2473,6 @@ class DailyCloseService
             'fuel_inventory' => $fuelInventory,
             'cash_over_short' => $cashOverShort,
             'amanat_deposits' => $amanatDeposits,
-            'partner_deposits' => $partnerDeposits,
-            'partner_drawings' => $partnerDrawings,
             'employee_advances' => $employeeAdvances,
             'accounts_payable' => $accountsPayable,
             'fuel_shrinkage' => $fuelShrinkage,

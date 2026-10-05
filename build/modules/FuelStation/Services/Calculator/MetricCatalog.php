@@ -15,6 +15,7 @@ use App\Modules\FuelStation\Services\Calculator\Metrics\StatementLineMetric;
 use App\Modules\FuelStation\Services\Calculator\Metrics\StockMetric;
 use App\Modules\FuelStation\Services\Calculator\Metrics\TankGainLossMetric;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Every value the Calculator can read: a metric, the collection it is read for (a product, an
@@ -25,7 +26,7 @@ class MetricCatalog
 {
     private const UUID = '/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/';
 
-    private const NEEDS_ID = ['product', 'fuel', 'account', 'customer', 'channel'];
+    private const NEEDS_ID = ['product', 'fuel', 'account', 'customer', 'channel', 'category', 'customer_category'];
 
     /** @var array<string,MetricEvaluator> */
     private array $metrics = [];
@@ -162,6 +163,8 @@ class MetricCatalog
             'all_products' => 'All products',
             'account' => $c->account($id)?->name ?? 'Unknown account',
             'customer' => Customer::where('company_id', $c->companyId)->whereKey($id)->value('name') ?? 'Unknown customer',
+            'category' => DB::table('inv.item_categories')->where('company_id', $c->companyId)->where('id', $id)->value('name') ?? 'Unknown category',
+            'customer_category' => DB::table('acct.customer_categories')->where('company_id', $c->companyId)->where('id', $id)->value('name') ?? 'Unknown category',
             'channel' => collect($c->settings()?->payment_channels ?? [])->firstWhere('code', $id)['label'] ?? $id,
             default => null,
         };

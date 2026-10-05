@@ -23,19 +23,11 @@ interface Partner {
   profit_share_percentage: number
   drawing_limit_period: string
   drawing_limit_amount: number | null
-  drawing_account_id: string | null
   is_active: boolean
-}
-
-interface EquityAccount {
-  id: string
-  code: string
-  name: string
 }
 
 const props = defineProps<{
   partner: Partner
-  equityAccounts: EquityAccount[]
   currency: string
 }>()
 
@@ -57,7 +49,6 @@ const form = useForm({
   profit_share_percentage: props.partner.profit_share_percentage,
   drawing_limit_period: props.partner.drawing_limit_period,
   drawing_limit_amount: props.partner.drawing_limit_amount,
-  drawing_account_id: props.partner.drawing_account_id || '',
   is_active: props.partner.is_active,
 })
 

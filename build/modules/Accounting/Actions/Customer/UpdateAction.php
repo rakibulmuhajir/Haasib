@@ -39,6 +39,7 @@ class UpdateAction implements PaletteAction
             'shipping_address.country' => 'nullable|string|max:2',
             'logo_url' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
+            'category_id' => 'nullable|uuid',
         ];
     }
 
@@ -109,6 +110,18 @@ class UpdateAction implements PaletteAction
             }
             $updates['parent_customer_id'] = $parentId;
             $changes[] = 'group → '.($parentId ? $parent->name : 'none');
+        }
+
+        if (array_key_exists('category_id', $params) && ($params['category_id'] ?: null) !== $customer->category_id) {
+            $categoryId = $params['category_id'] ?: null;
+            $category = $categoryId
+                ? \App\Modules\Accounting\Models\CustomerCategory::where('company_id', $company->id)->find($categoryId)
+                : null;
+            if ($categoryId && ! $category) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['category_id' => 'Choose a category of this company.']);
+            }
+            $updates['category_id'] = $categoryId;
+            $changes[] = 'category → '.($category?->name ?? 'none');
         }
 
         if (isset($params['base_currency'])) {

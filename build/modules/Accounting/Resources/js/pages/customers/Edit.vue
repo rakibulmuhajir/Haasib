@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,7 @@ interface CustomerRef {
   phone: string | null
   billing_contact?: string | null
   parent_customer_id?: string | null
+  category_id?: string | null
   base_currency: string | null
   payment_terms: number | null
   tax_id: string | null
@@ -67,6 +68,7 @@ const props = defineProps<{
   currencies: CurrencyOption[]
   arAccounts?: AccountOption[]
   customerTypes: Record<string, string>
+  categories?: { id: string; name: string }[]
   groupOptions?: { id: string; name: string }[]
   hasMembers?: boolean
 }>()
@@ -82,6 +84,8 @@ const currencyOptions = computed(() =>
   props.currencies.length ? props.currencies : [{ currency_code: props.company.base_currency }]
 )
 
+const categoryChoices = computed(() => [{ value: '', label: 'None' }, ...(props.categories ?? []).map((c) => ({ value: c.id, label: c.name }))])
+
 const groupChoices = computed(() => [{ value: '', label: 'None' }, ...(props.groupOptions ?? []).map((c) => ({ value: c.id, label: c.name }))])
 
 const form = useForm({
@@ -91,6 +95,7 @@ const form = useForm({
   phone: props.customer.phone ?? '',
   billing_contact: props.customer.billing_contact ?? '',
   parent_customer_id: props.customer.parent_customer_id ?? '',
+  category_id: props.customer.category_id ?? '',
   base_currency: props.customer.base_currency ?? props.company.base_currency,
   payment_terms: props.customer.payment_terms ?? '',
   tax_id: props.customer.tax_id ?? '',
@@ -138,6 +143,7 @@ const handleSubmit = () => {
         phone: data.phone || null,
         billing_contact: data.billing_contact || null,
         parent_customer_id: data.parent_customer_id || null,
+        category_id: data.category_id || null,
         base_currency: data.base_currency || props.company.base_currency,
         payment_terms: data.payment_terms ? Number(data.payment_terms) : null,
         tax_id: data.tax_id || null,
@@ -180,6 +186,14 @@ const handleSubmit = () => {
             </SelectContent>
           </Select>
           <InputError :message="form.errors.customer_type" />
+        </div>
+<div>
+          <div class="flex items-center justify-between">
+            <Label>Category</Label>
+            <Link :href="`/${company.slug}/customer-categories`" class="text-xs text-primary hover:underline">Manage</Link>
+          </div>
+          <SearchableSelect v-model="form.category_id" :options="categoryChoices" :show-value="false" placeholder="None" />
+          <InputError :message="form.errors.category_id" />
         </div>
         <div>
           <Label for="email">Email</Label>

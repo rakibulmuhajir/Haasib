@@ -50,6 +50,12 @@ class UpdateCustomerRequest extends BaseFormRequest
             'shipping_address.zip' => ['nullable', 'string', 'max:20'],
             'shipping_address.country' => ['nullable', 'string', 'max:2'],
             'logo_url' => ['nullable', 'string', 'max:500'],
+            'category_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.customer_categories', 'id')->where(fn ($q) => $q
+                    ->where('company_id', app(\App\Services\CompanyContextService::class)->getCompanyId())),
+            ],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

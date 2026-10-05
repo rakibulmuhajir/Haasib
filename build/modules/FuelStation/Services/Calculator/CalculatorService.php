@@ -33,6 +33,10 @@ class CalculatorService
             'products' => DB::table('inv.items')->where('company_id', $companyId)->whereNull('deleted_at')
                 ->orderBy('name')->get(['id', 'name', 'fuel_category'])
                 ->map(fn ($i) => ['id' => $i->id, 'name' => $i->name, 'is_fuel' => (bool) $i->fuel_category])->all(),
+            'product_categories' => DB::table('inv.item_categories')->where('company_id', $companyId)->whereNull('deleted_at')
+                ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),
+            'customer_categories' => DB::table('acct.customer_categories')->where('company_id', $companyId)
+                ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),
             'expense_accounts' => $accounts(AccountMetric::EXPENSE_TYPES),
             'income_accounts' => $accounts(AccountMetric::INCOME_TYPES),
             'customers' => Customer::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name'])

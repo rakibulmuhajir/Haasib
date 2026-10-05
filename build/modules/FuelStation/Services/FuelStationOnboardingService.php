@@ -670,6 +670,8 @@ class FuelStationOnboardingService
         ];
 
         $productCatalog = app(ProductCatalogService::class);
+        $categoryId = app(StationProductCategories::class)->idForType($companyId, 'fuel', $company->created_by_user_id);
+        app(StationProductCategories::class)->ensureDefaults($companyId, $company->created_by_user_id);
         foreach ($fuelTypes as $fuel) {
             $normalizedCategory = $productCatalog->normalizeFuelCategory($fuel['fuel_category']);
             $existing = $productCatalog->findExisting($companyId, $normalizedCategory);
@@ -681,6 +683,7 @@ class FuelStationOnboardingService
                     'sku' => $fuel['sku'],
                     'type' => 'fuel',
                     'fuel_category' => $normalizedCategory,
+                    'category_id' => $categoryId,
                     'item_type' => 'product',
                     'is_active' => true,
                     'track_inventory' => true,

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import Hint from '@/components/Hint.vue'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -41,10 +43,23 @@ interface Stats {
   total_withdrawn: number
 }
 
+interface SharePreview {
+  month: string
+  net_profit: number
+  partners: { partner_id: string; name: string; percent: number; amount: number }[]
+  allocated: number
+  unallocated: number
+  shared_before: boolean
+  unchanged: boolean
+  locked: boolean
+}
+
 const props = defineProps<{
   partners: PartnerRow[]
-  stats: Stats
+  stats: Stats & { profit_share_total: number }
   currency: string
+  shareMonth: string
+  preview?: SharePreview
 }>()
 
 const { companySlug } = useCompanyRoute()
@@ -104,6 +119,54 @@ const goToShow = (row: any) => {
   router.get(`/${companySlug.value}/partners/${row.id}`)
 }
 
+// Share a month's profit: pick the month, check each partner's share, confirm.
+const shareOpen = ref(false)
+const month = ref(props.shareMonth)
+const loadingPreview = ref(false)
+const shareForm = useForm({ month: props.shareMonth })
+
+const loadPreview = () => {
+  loadingPreview.value = true
+  router.reload({
+    only: ['preview', 'shareMonth'],
+    data: { month: month.value },
+    onFinish: () => {
+      loadingPreview.value = false
+    },
+  })
+}
+
+const openShare = () => {
+  month.value = props.shareMonth
+  shareOpen.value = true
+  loadPreview()
+}
+
+const canShare = computed(
+  () =>
+    !!props.preview &&
+    props.preview.month === month.value &&
+    !loadingPreview.value &&
+    !props.preview.unchanged &&
+    props.preview.partners.length > 0 &&
+    !(props.preview.locked && props.preview.shared_before),
+)
+
+const submitShare = () => {
+  shareForm.month = month.value
+  shareForm.post(`/${companySlug.value}/partners/share-profit`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      shareOpen.value = false
+    },
+  })
+}
+
+const monthLabel = computed(() => {
+  const [y, m] = month.value.split('-').map(Number)
+  return new Date(y, (m ?? 1) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+})
+
 const goToCreate = () => {
   router.get(`/${companySlug.value}/partners/create`)
 }
@@ -119,6 +182,9 @@ const goToCreate = () => {
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <Button v-if="partners.length > 0" variant="outline" @click="openShare">
+        Share {{ new Date(Number(shareMonth.slice(0, 4)), Number(shareMonth.slice(5)) - 1, 1).toLocaleString('en-US', { month: 'long' }) }}'s profit
+      </Button>
       <Button @click="goToCreate">
         <Plus class="mr-2 h-4 w-4" />
         Add Partner
@@ -275,5 +341,44 @@ const goToCreate = () => {
         </LedgerRegister>
       </CardContent>
     </Card>
+    <Dialog v-model:open="shareOpen">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share {{ monthLabel }}'s profit</DialogTitle>
+          <DialogDescription>Net profit by each partner's share.</DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <Label for="share_month">Month</Label>
+            <Input id="share_month" v-model="month" type="month" @change="loadPreview" />
+          </div>
+
+          <div v-if="preview && preview.month === month" class="space-y-3">
+            <div class="flex items-baseline justify-between text-sm">
+              <span class="text-text-secondary">Net profit</span>
+              <MoneyText class="font-medium" :amount="preview.net_profit" :currency="props.currency" />
+            </div>
+            <div v-for="row in preview.partners" :key="row.partner_id" class="flex items-baseline justify-between text-sm">
+              <span>{{ row.name }} <span class="text-text-secondary">{{ row.percent }}%</span></span>
+              <MoneyText class="font-medium" :amount="row.amount" :currency="props.currency" />
+            </div>
+            <div v-if="Math.abs(preview.unallocated) >= 0.005" class="flex items-baseline justify-between text-sm text-text-secondary">
+              <span>Not shared</span>
+              <MoneyText :amount="preview.unallocated" :currency="props.currency" />
+            </div>
+            <Hint v-if="preview.unchanged">Already shared. Nothing to change.</Hint>
+            <Hint v-else-if="preview.shared_before && preview.locked">Month is locked. The share can't change.</Hint>
+            <Hint v-else-if="preview.shared_before">Replaces the earlier share.</Hint>
+          </div>
+          <p v-else class="text-sm text-text-secondary">Loading…</p>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" :disabled="shareForm.processing" @click="shareOpen = false">Cancel</Button>
+          <Button type="button" :disabled="!canShare || shareForm.processing" @click="submitShare">Share profit</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </PageShell>
 </template>

@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
+use App\Modules\FuelStation\Services\StationProductCategories;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\ItemCategory;
@@ -170,6 +171,8 @@ class SetupAction implements PaletteAction
                 if ($type === 'other' && $categoryName !== '') {
                     $categoryId = $this->resolveCategoryId($company->id, $categoryName, $userId, $categoriesCreated);
                 }
+                // Fuel and lubricant products are filed under their own category when none is given.
+                $categoryId ??= app(StationProductCategories::class)->idForType($company->id, $type, $userId);
 
                 $skuInput = trim((string) ($product['sku'] ?? ''));
                 $sku = $skuInput !== '' ? $skuInput : $productCatalog->generateSku($company->id, $type, $fuelCategory, $seenSkus);

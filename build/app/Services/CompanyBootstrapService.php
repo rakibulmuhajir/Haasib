@@ -101,6 +101,7 @@ class CompanyBootstrapService
         if ($industryCode === 'fuel_station') {
             try {
                 app(FuelStationModuleInstaller::class)->ensureMigrationsApplied();
+                app(\App\Modules\FuelStation\Services\StationProductCategories::class)->ensureDefaults($company->id, $userId);
             } catch (\Throwable $e) {
                 Log::error('Company bootstrap failed to prepare Fuel Station module', [
                     'company_id' => $company->id,

@@ -15,6 +15,11 @@ return [
     'company.delete' => \App\Modules\Accounting\Actions\Company\DeleteAction::class,
     'company.modules.update' => \App\Actions\Company\UpdateModulesAction::class,
 
+    // Partners
+    'partner.invest' => \App\Actions\Partner\InvestAction::class,
+    'partner.withdraw' => \App\Actions\Partner\WithdrawAction::class,
+    'partner.share_profit' => \App\Actions\Partner\ShareProfitAction::class,
+
     // Inventory
     'item_price.save' => \App\Modules\Inventory\Actions\SaveItemPriceAction::class,
     'item_price.delete' => \App\Modules\Inventory\Actions\DeleteItemPriceAction::class,
@@ -44,6 +49,9 @@ return [
     'customer.update' => \App\Modules\Accounting\Actions\Customer\UpdateAction::class,
     'customer.delete' => \App\Modules\Accounting\Actions\Customer\DeleteAction::class,
     'customer.restore' => \App\Modules\Accounting\Actions\Customer\RestoreAction::class,
+    'customer_category.create' => \App\Modules\Accounting\Actions\CustomerCategory\CreateAction::class,
+    'customer_category.update' => \App\Modules\Accounting\Actions\CustomerCategory\UpdateAction::class,
+    'customer_category.delete' => \App\Modules\Accounting\Actions\CustomerCategory\DeleteAction::class,
 
     // Invoice
     'invoice.create' => \App\Modules\Accounting\Actions\Invoice\CreateAction::class,

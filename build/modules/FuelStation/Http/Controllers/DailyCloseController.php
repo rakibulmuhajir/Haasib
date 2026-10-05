@@ -278,23 +278,31 @@ class DailyCloseController extends Controller
             ]);
     }
 
-    private function getPartnersForDailyClose(string $companyId)
+    private function getPartnersForDailyClose(string $companyId, string $date)
     {
+        // "Withdrawn this period" is the partner's withdrawals in the close date's month (or year),
+        // so the close can show how much of the limit is left before the rows typed here.
         return Partner::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn', 'total_invested', 'total_withdrawn'])
-            ->map(fn (Partner $partner) => [
-                'id' => $partner->id,
-                'name' => $partner->name,
-                'drawing_limit_period' => $partner->drawing_limit_period,
-                'drawing_limit_amount' => $partner->drawing_limit_amount !== null ? (float) $partner->drawing_limit_amount : null,
-                'current_period_withdrawn' => (float) $partner->current_period_withdrawn,
-                'remaining_drawing_limit' => $partner->remaining_drawing_limit,
-                'total_invested' => (float) $partner->total_invested,
-                'total_withdrawn' => (float) $partner->total_withdrawn,
-                'net_capital' => $partner->net_capital,
-            ]);
+            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn', 'total_invested', 'total_withdrawn', 'capital_account_id', 'drawing_account_id'])
+            ->map(function (Partner $partner) use ($date) {
+                $withdrawn = $partner->withdrawnThisPeriod($date);
+
+                return [
+                    'id' => $partner->id,
+                    'name' => $partner->name,
+                    'drawing_limit_period' => $partner->drawing_limit_period,
+                    'drawing_limit_amount' => $partner->drawing_limit_amount !== null ? (float) $partner->drawing_limit_amount : null,
+                    'current_period_withdrawn' => $withdrawn,
+                    'remaining_drawing_limit' => $partner->drawing_limit_period === 'none' || $partner->drawing_limit_amount === null
+                        ? null
+                        : round((float) $partner->drawing_limit_amount - $withdrawn, 2),
+                    'total_invested' => (float) $partner->total_invested,
+                    'total_withdrawn' => (float) $partner->total_withdrawn,
+                    'net_capital' => $partner->net_capital,
+                ];
+            });
     }
 
     private function getAmanatHoldersForDailyClose(string $companyId)
@@ -716,7 +724,7 @@ class DailyCloseController extends Controller
         }
 
         // Get live people/balance lookups for daily close
-        $partners = $this->getPartnersForDailyClose($companyId);
+        $partners = $this->getPartnersForDailyClose($companyId, $date);
         $amanatHolders = $this->getAmanatHoldersForDailyClose($companyId);
         $investors = $this->getInvestorsForDailyClose($companyId);
 
@@ -942,9 +950,15 @@ class DailyCloseController extends Controller
             }
 
 
-            return redirect()
+            $redirect = redirect()
                 ->route('fuel.daily-close.index', ['company' => $company->slug])
                 ->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number'] . $payrollNote);
+            // Over a partner's drawing limit: posted anyway, with a notice.
+            if (! empty($result['warnings'])) {
+                $redirect->with('warning', implode('. ', $result['warnings']));
+            }
+
+            return $redirect;
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

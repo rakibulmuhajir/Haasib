@@ -173,6 +173,11 @@ Route::middleware(['auth'])->group(function () {
         // through - so registering PUT alone was what made every inline save return 405.
         Route::match(['put', 'patch'], '/{company}/customers/{customer}', [CustomerController::class, 'update'])->whereUuid('customer')->name('customers.update');
         Route::delete('/{company}/customers/{customer}', [CustomerController::class, 'destroy'])->whereUuid('customer')->name('customers.destroy');
+        // Customer categories: the owner's own groups of customers
+        Route::get('/{company}/customer-categories', [\App\Modules\Accounting\Http\Controllers\CustomerCategoryController::class, 'index'])->name('customer-categories.index');
+        Route::post('/{company}/customer-categories', [\App\Modules\Accounting\Http\Controllers\CustomerCategoryController::class, 'store'])->name('customer-categories.store');
+        Route::put('/{company}/customer-categories/{category}', [\App\Modules\Accounting\Http\Controllers\CustomerCategoryController::class, 'update'])->whereUuid('category')->name('customer-categories.update');
+        Route::delete('/{company}/customer-categories/{category}', [\App\Modules\Accounting\Http\Controllers\CustomerCategoryController::class, 'destroy'])->whereUuid('category')->name('customer-categories.destroy');
         Route::post('/{company}/customers/{customer}/units', [\App\Modules\Accounting\Http\Controllers\CustomerUnitController::class, 'store'])->whereUuid('customer')->name('customers.units.store');
         Route::patch('/{company}/customers/{customer}/units/{unit}', [\App\Modules\Accounting\Http\Controllers\CustomerUnitController::class, 'update'])->whereUuid('customer')->whereUuid('unit')->name('customers.units.update');
 
@@ -529,6 +534,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/partners', [PartnerController::class, 'index'])->name('partners.index');
         Route::get('/{company}/partners/create', [PartnerController::class, 'create'])->name('partners.create');
         Route::post('/{company}/partners', [PartnerController::class, 'store'])->name('partners.store');
+        Route::post('/{company}/partners/share-profit', [PartnerController::class, 'shareProfit'])->name('partners.share-profit');
         Route::get('/{company}/partners/{partner}', [PartnerController::class, 'show'])->whereUuid('partner')->name('partners.show');
         Route::get('/{company}/partners/{partner}/edit', [PartnerController::class, 'edit'])->whereUuid('partner')->name('partners.edit');
         Route::put('/{company}/partners/{partner}', [PartnerController::class, 'update'])->whereUuid('partner')->name('partners.update');

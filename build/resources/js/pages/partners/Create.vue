@@ -5,6 +5,7 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import Hint from '@/components/Hint.vue'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,14 +14,15 @@ import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Save, ArrowLeft } from 'lucide-vue-next'
 
-interface EquityAccount {
+interface CashAccount {
   id: string
   code: string
   name: string
+  subtype: string
 }
 
 const props = defineProps<{
-  equityAccounts: EquityAccount[]
+  cashAccounts: CashAccount[]
   currency: string
 }>()
 
@@ -41,8 +43,8 @@ const form = useForm({
   profit_share_percentage: 0,
   drawing_limit_period: 'none',
   drawing_limit_amount: null as number | null,
-  drawing_account_id: '',
   initial_investment: null as number | null,
+  account_id: '',
   is_active: true,
 })
 
@@ -189,8 +191,21 @@ const goBack = () => {
                   :class="{ 'border-destructive': form.errors.initial_investment }"
                 />
               </div>
-              <p class="text-sm text-muted-foreground">Optional: Record opening capital contribution.</p>
+              <Hint>Optional. Posts to their Capital account.</Hint>
               <p v-if="form.errors.initial_investment" class="text-sm text-destructive">{{ form.errors.initial_investment }}</p>
+            </div>
+
+            <div v-if="(form.initial_investment ?? 0) > 0" class="space-y-2">
+              <Label for="account_id">Paid into <span class="text-destructive">*</span></Label>
+              <Select v-model="form.account_id">
+                <SelectTrigger id="account_id" :class="{ 'border-destructive': form.errors.account_id }">
+                  <SelectValue placeholder="Cash or bank account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="a in cashAccounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="form.errors.account_id" class="text-sm text-destructive">{{ form.errors.account_id }}</p>
             </div>
           </div>
         </CardContent>

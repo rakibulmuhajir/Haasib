@@ -192,6 +192,7 @@ class CustomerController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'customerTypes' => Customer::TYPES,
+            'categories' => $this->categoryOptions($company->id),
         ]);
     }
 
@@ -378,11 +379,18 @@ class CustomerController extends Controller
             'currencies' => $currencies,
             'arAccounts' => $arAccounts,
             'customerTypes' => Customer::TYPES,
+            'categories' => $this->categoryOptions($company->id),
             // Groups it can join: customers not part of a group themselves. None when it has members.
             'groupOptions' => Customer::where('company_id', $company->id)->where('parent_customer_id', null)
                 ->where('id', '!=', $customer->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'hasMembers' => Customer::where('company_id', $company->id)->where('parent_customer_id', $customer->id)->exists(),
         ]);
+    }
+
+    private function categoryOptions(string $companyId): array
+    {
+        return \App\Modules\Accounting\Models\CustomerCategory::where('company_id', $companyId)
+            ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all();
     }
 
     public function update(UpdateCustomerRequest $request): RedirectResponse

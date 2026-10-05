@@ -34,7 +34,26 @@ class StockStatementReportController extends Controller
         $from = $startDate->toDateString();
         $to = $endDate->toDateString();
 
-        if ($itemId === 'all') {
+        // "All in {category}": every sellable item filed under the category.
+        $categories = \Illuminate\Support\Facades\DB::table('inv.item_categories as c')
+            ->where('c.company_id', $company->id)->whereNull('c.deleted_at')
+            ->whereExists(fn ($q) => $q->selectRaw('1')->from('inv.items as i')->whereColumn('i.category_id', 'c.id')
+                ->where('i.is_sellable', true)->whereNull('i.deleted_at'))
+            ->orderBy('c.name')->get(['c.id', 'c.name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all();
+        $categoryId = (string) $request->query('category', '');
+        $categoryItems = [];
+        if ($categoryId !== '' && collect($categories)->contains('id', $categoryId)) {
+            $categoryItems = \Illuminate\Support\Facades\DB::table('inv.items')->where('company_id', $company->id)
+                ->where('category_id', $categoryId)->where('is_sellable', true)->whereNull('deleted_at')
+                ->pluck('id')->all();
+            $categoryItems = array_values(array_intersect($known, $categoryItems));
+        } else {
+            $categoryId = '';
+        }
+
+        if ($categoryId !== '') {
+            $report = $this->service->runMany($company->id, $categoryItems, $from, $to);
+        } elseif ($itemId === 'all') {
             $report = $this->service->runMany($company->id, $known, $from, $to);
         } elseif ($picked) {
             $report = $this->service->runMany($company->id, $picked, $from, $to);
@@ -53,7 +72,8 @@ class StockStatementReportController extends Controller
                 'base_currency' => $company->base_currency ?? 'PKR',
             ],
             'filters' => [
-                'item' => ! empty($report['combined']) ? $report['item']['id'] : $itemId,
+                'item' => $categoryId !== '' ? 'cat:'.$categoryId : (! empty($report['combined']) ? $report['item']['id'] : $itemId),
+                'category' => $categoryId,
                 'items' => $picked,
                 'start_date' => $startDate->toDateString(),
                 'end_date' => $endDate->toDateString(),
@@ -63,7 +83,8 @@ class StockStatementReportController extends Controller
             'includeOpeningDefault' => \Illuminate\Support\Facades\DB::table('fuel.station_settings')
                 ->where('company_id', $company->id)->value('month_end_stock_valuation') === 'next_month_purchase_rate',
             // One tank fuel: how its profit over the range is worked out (bottom of the page).
-            'profitWorking' => empty($report['combined']) && $itemId !== ''
+            'categories' => $categories,
+            'profitWorking' => empty($report['combined']) && $itemId !== '' && $categoryId === ''
                 ? $this->service->profitWorking($company->id, $itemId, $from, $to, $report)
                 : null,
             ...$report,

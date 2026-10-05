@@ -26,6 +26,7 @@ class PartnerTransaction extends Model
         'description',
         'reference',
         'journal_entry_id',
+        'gl_transaction_id',
         'payment_method',
         'bank_account_id',
         'recorded_by_user_id',
@@ -37,6 +38,7 @@ class PartnerTransaction extends Model
         'transaction_date' => 'date',
         'amount' => 'decimal:2',
         'journal_entry_id' => 'string',
+        'gl_transaction_id' => 'string',
         'bank_account_id' => 'string',
         'recorded_by_user_id' => 'string',
     ];

@@ -33,6 +33,7 @@ class ProductProfitabilityReportController extends Controller
             $endDate->toDateString(),
             (string) $request->query('group_by', 'day'),
             (string) $request->query('product', 'all'),
+            $request->query('category_id') ? (string) $request->query('category_id') : null,
         );
 
         return Inertia::render('FuelStation/Reports/ProductProfitability', [

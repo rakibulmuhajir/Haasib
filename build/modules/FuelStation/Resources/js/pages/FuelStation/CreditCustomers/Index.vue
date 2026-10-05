@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp, Plus, ScrollText } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
@@ -20,6 +21,7 @@ interface Customer {
   code: string | null
   phone: string | null
   email: string | null
+  category?: string | null
   credit_limit: number
   current_balance: number
   is_credit_blocked: boolean
@@ -37,6 +39,8 @@ const props = defineProps<{
   customers: Customer[]
   stats: Stats
   currency: string
+  categories?: Array<{ id: string; name: string }>
+  filters?: { category_id: string }
 }>()
 
 const { companySlug } = useCompanyRoute()
@@ -47,6 +51,13 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const search = ref('')
+const categoryFilter = ref(props.filters?.category_id || 'all')
+const applyCategory = (value: string) => {
+  categoryFilter.value = value
+  router.get(`/${companySlug.value}/fuel/credit-customers`, {
+    category_id: value === 'all' ? undefined : value,
+  }, { preserveScroll: true, preserveState: true })
+}
 
 const filteredCustomers = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -70,6 +81,7 @@ const tableData = computed(() => {
   return filteredCustomers.value.map((c) => ({
     id: c.id,
     name: c.name,
+    category: c.category,
     balance: c.current_balance,
     limit: c.credit_limit,
     status: c.is_credit_blocked ? 'blocked' : (c.credit_limit > 0 && c.current_balance > c.credit_limit ? 'over_limit' : 'active'),
@@ -165,9 +177,20 @@ const onCreated = (customer: { id: string }) => {
             <CardDescription>View and manage credit customers.</CardDescription>
           </div>
 
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Select v-if="categories?.length" :model-value="categoryFilter" @update:model-value="(v) => applyCategory(String(v))">
+            <SelectTrigger class="w-full sm:w-44">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
+            </SelectContent>
+          </Select>
           <div class="relative w-full sm:w-[280px]">
             <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <Input v-model="search" placeholder="Search customers..." class="pl-9" />
+          </div>
           </div>
         </div>
       </CardHeader>
@@ -191,6 +214,7 @@ const onCreated = (customer: { id: string }) => {
               <div class="flex items-center gap-2 font-medium">
                 {{ row._raw.name }}
                 <span v-if="row._raw.is_amanat_holder" class="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">Amanat</span>
+                <span v-if="row._raw.category" class="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">{{ row._raw.category }}</span>
               </div>
               <div v-if="row._raw.code || row._raw.phone" class="text-sm text-muted-foreground">
                 {{ row._raw.code || row._raw.phone }}

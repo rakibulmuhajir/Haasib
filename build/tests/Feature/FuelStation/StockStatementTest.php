@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
  * as sold too; the balance is the dip, and the variance is dip - (opening + bought - sold).
  * Metadata is written by hand so every figure can be checked against an input.
  */
-function statementFixture(): array
+function stockStatementFixture(): array
 {
     $user = User::factory()->create();
     $company = Company::create(['name' => 'Statement', 'slug' => 'stmt-'.str()->lower(str()->random(10)), 'owner_id' => $user->id, 'base_currency' => 'PKR']);
@@ -116,7 +116,7 @@ function statementBill(Company $company, string $itemId, string $tankId, string 
 
 test('monthly management profit reads the actual credit purchases and carries first-day opening stock', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $itemId, $tankId] = statementFixture();
+    [$company, $itemId, $tankId] = stockStatementFixture();
     DB::table('inv.stock_movements')->insert([
         'id' => (string) str()->uuid(), 'company_id' => $company->id, 'warehouse_id' => $tankId, 'item_id' => $itemId,
         'movement_date' => '2026-09-01', 'movement_type' => 'opening', 'quantity' => 100,
@@ -142,7 +142,7 @@ test('monthly management profit reads the actual credit purchases and carries fi
 
 test('opening comes from the close before the range; bought comes from the bills', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $itemId, $tankId] = statementFixture();
+    [$company, $itemId, $tankId] = stockStatementFixture();
 
     statementClose($company, $itemId, $tankId, '2026-08-31', 5000, 5000, 0, 400);
     statementClose($company, $itemId, $tankId, '2026-09-01', 5000, 4950, 1000, 400);   // 1000 bought into the tank
@@ -213,7 +213,7 @@ test('opening comes from the close before the range; bought comes from the bills
 
 test('with no earlier close the first row opens on the opening stock', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $itemId, $tankId] = statementFixture();
+    [$company, $itemId, $tankId] = stockStatementFixture();
 
     DB::table('inv.stock_movements')->insert([
         'company_id' => $company->id, 'warehouse_id' => $tankId, 'item_id' => $itemId,
@@ -230,7 +230,7 @@ test('with no earlier close the first row opens on the opening stock', function 
 
 test('with no earlier close and no opening stock, the opening is unknown', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $itemId, $tankId] = statementFixture();
+    [$company, $itemId, $tankId] = stockStatementFixture();
     statementClose($company, $itemId, $tankId, '2026-09-01', 5000, 5000, 1000, 400);
 
     $r = app(StockStatementService::class)->run($company->id, $itemId, '2026-09-01', '2026-09-01');
@@ -280,7 +280,7 @@ function statementPackagedBill(Company $company, string $oilId, string $tankId, 
 
 test('an item without a tank reads as a book balance, with rows only on active days', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $petrolId, $tankId] = statementFixture();
+    [$company, $petrolId, $tankId] = stockStatementFixture();
     $oilId = statementPackaged($company, $tankId);
 
     // Before the range: 10 bought and 4 sold -> opening 50 + 10 - 4 = 56.
@@ -328,7 +328,7 @@ test('an item without a tank reads as a book balance, with rows only on active d
 
 test('several products combine into one date-sorted statement with summed totals', function () {
     $this->travelTo(\Carbon\Carbon::parse('2026-10-05'));
-    [$company, $petrolId, $tankId] = statementFixture();
+    [$company, $petrolId, $tankId] = stockStatementFixture();
     $oilId = statementPackaged($company, $tankId);
 
     statementOtherSale(statementClose($company, $petrolId, $tankId, '2026-09-01', 5000, 5000, 1000, 400), $oilId, 5, 500);

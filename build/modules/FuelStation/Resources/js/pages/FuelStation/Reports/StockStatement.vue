@@ -81,7 +81,7 @@ interface Totals {
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
-  filters: { item: string; items?: string[]; start_date: string; end_date: string }
+  filters: { item: string; items?: string[]; category?: string; start_date: string; end_date: string }
   includeOpeningDefault?: boolean
   // One tank fuel: how its profit is worked out, from the books (StockStatementService::profitWorking).
   profitWorking?: {
@@ -100,6 +100,7 @@ const props = defineProps<{
   rows: Row[]
   totals: Totals
   products: Array<{ id: string; name: string; unit?: string | null; has_tank?: boolean }>
+  categories?: Array<{ id: string; name: string }>
 }>()
 
 const itemId = ref(props.filters.item)
@@ -166,7 +167,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const apply = () => {
   router.get(`/${props.company.slug}/fuel/reports/stock-statement`, {
-    item: itemId.value === 'some' ? undefined : itemId.value,
+    item: itemId.value === 'some' || itemId.value.startsWith('cat:') ? undefined : itemId.value,
+    category: itemId.value.startsWith('cat:') ? itemId.value.slice(4) : undefined,
     items: itemId.value === 'some' && picked.value.length ? picked.value.join(',') : undefined,
     start_date: startDate.value,
     end_date: endDate.value,
@@ -191,6 +193,7 @@ const apply = () => {
                 <SelectContent>
                   <SelectItem value="all">All products</SelectItem>
                   <SelectItem value="some">{{ itemId === 'some' && picked.length ? pickedLabel : 'Choose several…' }}</SelectItem>
+                  <SelectItem v-for="c in categories ?? []" :key="c.id" :value="`cat:${c.id}`">All in {{ c.name }}</SelectItem>
                   <SelectItem v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
                 </SelectContent>
               </Select>

@@ -26,6 +26,7 @@ interface Filters {
   end_date: string
   group_by: 'day' | 'week' | 'month'
   product: string
+  category_id?: string
 }
 
 interface Totals {
@@ -109,12 +110,15 @@ const props = defineProps<{
   periodRows: PeriodRow[]
   rateChangeRows: RateChangeRow[]
   productOptions: ProductOption[]
+  category?: { id: string; name: string } | null
+  categoryOptions?: { id: string; name: string }[]
 }>()
 
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
 const groupBy = ref(props.filters.group_by)
 const product = ref(props.filters.product)
+const categoryId = ref(props.filters.category_id || 'all')
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -135,6 +139,7 @@ const applyFilters = () => {
     end_date: endDate.value,
     group_by: groupBy.value,
     product: product.value,
+    category_id: categoryId.value === 'all' ? undefined : categoryId.value,
   }, {
     preserveScroll: true,
     preserveState: true,
@@ -186,6 +191,18 @@ const productColumns = [
   { key: 'gross_margin_percent', label: 'Margin %', kind: 'amount' as const },
   { key: 'stock_variance', label: 'Stock variance', kind: 'amount' as const },
 ]
+
+// Ruled-off sum of the listed products, only when a category is chosen.
+const categoryTotals = computed(() => props.category ? {
+  purchased_quantity: qty(props.totals.purchased_quantity),
+  quantity: qty(props.totals.quantity),
+  revenue: qty(props.totals.revenue),
+  cogs: qty(props.totals.cogs),
+  gross_profit: qty(props.totals.gross_profit),
+  book_profit: props.totals.book_profit != null ? qty(props.totals.book_profit) : '',
+  margin_per_unit: qty(props.totals.margin_per_unit, 2),
+  gross_margin_percent: percent(props.totals.gross_margin_percent),
+} : undefined)
 
 const trendColumns = [
   { key: 'label', label: 'Period', kind: 'text' as const },
@@ -273,6 +290,21 @@ const rateChangeColumns = [
               </Select>
             </div>
 
+            <div v-if="categoryOptions?.length" class="grid gap-1.5">
+              <Label>Category</Label>
+              <Select v-model="categoryId">
+                <SelectTrigger class="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem v-for="option in categoryOptions" :key="option.id" :value="option.id">
+                    {{ option.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button @click="applyFilters">Apply</Button>
           </div>
         </CardContent>
@@ -330,7 +362,7 @@ const rateChangeColumns = [
           <CardDescription>Sales, cost, margin, and stock variance by product.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <LedgerRegister :data="productRows" :columns="productColumns">
+          <LedgerRegister :data="productRows" :columns="productColumns" :totals="categoryTotals" :totals-label="category ? `${category.name} total` : 'Total'">
             <template #empty>No product sales or stock variance found for this range.</template>
 
             <template #cell-name="{ row }">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import InputError from '@/components/InputError.vue'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Save, Building2, Mail, Phone, ImageIcon } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
@@ -21,7 +23,10 @@ interface CompanyRef {
 const props = defineProps<{
   company: CompanyRef
   customerTypes: Record<string, string>
+  categories?: { id: string; name: string }[]
 }>()
+
+const categoryChoices = computed(() => [{ value: '', label: 'None' }, ...(props.categories ?? []).map((c) => ({ value: c.id, label: c.name }))])
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -32,6 +37,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const form = useForm({
   name: '',
   customer_type: 'walk_in',
+  category_id: '',
   email: '',
   phone: '',
   logo_url: '',
@@ -42,6 +48,7 @@ const handleSubmit = () => {
     .transform((data) => ({
       name: data.name,
       customer_type: data.customer_type,
+      category_id: data.category_id || null,
       email: data.email || null,
       phone: data.phone || null,
       logo_url: data.logo_url || null,
@@ -107,6 +114,15 @@ const handleSubmit = () => {
               </Select>
               <p class="text-xs text-text-secondary">An Umrah agent is a customer of this type with a travel profile attached.</p>
               <InputError :message="form.errors.customer_type" />
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <Label class="text-text-primary">Category</Label>
+                <Link :href="`/${company.slug}/customer-categories`" class="text-xs text-primary hover:underline">Manage</Link>
+              </div>
+              <SearchableSelect v-model="form.category_id" :options="categoryChoices" :show-value="false" placeholder="None" />
+              <InputError :message="form.errors.category_id" />
             </div>
 
             <div class="space-y-2">

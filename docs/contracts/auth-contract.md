@@ -157,6 +157,26 @@ Authentication does not require email verification. `email_verified_at` is retai
   - Company creation does not insert a row in this table.
   - Secondary rates are editable defaults only. Posted documents and journals retain immutable rate snapshots.
 
+### auth.partners / auth.partner_transactions (partner ledger)
+- `auth.partners` (company-scoped, soft deletes, RLS company isolation):
+  - `id` uuid PK; `company_id`; `name`; `phone`; `email`; `cnic`; `address`; `profit_share_percentage` decimal(5,2) 0-100 (share of the monthly profit); `drawing_limit_period` enum `monthly|yearly|none`; `drawing_limit_amount` decimal(15,2) nullable.
+  - `capital_account_id` uuid FK -> `acct.accounts` (nullOnDelete): the partner's own **Capital - name** account (equity, credit normal, code 3300-3499, not system). Created with the partner, or lazily by `PartnerLedgerService::accountsFor()`.
+  - `drawing_account_id` uuid FK -> `acct.accounts`: the partner's own **Drawings - name** account (equity contra, debit normal, `is_contra = true`, code 3500-3699). A shared equity account chosen on the old form is replaced by an own one on first use.
+  - `total_invested`, `total_withdrawn`: sums of the partner's `investment` / `withdrawal` rows (kept by the `auth.update_partner_totals` trigger and `Partner::refreshTotals()`; never incremented by hand). `current_period_withdrawn`, `period_reset_date`: legacy, no longer read.
+- `auth.partner_transactions`:
+  - `transaction_type` check: `investment | withdrawal | adjustment | profit_share` (`profit_share` amount is signed: negative for a loss; `reference` = `YYYY-MM`).
+  - `gl_transaction_id` uuid FK -> `acct.transactions` (nullOnDelete): the journal that carries the movement (the page's own journal, the Daily Close's journal, or the month's profit-share journal). `journal_entry_id` points at the partner's own Capital / Drawings line in it. `bank_account_id` = the cash/bank account used. `payment_method` is display only (`cash`, `bank_transfer`).
+- Balance = the books: **Capital - name** balance (credit - debit) minus **Drawings - name** balance (debit - credit). `Partner::net_capital`, the partner page and the Statements `partner` kind all show this figure. (Opening partner capital posted through Opening balances still sits on 2210 Investor Deposits and is not in it.)
+- Posting (one path, `App\Services\PartnerLedgerService`, commands `partner.invest` / `partner.withdraw`, FormRequest `PartnerMovementRequest`):
+  - invest: `Dr cash/bank, Cr Capital - name`. withdraw: `Dr Drawings - name, Cr cash/bank`. `transaction_type` `partner_investment` / `partner_withdrawal`, `reference_type = auth.partners`, `reference_id = partner id`. Dates in a locked day are refused (`DocumentDateLock`).
+  - Daily Close: partner deposits / withdrawals are posted in the close's own journal to each partner's Capital / Drawings account (one line per partner per side, cash side as the close posts it); the `partner_transactions` rows carry the close's `gl_transaction_id`. Edit day / reopen deletes them (`PartnerLedgerService::undoClose`), totals follow. The shared Investor Deposits / Partner Drawings accounts are no longer used for partner money.
+- Drawing limit (warn, never block): "withdrawn this period" = the partner's `withdrawal` rows with `transaction_date` in the calendar month (`monthly`, also the default) or year (`yearly`) of the date being posted. Over the limit the movement is recorded and a warning is returned (page: flash `warning`; close: `metadata.partner_limit_warnings` and the result `warnings`, a notice beside the withdrawal rows).
+- Monthly profit share (`PartnerProfitShareService::share(companyId, 'YYYY-MM')`, command `partners:share-profit {month} {--company=} {--dry-run}`, command `partner.share_profit`, button on the partners list):
+  - Net profit: the station profit statement (`ProfitStatementService`) for a fuel company, else the ledger P&L total. Each active partner gets `net x profit_share_percentage / 100`; the unshared remainder is reported, not posted.
+  - Journal dated the month's last day, `transaction_type = partner_profit_share`, `metadata = {month, net_profit, allocations}`: profit `Dr Retained Earnings (company setting, else 3100, else a retained_earnings account, else created), Cr each Capital - name`; loss the other way round. One `profit_share` partner transaction per partner.
+  - Idempotent per month: same figures post nothing; changed figures reverse the previous journal (`PostingService::reverseTransaction`, on its own date), delete its `profit_share` rows and post the new one. Once the month's daily closes are month-locked an existing share cannot be replaced.
+- Statements: `kind = partner` (`StatementReportController`, `PartnerStatementService`): opening, each movement on the two accounts (reversed pairs hidden unless `reversed=1`), closing = the page's net capital.
+
 ## Usage Patterns
 - Models should use `protected $connection = 'pgsql'` and table names with schema (`auth.users`, `auth.companies`, `auth.company_user`).
 - Frontend/Inertia forms must mirror payload keys exactly as above; avoid renaming (`base_currency` vs `currency`, `system_role` vs `role`).

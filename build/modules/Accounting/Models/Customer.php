@@ -43,6 +43,7 @@ class Customer extends Model
         'phone',
         'billing_contact',
         'parent_customer_id',
+        'category_id',
         'invoice_layout',
         'billing_address',
         'shipping_address',
@@ -69,6 +70,7 @@ class Customer extends Model
         'is_credit_blocked' => 'boolean',
         'payment_terms' => 'integer',
         'ar_account_id' => 'string',
+        'category_id' => 'string',
         'is_active' => 'boolean',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
@@ -76,6 +78,11 @@ class Customer extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    public function category(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(CustomerCategory::class, 'category_id');
+    }
 
     public function units()
     {

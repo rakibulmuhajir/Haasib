@@ -217,6 +217,7 @@ class HandleInertiaRequests extends Middleware
                 'uploadedLogoUrl' => fn () => $request->session()->get('uploaded_logo_url'),
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
                 'tank' => fn () => $request->session()->get('tank'),
                 'item' => fn () => $request->session()->get('item'),
                 'umrahImportedMutamers' => fn () => $request->session()->get('umrah_imported_mutamers'),

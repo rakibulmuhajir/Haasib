@@ -38,6 +38,8 @@ interface Options {
   income_accounts: Option[]
   customers: Option[]
   channels: Option[]
+  product_categories?: Option[]
+  customer_categories?: Option[]
 }
 interface Saved { id: string; name: string; formula: FormulaNode; is_shared: boolean; mine: boolean; owner: string | null }
 interface Part { label: string; value: number | null; unit: string | null; source_href: string | null; note: string | null; from: string; to: string }
@@ -88,6 +90,8 @@ const collectionName = (node: ValueNode): string => {
     case 'account': return nameOf([...props.options.expense_accounts, ...props.options.income_accounts], c.id)
     case 'customer': return nameOf(props.options.customers, c.id)
     case 'channel': return nameOf(props.options.channels, c.id)
+    case 'category': return nameOf(props.options.product_categories ?? [], c.id)
+    case 'customer_category': return nameOf(props.options.customer_categories ?? [], c.id)
     default: return ''
   }
 }
@@ -117,10 +121,13 @@ const editingKey = ref<number | null>(null)
 const draft = ref<ValueNode>({ type: 'value', metric: 'sales', collection: { type: 'all_fuels' }, when: { preset: 'this_month' } })
 
 const draftMetric = computed(() => metricOf(draft.value.metric))
-const collectionTypes = computed(() => (draftMetric.value?.collections ?? []).filter((t) => t !== 'fuel'))
+const collectionTypes = computed(() => (draftMetric.value?.collections ?? []).filter((t) => t !== 'fuel'
+  && !(t === 'category' && !props.options.product_categories?.length)
+  && !(t === 'customer_category' && !props.options.customer_categories?.length)))
 const collectionTypeLabel = (type: string): string => ({
   product: 'One product', all_fuels: 'All fuels', all_products: 'All products', account: 'One account',
   customer: 'One customer', channel: 'One channel',
+  category: 'Product category', customer_category: 'Customer category',
   none: draftMetric.value?.collections.includes('channel') ? 'All channels' : 'Whole station',
 } as Record<string, string>)[type] ?? type
 
@@ -131,17 +138,19 @@ const idOptions = computed(() => {
     case 'account': return draft.value.metric === 'income_account' ? o.income_accounts : o.expense_accounts
     case 'customer': return o.customers
     case 'channel': return o.channels
+    case 'category': return o.product_categories ?? []
+    case 'customer_category': return o.customer_categories ?? []
     default: return []
   }
 })
 const idChoices = computed(() => idOptions.value.map((o) => ({ value: o.id, label: o.name })))
-const needsId = computed(() => ['product', 'fuel', 'account', 'customer', 'channel'].includes(draft.value.collection.type))
+const needsId = computed(() => ['product', 'fuel', 'account', 'customer', 'channel', 'category', 'customer_category'].includes(draft.value.collection.type))
 const draftReady = computed(() => !!draftMetric.value && (!needsId.value || !!draft.value.collection.id))
 
 const defaultWhen = (metric: Metric | undefined): When => (metric?.takes_day ? { preset: 'today' } : { preset: 'this_month' })
 const pickCollectionType = (type: string) => {
   draft.value.collection = { type }
-  if (['product', 'fuel', 'account', 'customer', 'channel'].includes(type)) draft.value.collection.id = idOptions.value[0]?.id
+  if (['product', 'fuel', 'account', 'customer', 'channel', 'category', 'customer_category'].includes(type)) draft.value.collection.id = idOptions.value[0]?.id
 }
 const pickMetric = (key: string) => {
   const metric = metricOf(key)

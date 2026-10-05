@@ -617,6 +617,15 @@ Dr. Cash/Bank                     XXX
     Cr. Investor Deposits (2210)            XXX
 ```
 
+### Partner Deposit / Withdrawal (Daily Close)
+```
+Dr. Cash on Hand                  XXX
+    Cr. Capital - {partner} (equity)        XXX      (deposit)
+Dr. Drawings - {partner} (equity contra)  XXX
+    Cr. Cash on Hand                        XXX      (withdrawal)
+```
+Each partner has their own Capital and Drawings accounts (see auth-contract.md, partner ledger); the close posts one line per partner per side. Over the partner's drawing limit the close still posts, with `metadata.partner_limit_warnings`.
+
 ### Investor Fulfillment + Commission
 ```
 Dr. Investor Deposits (2210)      (sale amount)

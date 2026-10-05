@@ -15,7 +15,7 @@ class ProfitabilityMetric extends MetricEvaluator
     /** @param string $field The report column: revenue, quantity, cogs, gross_profit or book_profit. */
     public function __construct(string $key, string $label, string $unit, private readonly string $field)
     {
-        parent::__construct($key, $label, 'Sales and profit', $unit, ['product', 'all_fuels', 'all_products']);
+        parent::__construct($key, $label, 'Sales and profit', $unit, ['product', 'category', 'all_fuels', 'all_products']);
     }
 
     public function unitFor(CalculatorContext $c, array $collection): string
@@ -27,6 +27,7 @@ class ProfitabilityMetric extends MetricEvaluator
         return match ($collection['type']) {
             'all_fuels' => 'L',
             'all_products' => 'qty',
+            'category' => $c->quantityUnitOf($c->categoryItems((string) ($collection['id'] ?? ''))),
             default => $c->quantityUnit($c->item((string) ($collection['id'] ?? ''))),
         };
     }
@@ -58,6 +59,12 @@ class ProfitabilityMetric extends MetricEvaluator
                 : new MetricResult((float) $value, $unit, $href);
         }
 
+        if ($type === 'category') {
+            $id = (string) ($collection['id'] ?? '');
+            $keys = array_filter(array_map(fn ($i) => $c->productKey($i->id), $c->categoryItems($id)));
+            $rows = $rows->filter(fn (array $r) => in_array($r['key'], $keys, true));
+            $href = "/{$c->slug}/fuel/reports/product-profitability?start_date={$from}&end_date={$to}&category_id={$id}";
+        }
         if ($type === 'all_fuels') {
             $fuels = $c->fuelKeys();
             $rows = $rows->filter(fn (array $r) => isset($fuels[$r['key']]));

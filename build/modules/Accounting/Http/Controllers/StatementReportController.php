@@ -9,7 +9,9 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\AccountStatementService;
+use App\Models\Partner;
 use App\Modules\Accounting\Services\CustomerStatementService;
+use App\Modules\Accounting\Services\PartnerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
 use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +79,10 @@ class StatementReportController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        // Partners: each one's own Capital and Drawings accounts, statement by statement.
+        $partners = Partner::where('company_id', $company->id)->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($p) => ['id' => $p->id, 'name' => $p->name]);
+
         $vendors = Vendor::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -93,6 +99,7 @@ class StatementReportController extends Controller
                 'amanat' => $this->allParties($pick($holders), fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
                 'employee' => $this->allParties($pick($employees), fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
                 'expense' => $this->allParties($pick($expenseAccounts), fn ($pid) => $this->expenseStatement($expenseAccounts, $pid, $from, $to), $from, $to),
+                'partner' => $this->allParties($pick($partners), fn ($pid) => $this->partnerStatement($partners, $pid, $from, $to), $from, $to),
             };
             if ($ids) {
                 $resolvedId = 'some';
@@ -104,6 +111,7 @@ class StatementReportController extends Controller
                 'amanat' => $this->amanatStatement($holders, $id, $from, $to),
                 'employee' => $this->employeeStatement($employees, $id, $from, $to),
                 'expense' => $this->expenseStatement($expenseAccounts, $id, $from, $to),
+                'partner' => $this->partnerStatement($partners, $id, $from, $to),
                 default => $this->bankStatement($bankAccounts, $company->id, $id, $from, $to),
             };
         }
@@ -123,6 +131,7 @@ class StatementReportController extends Controller
                 'amanat' => $holders,
                 'employee' => $employees->values(),
                 'expense' => $expenseAccounts,
+                'partner' => $partners->values(),
                 // Customer groups: the group and its members, to pick in one go.
                 'groups' => Customer::where('company_id', $company->id)->whereNotNull('parent_customer_id')
                     ->where('is_active', true)->get(['id', 'parent_customer_id'])
@@ -188,6 +197,21 @@ class StatementReportController extends Controller
             $columns ?? ['money_in' => 'In', 'money_out' => 'Out', 'balance' => 'Balance'],
             'all',
         ];
+    }
+
+    /** One partner: opening, each movement on their Capital and Drawings accounts, closing. */
+    private function partnerStatement($partners, ?string $id, string $from, string $to): array
+    {
+        $columns = ['money_in' => 'Put in / profit', 'money_out' => 'Taken', 'balance' => 'Balance'];
+        $pick = $id ? $partners->firstWhere('id', $id) : null;
+        $pick ??= $partners->first();
+        $partner = $pick ? Partner::find($pick['id']) : null;
+
+        if (! $partner) {
+            return [['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null], $columns, null];
+        }
+
+        return [app(PartnerStatementService::class)->statement($partner, $from, $to, $this->showReversed), $columns, $partner->id];
     }
 
     /** One expense account's ledger: each entry to it by date, with the running total. */

@@ -857,14 +857,10 @@ class DailyCloseReopenService
 
     private function reversePartnerTransactions(string $companyId, string $closeId): void
     {
+        // Each partner's deposits and withdrawals the close entered, found by the close's journal;
+        // totals and the period's withdrawn figure follow because both are sums of these rows.
         $entryIds = JournalEntry::where('company_id', $companyId)->where('transaction_id', $closeId)->pluck('id');
-        foreach (PartnerTransaction::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $txn) {
-            if ($txn->transaction_type === 'withdrawal') {
-                $partner = Partner::find($txn->partner_id);
-                $partner?->decrement('current_period_withdrawn', (float) $txn->amount);
-            }
-            $txn->delete();
-        }
+        app(\App\Services\PartnerLedgerService::class)->undoClose($companyId, $closeId, $entryIds);
     }
 
     private function reverseSalaryAdvances(string $companyId, string $closeId, array &$warnings): void

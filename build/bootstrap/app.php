@@ -52,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\RecostFuelCloses::class,
         \App\Console\Commands\FuelMonthEndValuation::class,
         \App\Console\Commands\FuelLubricantCost::class,
+        \App\Console\Commands\SharePartnerProfit::class,
     ])
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, Request $request) {

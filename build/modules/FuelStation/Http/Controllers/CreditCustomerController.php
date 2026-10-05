@@ -23,9 +23,15 @@ class CreditCustomerController extends Controller
     /**
      * List credit customers (customers with credit accounts for fuel).
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        $categories = \App\Modules\Accounting\Models\CustomerCategory::where('company_id', $company->id)
+            ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all();
+        $categoryId = (string) $request->query('category_id', '');
+        if (! collect($categories)->contains('id', $categoryId)) {
+            $categoryId = '';
+        }
 
         $openBalances = \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)
             ->whereNotIn('status', ['void', 'draft'])
@@ -48,6 +54,8 @@ class CreditCustomerController extends Controller
 
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
+            ->when($categoryId !== '', fn ($q) => $q->where('category_id', $categoryId))
+            ->with('category:id,name')
             ->orderBy('name')
             ->get()
             ->map(fn($c) => [
@@ -56,6 +64,7 @@ class CreditCustomerController extends Controller
                 'code' => $c->customer_number,
                 'phone' => $c->phone,
                 'email' => $c->email,
+                'category' => $c->category?->name,
                 'credit_limit' => (float) ($c->credit_limit ?? 0),
                 'current_balance' => (float) ($openBalances[$c->id] ?? 0),
                 'is_credit_blocked' => (bool) $c->is_credit_blocked,
@@ -75,6 +84,8 @@ class CreditCustomerController extends Controller
             'customers' => $customers,
             'stats' => $stats,
             'currency' => $company->base_currency ?? 'PKR',
+            'categories' => $categories,
+            'filters' => ['category_id' => $categoryId],
         ]);
     }
 

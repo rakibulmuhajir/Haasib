@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Services;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemCategory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -12,6 +13,9 @@ class ProductProfitabilityReportService
 {
     /** @var array<string,array<string,mixed>> StockStatementService::run results of this run, by item id. */
     private array $statements = [];
+
+    /** @var array<int,string>|null Product keys of the category being reported, null for every product. */
+    private ?array $categoryKeys = null;
 
     /**
      * @return array{
@@ -23,11 +27,19 @@ class ProductProfitabilityReportService
      *   productOptions: array<int,array{key:string,name:string}>
      * }
      */
-    public function run(string $companyId, string $startDate, string $endDate, string $groupBy = 'day', string $product = 'all'): array
+    public function run(string $companyId, string $startDate, string $endDate, string $groupBy = 'day', string $product = 'all', ?string $categoryId = null): array
     {
         $groupBy = in_array($groupBy, ['day', 'week', 'month'], true) ? $groupBy : 'day';
         $this->statements = [];
         $items = $this->items($companyId);
+        $category = null;
+        $this->categoryKeys = null;
+        if ($categoryId) {
+            $category = ItemCategory::where('company_id', $companyId)->find($categoryId);
+            $this->categoryKeys = $category
+                ? array_keys(array_filter($items, fn ($i) => ($i['category_id'] ?? null) === $categoryId))
+                : [];
+        }
         $transactions = Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')
             ->where('status', 'posted')
@@ -54,7 +66,7 @@ class ProductProfitabilityReportService
                 : Carbon::parse($transaction->transaction_date);
 
             foreach ($this->fuelSalesRows($metadata['fuel_sales'] ?? [], $items) as $row) {
-                if ($product !== 'all' && $row['key'] !== $product) {
+                if ($this->skipsKey($row['key'], $product)) {
                     continue;
                 }
 
@@ -63,7 +75,7 @@ class ProductProfitabilityReportService
             }
 
             foreach ($this->otherSalesRows($metadata['other_sales_details'] ?? [], $items, $lubricantCosts[$date->format('Y-m')] ?? []) as $row) {
-                if ($product !== 'all' && $row['key'] !== $product) {
+                if ($this->skipsKey($row['key'], $product)) {
                     continue;
                 }
 
@@ -77,7 +89,7 @@ class ProductProfitabilityReportService
                 }
 
                 $key = $this->itemKey($segment['item_id'] ?? null, $items, $segment['item_name'] ?? null);
-                if ($product !== 'all' && $key !== $product) {
+                if ($this->skipsKey($key, $product)) {
                     continue;
                 }
 
@@ -132,7 +144,11 @@ class ProductProfitabilityReportService
                 'end_date' => $endDate,
                 'group_by' => $groupBy,
                 'product' => $product,
+                'category_id' => $category?->id ?? '',
             ],
+            'category' => $category ? ['id' => $category->id, 'name' => $category->name] : null,
+            'categoryOptions' => ItemCategory::where('company_id', $companyId)->where('is_active', true)
+                ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),
             'totals' => $this->totals($productRows),
             'productRows' => $productRows,
             'periodRows' => $periodRows,
@@ -156,6 +172,16 @@ class ProductProfitabilityReportService
         return null;
     }
 
+    /** True when a product key is outside the chosen product or category. */
+    private function skipsKey(string $key, string $product): bool
+    {
+        if ($this->categoryKeys !== null && ! in_array($key, $this->categoryKeys, true)) {
+            return true;
+        }
+
+        return $product !== 'all' && $key !== $product;
+    }
+
     /**
      * @return array<string,array<string,mixed>>
      */
@@ -170,7 +196,7 @@ class ProductProfitabilityReportService
         $all = Item::where('company_id', $companyId)
             ->where('is_sellable', true)
             ->whereNull('deleted_at')
-            ->get(['id', 'sku', 'name', 'fuel_category', 'avg_cost', 'cost_price', 'unit_of_measure', 'asset_account_id']);
+            ->get(['id', 'sku', 'name', 'fuel_category', 'avg_cost', 'cost_price', 'unit_of_measure', 'asset_account_id', 'category_id']);
         $sharing = $all->whereNotNull('fuel_category')->groupBy('fuel_category')->filter(fn ($g) => $g->count() > 1);
         $categoryOwner = $sharing->map(fn ($g) => ($g->first(fn ($i) => in_array($i->id, $tankItems, true)) ?? $g->first())->id);
 
@@ -190,6 +216,7 @@ class ProductProfitabilityReportService
                     'avg_cost' => (float) ($item->avg_cost ?: $item->cost_price ?: 0),
                     'unit' => $item->unit_of_measure ?: 'L',
                     'asset_account_id' => $item->asset_account_id,
+                    'category_id' => $item->category_id,
                 ]];
             })
             ->all();
@@ -360,7 +387,7 @@ class ProductProfitabilityReportService
                 continue;
             }
             $key = $this->itemKey($line->item_id, $items);
-            if ($product !== 'all' && $key !== $product) {
+            if ($this->skipsKey($key, $product)) {
                 continue;
             }
 
@@ -398,7 +425,7 @@ class ProductProfitabilityReportService
             if (! in_array($item['id'], $tankItemIds, true)) {
                 continue;
             }
-            if ($product !== 'all' && $key !== $product) {
+            if ($this->skipsKey($key, $product)) {
                 continue;
             }
 
@@ -505,7 +532,7 @@ class ProductProfitabilityReportService
                 continue;
             }
             $key = $this->itemKey($itemId, $items);
-            if ($product !== 'all' && $key !== $product) {
+            if ($this->skipsKey($key, $product)) {
                 continue;
             }
             $amount = (float) ($writedown->metadata['amount'] ?? 0);
@@ -560,7 +587,7 @@ class ProductProfitabilityReportService
 
         foreach ($readings as $reading) {
             $key = $this->itemKey($reading->item_id, $items, $reading->item?->name, $reading->item?->fuel_category);
-            if ($product !== 'all' && $key !== $product) {
+            if ($this->skipsKey($key, $product)) {
                 continue;
             }
 

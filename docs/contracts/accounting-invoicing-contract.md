@@ -15,6 +15,16 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 
 ## Tables
 
+### acct.customer_categories
+- Purpose: the owner's own groups of customers. No defaults are created; a customer is in at most one.
+- Columns: `id` uuid PK; `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE); `name` varchar(100) not null; `description` text null; `created_at`, `updated_at`.
+- Indexes/constraints: unique (`company_id`, `lower(name)`). No soft delete.
+- Delete: only when no customer (active, inactive or deleted) has it (`customer_category.delete` refuses with "In use by N customers."; the FK is RESTRICT).
+- RLS: forced; `customer_categories_super_admin` + `customer_categories_company_isolation` (NULLIF guard), as `inv.item_prices`.
+- Commands: `customer_category.create|update|delete` (permission `customer.update`). Routes `/{company}/customer-categories` (index, store, update, destroy).
+- Model: `App\Modules\Accounting\Models\CustomerCategory` (`$fillable = company_id, name, description`).
+- Used by: customer create/edit forms, the fuel Customers list filter, the Calculator `customer_category` collection.
+
 ### acct.customers
 - Purpose: customer master for invoicing.
 - Columns:
@@ -32,6 +42,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `credit_limit` numeric(15,2) null.
   - `notes` text null.
   - `logo_url` varchar(500) null.
+  - `category_id` uuid null FK → `acct.customer_categories.id` (RESTRICT/CASCADE); index (`company_id`, `category_id`).
   - `is_active` boolean not null default true.
   - `created_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
   - `updated_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).

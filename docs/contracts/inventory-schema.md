@@ -32,6 +32,8 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - PK `id`.
   - Unique (`company_id`, `code`) where deleted_at is null.
   - Index: `company_id`; `parent_id`; (`company_id`, `is_active`).
+- Fuel stations: every company with `industry_code = 'fuel_station'` has two categories, "Fuel" (codes `FUEL`) and "Lubricant" (`LUBRICANT`), created at company bootstrap (`StationProductCategories::ensureDefaults`) and backfilled by `2026_10_05_000002_add_fuel_and_lubricant_categories_to_fuel_stations`. Products with a tank or a petrol/diesel/high-octane `fuel_category` are filed under Fuel; lubricants (`fuel_category = 'lubricant'`, lubricant stock/sales/cost accounts 1250/1251/4150/4151/5150/5151, or "lubric" in the name) under Lubricant. Only products with no category are set. Product quick add (`fuel.products.setup`) files a fuel/lubricant under them when no category is given. A category already named Fuel/Lubricant (any case) is reused.
+- Reports: Fuel Profit and the Stock statement take a category (`category_id` / `category` query) and the Calculator reads a `category` collection.
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'inv.item_categories'; $keyType = 'string'; public $incrementing = false;`

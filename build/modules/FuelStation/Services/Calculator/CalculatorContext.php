@@ -43,12 +43,18 @@ final class CalculatorContext
     public function items(): array
     {
         return $this->items ??= DB::table('inv.items')->where('company_id', $this->companyId)->whereNull('deleted_at')
-            ->get(['id', 'name', 'fuel_category', 'unit_of_measure'])->keyBy('id')->all();
+            ->get(['id', 'name', 'fuel_category', 'unit_of_measure', 'category_id'])->keyBy('id')->all();
     }
 
     public function item(string $id): ?object
     {
         return $this->items()[$id] ?? null;
+    }
+
+    /** @return array<int,object> the items filed under a product category */
+    public function categoryItems(string $categoryId): array
+    {
+        return array_values(array_filter($this->items(), fn ($i) => $i->category_id === $categoryId));
     }
 
     /** Litres for a fuel (or an item sold by the litre), else a plain quantity. */
@@ -80,6 +86,21 @@ final class CalculatorContext
         }
 
         return $this->keys;
+    }
+
+    /** Litres when every item of the set is measured in litres, else a plain quantity. */
+    public function quantityUnitOf(array $items): string
+    {
+        if ($items === []) {
+            return 'qty';
+        }
+        foreach ($items as $item) {
+            if ($this->quantityUnit($item) !== 'L') {
+                return 'qty';
+            }
+        }
+
+        return 'L';
     }
 
     public function account(string $id): ?Account

@@ -102,10 +102,13 @@ class PartnerLedgerService
         if (! $partner->capital_account_id || ! $partner->drawing_account_id) {
             return 0.0;
         }
+        // A partner loaded with only some columns may lack company_id; its account knows it.
+        $companyId = $partner->company_id
+            ?? DB::table('acct.accounts')->where('id', $partner->capital_account_id)->value('company_id');
 
         return round(
-            $this->accountNet($partner->company_id, $partner->capital_account_id, 'credit', $asOf)
-            - $this->accountNet($partner->company_id, $partner->drawing_account_id, 'debit', $asOf),
+            $this->accountNet($companyId, $partner->capital_account_id, 'credit', $asOf)
+            - $this->accountNet($companyId, $partner->drawing_account_id, 'debit', $asOf),
             2
         );
     }

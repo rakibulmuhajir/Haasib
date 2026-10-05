@@ -285,7 +285,7 @@ class DailyCloseController extends Controller
         return Partner::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn', 'total_invested', 'total_withdrawn', 'capital_account_id', 'drawing_account_id'])
+            ->get(['id', 'company_id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn', 'total_invested', 'total_withdrawn', 'capital_account_id', 'drawing_account_id'])
             ->map(function (Partner $partner) use ($date) {
                 $withdrawn = $partner->withdrawnThisPeriod($date);
 

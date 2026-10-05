@@ -360,3 +360,14 @@ test('the partner statement closes on capital less drawings, the same figure as 
 
     test()->get("/{$f['company']->slug}/reports/statements?kind=partner&id={$ali->id}&from=2026-09-01&to=2026-09-30")->assertOk();
 });
+
+test('the new daily close opens with partners set up (their balance needs no company on the loaded row)', function () {
+    $f = partnerLedgerFixture();
+    partnerLedgerMake($f, 'Ahmed', 50, 'monthly', 10000);
+
+    // The close loads partners with only some columns; reading their balance must not crash.
+    $partner = Partner::where('company_id', $f['company']->id)->get(['id', 'name', 'capital_account_id', 'drawing_account_id'])->first();
+    expect($partner->net_capital)->toBe(0.0);
+
+    test()->actingAs($f['user'])->get("/{$f['company']->slug}/fuel/daily-close?date=2026-09-20")->assertOk();
+});

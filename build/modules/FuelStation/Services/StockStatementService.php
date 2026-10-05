@@ -262,7 +262,8 @@ class StockStatementService
      */
     private function withStockValues(string $companyId, string $itemId, string $startDate, string $endDate, array $result): array
     {
-        if (empty($result['rows'])) {
+        // A product with no activity in the range still has stock worth something: value it anyway.
+        if (! isset($result['rows'])) {
             return $result;
         }
         $item = DB::table('inv.items')->where('company_id', $companyId)->where('id', $itemId)
@@ -298,7 +299,10 @@ class StockStatementService
             return $result;
         }
 
-        $unit = (float) ($item->avg_cost ?: $item->cost_price ?: 0);
+        // The product's cost; without one, the cost its stock last came in at (an opening or a receipt).
+        $unit = (float) ($item->avg_cost ?: $item->cost_price ?: DB::table('inv.stock_movements')
+            ->where('company_id', $companyId)->where('item_id', $itemId)->where('quantity', '>', 0)->where('unit_cost', '>', 0)
+            ->orderByDesc('movement_date')->value('unit_cost') ?: 0);
         if ($unit <= 0) {
             return $result;
         }
@@ -638,7 +642,7 @@ class StockStatementService
     {
         $products = $this->products($companyId);
         $rows = [];
-        $sum = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'opening' => null, 'closing' => null, 'variance' => 0.0, 'opening_value' => null, 'available' => null, 'available_value' => null];
+        $sum = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'opening' => null, 'closing' => null, 'variance' => 0.0, 'opening_value' => null, 'available' => null, 'available_value' => null, 'opening_stock_value' => null, 'closing_value' => null];
         $add = function (string $k, $v) use (&$sum) {
             if ($v !== null) {
                 $sum[$k] = ($sum[$k] ?? 0.0) + (float) $v;
@@ -661,7 +665,7 @@ class StockStatementService
                 }
                 $rows[] = $row + ['product' => $r['item']['name'], 'unit' => $unit];
             }
-            foreach (['received', 'opening', 'closing', 'opening_value', 'available', 'available_value'] as $k) {
+            foreach (['received', 'opening', 'closing', 'opening_value', 'available', 'available_value', 'opening_stock_value', 'closing_value'] as $k) {
                 $add($k, $r['totals'][$k] ?? null);
             }
             foreach (['purchase_amount', 'sold', 'sale_amount', 'variance'] as $k) {
@@ -700,6 +704,9 @@ class StockStatementService
                 'opening_value' => $sum['opening_value'],
                 'available' => $sum['available'],
                 'available_value' => $sum['available_value'],
+                // Every product's stock value added up, at each product's own basis.
+                'opening_stock_value' => $sum['opening_stock_value'],
+                'closing_value' => $sum['closing_value'],
             ],
             'products' => $products,
             'has_tank' => $anyTank,

@@ -12,6 +12,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { CreditCard, PencilLine } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CorrectionHistory from '../../components/CorrectionHistory.vue';
 import type { Correction } from '../../components/CorrectionHistory.vue';
 
@@ -61,6 +62,13 @@ const props = defineProps<{
     correctionSuppliers?: { id: string; name: string }[];
     corrections?: Correction[];
 }>();
+
+const voidOpen = ref(false);
+const voidPayment = () => {
+    router.delete(`/${props.company.slug}/bill-payments/${props.payment.id}`, {
+        onSuccess: () => router.get(`/${props.company.slug}/bill-payments`),
+    });
+};
 
 const correcting = ref(false);
 
@@ -172,6 +180,10 @@ const groupedCashMovement = computed(
             >
                 Edit
             </Button>
+            <!-- Void: the payment is undone and the bills it paid are owed again (bill_payment.void). -->
+            <Button variant="outline" class="text-destructive" @click="voidOpen = true">
+                Void
+            </Button>
             <Button
                 v-if="journalTransactionId"
                 variant="outline"
@@ -277,6 +289,14 @@ const groupedCashMovement = computed(
             :total="Number(payment.amount)"
             :customer-id="payment.vendor?.id ?? null"
             :parties="correctionSuppliers ?? []"
+        />
+        <ConfirmDialog
+            v-model:open="voidOpen"
+            title="Void this payment?"
+            :description="`${payment.payment_number} is undone and the bills it paid are owed again.`"
+            confirm-text="Void"
+            variant="destructive"
+            @confirm="voidPayment"
         />
     </PageShell>
 </template>

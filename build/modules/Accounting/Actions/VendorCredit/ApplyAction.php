@@ -31,16 +31,31 @@ class ApplyAction implements PaletteAction
     public function handle(array $params): array
     {
         $company = CompanyContext::requireCompany();
-        $credit = VendorCredit::where('company_id', $company->id)->findOrFail($params['id']);
+        return \App\Services\AccountingWriteTransaction::run(function () use ($company, $params) {
+            $credit = VendorCredit::where('company_id', $company->id)->lockForUpdate()->findOrFail($params['id']);
 
-        $sum = collect($params['applications'])->sum('amount_applied');
-        if ($sum - $credit->amount > 0.000001) {
-            throw new \InvalidArgumentException('Applications exceed credit amount');
-        }
+            // A draft is not on the books yet; post it first so applying it keeps them right.
+            if ($credit->status === 'draft') {
+                PostAction::post($credit);
+            }
+            if ($credit->status !== 'received') {
+                throw new \InvalidArgumentException('This credit cannot be applied');
+            }
 
-        return DB::transaction(function () use ($credit, $company, $params) {
+            $already = (float) VendorCreditApplication::where('vendor_credit_id', $credit->id)->sum('amount_applied');
+            $sum = (float) collect($params['applications'])->sum('amount_applied');
+            if ($sum - ($credit->amount - $already) > 0.000001) {
+                throw new \InvalidArgumentException('Applications exceed credit amount');
+            }
+
             foreach ($params['applications'] as $app) {
-                $bill = Bill::where('company_id', $company->id)->findOrFail($app['bill_id']);
+                $bill = Bill::where('company_id', $company->id)->lockForUpdate()->findOrFail($app['bill_id']);
+                if ($bill->vendor_id !== $credit->vendor_id) {
+                    throw new \InvalidArgumentException('The bill belongs to a different supplier');
+                }
+                if ($app['amount_applied'] - (float) $bill->balance > 0.000001) {
+                    throw new \InvalidArgumentException("Bill {$bill->bill_number} owes less than that");
+                }
 
                 VendorCreditApplication::create([
                     'company_id' => $company->id,
@@ -63,7 +78,7 @@ class ApplyAction implements PaletteAction
                 $bill->save();
             }
 
-            if ($credit->amount - collect($params['applications'])->sum('amount_applied') <= 0.000001) {
+            if ($credit->amount - $already - $sum <= 0.000001) {
                 $credit->status = 'applied';
                 $credit->updated_by_user_id = Auth::id();
                 $credit->save();

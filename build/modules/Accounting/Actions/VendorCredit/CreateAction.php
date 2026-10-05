@@ -6,7 +6,6 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\VendorCredit;
-use App\Modules\Accounting\Models\VendorCreditItem;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +26,7 @@ class CreateAction implements PaletteAction
             'exchange_rate' => 'nullable|numeric|min:0.00000001|decimal:8',
             'reason' => 'required|string|max:255',
             'notes' => 'nullable|string',
+            'status' => 'nullable|in:draft,received',
             'ap_account_id' => 'nullable|uuid',
             'line_items' => 'nullable|array',
             'line_items.*.description' => 'sometimes|required|string|max:500',
@@ -82,44 +82,18 @@ class CreateAction implements PaletteAction
                 'exchange_rate' => $exchangeRate,
                 'base_amount' => $baseAmount,
                 'reason' => $params['reason'],
-                'status' => $params['status'] ?? 'draft',
+                'status' => ($params['status'] ?? 'draft') === 'received' ? 'received' : 'draft',
                 'notes' => $params['notes'] ?? null,
                 'ap_account_id' => $params['ap_account_id'] ?? $vendor->ap_account_id,
                 'created_by_user_id' => Auth::id(),
             ]);
 
-            if (!empty($params['line_items'])) {
-                foreach ($params['line_items'] as $index => $item) {
-                    // Skip items that don't have basic required data
-                    if (empty($item['description']) || !isset($item['quantity']) || !isset($item['unit_price'])) {
-                        continue;
-                    }
-
-                    $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
-                    $taxAmount = round($lineTotal * (($item['tax_rate'] ?? 0) / 100), 6);
-                    $discountAmount = round($lineTotal * (($item['discount_rate'] ?? 0) / 100), 6);
-                    $total = $lineTotal + $taxAmount - $discountAmount;
-                    VendorCreditItem::create([
-                        'company_id' => $company->id,
-                        'vendor_credit_id' => $credit->id,
-                        'line_number' => $index + 1,
-                        'description' => $item['description'] ?? '',
-                        'quantity' => $item['quantity'] ?? 0,
-                        'unit_price' => $item['unit_price'] ?? 0,
-                        'tax_rate' => $item['tax_rate'] ?? 0,
-                        'discount_rate' => $item['discount_rate'] ?? 0,
-                        'line_total' => $lineTotal,
-                        'tax_amount' => $taxAmount,
-                        'total' => $total,
-                        'expense_account_id' => $item['expense_account_id'] ?? null,
-                        'created_by_user_id' => Auth::id(),
-                    ]);
-                }
-            }
+            VendorCreditLines::replace($credit, $params['line_items'] ?? []);
 
             if (($params['status'] ?? 'draft') === 'received') {
-                $transaction = app(GlPostingService::class)->postVendorCredit($credit);
+                $transaction = app(GlPostingService::class)->postVendorCredit($credit->fresh());
                 $credit->transaction_id = $transaction->id;
+                $credit->received_at = now();
                 $credit->save();
             }
 

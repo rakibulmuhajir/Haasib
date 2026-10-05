@@ -147,6 +147,8 @@ const handleSubmit = () => {
       discount_rate: Number(item.discount_rate) || 0,
       expense_account_id: item.expense_account_id === '__none' ? null : (item.expense_account_id || null),
     }))
+    // With lines, the lines are the amount.
+    if (totals.value.total > 0) data.amount = Math.round(totals.value.total * 100) / 100
   }
 
   // Use router.post directly instead of form.transform
@@ -256,7 +258,7 @@ const handleSubmit = () => {
           </Button>
         </div>
         <p class="text-sm text-muted-foreground">
-          Add line items for detailed tracking. Items without descriptions will be excluded.
+          Pick the account each line credits: Transit Loss, Fines, stock for a return. Lines add up to the amount.
         </p>
         <div class="space-y-4">
           <div
@@ -287,13 +289,13 @@ const handleSubmit = () => {
               <InputError :message="(form.errors as Record<string, string>)[`line_items.${idx}.unit_price`]" />
             </div>
             <div class="md:col-span-2">
-              <Label>Expense Account</Label>
+              <Label>Account credited</Label>
               <Select v-model="line.expense_account_id">
                 <SelectTrigger>
                   <SelectValue placeholder="Select account" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Default</SelectItem>
+                  <SelectItem value="__none">Default expense account</SelectItem>
                   <SelectItem
                     v-for="acct in props.expenseAccounts"
                     :key="acct.id"

@@ -124,6 +124,8 @@ return [
     'vendor_credit.list' => \App\Modules\Accounting\Actions\VendorCredit\IndexAction::class,
     'vendor_credit.create' => \App\Modules\Accounting\Actions\VendorCredit\CreateAction::class,
     'vendor_credit.apply' => \App\Modules\Accounting\Actions\VendorCredit\ApplyAction::class,
+    'vendor_credit.post' => \App\Modules\Accounting\Actions\VendorCredit\PostAction::class,
+    'vendor_credit.update' => \App\Modules\Accounting\Actions\VendorCredit\UpdateAction::class,
     'vendor_credit.void' => \App\Modules\Accounting\Actions\VendorCredit\VoidAction::class,
 
     // Fiscal Years & Periods

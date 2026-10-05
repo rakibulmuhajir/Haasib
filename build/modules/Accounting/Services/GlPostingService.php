@@ -115,9 +115,9 @@ class GlPostingService
     /**
      * Post a vendor credit: DR AP, CR expense reversal.
      */
-    public function postVendorCredit(VendorCredit $credit): Transaction
+    public function postVendorCredit(VendorCredit $credit, ?string $transactionNumber = null): Transaction
     {
-        return app(PostingService::class)->postVendorCredit($credit);
+        return app(PostingService::class)->postVendorCredit($credit, $transactionNumber);
     }
 
     /**

@@ -276,6 +276,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'show'])->name('vendor-credits.show');
         Route::get('/{company}/vendor-credits/{vendorCredit}/edit', [VendorCreditController::class, 'edit'])->name('vendor-credits.edit');
         Route::get('/{company}/vendor-credits/{vendorCredit}/apply', [VendorCreditController::class, 'apply'])->name('vendor-credits.apply');
+        Route::post('/{company}/vendor-credits/{vendorCredit}/apply', [VendorCreditController::class, 'applyStore'])->name('vendor-credits.apply.store');
+        Route::post('/{company}/vendor-credits/{vendorCredit}/post', [VendorCreditController::class, 'post'])->name('vendor-credits.post');
+        Route::put('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'update'])->name('vendor-credits.update');
         Route::delete('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'destroy'])->name('vendor-credits.destroy');
 
         // Manual Journals

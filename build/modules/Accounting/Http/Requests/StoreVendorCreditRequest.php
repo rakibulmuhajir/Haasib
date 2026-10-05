@@ -77,11 +77,17 @@ class StoreVendorCreditRequest extends BaseFormRequest
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),
             ],
+            'line_items' => ['nullable', 'array'],
+            'line_items.*.description' => ['sometimes', 'required', 'string', 'max:500'],
+            'line_items.*.quantity' => ['sometimes', 'required', 'numeric', 'min:0.01'],
+            'line_items.*.unit_price' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'line_items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'line_items.*.discount_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.expense_account_id' => [
                 'nullable',
                 'uuid',
                 Rule::exists(Account::class, 'id')->where(fn ($q) => $q
-                    ->whereIn('type', ['expense', 'cogs', 'asset'])
+                    ->whereIn('type', ['expense', 'cogs', 'asset', 'other_expense'])
                     ->where('is_active', true)),
             ],
         ];

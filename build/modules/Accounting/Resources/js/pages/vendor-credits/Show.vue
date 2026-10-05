@@ -11,7 +11,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { formatDateTime } from '@/lib/datetime'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptText, Edit, ArrowLeft, DollarSign, Trash2 } from 'lucide-vue-next'
+import { ReceiptText, Edit, ArrowLeft, DollarSign, Trash2, Send } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -143,12 +143,19 @@ const amountApplied = computed(
 
 const amountRemaining = computed(() => props.credit.amount - amountApplied.value)
 
-const isEditable = computed(() => ['draft', 'received'].includes(props.credit.status))
+const isEditable = computed(() => ['draft', 'received'].includes(props.credit.status) && !props.credit.applications?.length)
 const isApplicable = computed(() => ['received', 'draft'].includes(props.credit.status))
+const isDraft = computed(() => props.credit.status === 'draft')
 const canDelete = computed(() => ['draft', 'received'].includes(props.credit.status))
 
 const editCredit = () => {
   router.get(`/${props.company.slug}/vendor-credits/${props.credit.id}/edit`)
+}
+
+const postCredit = () => {
+  if (confirm('Post this credit to the books?')) {
+    router.post(`/${props.company.slug}/vendor-credits/${props.credit.id}/post`, {}, { preserveScroll: true })
+  }
 }
 
 const applyCredit = () => {
@@ -174,7 +181,11 @@ const deleteCredit = () => {
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back to Credits
       </Button>
-      <Button v-if="isEditable" @click="editCredit">
+      <Button v-if="isDraft" @click="postCredit">
+        <Send class="mr-2 h-4 w-4" />
+        Post
+      </Button>
+      <Button v-if="isEditable" variant="outline" @click="editCredit">
         <Edit class="mr-2 h-4 w-4" />
         Edit
       </Button>

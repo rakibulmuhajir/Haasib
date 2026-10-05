@@ -335,7 +335,7 @@ class PostingService
         ], $entries);
     }
 
-    public function postVendorCredit(VendorCredit $credit): Transaction
+    public function postVendorCredit(VendorCredit $credit, ?string $transactionNumber = null): Transaction
     {
         $credit->loadMissing(['vendor', 'items', 'company']);
 
@@ -369,6 +369,24 @@ class PostingService
         if ($taxAmount > 0) $requiredWhenPresent[] = 'TAX_RECEIVABLE';
         $this->templateValidator->validateForPosting($template, $roleAccounts, $requiredWhenPresent);
 
+        // Credit each line's own account (net of its tax); whatever the lines do not
+        // cover -- or the whole credit when it has no lines -- goes to the template's
+        // default expense account.
+        $byAccount = [];
+        $allocated = 0.0;
+        foreach ($credit->items as $item) {
+            if (! $item->expense_account_id) {
+                continue;
+            }
+            $net = round((float) $item->total - (float) $item->tax_amount, 2);
+            $byAccount[$item->expense_account_id] = round(($byAccount[$item->expense_account_id] ?? 0.0) + $net, 2);
+            $allocated = round($allocated + $net, 2);
+        }
+        $remainder = round($expenseAmount - $allocated, 2);
+        if ($remainder < -0.01) {
+            throw new \RuntimeException('The credit lines add up to more than the credit amount.');
+        }
+
         $entries = [
             [
                 'account_id' => $apAccountId,
@@ -376,13 +394,25 @@ class PostingService
                 'amount' => $total,
                 'description' => 'Accounts Payable',
             ],
-            [
+        ];
+        foreach ($byAccount as $accountId => $amount) {
+            if ($amount > 0) {
+                $entries[] = [
+                    'account_id' => $accountId,
+                    'type' => 'credit',
+                    'amount' => $amount,
+                    'description' => $credit->reason ?: 'Vendor credit',
+                ];
+            }
+        }
+        if ($remainder > 0.004) {
+            $entries[] = [
                 'account_id' => $expenseAccountId,
                 'type' => 'credit',
-                'amount' => $expenseAmount,
+                'amount' => $remainder,
                 'description' => 'Vendor credit (expense reversal)',
-            ],
-        ];
+            ];
+        }
 
         if ($taxAmount > 0) {
             $entries[] = [
@@ -395,7 +425,7 @@ class PostingService
 
         return $this->createTransaction([
             'company_id' => $company->id,
-            'transaction_number' => $credit->credit_number,
+            'transaction_number' => $transactionNumber ?? $credit->credit_number,
             'transaction_type' => 'vendor_credit',
             'transaction_date' => $transactionDate,
             'posting_date' => $transactionDate,

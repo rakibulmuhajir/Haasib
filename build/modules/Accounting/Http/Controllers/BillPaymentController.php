@@ -257,7 +257,7 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
-            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'bill_payment'),
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'bill_payment', true, $record->payment_date),
             'unappliedAmount' => round((float) $groupPayments->sum(fn ($p) => $p->unappliedAmount()), 2),
             'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,

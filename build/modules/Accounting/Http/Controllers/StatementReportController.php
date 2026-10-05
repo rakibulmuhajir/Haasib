@@ -157,7 +157,7 @@ class StatementReportController extends Controller
             'columns' => $columns,
             'statement' => $statement,
             // Customer statements only; a statement is a document the company issues, the rest are internal.
-            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement') : null,
+            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement', true, $to ?: now()->toDateString()) : null,
         ]);
     }
 

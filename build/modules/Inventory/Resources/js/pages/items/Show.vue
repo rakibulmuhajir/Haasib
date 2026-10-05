@@ -91,10 +91,23 @@ interface PriceRow {
   notes: string | null
 }
 
+interface PriceChange {
+  id: string
+  changed_at: string | null
+  user: string | null
+  text: string
+  purchase: string | null
+  note: string | null
+}
+
+const changesOpen = ref(false)
+const formatWhen = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+
 const props = defineProps<{
   company: CompanyRef
   item: Item
-  priceHistory: { rows: PriceRow[]; is_fuel: boolean }
+  priceHistory: { rows: PriceRow[]; is_fuel: boolean; changes?: PriceChange[] }
   stockLevels: StockLevelRow[]
   pendingReceiptsCount: number
   pendingReceiptsQuantity: number
@@ -262,6 +275,20 @@ const getTypeBadgeVariant = (type: string) => {
       @confirm="confirmDeletePrice"
     />
 
+    <Dialog v-model:open="changesOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader><DialogTitle>Price changes</DialogTitle></DialogHeader>
+        <ul class="max-h-[60vh] space-y-3 overflow-y-auto">
+          <li v-for="change in priceHistory.changes" :key="change.id" class="border-b border-border pb-3 text-sm last:border-0">
+            <div class="text-xs text-muted-foreground">{{ formatWhen(change.changed_at) }} · {{ change.user || 'Unknown' }}</div>
+            <div class="font-medium">{{ change.text }}</div>
+            <div v-if="change.purchase" class="text-xs text-muted-foreground">{{ change.purchase }}</div>
+            <div v-if="change.note" class="text-xs text-muted-foreground">Note: {{ change.note }}</div>
+          </li>
+        </ul>
+      </DialogContent>
+    </Dialog>
+
     <Dialog v-model:open="priceOpen">
       <DialogContent class="sm:max-w-sm">
         <DialogHeader><DialogTitle>{{ editingPriceId ? 'Change price' : 'Add price' }}</DialogTitle></DialogHeader>
@@ -351,6 +378,10 @@ const getTypeBadgeVariant = (type: string) => {
               <CardTitle>
                 <Hint>Price history<template #content>A price runs from its date until the next one. Months with a locked daily close cannot be changed.</template></Hint>
               </CardTitle>
+              <div class="flex items-center gap-2">
+              <Button v-if="!priceHistory.is_fuel && priceHistory.changes?.length" variant="link" size="sm" @click="changesOpen = true">
+                Changes
+              </Button>
               <Button v-if="priceHistory.is_fuel" variant="outline" size="sm" @click="router.get(`/${company.slug}/fuel/rates`)">
                 Fuel prices
               </Button>
@@ -358,6 +389,7 @@ const getTypeBadgeVariant = (type: string) => {
                 <Plus class="mr-2 h-4 w-4" />
                 Add price
               </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

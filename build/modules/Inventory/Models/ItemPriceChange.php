@@ -22,7 +22,7 @@ class ItemPriceChange extends Model
     protected $fillable = [
         'company_id', 'item_id', 'effective_date', 'action',
         'old_sale_price', 'new_sale_price', 'old_purchase_price', 'new_purchase_price',
-        'changed_by_user_id', 'changed_at',
+        'changed_by_user_id', 'changed_at', 'notes',
     ];
 
     protected $casts = [

@@ -57,6 +57,7 @@ interface Company {
     signer_name?: string | null;
     signer_title?: string | null;
     stamp_documents?: Record<string, boolean>;
+    stamp_from?: string | null;
     address?: CompanyAddress | null;
     language?: string | null;
     locale?: string | null;
@@ -260,6 +261,7 @@ const generalForm = useForm({
     remove_signature: false,
     signer_name: company.value.signer_name || '',
     signer_title: company.value.signer_title || '',
+    stamp_from: company.value.stamp_from || '',
     stamp_documents: Object.fromEntries(
         ['invoice', 'consolidated_invoice', 'statement', 'payment_receipt', 'credit_note', 'bill_payment'].map((key) => [
             key,
@@ -377,6 +379,7 @@ const saveGeneralSettings = () =>
                 generalForm.signature = null;
                 generalForm.remove_stamp = false;
                 generalForm.remove_signature = false;
+                generalForm.stamp_from = company.value.stamp_from || '';
             },
         });
 
@@ -804,6 +807,12 @@ const createUser = () =>
                                         <Label for="signer-title">Signer title</Label>
                                         <Input id="signer-title" v-model="generalForm.signer_title" :disabled="!company.can_manage_company" />
                                         <p v-if="generalForm.errors.signer_title" class="text-xs text-destructive">{{ generalForm.errors.signer_title }}</p>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <Label for="stamp-from">Stamp documents dated from</Label>
+                                        <Input id="stamp-from" type="date" v-model="generalForm.stamp_from" :disabled="!company.can_manage_company" />
+                                        <p v-if="generalForm.errors.stamp_from" class="text-xs text-destructive">{{ generalForm.errors.stamp_from }}</p>
                                     </div>
 
                                     <div class="space-y-2 md:col-span-2">

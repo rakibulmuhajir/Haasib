@@ -248,6 +248,7 @@ class CompanyController extends Controller
                 'signer_name' => $company->signer_name,
                 'signer_title' => $company->signer_title,
                 'stamp_documents' => $company->stampDocumentFlags(),
+                'stamp_from' => $company->stamp_from?->toDateString(),
                 'address' => $company->address,
                 'language' => $company->language,
                 'locale' => $company->locale,
@@ -650,6 +651,14 @@ class CompanyController extends Controller
                 $logos->deleteIfOurs('/storage/'.$company->{$column});
                 $directUpdates[$column] = null;
             }
+        }
+        // A newly uploaded stamp applies from today unless a date is already set or sent now.
+        if (filled($validated['stamp_from'] ?? null)) {
+            $directUpdates['stamp_from'] = $validated['stamp_from'];
+        } elseif ($request->hasFile('stamp') && ! $company->stamp_from) {
+            $directUpdates['stamp_from'] = now()->toDateString();
+        } elseif (array_key_exists('stamp_from', $validated)) {
+            $directUpdates['stamp_from'] = null;
         }
         foreach (['signer_name', 'signer_title'] as $field) {
             if (array_key_exists($field, $validated)) {

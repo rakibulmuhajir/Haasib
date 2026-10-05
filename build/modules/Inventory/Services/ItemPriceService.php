@@ -58,7 +58,7 @@ class ItemPriceService
                 $action = 'created';
             }
 
-            $this->log($companyId, $item->id, $date, $action, $old, [$salePrice, $purchasePrice], $userId);
+            $this->log($companyId, $item->id, $date, $action, $old, [$salePrice, $purchasePrice], $userId, $notes);
             $this->syncItem($item);
 
             return $entry;
@@ -75,7 +75,7 @@ class ItemPriceService
             $old = [(float) $entry->sale_price, $entry->purchase_price === null ? null : (float) $entry->purchase_price];
             $entry->update(['updated_by_user_id' => $userId]);
             $entry->delete();
-            $this->log($companyId, $entry->item_id, $date, 'deleted', $old, [null, null], $userId);
+            $this->log($companyId, $entry->item_id, $date, 'deleted', $old, [null, null], $userId, $entry->notes);
             $item = Item::where('company_id', $companyId)->find($entry->item_id);
             if ($item) {
                 $this->syncItem($item);
@@ -194,6 +194,51 @@ class ItemPriceService
         return $rows;
     }
 
+    /**
+     * The change log for a product, newest first: when, who, and what in a short sentence.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function changes(Item $item): array
+    {
+        $fmt = fn ($v) => $v === null ? null : rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
+
+        return ItemPriceChange::where('company_id', $item->company_id)->where('item_id', $item->id)
+            ->with('changedBy:id,name')
+            ->orderByDesc('changed_at')->orderByDesc('id')->get()
+            ->map(function (ItemPriceChange $c) use ($fmt) {
+                $from = $c->effective_date->format('j M');
+                $oldSale = $fmt($c->old_sale_price);
+                $newSale = $fmt($c->new_sale_price);
+                $text = match ($c->action) {
+                    'created' => "Added price from {$from}: {$newSale}",
+                    'deleted' => "Removed price from {$from} ({$oldSale})",
+                    default => "Changed price from {$from}: {$oldSale} → {$newSale}",
+                };
+                $oldPurchase = $fmt($c->old_purchase_price);
+                $newPurchase = $fmt($c->new_purchase_price);
+                $purchase = null;
+                if ($oldPurchase !== $newPurchase) {
+                    $purchase = 'Purchase ref: '.($oldPurchase ?? 'none').' → '.($newPurchase ?? 'none');
+                }
+
+                return [
+                    'id' => $c->id,
+                    'changed_at' => $c->changed_at?->toISOString(),
+                    'user' => $c->changedBy?->name,
+                    'action' => $c->action,
+                    'effective_date' => $c->effective_date->toDateString(),
+                    'text' => $text,
+                    'purchase' => $purchase,
+                    'old_sale_price' => $c->old_sale_price === null ? null : (float) $c->old_sale_price,
+                    'new_sale_price' => $c->new_sale_price === null ? null : (float) $c->new_sale_price,
+                    'old_purchase_price' => $c->old_purchase_price === null ? null : (float) $c->old_purchase_price,
+                    'new_purchase_price' => $c->new_purchase_price === null ? null : (float) $c->new_purchase_price,
+                    'note' => $c->notes,
+                ];
+            })->values()->all();
+    }
+
     private function assertOpen(string $companyId, string $date): void
     {
         if ($this->locks->isDateInLockedMonth($companyId, $date)) {
@@ -207,13 +252,13 @@ class ItemPriceService
      * @param  array{0:?float,1:?float}  $old
      * @param  array{0:?float,1:?float}  $new
      */
-    private function log(string $companyId, string $itemId, string $date, string $action, array $old, array $new, ?string $userId): void
+    private function log(string $companyId, string $itemId, string $date, string $action, array $old, array $new, ?string $userId, ?string $notes = null): void
     {
         ItemPriceChange::create([
             'company_id' => $companyId, 'item_id' => $itemId, 'effective_date' => $date, 'action' => $action,
             'old_sale_price' => $old[0], 'new_sale_price' => $new[0],
             'old_purchase_price' => $old[1], 'new_purchase_price' => $new[1],
-            'changed_by_user_id' => $userId, 'changed_at' => now(),
+            'changed_by_user_id' => $userId, 'changed_at' => now(), 'notes' => $notes,
         ]);
     }
 }

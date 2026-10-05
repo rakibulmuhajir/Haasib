@@ -304,7 +304,7 @@ class ConsolidatedInvoiceService
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
             // A saved consolidated invoice is final.
-            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice'),
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice', true, substr((string) $doc->created_at, 0, 10)),
             // The headings it was sent with; older documents saved none, so they get today's defaults.
             'file_name' => self::fileName(['title' => $doc->title, 'number' => $doc->number, 'date' => substr((string) $doc->created_at, 0, 10), 'customer_name' => $doc->customer_name]),
             'labels' => array_merge(self::labels($company), array_filter(

@@ -229,3 +229,28 @@ test('a fuel item shows its rate changes and offers no price editing', function 
     expect(fn () => itemPriceSave($f, '2026-09-12', 300))->toThrow(ValidationException::class);
     expect(ItemPrice::where('item_id', $f['item']->id)->count())->toBe(0);
 });
+
+test('the item page lists the price changes newest first with who and old to new', function () {
+    $f = itemPriceFixture();
+    $slug = $f['company']->slug;
+    $f['owner']->update(['name' => 'Tariq Mahmood']);
+
+    $entry = itemPriceSave($f, '2026-10-01', 5100, 4000);
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 10:00:00'));
+    itemPriceSave($f, '2026-10-01', 5200, 4100);
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-15 11:00:00'));
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    app(CommandBus::class)->dispatch('item_price.delete', ['price_id' => $entry->id, 'user_id' => $f['owner']->id], $f['owner'], true);
+
+    $this->actingAs($f['owner'])->get("/{$slug}/items/{$f['item']->id}")->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->has('priceHistory.changes', 3)
+            ->where('priceHistory.changes.0.action', 'deleted')
+            ->where('priceHistory.changes.0.text', 'Removed price from 1 Oct (5,200)')
+            ->where('priceHistory.changes.1.text', 'Changed price from 1 Oct: 5,100 → 5,200')
+            ->where('priceHistory.changes.1.purchase', 'Purchase ref: 4,000 → 4,100')
+            ->where('priceHistory.changes.1.old_sale_price', 5100)
+            ->where('priceHistory.changes.1.new_sale_price', 5200)
+            ->where('priceHistory.changes.2.text', 'Added price from 1 Oct: 5,100')
+            ->where('priceHistory.changes.2.user', 'Tariq Mahmood'));
+});

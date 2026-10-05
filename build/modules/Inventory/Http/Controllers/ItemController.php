@@ -260,6 +260,7 @@ class ItemController extends Controller
             'priceHistory' => [
                 'rows' => app(ItemPriceService::class)->timeline($item, $company->slug),
                 'is_fuel' => (bool) $item->fuel_category,
+                'changes' => app(ItemPriceService::class)->changes($item),
             ],
             'stockLevels' => $stockLevels,
             'pendingReceiptsCount' => $pendingReceiptsCount,

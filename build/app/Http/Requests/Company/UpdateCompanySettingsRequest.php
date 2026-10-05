@@ -25,6 +25,7 @@ class UpdateCompanySettingsRequest extends BaseFormRequest
             'remove_signature' => ['sometimes', 'boolean'],
             'signer_name' => ['sometimes', 'nullable', 'string', 'max:120'],
             'signer_title' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'stamp_from' => ['sometimes', 'nullable', 'date'],
             'stamp_documents' => ['sometimes', 'array'],
             'stamp_documents.*' => ['boolean'],
             'language' => ['sometimes', 'string', 'max:10'],

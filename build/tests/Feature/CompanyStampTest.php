@@ -123,6 +123,8 @@ test('a posted invoice page carries the stamp; draft and void ones do not; untic
         'stamp' => UploadedFile::fake()->image('stamp.png', 300, 300),
         'signer_name' => 'Tariq',
     ])->assertSessionHasNoErrors();
+    // The upload dated the stamp from today; these invoices pre-date it, so lift the restriction here.
+    Company::whereKey($f['company']->id)->update(['stamp_from' => null]);
     $company = Company::find($f['company']->id);
 
     $sent = stampInvoice($f, 'sent');
@@ -158,4 +160,34 @@ test('stamp and signature uploads must be a small png, jpg or webp image', funct
         ->assertSessionHasErrors('stamp');
 
     expect(Company::find($f['company']->id)->stamp_path)->toBeNull();
+});
+
+test('a first stamp upload dates the stamp from today, editable, and older documents are not stamped', function () {
+    Storage::fake('public');
+    $f = creditCloseFixture();
+    $user = stampOwner($f);
+    $slug = $f['company']->slug;
+
+    stampUpload($f, $user, ['stamp' => UploadedFile::fake()->image('stamp.png', 300, 300), 'signer_name' => 'Tariq'])
+        ->assertSessionHasNoErrors();
+    expect(Company::find($f['company']->id)->stamp_from->toDateString())->toBe(now()->toDateString());
+
+    // A second upload keeps the date; editing it works.
+    stampUpload($f, $user, ['stamp' => UploadedFile::fake()->image('b.png', 100, 100)])->assertSessionHasNoErrors();
+    expect(Company::find($f['company']->id)->stamp_from->toDateString())->toBe(now()->toDateString());
+    stampUpload($f, $user, ['stamp_from' => '2026-09-10'])->assertSessionHasNoErrors();
+    expect(Company::find($f['company']->id)->stamp_from->toDateString())->toBe('2026-09-10');
+
+    $old = stampInvoice($f, 'sent'); // dated 2026-09-01
+    $new = Invoice::create([
+        'company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'invoice_number' => 'INV-ST-NEW',
+        'invoice_date' => '2026-09-10', 'due_date' => '2026-09-10', 'status' => 'sent',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'exchange_rate' => 1,
+        'subtotal' => 1000, 'total_amount' => 1000, 'paid_amount' => 0, 'balance' => 1000,
+    ]);
+
+    $this->actingAs($user)->get("/{$slug}/invoices/{$old->id}")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('stamp', null));
+    $this->actingAs($user)->get("/{$slug}/invoices/{$new->id}")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('stamp.signerName', 'Tariq'));
 });

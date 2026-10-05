@@ -173,7 +173,7 @@ class CreditNoteController extends Controller
                 'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'credit_note' => $creditNoteRecord,
-            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'credit_note', CompanyLetterhead::isFinalStatus($creditNoteRecord->status)),
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'credit_note', CompanyLetterhead::isFinalStatus($creditNoteRecord->status), $creditNoteRecord->credit_date),
         ]);
     }
 

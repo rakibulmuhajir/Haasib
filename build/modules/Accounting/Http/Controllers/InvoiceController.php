@@ -182,7 +182,7 @@ class InvoiceController extends Controller
             ],
             'invoice' => $invoiceRecord,
             // Stamp and signature: only a final invoice, and only when Invoices is ticked in company settings.
-            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'invoice', CompanyLetterhead::isFinalStatus($invoiceRecord->status)),
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'invoice', CompanyLetterhead::isFinalStatus($invoiceRecord->status), $invoiceRecord->invoice_date),
             // The customer's vehicles, to name or correct the one this invoice was for.
             'customerUnits' => \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $company->id)->where('customer_id', $invoiceRecord->customer_id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             // Corrections: who it can be moved to, and what was corrected before.

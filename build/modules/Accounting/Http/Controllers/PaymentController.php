@@ -292,7 +292,7 @@ class PaymentController extends Controller
             ],
             'payment' => $paymentRecord,
             // A receipt is final once it exists (a deleted payment has no page).
-            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'payment_receipt'),
+            'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'payment_receipt', true, $paymentRecord->payment_date),
             // What part of this payment is still on account can go onto the customer's unpaid
             // invoices from here (see apply()).
             'openInvoices' => $paymentRecord->customer_id

@@ -64,14 +64,22 @@ class CompanyLetterhead
      * The stamp block for ONE document, or null. Only a final document (not
      * draft / void / cancelled / reversed) of a ticked type carries it, so the
      * rule lives here and every page asks the same question. $docType is a key
-     * of Company::STAMP_DEFAULTS.
+     * of Company::STAMP_DEFAULTS; $documentDate is the document's own date.
      *
      * @return array{stampUrl: ?string, signatureUrl: ?string, signerName: ?string, signerTitle: ?string}|null
      */
-    public function stampFor(Company $company, string $docType, bool $final = true): ?array
+    public function stampFor(Company $company, string $docType, bool $final = true, \DateTimeInterface|string|null $documentDate = null): ?array
     {
         if (! $final || ! ($company->stampDocumentFlags()[$docType] ?? false)) {
             return null;
+        }
+
+        // Only documents dated on or after stamp_from carry it; older ones stay as issued.
+        if ($company->stamp_from && $documentDate) {
+            $date = $documentDate instanceof \DateTimeInterface ? $documentDate->format('Y-m-d') : substr((string) $documentDate, 0, 10);
+            if ($date < $company->stamp_from->format('Y-m-d')) {
+                return null;
+            }
         }
 
         $stamp = $this->publicUrl($company->stamp_path);

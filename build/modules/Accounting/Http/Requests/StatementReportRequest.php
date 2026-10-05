@@ -31,6 +31,8 @@ class StatementReportRequest extends BaseFormRequest
             'id' => ['nullable', 'regex:/^(all|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/'],
             // Several people of the kind, comma-separated: a group, or any the user ticked.
             'ids' => ['nullable', 'string', 'regex:/^[0-9a-fA-F-]{36}(,[0-9a-fA-F-]{36})*$/'],
+            // Every customer in one category (customer kind only); must be this company's.
+            'category_id' => ['nullable', 'uuid', Rule::exists('acct.customer_categories', 'id')->where('company_id', \App\Facades\CompanyContext::getCompany()?->id)],
             'reversed' => ['nullable', 'boolean'],
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],

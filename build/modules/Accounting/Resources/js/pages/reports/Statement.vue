@@ -41,8 +41,8 @@ type PartyOption = { id: string; name: string; customer_number?: string; vendor_
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
-  filters: { kind: Kind; id: string | null; ids?: string[]; from: string; to: string; reversed?: boolean }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[] }
+  filters: { kind: Kind; id: string | null; ids?: string[]; category_id?: string | null; from: string; to: string; reversed?: boolean }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[]; categories?: { id: string; name: string }[] }
   columns: { money_in: string; money_out: string; balance: string }
   statement: {
     rows: Row[]
@@ -56,6 +56,8 @@ const props = defineProps<{
     reversed_count?: number
     // Everyone of the kind in one list ('all'): each row names its person.
     combined?: boolean
+    // A customer category: each customer's opening, bought, paid and owes.
+    category_summary?: { rows: { customer_id: string; name: string; opening: number; bought: number; paid: number; owes: number }[]; totals: { opening: number; bought: number; paid: number; owes: number } }
     // Employee statements: the period's totals, for the summary above the rows.
     totals?: { salary: number; earned: number; advances: number; advance_count: number; repaid: number; deductions: number; paid: number }
   }
@@ -74,6 +76,7 @@ const to = ref(props.filters.to)
 const search = ref('')
 // Several people in one statement: a customer group, or any the user ticks.
 const picked = ref<string[]>(props.filters.ids ?? [])
+const categoryId = ref(props.filters.category_id ?? '')
 const showReversed = ref(Boolean(props.filters.reversed))
 const picking = ref(false)
 
@@ -81,6 +84,7 @@ watch(() => props.filters, (f) => {
   kind.value = f.kind
   partyId.value = f.id ?? ''
   picked.value = f.ids ?? []
+  categoryId.value = f.category_id ?? ''
   picking.value = false
   from.value = f.from
   to.value = f.to
@@ -123,7 +127,8 @@ const filteredOptions = computed(() => {
 const reload = () => {
   router.get(`/${props.company.slug}/reports/statements`, {
     kind: kind.value,
-    id: partyId.value === 'some' ? undefined : partyId.value || undefined,
+    id: partyId.value === 'some' || partyId.value === 'category' ? undefined : partyId.value || undefined,
+    category_id: partyId.value === 'category' && categoryId.value ? categoryId.value : undefined,
     ids: partyId.value === 'some' && picked.value.length ? picked.value.join(',') : undefined,
     from: from.value,
     to: to.value,
@@ -145,13 +150,24 @@ const changeKind = (value: Kind | string) => {
   }
   kind.value = value as Kind
   partyId.value = ''
+  categoryId.value = ''
   search.value = ''
   reload()
 }
 
 const groups = computed(() => (kind.value === 'customer' ? props.options.groups ?? [] : []))
 
+const categories = computed(() => (kind.value === 'customer' ? props.options.categories ?? [] : []))
+
 const changeParty = (value: string) => {
+  if (value.startsWith('category:')) {
+    categoryId.value = value.slice('category:'.length)
+    partyId.value = 'category'
+    picked.value = []
+    reload()
+    return
+  }
+  categoryId.value = ''
   if (value.startsWith('group:')) {
     picked.value = groups.value.find((g) => `group:${g.id}` === value)?.member_ids ?? []
     partyId.value = 'some'
@@ -205,12 +221,13 @@ const printStatement = () => window.print()
 
 
 const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' })[kind.value])
+const categoryName = computed(() => (props.options.categories ?? []).find((c) => c.id === categoryId.value)?.name ?? 'Category')
 const pickedLabel = computed(() => {
   const group = (props.options.groups ?? []).find((g) => g.member_ids.length === picked.value.length && g.member_ids.every((id) => picked.value.includes(id)))
   return group ? `${group.name} · group` : `${picked.value.length} ${partyLabel.value.toLowerCase()}${picked.value.length === 1 ? '' : 's'}`
 })
 const statementTitle = computed(() => (props.statement.combined
-  ? (props.filters.ids?.length ? pickedLabel.value : allLabel.value)
+  ? (props.filters.category_id ? `${categoryName.value} · category` : props.filters.ids?.length ? pickedLabel.value : allLabel.value)
   : props.statement.account || props.statement.party || 'No account or party selected'))
 </script>
 
@@ -251,6 +268,7 @@ const statementTitle = computed(() => (props.statement.combined
                   <SelectItem v-if="kind !== 'bank'" value="all">{{ allLabel }}</SelectItem>
                   <SelectItem v-if="kind !== 'bank'" value="some">{{ partyId === 'some' && picked.length ? pickedLabel : 'Choose several…' }}</SelectItem>
                   <SelectItem v-for="g in groups" :key="g.id" :value="`group:${g.id}`">{{ g.name }} · group</SelectItem>
+                  <SelectItem v-for="c in categories" :key="c.id" :value="`category:${c.id}`">{{ c.name }} · category</SelectItem>
                   <SelectSeparator v-if="kind !== 'bank'" />
                   <SelectItem v-for="opt in filteredOptions" :key="opt.id" :value="opt.id">
                     {{ opt.label }}<span v-if="opt.sublabel" class="text-text-tertiary"> · {{ opt.sublabel }}</span>
@@ -290,7 +308,7 @@ const statementTitle = computed(() => (props.statement.combined
               <Printer class="h-4 w-4" />
               Print
             </Button>
-            <Button v-if="kind === 'customer' && partyId && !['all', 'some'].includes(partyId)" variant="outline" as-child>
+            <Button v-if="kind === 'customer' && partyId && !['all', 'some', 'category'].includes(partyId)" variant="outline" as-child>
               <Link :href="`/${company.slug}/consolidated-invoices/create?customer_id=${partyId}&from=${from}&to=${to}`">
                 <FileText class="h-4 w-4" />
                 Consolidated invoice
@@ -322,6 +340,39 @@ const statementTitle = computed(() => (props.statement.combined
           <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="Math.abs(statement.closing_balance)" :currency="currency" :fraction-digits="0" /></div>
         </div>
       </div>
+
+      <Card v-if="statement.category_summary">
+        <CardHeader><CardTitle>By customer</CardTitle></CardHeader>
+        <CardContent>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-muted-foreground">
+                <th class="py-1">Customer</th>
+                <th class="py-1 text-right">Opening</th>
+                <th class="py-1 text-right">Bought</th>
+                <th class="py-1 text-right">Paid</th>
+                <th class="py-1 text-right">Owes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in statement.category_summary.rows" :key="r.customer_id" class="border-t">
+                <td class="py-1">{{ r.name }}</td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="r.opening" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="r.bought" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="r.paid" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="r.owes" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+              </tr>
+              <tr class="border-t font-semibold">
+                <td class="py-1">Total</td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="statement.category_summary.totals.opening" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="statement.category_summary.totals.bought" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="statement.category_summary.totals.paid" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+                <td class="py-1 text-right tabular-nums"><MoneyText :amount="statement.category_summary.totals.owes" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       <LedgerRegister
         :data="statement.rows"

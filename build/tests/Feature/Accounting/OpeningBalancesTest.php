@@ -91,7 +91,8 @@ test('amanat, employee advance and partner capital openings create sub-records l
 
     $amanatEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['amanat']->id && (float) $e->credit_amount === 30000.0);
     $advanceEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['advances']->id && (float) $e->debit_amount === 5000.0);
-    $partnerEntry = $entries->first(fn ($e) => $e->account_id === $f['accounts']['partner']->id && (float) $e->credit_amount === 1000000.0);
+    $partnerCapital = Account::find($partner->fresh()->capital_account_id);
+    $partnerEntry = $entries->first(fn ($e) => $partnerCapital && $e->account_id === $partnerCapital->id && (float) $e->credit_amount === 1000000.0);
     expect($amanatEntry)->not->toBeNull()
         ->and($advanceEntry)->not->toBeNull()
         ->and($partnerEntry)->not->toBeNull();
@@ -115,11 +116,13 @@ test('amanat, employee advance and partner capital openings create sub-records l
     expect($capital)->not->toBeNull()
         ->and($capital->transaction_type)->toBe('investment')
         ->and((float) $capital->amount)->toBe(1000000.0)
-        ->and($capital->journal_entry_id)->toBe($partnerEntry->id);
+        ->and($capital->journal_entry_id)->toBe($partnerEntry->id)
+        ->and($capital->gl_transaction_id)->toBe($journalId);
 
     expect(ledgerBalance($f['accounts']['amanat']))->toBe(-30000.0)
         ->and(ledgerBalance($f['accounts']['advances']))->toBe(5000.0)
-        ->and(ledgerBalance($f['accounts']['partner']))->toBe(-1000000.0);
+        ->and(ledgerBalance($partnerCapital))->toBe(-1000000.0)
+        ->and(ledgerBalance($f['accounts']['partner']))->toBe(0.0);
 
     $equity = Account::where('company_id', $f['company']->id)->where('code', '3080')->first();
     // assets 5000 − liabilities 1,030,000 = −1,025,000 → 3080 carries a debit of 1,025,000
@@ -350,6 +353,8 @@ test('re-saving replaces the previous opening records without duplicating balanc
 });
 
 test('re-saving every category across three generations never leaks balances or poisons the guard', function () {
+    // The fixture's accounting periods end in September; postings dated today need one open.
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
     $f = openingBalanceFixture();
     $customer = openingCustomer($f, 'Truck Company');
     $depositor = openingCustomer($f, 'Haji Saab');
@@ -435,7 +440,9 @@ test('re-saving every category across three generations never leaks balances or 
         ->and(ledgerBalance($f['accounts']['advances']))->toBe(6000.0)
         ->and(ledgerBalance($f['accounts']['amanat']))->toBe(-32000.0)
         ->and(ledgerBalance($f['accounts']['ap']))->toBe(-260000.0)
-        ->and(ledgerBalance($f['accounts']['partner']))->toBe(-900000.0);
+        ->and(ledgerBalance(Account::find($partner->fresh()->capital_account_id)))->toBe(-900000.0)
+        ->and(ledgerBalance($f['accounts']['partner']))->toBe(0.0)
+        ->and((float) $partner->fresh()->total_invested)->toBe(900000.0);
 
     $view = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('opening_balance.view', [], $f['user'], true));
     expect($view['rows']['credit_customers'])->toHaveCount(1)
@@ -609,6 +616,8 @@ test('viewing opening balances on a fresh company creates no equity account, sav
 });
 
 test('locking opening balances freezes the underlying opening invoice and bill against voiding', function () {
+    // The fixture's accounting periods end in September; postings dated today need one open.
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
     $f = openingBalanceFixture();
     $customer = openingCustomer($f, 'Truck Company');
     $vendor = Vendor::create([
@@ -878,4 +887,27 @@ test('once the opening date is in use, balances can still be added at that date 
     // Moving the date is still checked.
     expect(fn () => dispatchOpeningBalance($f, ['as_of_date' => '2026-09-01', 'cash' => ['amount' => 3]]))
         ->toThrow(\Illuminate\Validation\ValidationException::class);
+});
+
+
+test('opening capital for a partner is the opening of their statement and counts in the partner page net capital', function () {
+    $f = openingBalanceFixture();
+    $partner = Partner::create([
+        'company_id' => $f['company']->id,
+        'name' => 'Owner Three',
+        'profit_share_percentage' => 100,
+    ]);
+
+    dispatchOpeningBalance($f, [
+        'as_of_date' => '2026-08-31',
+        'partners' => [['partner_id' => $partner->id, 'amount' => 750000]],
+    ]);
+
+    $partner = $partner->fresh();
+    $statement = app(\App\Modules\Accounting\Services\PartnerStatementService::class)->statement($partner, '2026-09-01', '2026-09-30');
+    expect($statement['opening_balance'])->toBe(750000.0)
+        ->and($statement['closing_balance'])->toBe(750000.0)
+        ->and((float) $partner->total_invested)->toBe(750000.0)
+        ->and(app(\App\Services\PartnerLedgerService::class)->balance($partner))->toBe(750000.0)
+        ->and((float) PartnerTransaction::where('partner_id', $partner->id)->sum('amount'))->toBe(750000.0);
 });

@@ -28,6 +28,7 @@ use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CommandBus;
+use App\Services\PartnerLedgerService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -557,7 +558,12 @@ class SaveAction implements PaletteAction
                 $salaryPayslip->delete();
             }
 
-            PartnerTransaction::whereIn('journal_entry_id', $journal->journalEntries->pluck('id')->all())->delete();
+            $partnerRows = PartnerTransaction::where(fn ($q) => $q->whereIn('journal_entry_id', $journal->journalEntries->pluck('id')->all())->orWhere('gl_transaction_id', $journal->id))->get();
+            $partnerIds = $partnerRows->pluck('partner_id')->unique()->all();
+            $partnerRows->each->delete();
+            foreach (Partner::whereIn('id', $partnerIds)->get() as $affected) {
+                $affected->refreshTotals();
+            }
 
             $this->deleteJournal($journal);
         }
@@ -818,16 +824,15 @@ class SaveAction implements PaletteAction
         if (empty($rows)) {
             return;
         }
-        if (! $accounts['partner_deposits']) {
-            throw ValidationException::withMessages(['partners' => 'Set up account 2210 (Investor Deposits) first.']);
-        }
         foreach ($rows as $row) {
             $partner = Partner::where('company_id', $companyId)->findOrFail($row['partner_id']);
             $amount = round((float) $row['amount'], 2);
             $partnerId = $partner->id;
+            // Each partner's opening capital goes to their own Capital account.
+            $capital = app(PartnerLedgerService::class)->accountsFor($partner)['capital'];
             $lineIndex = count($lines);
-            $lines[] = ['account_id' => $accounts['partner_deposits'], 'type' => 'credit', 'amount' => $amount, 'description' => "Opening partner capital — {$partner->name}"];
-            $pending[] = function (array $entryIdsByLine) use ($companyId, $partnerId, $amount, $asOf, $lineIndex) {
+            $lines[] = ['account_id' => $capital->id, 'type' => 'credit', 'amount' => $amount, 'description' => "Opening partner capital — {$partner->name}"];
+            $pending[] = function (array $entryIdsByLine, ?string $journalId = null) use ($companyId, $partnerId, $amount, $asOf, $lineIndex) {
                 PartnerTransaction::create([
                     'company_id' => $companyId,
                     'partner_id' => $partnerId,
@@ -838,8 +843,10 @@ class SaveAction implements PaletteAction
                     'reference' => self::MARK,
                     'payment_method' => 'cash',
                     'journal_entry_id' => $entryIdsByLine[$lineIndex],
+                    'gl_transaction_id' => $journalId,
                     'recorded_by_user_id' => Auth::id(),
                 ]);
+                Partner::find($partnerId)?->refreshTotals();
             };
         }
     }

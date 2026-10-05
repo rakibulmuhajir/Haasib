@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StatementReportRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\CustomerCategory;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\AccountStatementService;
 use App\Models\Partner;
@@ -39,6 +40,7 @@ class StatementReportController extends Controller
         $to = $request->validated('to');
         $ids = array_values(array_filter(explode(',', (string) $request->validated('ids'))));
         $this->showReversed = (bool) $request->validated('reversed');
+        $categoryId = $kind === 'customer' ? $request->validated('category_id') : null;
 
         $bankAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash'])
@@ -56,7 +58,7 @@ class StatementReportController extends Controller
         $allCustomers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'customer_number']);
+            ->get(['id', 'name', 'customer_number', 'category_id']);
 
         $customers = $allCustomers
             ->reject(fn ($c) => $holderIds->has($c->id) && ! $holderIds[$c->id])
@@ -91,7 +93,15 @@ class StatementReportController extends Controller
         // A customer, supplier, holder or employee statement opens on everyone at once ('all'):
         // each of their transactions by date, named, with that person's own running balance.
         // With ids, only those people: a group, or any the user picked.
-        if ($kind !== 'bank' && ($id === null || $id === 'all' || $ids)) {
+        $categorySummary = null;
+        if ($categoryId) {
+            // A customer category: everyone in it, in one combined statement, plus each one's totals.
+            $members = $customers->filter(fn ($c) => $c->category_id === $categoryId)->values();
+            [$statement, $columns] = $this->allParties($members, fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to);
+            $resolvedId = 'category';
+            $categorySummary = $this->categorySummary($members, $from, $to);
+            $statement['category_summary'] = $categorySummary;
+        } elseif ($kind !== 'bank' && ($id === null || $id === 'all' || $ids)) {
             $pick = fn ($list) => $ids ? collect($list)->filter(fn ($p) => in_array(is_array($p) ? $p['id'] : $p->id, $ids, true))->values() : $list;
             [$statement, $columns, $resolvedId] = match ($kind) {
                 'customer' => $this->allParties($pick($customers), fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to),
@@ -123,7 +133,7 @@ class StatementReportController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
-            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'from' => $from, 'to' => $to, 'reversed' => $this->showReversed],
+            'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'category_id' => $categoryId, 'from' => $from, 'to' => $to, 'reversed' => $this->showReversed],
             'options' => [
                 'bank' => $bankAccounts,
                 'customer' => $customers,
@@ -132,6 +142,8 @@ class StatementReportController extends Controller
                 'employee' => $employees->values(),
                 'expense' => $expenseAccounts,
                 'partner' => $partners->values(),
+                'categories' => CustomerCategory::where('company_id', $company->id)->orderBy('name')->get(['id', 'name'])
+                    ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
                 // Customer groups: the group and its members, to pick in one go.
                 'groups' => Customer::where('company_id', $company->id)->whereNotNull('parent_customer_id')
                     ->where('is_active', true)->get(['id', 'parent_customer_id'])
@@ -145,6 +157,37 @@ class StatementReportController extends Controller
             'columns' => $columns,
             'statement' => $statement,
         ]);
+    }
+
+    /**
+     * Per customer for a category: opening, bought (invoiced), paid (received) and owes (closing),
+     * straight from each customer's own statement so the figures agree with it.
+     */
+    private function categorySummary($members, string $from, string $to): array
+    {
+        $rows = [];
+        foreach ($members as $member) {
+            [$s] = $this->customerStatement($members, $member->id, $from, $to);
+            $moves = array_filter($s['rows'], fn ($r) => ! in_array($r['type'], ['opening_balance', 'closing_balance'], true));
+            $bought = round((float) array_sum(array_column($moves, 'money_in')), 2);
+            $paid = round((float) array_sum(array_column($moves, 'money_out')), 2);
+            $opening = round((float) $s['opening_balance'], 2);
+            $closing = round((float) $s['closing_balance'], 2);
+            if (! $moves && abs($opening) < 0.005 && abs($closing) < 0.005) {
+                continue;
+            }
+            $rows[] = ['customer_id' => $member->id, 'name' => $member->name, 'opening' => $opening, 'bought' => $bought, 'paid' => $paid, 'owes' => $closing];
+        }
+
+        return [
+            'rows' => $rows,
+            'totals' => [
+                'opening' => round(array_sum(array_column($rows, 'opening')), 2),
+                'bought' => round(array_sum(array_column($rows, 'bought')), 2),
+                'paid' => round(array_sum(array_column($rows, 'paid')), 2),
+                'owes' => round(array_sum(array_column($rows, 'owes')), 2),
+            ],
+        ];
     }
 
     /**

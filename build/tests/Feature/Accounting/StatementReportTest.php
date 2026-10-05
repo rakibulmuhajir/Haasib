@@ -709,3 +709,47 @@ test('an entry and its reversal inside the range are hidden unless asked for, an
         ->and($hidden['closing_balance'])->toBe(2000.0)
         ->and($shown['closing_balance'])->toBe(2000.0);
 });
+
+test('a customer category statement lists only its customers, and opening and closing are the sum of theirs', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
+    $f = statementReportFixture();
+    $category = \App\Modules\Accounting\Models\CustomerCategory::create(['company_id' => $f['company']->id, 'name' => 'Transporters']);
+    $a = correctionCustomer($f, 'Cat One');
+    $b = correctionCustomer($f, 'Cat Two');
+    $outsider = correctionCustomer($f, 'Cat Outsider');
+    foreach ([$a, $b] as $member) {
+        $member->forceFill(['category_id' => $category->id])->save();
+    }
+    correctionInvoice($f, $a, 100, '2026-08-20');
+    correctionInvoice($f, $b, 50, '2026-08-21');
+    correctionInvoice($f, $a, 300, '2026-09-05');
+    correctionInvoice($f, $b, 200, '2026-09-06');
+    correctionInvoice($f, $outsider, 999, '2026-09-07');
+
+    $svc = app(CustomerStatementService::class);
+    $sa = $svc->statement($a->fresh(), '2026-09-01', '2026-09-24');
+    $sb = $svc->statement($b->fresh(), '2026-09-01', '2026-09-24');
+    expect(round($sa['opening_balance'] + $sb['opening_balance'], 2))->toEqual(150)
+        ->and(round($sa['closing_balance'] + $sb['closing_balance'], 2))->toEqual(650);
+
+    test()->actingAs($f['user'])
+        ->get("/{$f['company']->slug}/reports/statements?kind=customer&category_id={$category->id}&from=2026-09-01&to=2026-09-24")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.id', 'category')
+            ->where('filters.category_id', $category->id)
+            ->where('statement.combined', true)
+            ->where('statement.opening_balance', 150)
+            ->where('statement.closing_balance', 650)
+            ->has('statement.rows', 4)
+            ->has('statement.category_summary.rows', 2)
+            ->where('statement.category_summary.totals.opening', 150)
+            ->where('statement.category_summary.totals.bought', 500)
+            ->where('statement.category_summary.totals.owes', 650)
+        );
+
+    // A category from another company is refused.
+    test()->actingAs($f['user'])
+        ->get("/{$f['company']->slug}/reports/statements?kind=customer&category_id=".\Illuminate\Support\Str::uuid()."&from=2026-09-01&to=2026-09-24")
+        ->assertSessionHasErrors('category_id');
+});

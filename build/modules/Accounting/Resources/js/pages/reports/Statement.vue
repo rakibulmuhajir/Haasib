@@ -34,6 +34,7 @@ type Row = {
   balance: number
   link: string | null
   party?: string
+  vehicle?: string | null
 }
 
 type BankOption = { id: string; code: string; name: string }
@@ -207,6 +208,8 @@ const columns = computed<RegisterColumn<Row>[]>(() => [
   ...(props.statement.combined ? [{ key: 'party', label: 'Name', kind: 'text' } as RegisterColumn<Row>] : []),
   { key: 'reference', label: 'Reference', kind: 'ref' },
   { key: 'description', label: 'Description', kind: 'text' },
+  // Only when some invoice names the customer's vehicle.
+  ...(kind.value === 'customer' && props.statement.rows.some((r) => r.vehicle) ? [{ key: 'vehicle', label: 'Vehicle', kind: 'text' } as RegisterColumn<Row>] : []),
   { key: 'money_in', label: props.columns.money_in, kind: 'in' },
   { key: 'money_out', label: props.columns.money_out, kind: 'out' },
   { key: 'balance', label: props.columns.balance, kind: 'amount' },

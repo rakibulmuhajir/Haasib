@@ -11,8 +11,8 @@
     $billTo = $doc['bill_to'];
     $billedBy = array_filter($doc['billed_by'] ?? []);
     $label = $doc['labels'];
-    // Columns before Amount, for a subtotal row's colspan: Date, Reference?, Invoice no.?, Item, Qty, Rate.
-    $subtotalColspan = 3 + ($doc['show_reference'] ? 1 : 0) + ($doc['show_physical'] ? 1 : 0);
+    // Columns before Qty, for a subtotal row's colspan: Date, Reference?, Vehicle?, Invoice no.?, Item.
+    $subtotalColspan = 2 + ($doc['show_reference'] ? 1 : 0) + ($doc['show_physical'] ? 1 : 0) + ($doc['show_vehicle'] ?? false ? 1 : 0);
 @endphp
 <!doctype html>
 <html>
@@ -99,6 +99,7 @@
             <tr>
                 <th>{{ $label['date'] }}</th>
                 @if ($doc['show_reference'])<th>{{ $label['reference'] }}</th>@endif
+                @if ($doc['show_vehicle'] ?? false)<th>Vehicle</th>@endif
                 @if ($doc['show_physical'])<th>{{ $label['physical'] }}</th>@endif
                 <th>{{ $label['item'] }}</th>
                 <th class="num">{{ $label['quantity'] }}</th>
@@ -111,12 +112,15 @@
                 @if ($line['is_subtotal'] ?? false)
                     <tr>
                         <td class="mono" colspan="{{ $subtotalColspan }}"><strong>{{ $line['unit'] ?: '—' }} subtotal</strong></td>
+                        <td class="num"><strong>{{ $qty($line['quantity'] ?? null) }}</strong></td>
+                        <td></td>
                         <td class="num"><strong>{{ number_format($line['amount'], 2) }}</strong></td>
                     </tr>
                 @else
                     <tr>
                         <td class="mono">{{ $line['date'] }}</td>
                         @if ($doc['show_reference'])<td>{{ $line['reference'] ?? '' }}</td>@endif
+                        @if ($doc['show_vehicle'] ?? false)<td>{{ $line['vehicle'] ?? '' }}</td>@endif
                         @if ($doc['show_physical'])<td>{{ $line['physical_invoice'] ?? '' }}</td>@endif
                         <td>{{ $line['item'] ?? '' }}</td>
                         <td class="num">{{ $qty($line['quantity']) }}</td>

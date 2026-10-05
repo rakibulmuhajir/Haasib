@@ -67,6 +67,8 @@ class ConsolidatedInvoiceService
                     'date' => $invoice->invoice_date?->toDateString(),
                     'reference' => $reference,
                     'unit' => $unit,
+                    // The vehicle (unit) the invoice names, on its own: shown as a column.
+                    'vehicle' => $invoice->unit?->name,
                     'paid' => (float) $invoice->balance <= 0.005,
                     'balance' => round((float) $invoice->balance, 2),
                     'sent_in' => $last ? ['number' => $last->number, 'date' => substr((string) $last->created_at, 0, 10)] : null,
@@ -187,6 +189,7 @@ class ConsolidatedInvoiceService
             'date' => $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
             'unit' => $r['unit'] ?? null,
+            'vehicle' => $r['vehicle'] ?? null,
             'physical_invoice' => $text($physical[$r['key']] ?? '', 60),
             'item' => $r['item'] !== '' ? $r['item'] : $text($fill($r, 'item') ?? '', 60),
             'description' => $r['description'],
@@ -258,18 +261,21 @@ class ConsolidatedInvoiceService
             $grouped = [];
             $currentUnit = null;
             $subtotal = 0.0;
+            $subQty = 0.0;
             foreach ($lines as $line) {
                 $unit = $line['unit'] ?? '';
                 if ($currentUnit !== null && $unit !== $currentUnit) {
-                    $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'amount' => round($subtotal, 2)];
+                    $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'quantity' => round($subQty, 2), 'amount' => round($subtotal, 2)];
                     $subtotal = 0.0;
+                    $subQty = 0.0;
                 }
                 $currentUnit = $unit;
                 $subtotal += (float) $line['amount'];
+                $subQty += (float) ($line['quantity'] ?? 0);
                 $grouped[] = $line;
             }
             if ($currentUnit !== null) {
-                $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'amount' => round($subtotal, 2)];
+                $grouped[] = ['is_subtotal' => true, 'unit' => $currentUnit, 'quantity' => round($subQty, 2), 'amount' => round($subtotal, 2)];
             }
             $lines = $grouped;
         }
@@ -289,6 +295,7 @@ class ConsolidatedInvoiceService
             'lines' => $lines,
             // Reference always prints; the station's invoice no. only when something is in it.
             'show_reference' => true,
+            'show_vehicle' => collect($lines)->contains(fn ($l) => ! empty($l['vehicle'] ?? null)),
             'show_physical' => collect($lines)->contains(fn ($l) => ($l['physical_invoice'] ?? '') !== ''),
             'total' => (float) $doc->total,
             'currency' => $doc->currency,

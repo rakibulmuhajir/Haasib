@@ -18,6 +18,9 @@ interface Line {
   date: string
   reference: string
   physical_invoice?: string
+  vehicle?: string | null
+  is_subtotal?: boolean
+  unit?: string | null
   item?: string
   description: string
   quantity: number | null
@@ -44,6 +47,7 @@ const props = defineProps<{
     currency: string
     show_reference?: boolean
     show_physical?: boolean
+    show_vehicle?: boolean
     labels: Record<string, string>
     file_name: string
     issuer: DocumentIssuer
@@ -104,6 +108,7 @@ const print = () => window.print()
             <tr>
               <th>{{ document.labels.date }}</th>
               <th v-if="document.show_reference">{{ document.labels.reference }}</th>
+              <th v-if="document.show_vehicle">Vehicle</th>
               <th v-if="document.show_physical">{{ document.labels.physical }}</th>
               <th>{{ document.labels.item }}</th>
               <th class="num">{{ document.labels.quantity }}</th>
@@ -112,14 +117,23 @@ const print = () => window.print()
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(line, i) in document.lines" :key="i">
+            <tr v-for="(line, i) in document.lines" :key="i" :class="{ 'font-semibold': line.is_subtotal }">
+              <template v-if="line.is_subtotal">
+                <td :colspan="2 + (document.show_reference ? 1 : 0) + (document.show_vehicle ? 1 : 0) + (document.show_physical ? 1 : 0)">{{ line.unit || '—' }} subtotal</td>
+                <td class="num">{{ number(line.quantity) }}</td>
+                <td></td>
+                <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
+              </template>
+              <template v-else>
               <td>{{ line.date }}</td>
               <td v-if="document.show_reference">{{ line.reference }}</td>
+              <td v-if="document.show_vehicle">{{ line.vehicle }}</td>
               <td v-if="document.show_physical">{{ line.physical_invoice }}</td>
               <td>{{ line.item }}</td>
               <td class="num">{{ number(line.quantity) }}</td>
               <td class="num">{{ number(line.rate) }}</td>
               <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
+              </template>
             </tr>
           </tbody>
         </table>

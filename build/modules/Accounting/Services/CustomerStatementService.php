@@ -42,6 +42,7 @@ class CustomerStatementService
         Invoice::where('company_id', $customer->company_id)
             ->where('customer_id', $customer->id)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->with('unit')
             ->get()
             ->each(function (Invoice $invoice) use (&$rows) {
                 $rows[] = [
@@ -49,6 +50,8 @@ class CustomerStatementService
                     'type' => 'invoice',
                     'reference' => $invoice->invoice_number,
                     'description' => 'Invoice ' . $invoice->invoice_number,
+                    // The customer's vehicle (unit) the sale was for, when the invoice names one.
+                    'vehicle' => $invoice->unit?->name,
                     'debit' => (float) $invoice->total_amount,
                     'credit' => 0.0,
                     'source_id' => $invoice->id,

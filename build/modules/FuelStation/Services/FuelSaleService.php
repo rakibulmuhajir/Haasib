@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Services;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\CustomerUnit;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Models\Transaction;
@@ -55,6 +56,17 @@ class FuelSaleService
                 }
             }
 
+            // The buyer's own unit (a vehicle), when one was picked: it must be theirs.
+            $unit = null;
+            if (! empty($data['unit_id'])) {
+                $unit = ! empty($data['customer_id'])
+                    ? CustomerUnit::where('company_id', $company->id)->where('customer_id', $data['customer_id'])->find($data['unit_id'])
+                    : null;
+                if (! $unit) {
+                    throw new \InvalidArgumentException('Choose a unit belonging to this customer.');
+                }
+            }
+
             // Calculate amounts
             $quantity = $data['quantity'];
             $unitPrice = $this->determineUnitPrice($saleType, $currentRate, $data);
@@ -97,6 +109,8 @@ class FuelSaleService
                 'company_id' => $company->id,
                 'customer_id' => $this->resolveCustomerId($company, $saleType, $data),
                 'invoice_number' => $this->generateInvoiceNumber($company->id),
+                'unit_id' => $unit?->id,
+                'reference' => $unit?->name,
                 'invoice_date' => $data['sale_date'] ?? now()->toDateString(),
                 'due_date' => $this->calculateDueDate($saleType, $data),
                 'subtotal' => $lineTotal,

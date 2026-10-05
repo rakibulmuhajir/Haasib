@@ -31,7 +31,7 @@ class CustomerPeriodSummaryService
             ->where('customer_id', $customerId)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
             ->whereBetween('invoice_date', [$from, $to])
-            ->get(['id', 'discount_amount']);
+            ->get(['id', 'discount_amount', 'unit_id']);
 
         $lines = $invoices->isEmpty() ? collect() : InvoiceLineItem::where('company_id', $companyId)
             ->whereIn('invoice_id', $invoices->pluck('id'))
@@ -41,6 +41,8 @@ class CustomerPeriodSummaryService
 
         // Per product bucket: item_id (or 'other') => [qty, gross, discount].
         $buckets = [];
+        // Per vehicle bucket: unit id (or 'none') => [qty, gross, discount], same split of the discount.
+        $vehicleBuckets = [];
         foreach ($invoices as $invoice) {
             $invoiceLines = $lines->get($invoice->id, collect());
             $invoiceGross = round((float) $invoiceLines->sum('line_total'), 2);
@@ -60,6 +62,12 @@ class CustomerPeriodSummaryService
                 $buckets[$key]['qty'] += (float) $line->quantity;
                 $buckets[$key]['gross'] += $gross;
                 $buckets[$key]['discount'] += $share;
+
+                $vKey = $invoice->unit_id ?: 'none';
+                $vehicleBuckets[$vKey] ??= ['qty' => 0.0, 'gross' => 0.0, 'discount' => 0.0];
+                $vehicleBuckets[$vKey]['qty'] += (float) $line->quantity;
+                $vehicleBuckets[$vKey]['gross'] += $gross;
+                $vehicleBuckets[$vKey]['discount'] += $share;
             }
         }
 
@@ -86,6 +94,23 @@ class CustomerPeriodSummaryService
         }
         usort($products, fn ($a, $b) => [$a['name'] === 'Other', $a['name']] <=> [$b['name'] === 'Other', $b['name']]);
 
+        // Only for a customer who keeps vehicles (units); an invoice without one is "No vehicle".
+        $vehicles = [];
+        if ($customer->units()->exists()) {
+            $unitNames = DB::table('acct.customer_units')->where('customer_id', $customerId)->pluck('name', 'id');
+            foreach ($vehicleBuckets as $key => $b) {
+                $vehicles[] = [
+                    'unit_id' => $key === 'none' ? null : $key,
+                    'name' => $key === 'none' ? 'No vehicle' : (string) ($unitNames[$key] ?? 'No vehicle'),
+                    'quantity' => round($b['qty'], 2),
+                    'gross' => round($b['gross'], 2),
+                    'discount' => round($b['discount'], 2),
+                    'net' => round($b['gross'] - $b['discount'], 2),
+                ];
+            }
+            usort($vehicles, fn ($a, $b) => [$a['unit_id'] === null, $a['name']] <=> [$b['unit_id'] === null, $b['name']]);
+        }
+
         $totals = [
             'gross' => round(array_sum(array_column($products, 'gross')), 2),
             'discount' => round(array_sum(array_column($products, 'discount')), 2),
@@ -109,6 +134,7 @@ class CustomerPeriodSummaryService
             'from' => $from,
             'to' => $to,
             'products' => $products,
+            'vehicles' => $vehicles,
             'totals' => $totals,
             'money' => [
                 'opening' => $opening,

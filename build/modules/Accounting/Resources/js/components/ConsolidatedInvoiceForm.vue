@@ -19,6 +19,7 @@ export interface InvoiceRow {
   invoice_number: string
   date: string
   reference: string | null
+  vehicle?: string | null
   paid: boolean
   balance: number
   sent_in: { number: string; date: string } | null
@@ -142,6 +143,7 @@ const save = () => {
                 <span class="tabular-nums">{{ row.date }}</span>
                 <div class="text-xs text-muted-foreground">
                   {{ row.invoice_number }}
+                  <span v-if="row.vehicle"> · {{ row.vehicle }}</span>
                   <span v-if="row.sent_in"> · sent in {{ row.sent_in.number }}</span>
                 </div>
               </td>

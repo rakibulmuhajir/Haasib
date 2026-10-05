@@ -48,6 +48,7 @@ interface Customer {
   name: string
   email?: string | null
   phone?: string | null
+  units?: Array<{ id: string; name: string }>
 }
 
 interface Rate {
@@ -90,6 +91,9 @@ const quantity = ref<number | null>(null)
 const saleDate = ref<string>(entryDateDefault(companySlug.value))
 const saleType = ref<'retail' | 'bulk' | 'amanat' | 'investor' | 'credit' | 'parco_card'>('retail')
 const selectedCustomer = ref<Customer | null>(null)
+// The picked customer's own unit (a vehicle), for a customer who keeps them.
+const selectedUnitId = ref<string>('')
+const customerUnits = computed(() => selectedCustomer.value?.units ?? [])
 const selectedInvestor = ref(null)
 const discountPerLiter = ref<number | null>(null)
 const discountPercent = ref<number | null>(null)
@@ -225,12 +229,14 @@ const formatCurrency = (value: number) => {
 
 const selectCustomer = (customer: Customer) => {
   selectedCustomer.value = customer
+  selectedUnitId.value = ''
   showCustomerDialog.value = false
   customerSearch.value = ''
 }
 
 const clearCustomer = () => {
   selectedCustomer.value = null
+  selectedUnitId.value = ''
 }
 
 const resetForm = () => {
@@ -242,6 +248,7 @@ const resetForm = () => {
   directPaidInCash.value = true
   saleType.value = 'retail'
   selectedCustomer.value = null
+  selectedUnitId.value = ''
   discountPerLiter.value = null
   discountPercent.value = null
   discountTouched.value = false
@@ -295,6 +302,7 @@ const submitDirectSale = () => {
   if (!canSubmitDirect.value || !companySlug.value) return
   router.post(`/${companySlug.value}/fuel/sales/direct`, {
     customer_id: selectedCustomer.value?.id ?? null,
+    unit_id: selectedUnitId.value || null,
     item_id: selectedFuelItem.value!.id,
     quantity: quantity.value!,
     unit_price: directRate.value!,
@@ -323,6 +331,7 @@ const submitSale = () => {
     sale_date: saleDate.value,
     sale_type: saleType.value,
     customer_id: selectedCustomer.value?.id || null,
+    unit_id: selectedUnitId.value || null,
     investor_id: selectedInvestor.value?.id || null,
     discount_per_liter: discountPerLiter.value || null,
     discount_percent: discountPercent.value || null,
@@ -522,6 +531,16 @@ rememberEntryDate(companySlug.value, saleDate)
                 </Button>
               </div>
               <InputError :message="formErrors.customer_id?.[0]" />
+              <div v-if="customerUnits.length" class="space-y-1.5">
+                <Label>Vehicle</Label>
+                <Select v-model="selectedUnitId">
+                  <SelectTrigger aria-label="Vehicle"><SelectValue placeholder="Choose a vehicle" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="unit in customerUnits" :key="unit.id" :value="unit.id">{{ unit.name }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <InputError :message="formErrors.unit_id?.[0]" />
+              </div>
             </div>
 
             <!-- Discount: every sale type except investor (an investor already prices at

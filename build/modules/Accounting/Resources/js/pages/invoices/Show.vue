@@ -201,7 +201,7 @@ const documentDates = computed(() =>
       value: props.invoice.payment_terms ? `${props.invoice.payment_terms} days` : null,
     },
     { label: 'Reference', value: props.invoice.reference ?? null },
-    { label: 'Unit', value: props.invoice.unit?.name ?? null },
+    { label: 'Vehicle', value: props.invoice.unit?.name ?? null },
   ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
 )
 

@@ -63,6 +63,7 @@ interface StatementRow {
   type: 'opening_balance' | 'invoice' | 'payment' | 'credit_note'
   reference: string | null
   description: string
+  vehicle?: string | null
   debit: number
   credit: number
   source_id: string | null
@@ -81,10 +82,20 @@ interface SummaryProduct {
   link: string
 }
 
+interface SummaryVehicle {
+  unit_id: string | null
+  name: string
+  quantity: number
+  gross: number
+  discount: number
+  net: number
+}
+
 interface PeriodSummary {
   from: string
   to: string
   products: SummaryProduct[]
+  vehicles?: SummaryVehicle[]
   totals: { gross: number; discount: number; net: number }
   money: {
     opening: number
@@ -191,14 +202,15 @@ const submitDiscounts = () => {
   })
 }
 
-const columns = [
+const columns = computed(() => [
   { key: 'date', label: 'Date', kind: 'date' as const },
   { key: 'type', label: 'Type', kind: 'status' as const },
   { key: 'description', label: 'Description', kind: 'text' as const },
+  ...(props.statement.some((r) => r.vehicle) ? [{ key: 'vehicle', label: 'Vehicle', kind: 'text' as const }] : []),
   { key: 'debit', label: 'Debit', kind: 'amount' as const },
   { key: 'credit', label: 'Credit', kind: 'amount' as const },
   { key: 'balance', label: 'Balance', kind: 'amount' as const },
-]
+])
 
 const tableData = computed(() => {
   return props.statement.map((row, index) => ({
@@ -206,6 +218,7 @@ const tableData = computed(() => {
     date: row.date ? formatDate(row.date) : '—',
     type: row.type,
     description: row.description,
+    vehicle: row.vehicle ?? '',
     debit: row.debit,
     credit: row.credit,
     balance: row.balance,
@@ -391,6 +404,29 @@ const goBack = () => {
                 <td class="whitespace-nowrap py-1.5 pl-3 text-right"><MoneyText :amount="summary.totals.net" :currency="props.currency" /></td>
               </tr>
             </tfoot>
+          </table>
+        </div>
+
+        <div v-if="summary.vehicles?.length" class="overflow-x-auto">
+          <table class="w-full text-sm tabular-nums">
+            <thead>
+              <tr class="border-b border-rule-emphasis text-left text-xs text-text-secondary">
+                <th class="py-1.5 pr-3 font-medium">By vehicle</th>
+                <th class="px-3 py-1.5 text-right font-medium">Qty</th>
+                <th class="px-3 py-1.5 text-right font-medium">Gross</th>
+                <th class="px-3 py-1.5 text-right font-medium">Discount</th>
+                <th class="py-1.5 pl-3 text-right font-medium">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="v in summary.vehicles" :key="v.unit_id ?? 'none'" class="border-b border-rule-subtle">
+                <td class="py-1.5 pr-3" :class="v.unit_id ? '' : 'text-text-secondary'">{{ v.name }}</td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right">{{ formatQty(v.quantity) }}</td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="v.gross" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap px-3 py-1.5 text-right"><MoneyText :amount="v.discount" :currency="props.currency" /></td>
+                <td class="whitespace-nowrap py-1.5 pl-3 text-right"><MoneyText :amount="v.net" :currency="props.currency" /></td>
+              </tr>
+            </tbody>
           </table>
         </div>
 

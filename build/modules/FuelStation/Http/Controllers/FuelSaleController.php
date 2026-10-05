@@ -87,8 +87,14 @@ class FuelSaleController extends Controller
                 'name' => $item->name,
                 'fuel_category' => $item->fuel_category,
             ]),
+            // Each customer's active units (vehicles), for the unit picker.
             'customers' => Customer::where('company_id', $company->id)->where('is_active', true)
-                ->orderBy('name')->get(['id', 'name', 'email', 'phone']),
+                ->with(['units' => fn ($q) => $q->where('is_active', true)->orderBy('name')])
+                ->orderBy('name')->get(['id', 'name', 'email', 'phone'])
+                ->map(fn (Customer $c) => [
+                    'id' => $c->id, 'name' => $c->name, 'email' => $c->email, 'phone' => $c->phone,
+                    'units' => $c->units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values(),
+                ]),
             'rates' => $rates,
             // Per-customer, per-fuel-item discounts, keyed by customer id then item id, so
             // the form can prefill without a round trip once both are picked. See
@@ -147,6 +153,7 @@ class FuelSaleController extends Controller
                     'date' => $data['sale_date'],
                     'payment_terms' => $paidInCash ? 0 : null,
                     'is_direct_delivery' => true,
+                    'unit_id' => ! empty($data['customer_id']) ? ($data['unit_id'] ?? null) : null,
                     'line_items' => [[
                         'description' => rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
                         'quantity' => $data['quantity'],

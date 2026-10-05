@@ -90,6 +90,8 @@ interface Invoice {
   due_date: string
   description?: string
   reference?: string
+  // The customer's slip date when the sale was logged on another day; their copy carries it.
+  slip_date?: string | null
   unit?: { id: string; name: string } | null
   payment_terms?: number
   notes?: string
@@ -132,6 +134,13 @@ watch(() => props.invoice.reference, (value) => { slipNo.value = value ?? '' })
 const saveSlip = () => {
   if ((slipNo.value.trim() || null) === (props.invoice.reference ?? null)) return
   router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/reference`, { reference: slipNo.value.trim() || null }, { preserveScroll: true })
+}
+const slipDate = ref((props.invoice.slip_date ?? props.invoice.invoice_date ?? '').slice(0, 10))
+watch(() => props.invoice.slip_date, (value) => { slipDate.value = (value ?? props.invoice.invoice_date ?? '').slice(0, 10) })
+const saveSlipDate = () => {
+  const current = (props.invoice.slip_date ?? props.invoice.invoice_date ?? '').slice(0, 10)
+  if (!slipDate.value || slipDate.value === current) return
+  router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/reference`, { slip_date: slipDate.value }, { preserveScroll: true })
 }
 
 const setVehicle = (unitId: string) => {
@@ -213,7 +222,8 @@ const billTo = computed(() => ({
 
 const documentDates = computed(() =>
   [
-    { label: 'Issued', value: formatDate(props.invoice.invoice_date) },
+    // The customer's copy carries their slip's date; the books keep the booking date.
+    { label: 'Date', value: formatDate(props.invoice.slip_date ?? props.invoice.invoice_date) },
     { label: 'Due', value: formatDate(props.invoice.due_date) },
     {
       label: 'Terms',
@@ -318,6 +328,7 @@ const voidInvoice = () => {
         </SelectContent>
       </Select>
       <Input v-if="invoice.status !== 'void'" v-model="slipNo" class="h-9 w-28" maxlength="100" placeholder="Slip no." aria-label="Slip number" @keydown.enter="saveSlip" @blur="saveSlip" />
+      <Input v-if="invoice.status !== 'void'" v-model="slipDate" type="date" class="h-9 w-40" aria-label="Slip date" title="Slip date" @change="saveSlipDate" />
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back

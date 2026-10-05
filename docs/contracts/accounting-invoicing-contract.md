@@ -658,6 +658,21 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   values the invoice already has are never overridden.
 - `bill_to.address` / `billed_by.address`: one line joining street, line 2, city, state, postal code, country (empty parts dropped).
 - `billed_by` defaults come from company settings `billed_by_name` / `billed_by_designation` / `billed_by_phone`.
+- **Customer's slip on an invoice** (2026-10-05): `acct.invoices.reference` is the slip / coupon number (a vehicle
+  no longer fills it; the vehicle is `unit_id`). `acct.invoices.slip_date` date null: the slip's own date when the sale
+  was logged on another day (null = same as `invoice_date`). Both are labels: `invoice.set_reference`
+  (PATCH `/{company}/invoices/{id}/reference`, either field) may write them on any invoice, a posted daily close's
+  included (`fuel.protect_close_credit_invoice` and `Invoice`'s guard allow `unit_id`, `reference`, `slip_date`). The
+  invoice date, journal, aging and reports keep the booking date; the customer's copy (invoice document "Date",
+  consolidated rows) shows `slip_date ?? invoice_date`. Invoice list filter `slip_differs=1` lists the ones that differ.
+- **Consolidated lines as sent**: the form may set each line's `date` (`dates[key]`, Y-m-d) and detail (`items[key]`)
+  and `reference`; quantity, rate and amount are always the invoice's. Each saved line keeps `booked_date`. The
+  separate "Invoice no." (`physical`) column is no longer offered (old documents keep theirs).
+- **Correction artifacts out of everyday views** (2026-10-05): an invoice split by a correction
+  (`Invoice::splitOriginals()`, `acct.corrections` entity_type=invoice, action=split) and the credit notes against it net
+  to zero for the customer. Scopes `Invoice::withoutCorrectionArtifacts()` / `CreditNote::withoutCorrectionArtifacts()`
+  drop them from the customer statement, the customer page and list totals (always) and from the invoice / credit note
+  lists (unless `show_corrections=1`). They stay in the books, the journal and the corrections history.
 
 ## Extending
 - Fuel Daily Close may create a sent base-currency invoice for the unpaid portion

@@ -14,6 +14,9 @@ class SetInvoiceReferenceRequest extends BaseFormRequest
 
     public function rules(): array
     {
-        return ['reference' => ['nullable', 'string', 'max:100']];
+        return [
+            'reference' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'slip_date' => ['sometimes', 'nullable', 'date'],
+        ];
     }
 }

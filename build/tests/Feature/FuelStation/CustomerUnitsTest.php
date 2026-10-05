@@ -271,3 +271,47 @@ test('the slip number can be written on a posted close invoice afterwards, its m
     expect(fn () => DB::table('acct.invoices')->where('id', $invoice->id)->update(['subtotal' => 1]))
         ->toThrow(\Illuminate\Database\QueryException::class);
 });
+
+test('a slip date on a posted close invoice is what the customer copy and consolidated lines carry, the books keep the booking date', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $booked = $invoice->invoice_date->toDateString();
+    $slip = $invoice->invoice_date->copy()->subDay()->toDateString();
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('invoice.set_reference', ['id' => $invoice->id, 'slip_date' => $slip], $f['user'], true));
+    expect($invoice->fresh()->slip_date->toDateString())->toBe($slip)
+        ->and($invoice->fresh()->invoice_date->toDateString())->toBe($booked);
+
+    $row = collect(app(ConsolidatedInvoiceService::class)->rowsFor($f['company']->id, $f['customer']->id, '2026-01-01', '2026-12-31'))->sole();
+    expect($row['date'])->toBe($slip)->and($row['booked_date'])->toBe($booked);
+
+    // The same day as the booking is no slip date at all.
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('invoice.set_reference', ['id' => $invoice->id, 'slip_date' => $booked], $f['user'], true));
+    expect($invoice->fresh()->slip_date)->toBeNull();
+});
+
+test('a split invoice and its credit notes stay out of the statement and the lists unless asked for', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $total = round((float) $invoice->total_amount, 2);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('correction.invoice_split', [
+        'invoice_id' => $invoice->id, 'reason' => 'Two vehicles.',
+        'shares' => [
+            ['customer_id' => $f['customer']->id, 'amount' => 1000],
+            ['customer_id' => $f['customer']->id, 'amount' => round($total - 1000, 2)],
+        ],
+    ], $f['user'], true));
+
+    $rows = collect(app(CustomerStatementService::class)->statement($f['customer'])['rows']);
+    expect($rows->where('type', 'credit_note'))->toHaveCount(0)
+        ->and($rows->where('type', 'invoice')->pluck('source_id')->all())->not->toContain($invoice->id)
+        ->and(round($rows->where('type', 'invoice')->sum('debit'), 2))->toBe($total);
+
+    expect(Invoice::where('company_id', $f['company']->id)->withoutCorrectionArtifacts()->count())->toBe(2)
+        ->and(\App\Modules\Accounting\Models\CreditNote::where('company_id', $f['company']->id)->withoutCorrectionArtifacts()->count())->toBe(0)
+        ->and(\App\Modules\Accounting\Models\CreditNote::where('company_id', $f['company']->id)->count())->toBe(2);
+});

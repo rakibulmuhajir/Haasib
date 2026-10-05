@@ -64,6 +64,8 @@ const props = defineProps<{
     status: string
     customer_id: string
     show_voided?: boolean
+    show_corrections?: boolean
+    slip_differs?: boolean
   }
 }>()
 
@@ -71,6 +73,8 @@ const search = ref(props.filters.search)
 const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
 const showVoided = ref(props.filters.show_voided ?? false)
+const showCorrections = ref(props.filters.show_corrections ?? false)
+const slipDiffers = ref(props.filters.slip_differs ?? false)
 const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -87,6 +91,8 @@ const query = (page?: number) => ({
   status: status.value === 'all' ? '' : status.value,
   customer_id: customerId.value,
   show_voided: showVoided.value ? 1 : undefined,
+  show_corrections: showCorrections.value ? 1 : undefined,
+  slip_differs: slipDiffers.value ? 1 : undefined,
   page,
 })
 
@@ -179,6 +185,14 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
       <div class="flex items-center gap-2">
         <Switch id="show-voided" v-model:checked="showVoided" @update:checked="handleSearch" />
         <Label for="show-voided" class="text-sm text-text-secondary">{{ t('showVoided') }}</Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch id="show-corrections" v-model:checked="showCorrections" @update:checked="handleSearch" />
+        <Label for="show-corrections" class="text-sm text-text-secondary">Show corrections</Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch id="slip-differs" v-model:checked="slipDiffers" @update:checked="handleSearch" />
+        <Label for="slip-differs" class="text-sm text-text-secondary">Slip on another day</Label>
       </div>
     </div>
 

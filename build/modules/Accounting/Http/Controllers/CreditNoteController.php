@@ -45,6 +45,11 @@ class CreditNoteController extends Controller
         if ($request->has('customer_id') && $request->customer_id) {
             $query->where('customer_id', $request->customer_id);
         }
+        // Credit notes a split correction made are the books' business (see Invoice::splitOriginals).
+        $showCorrections = $request->boolean('show_corrections', false);
+        if (! $showCorrections) {
+            $query->withoutCorrectionArtifacts();
+        }
 
         $creditNotes = $query->paginate(25)->withQueryString();
 
@@ -60,6 +65,7 @@ class CreditNoteController extends Controller
                 'search' => $request->search ?? '',
                 'status' => $request->status ?? 'all',
                 'customer_id' => $request->customer_id ?? '',
+                'show_corrections' => $showCorrections,
             ],
         ]);
     }

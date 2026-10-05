@@ -123,4 +123,13 @@ class CreditNote extends Model
 
         return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
     }
+
+    /** Credit notes against a split invoice (see Invoice::splitOriginals): kept in the books, out of everyday views. */
+    public function scopeWithoutCorrectionArtifacts($query)
+    {
+        $table = $this->getTable();
+
+        return $query->where(fn ($q) => $q->whereNull("{$table}.invoice_id")
+            ->orWhereNotIn("{$table}.invoice_id", Invoice::splitOriginals()));
+    }
 }

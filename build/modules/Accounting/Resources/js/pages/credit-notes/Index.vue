@@ -8,6 +8,8 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   DropdownMenu,
@@ -78,12 +80,15 @@ const props = defineProps<{
     search: string
     status: string
     customer_id: string
+    show_corrections?: boolean
   }
 }>()
 
 const search = ref(props.filters.search)
 const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
+// Credit notes a split correction made are the books' business; off unless asked for.
+const showCorrections = ref(props.filters.show_corrections ?? false)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -97,6 +102,7 @@ const handleSearch = () => {
       search: search.value,
       status: status.value === 'all' ? '' : status.value,
       customer_id: customerId.value,
+      show_corrections: showCorrections.value ? 1 : undefined,
     },
     { preserveState: true }
   )
@@ -188,6 +194,10 @@ const tableData = computed(() => {
           <SelectItem value="void">Void</SelectItem>
         </SelectContent>
       </Select>
+      <div class="flex items-center gap-2">
+        <Switch id="show-corrections" v-model:checked="showCorrections" @update:checked="handleSearch" />
+        <Label for="show-corrections" class="text-sm text-text-secondary">Show corrections</Label>
+      </div>
     </div>
 
     <!-- Data Table -->

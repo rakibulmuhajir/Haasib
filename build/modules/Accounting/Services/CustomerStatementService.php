@@ -39,9 +39,12 @@ class CustomerStatementService
     {
         $rows = [];
 
+        // A split invoice and its credit notes net to nothing for the customer: the statement
+        // shows the invoices the sale was split into (Invoice::splitOriginals).
         Invoice::where('company_id', $customer->company_id)
             ->where('customer_id', $customer->id)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->withoutCorrectionArtifacts()
             ->with('unit')
             ->get()
             ->each(function (Invoice $invoice) use (&$rows) {
@@ -81,6 +84,7 @@ class CustomerStatementService
             CreditNote::where('company_id', $customer->company_id)
                 ->where('customer_id', $customer->id)
                 ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+                ->withoutCorrectionArtifacts()
                 ->get()
                 ->each(function (CreditNote $creditNote) use (&$rows) {
                     $rows[] = [

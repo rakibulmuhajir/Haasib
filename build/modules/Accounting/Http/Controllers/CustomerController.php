@@ -113,6 +113,7 @@ class CustomerController extends Controller
 
         // Aggregate financials per customer to avoid N+1 in the grid
         $invoiceAggregates = Invoice::where('company_id', $company->id)
+            ->withoutCorrectionArtifacts()
             ->selectRaw('customer_id, SUM(balance) AS open_balance, COUNT(*) AS invoice_count')
             ->groupBy('customer_id')
             ->get()
@@ -120,6 +121,7 @@ class CustomerController extends Controller
 
         $creditTotals = CreditNote::where('company_id', $company->id)
             ->where('status', '!=', 'void')
+            ->withoutCorrectionArtifacts()
             ->selectRaw('customer_id, SUM(amount) AS total_credit, COUNT(*) AS credit_count')
             ->groupBy('customer_id')
             ->get()
@@ -128,6 +130,7 @@ class CustomerController extends Controller
         $creditApplied = DB::table('acct.credit_note_applications as cna')
             ->join('acct.credit_notes as cn', 'cn.id', '=', 'cna.credit_note_id')
             ->where('cn.company_id', $company->id)
+            ->where(fn ($q) => $q->whereNull('cn.invoice_id')->orWhereNotIn('cn.invoice_id', Invoice::splitOriginals()))
             ->selectRaw('cn.customer_id, SUM(cna.amount_applied) AS total_applied')
             ->groupBy('cn.customer_id')
             ->get()
@@ -216,8 +219,10 @@ class CustomerController extends Controller
         $customer = Customer::where('company_id', $company->id)
             ->findOrFail($customerId);
 
+        // A split invoice and its credit notes net to nothing: counting them would bill the sale twice.
         $invoiceSummary = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
+            ->withoutCorrectionArtifacts()
             ->selectRaw('COALESCE(SUM(balance), 0) AS open_balance')
             ->selectRaw('COALESCE(SUM(total_amount), 0) AS total_billed')
             ->selectRaw('COUNT(*) AS invoice_count')
@@ -227,6 +232,7 @@ class CustomerController extends Controller
         $creditSummary = CreditNote::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->where('status', '!=', 'void')
+            ->withoutCorrectionArtifacts()
             ->selectRaw('COALESCE(SUM(amount), 0) AS total_credit')
             ->selectRaw('COUNT(*) AS credit_count')
             ->first();
@@ -235,6 +241,7 @@ class CustomerController extends Controller
             ->join('acct.credit_notes as cn', 'cn.id', '=', 'cna.credit_note_id')
             ->where('cn.company_id', $company->id)
             ->where('cn.customer_id', $customer->id)
+            ->where(fn ($q) => $q->whereNull('cn.invoice_id')->orWhereNotIn('cn.invoice_id', Invoice::splitOriginals()))
             ->sum('cna.amount_applied');
 
         $availableCredit = max(0, (float) ($creditSummary->total_credit ?? 0) - (float) $creditApplied);
@@ -257,6 +264,7 @@ class CustomerController extends Controller
 
         $invoicedYtd = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
+            ->withoutCorrectionArtifacts()
             ->whereYear('invoice_date', now()->year)
             ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
@@ -282,6 +290,7 @@ class CustomerController extends Controller
 
         $invoices = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
+            ->withoutCorrectionArtifacts()
             ->orderByDesc('invoice_date')
             ->limit(25)
             ->get([

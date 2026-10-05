@@ -67,7 +67,10 @@ class ConsolidatedInvoiceService
                     'key' => $line->id,
                     'invoice_id' => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
-                    'date' => $invoice->invoice_date?->toDateString(),
+                    // The customer's slip date when it was logged on another day; the booking
+                    // date otherwise. booked_date keeps the books' own date alongside.
+                    'date' => ($invoice->slip_date ?? $invoice->invoice_date)?->toDateString(),
+                    'booked_date' => $invoice->invoice_date?->toDateString(),
                     'reference' => $reference,
                     'unit' => $unit,
                     // The vehicle (unit) the invoice names, on its own: shown as a column.
@@ -174,6 +177,11 @@ class ConsolidatedInvoiceService
         $text = fn ($v, int $max = 120) => mb_substr(trim((string) $v), 0, $max);
         $references = $data['references'] ?? [];
         $physical = $data['physical'] ?? [];
+        // The date and detail each line prints with, as edited on the form: a document for the
+        // customer, so it may read their slip's date. Litres, rate and amount stay the books'.
+        $dates = $data['dates'] ?? [];
+        $items = $data['items'] ?? [];
+        $dateFor = fn (array $r) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($dates[$r['key']] ?? '')) ? $dates[$r['key']] : $r['date'];
         // Blank cells the user filled in (fuel, litres, rate). A value the invoice has is kept.
         $fills = $data['fills'] ?? [];
         $fill = fn (array $r, string $field) => $fills[$r['key']][$field] ?? null;
@@ -189,12 +197,15 @@ class ConsolidatedInvoiceService
         $lines = array_map(fn ($r) => [
             'invoice_id' => $r['invoice_id'],
             'invoice_number' => $r['invoice_number'],
-            'date' => $r['date'],
+            'date' => $dateFor($r),
+            'booked_date' => $r['booked_date'] ?? $r['date'],
             'reference' => $text($references[$r['key']] ?? $r['reference'] ?? '', 100),
             'unit' => $r['unit'] ?? null,
             'vehicle' => $r['vehicle'] ?? null,
             'physical_invoice' => $text($physical[$r['key']] ?? '', 60),
-            'item' => $r['item'] !== '' ? $r['item'] : $text($fill($r, 'item') ?? '', 60),
+            'item' => ($items[$r['key']] ?? null) !== null && trim((string) $items[$r['key']]) !== ''
+                ? $text($items[$r['key']], 60)
+                : ($r['item'] !== '' ? $r['item'] : $text($fill($r, 'item') ?? '', 60)),
             'description' => $r['description'],
             'quantity' => $r['quantity'] ?? (is_numeric($fill($r, 'quantity')) ? round((float) $fill($r, 'quantity'), 2) : null),
             'rate' => $r['rate'] ?? (is_numeric($fill($r, 'rate')) ? round((float) $fill($r, 'rate'), 2) : null),

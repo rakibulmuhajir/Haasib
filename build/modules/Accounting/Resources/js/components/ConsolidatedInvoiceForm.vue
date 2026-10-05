@@ -20,6 +20,8 @@ export interface InvoiceRow {
   invoice_id: string
   invoice_number: string
   date: string
+  // The books' date; date is the customer's slip date when the sale was logged on another day.
+  booked_date?: string
   reference: string | null
   vehicle?: string | null
   paid: boolean
@@ -56,6 +58,9 @@ const form = useForm({
   references: {} as Record<string, string>,
   // The station's own physical invoice / coupon number per line, typed here (optional column).
   physical: {} as Record<string, string>,
+  // Per line, as the customer's copy should read: the date and the detail.
+  dates: {} as Record<string, string>,
+  items: {} as Record<string, string>,
   // Cells the invoice left blank (fuel, litres, rate), filled in here.
   fills: {} as Record<string, { item?: string; quantity?: number | null; rate?: number | null }>,
   // Column headings, renamable; they print as typed.
@@ -72,6 +77,8 @@ watch(() => [props.rows, props.billTo, props.billedBy], () => {
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, false]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
+  form.dates = Object.fromEntries(props.rows.map((r) => [r.key, r.date]))
+  form.items = Object.fromEntries(props.rows.map((r) => [r.key, r.item ?? '']))
   form.fills = Object.fromEntries(props.rows.map((r) => [r.key, {}]))
   form.headings = { ...(props.labels ?? {}) }
   form.bill_to = { name: props.billTo?.name ?? '', attention: props.billTo?.attention ?? '', phone: props.billTo?.phone ?? '', address: props.billTo?.address ?? '' }
@@ -166,8 +173,9 @@ const save = () => {
           <tbody>
             <tr v-for="row in shown" :key="row.key" class="border-b last:border-0" :class="picked[row.key] ? '' : 'text-muted-foreground'">
               <td class="px-3 py-1.5"><Checkbox v-model="picked[row.key]" :aria-label="`Include ${row.invoice_number}`" /></td>
-              <td class="whitespace-nowrap px-2 py-1.5">
-                <span class="tabular-nums">{{ row.date }}</span>
+              <td class="whitespace-nowrap px-2 py-1">
+                <Input v-model="form.dates[row.key]" type="date" class="h-7 w-36 text-xs tabular-nums" :aria-label="`${form.headings.date} for ${row.invoice_number}`" />
+                <div v-if="row.booked_date && form.dates[row.key] !== row.booked_date" class="text-xs text-status-attention">Booked {{ row.booked_date }}</div>
                 <div class="text-xs text-muted-foreground">
                   {{ row.invoice_number }}
                   <span v-if="row.vehicle"> · {{ row.vehicle }}</span>
@@ -176,8 +184,7 @@ const save = () => {
               </td>
               <td class="px-2 py-1"><Input v-model="form.references[row.key]" class="h-7 w-28 text-xs" :aria-label="`Reference for ${row.invoice_number}`" /></td>
               <td class="px-2 py-1">
-                <span v-if="row.item">{{ row.item }}</span>
-                <Input v-else v-model="form.fills[row.key].item" class="h-7 w-24 text-xs" :aria-label="`${form.headings.item} for ${row.invoice_number}`" />
+                <Input v-model="form.items[row.key]" class="h-7 w-28 text-xs" :aria-label="`${form.headings.item} for ${row.invoice_number}`" />
               </td>
               <td class="px-2 py-1 text-right tabular-nums">
                 <span v-if="row.quantity !== null">{{ number(row.quantity) }}</span>

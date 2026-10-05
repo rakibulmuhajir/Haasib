@@ -25,6 +25,10 @@ class StoreConsolidatedInvoiceRequest extends BaseFormRequest
             'references' => ['nullable', 'array'],
             'physical' => ['nullable', 'array'],
             'fills' => ['nullable', 'array'],
+            // Per line, as the customer's documents should read: the slip's date and the detail.
+            'dates' => ['nullable', 'array'],
+            'dates.*' => ['nullable', 'date_format:Y-m-d'],
+            'items' => ['nullable', 'array'],
             'headings' => ['nullable', 'array'],
             'bill_to' => ['nullable', 'array'],
             'billed_by' => ['nullable', 'array'],

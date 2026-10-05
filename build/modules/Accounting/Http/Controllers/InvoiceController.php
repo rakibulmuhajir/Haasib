@@ -59,6 +59,16 @@ class InvoiceController extends Controller
         if (! $showVoided) {
             $query->whereNotIn('status', ['void', 'cancelled']);
         }
+        // Split invoices are the books' business; the invoices they were split into are listed.
+        $showCorrections = $request->boolean('show_corrections', false);
+        if (! $showCorrections) {
+            $query->withoutCorrectionArtifacts();
+        }
+        // Booked on another day than the customer's slip says: the ones whose documents carry the slip date.
+        $slipDiffers = $request->boolean('slip_differs', false);
+        if ($slipDiffers) {
+            $query->whereNotNull('slip_date')->whereColumn('slip_date', '<>', 'invoice_date');
+        }
 
         $invoices = $query->paginate(25)->withQueryString();
 
@@ -77,6 +87,8 @@ class InvoiceController extends Controller
                 'from' => $request->from ?? '',
                 'to' => $request->to ?? '',
                 'show_voided' => $showVoided,
+                'show_corrections' => $showCorrections,
+                'slip_differs' => $slipDiffers,
             ],
         ]);
     }
@@ -406,9 +418,9 @@ class InvoiceController extends Controller
     {
         app(\App\Services\CommandBus::class)->dispatch('invoice.set_reference', [
             'id' => $request->route('invoice'),
-            'reference' => $request->validated('reference'),
+            ...$request->safe()->only(['reference', 'slip_date']),
         ], $request->user());
 
-        return back()->with('success', 'Reference saved');
+        return back()->with('success', 'Slip saved');
     }
 }

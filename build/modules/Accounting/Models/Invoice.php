@@ -25,7 +25,8 @@ class Invoice extends Model
             // unit_id (the customer's vehicle) is a label, no money: it may be named or corrected
             // after the close too (SetUnitAction; the DB guard allows it since 2026_10_05_000005), and
             // so may the reference, the slip number (SetReferenceAction; 2026_10_05_000008).
-            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount', 'unit_id', 'reference'];
+            // The slip date (the customer's physical slip, for their documents) likewise: 2026_10_05_000009.
+            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount', 'unit_id', 'reference', 'slip_date'];
             // total/discount only count as settlement when they move together as a discount:
             // the discount grows and the total falls by exactly that much. Any other change to
             // them is a change of principal and goes through assertMutable like everything else.
@@ -68,6 +69,7 @@ class Invoice extends Model
         'notes',
         'reference',
         'unit_id',
+        'slip_date',
         'internal_notes',
         'sent_at',
         'viewed_at',
@@ -87,6 +89,7 @@ class Invoice extends Model
         'unit_id' => 'string',
         'recurring_schedule_id' => 'string',
         'invoice_date' => 'date',
+        'slip_date' => 'date',
         'due_date' => 'date',
         'subtotal' => 'decimal:6',
         'tax_amount' => 'decimal:6',
@@ -119,6 +122,22 @@ class Invoice extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    /**
+     * Invoices a correction split (CorrectionService::invoiceSplit): credited off in full, each
+     * share an invoice of its own. They and the credit notes against them net to nothing for the
+     * customer, so they stay in the books but out of everyday views (statements, lists, totals).
+     */
+    public static function splitOriginals(): \Illuminate\Database\Query\Builder
+    {
+        return \Illuminate\Support\Facades\DB::table('acct.corrections')
+            ->where('entity_type', 'invoice')->where('action', 'split')->select('entity_id');
+    }
+
+    public function scopeWithoutCorrectionArtifacts($query)
+    {
+        return $query->whereNotIn($this->getTable().'.id', self::splitOriginals());
     }
 
     public function unit()

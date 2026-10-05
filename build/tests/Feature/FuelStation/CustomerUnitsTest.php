@@ -200,3 +200,61 @@ test('reopening a close keeps a vehicle named on its invoice after posting', fun
     $draft = json_decode(DB::table('fuel.daily_close_drafts')->where('company_id', $f['company']->id)->value('payload'), true);
     expect($draft['credit_sales'][0]['unit_id'])->toBe($unit->id);
 });
+
+test('a posted close invoice splits by vehicle into invoices of their own, the day stays as posted and cannot be reopened', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $total = round((float) $invoice->total_amount, 2);
+    $gen = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'name' => 'GENERATOR']);
+    $truck = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $f['customer']->id, 'name' => 'GBK-339']);
+    $close = \App\Modules\Accounting\Models\Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->sole();
+    $journal = fn () => DB::table('acct.journal_entries')->where('transaction_id', $close->id)->orderBy('id')->get(['account_id', 'debit_amount', 'credit_amount'])->toArray();
+    $before = $journal();
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('correction.invoice_split', [
+        'invoice_id' => $invoice->id,
+        'reason' => 'One sale was two vehicles.',
+        'shares' => [
+            ['customer_id' => $f['customer']->id, 'amount' => 1000, 'unit_id' => $truck->id, 'quantity' => 4, 'reference' => '110'],
+            ['customer_id' => $f['customer']->id, 'amount' => round($total - 1000, 2), 'unit_id' => $gen->id],
+        ],
+    ], $f['user'], true));
+
+    $shares = Invoice::where('company_id', $f['company']->id)->whereKeyNot($invoice->id)->with('lineItems')->orderBy('invoice_number')->get();
+    expect($shares)->toHaveCount(2)
+        ->and($shares[0]->unit_id)->toBe($truck->id)
+        ->and($shares[0]->reference)->toBe('110')
+        ->and((float) $shares[0]->lineItems[0]->quantity)->toBe(4.0)
+        ->and((float) $shares[0]->lineItems[0]->unit_price)->toBe(250.0)
+        ->and($shares[1]->unit_id)->toBe($gen->id)
+        ->and(round((float) $shares->sum('total_amount'), 2))->toBe($total)
+        ->and((float) $invoice->fresh()->balance)->toBe(0.0)
+        ->and($journal())->toEqual($before);
+
+    // Litres and money are counted once: the shares, not the credited original as well.
+    $summary = app(CustomerPeriodSummaryService::class)->run($f['company']->id, $f['customer']->id, '2026-09-01', '2026-09-30', $f['company']->slug);
+    expect(round(array_sum(array_column($summary['vehicles'], 'gross')), 2))->toBe($total);
+
+    expect(fn () => app(\App\Modules\FuelStation\Services\DailyCloseReopenService::class)->reopen($close->fresh(), $f['user'], 'Try to edit the day.'))
+        ->toThrow(\RuntimeException::class, 'split after posting');
+});
+
+test('a vehicle share must be one of that customer vehicles', function () {
+    $f = creditCloseFixture();
+    app(\App\Services\CurrentCompany::class)->set($f['company']);
+    creditClosePost($f);
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+    $other = Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'C-9', 'name' => 'Other', 'base_currency' => 'PKR', 'ar_account_id' => $f['accounts']['1100']->id, 'is_active' => true]);
+    $foreign = CustomerUnit::create(['company_id' => $f['company']->id, 'customer_id' => $other->id, 'name' => 'X-1']);
+    $total = round((float) $invoice->total_amount, 2);
+
+    expect(fn () => app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('correction.invoice_split', [
+        'invoice_id' => $invoice->id, 'reason' => 'Wrong vehicle.',
+        'shares' => [
+            ['customer_id' => $f['customer']->id, 'amount' => 1000, 'unit_id' => $foreign->id],
+            ['customer_id' => $f['customer']->id, 'amount' => round($total - 1000, 2)],
+        ],
+    ], $f['user'], true)))->toThrow(\Illuminate\Validation\ValidationException::class);
+});

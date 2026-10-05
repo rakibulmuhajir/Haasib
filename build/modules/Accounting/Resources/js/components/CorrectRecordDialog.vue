@@ -28,13 +28,19 @@ const props = withDefaults(defineProps<{
   parties: { id: string; name: string }[]
   // Payments already applied to this invoice or bill, shown before a split.
   appliedPayments?: { number: string; party: string | null; amount: number | string }[]
-}>(), { party: 'customer', appliedPayments: () => [] })
+  // The invoice customer's vehicles: a split for that customer can name one per share, with its
+  // litres (at rate, filling the amount) and slip number -- one sale that was several vehicles' fuel.
+  units?: { id: string; name: string }[]
+  rate?: number | null
+}>(), { party: 'customer', appliedPayments: () => [], units: () => [], rate: null })
 const open = defineModel<boolean>('open', { default: false })
+
+type Share = { customer_id: string; amount: number | null; unit_id?: string; quantity?: number | null; reference?: string }
 
 const form = useForm({
   action: 'change_customer' as 'change_customer' | 'split',
   customer_id: '',
-  shares: [] as { customer_id: string; amount: number | null }[],
+  shares: [] as Share[],
   // Money freed by a correction stays on account; applying it is left to the payment's page.
   apply_oldest_first: false,
   unapply_payments: true,
@@ -59,6 +65,13 @@ const shareTotal = computed(() => form.shares.reduce((sum, s) => sum + Number(s.
 const remaining = computed(() => Math.round((props.total - shareTotal.value) * 100) / 100)
 
 const addShare = () => form.shares.push({ customer_id: '', amount: remaining.value > 0 ? remaining.value : null })
+
+// Vehicle, litres and slip no. show for a share to the invoice's own customer, when it has vehicles.
+const vehicleOptions = computed(() => props.units.map((u) => ({ value: u.id, label: u.name })))
+const showsVehicle = (share: Share) => props.kind === 'invoice' && props.units.length > 0 && share.customer_id === props.customerId
+const onLitres = (share: Share) => {
+  if (props.rate && Number(share.quantity) > 0) share.amount = Math.round(Number(share.quantity) * props.rate * 100) / 100
+}
 const removeShare = (i: number) => form.shares.splice(i, 1)
 
 const canSave = computed(() => form.reason.trim().length >= 3 && (form.action === 'change_customer'
@@ -77,7 +90,7 @@ const save = () => form
 
 // Any error the fields above do not show still shows, so a refused save never looks like nothing.
 const otherErrors = computed(() => Object.entries(form.errors)
-  .filter(([key]) => !['customer_id', 'shares', 'reason'].includes(key))
+  .filter(([key]) => !['customer_id', 'shares', 'reason'].includes(key) && !/^shares\.\d+\.unit_id$/.test(key))
   .map(([, message]) => message))
 </script>
 
@@ -125,15 +138,26 @@ const otherErrors = computed(() => Object.entries(form.errors)
             <span class="text-right">Amount</span>
             <span />
           </div>
-          <div v-for="(share, i) in form.shares" :key="i" class="grid grid-cols-[minmax(0,1fr)_8rem_2.25rem] items-center gap-2">
-            <div class="min-w-0">
-              <SearchableSelect v-model="share.customer_id" :options="options" :show-value="false" :placeholder="`Choose ${party}`" />
+          <div v-for="(share, i) in form.shares" :key="i" class="space-y-1.5">
+            <div class="grid grid-cols-[minmax(0,1fr)_8rem_2.25rem] items-center gap-2">
+              <div class="min-w-0">
+                <SearchableSelect v-model="share.customer_id" :options="options" :show-value="false" :placeholder="`Choose ${party}`" />
+              </div>
+              <Input v-model.number="share.amount" type="number" step="0.01" min="0" class="w-full text-right tabular-nums" />
+              <Button v-if="form.shares.length > 2" type="button" variant="ghost" size="icon" aria-label="Remove" @click="removeShare(i)">
+                <Trash2 class="h-4 w-4" />
+              </Button>
+              <span v-else />
             </div>
-            <Input v-model.number="share.amount" type="number" step="0.01" min="0" class="w-full text-right tabular-nums" />
-            <Button v-if="form.shares.length > 2" type="button" variant="ghost" size="icon" aria-label="Remove" @click="removeShare(i)">
-              <Trash2 class="h-4 w-4" />
-            </Button>
-            <span v-else />
+            <div v-if="showsVehicle(share)" class="grid grid-cols-[minmax(0,1fr)_6rem_8rem_2.25rem] items-center gap-2">
+              <div class="min-w-0">
+                <SearchableSelect v-model="share.unit_id" :options="vehicleOptions" :show-value="false" placeholder="Vehicle" />
+              </div>
+              <Input v-model.number="share.quantity" type="number" step="0.01" min="0" placeholder="Litres" class="text-right tabular-nums" aria-label="Litres" @update:model-value="onLitres(share)" />
+              <Input v-model="share.reference" maxlength="100" placeholder="Slip no." aria-label="Slip number" />
+              <span />
+            </div>
+            <InputError :message="(form.errors as Record<string, string>)[`shares.${i}.unit_id`]" />
           </div>
           <div class="flex items-center justify-between text-sm">
             <Button type="button" variant="outline" size="sm" @click="addShare"><Plus class="mr-1 h-4 w-4" />Add</Button>

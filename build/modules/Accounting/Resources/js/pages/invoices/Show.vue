@@ -478,6 +478,8 @@ const voidInvoice = () => {
       :total="Number(invoice.total_amount)"
       :customer-id="invoice.customer?.id ?? null"
       :parties="correctionCustomers ?? []"
+      :units="customerUnits ?? []"
+      :rate="invoice.line_items.length === 1 ? Number(invoice.line_items[0].unit_price) : null"
     />
 
     <RelatedActions screen="invoice.show" :slug="company.slug" :subject="invoice" />

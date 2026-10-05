@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\CorrectionService;
 use Illuminate\Validation\ValidationException;
 
-/** Splits an invoice between customers; the first share keeps the invoice. See CorrectionService. */
+/** Splits an invoice between customers, or by vehicle for the same customer. See CorrectionService. */
 class InvoiceSplitAction implements PaletteAction
 {
     public function rules(): array
@@ -19,6 +19,9 @@ class InvoiceSplitAction implements PaletteAction
             'shares' => 'required|array|min:2',
             'shares.*.customer_id' => 'required|uuid',
             'shares.*.amount' => 'required|numeric|min:0.01',
+            'shares.*.unit_id' => 'nullable|uuid',
+            'shares.*.quantity' => 'nullable|numeric|min:0.0001',
+            'shares.*.reference' => 'nullable|string|max:100',
             'unapply_payments' => 'nullable|boolean',
             'reason' => 'required|string|min:3|max:500',
         ];

@@ -31,6 +31,10 @@ class CustomerPeriodSummaryService
             ->where('customer_id', $customerId)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])
             ->whereBetween('invoice_date', [$from, $to])
+            // A split invoice is credited off in full and its shares are invoices of their own;
+            // counting it too would count the sale twice.
+            ->whereNotIn('id', DB::table('acct.corrections')->where('company_id', $companyId)
+                ->where('entity_type', 'invoice')->where('action', 'split')->select('entity_id'))
             ->get(['id', 'discount_amount', 'unit_id']);
 
         $lines = $invoices->isEmpty() ? collect() : InvoiceLineItem::where('company_id', $companyId)

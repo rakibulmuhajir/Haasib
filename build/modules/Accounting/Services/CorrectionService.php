@@ -77,9 +77,17 @@ class CorrectionService
      */
     public function invoiceSplit(Invoice $invoice, array $shares, string $reason, bool $unapplyPayments = false): array
     {
-        $shares = array_values(array_filter(array_map(fn ($s) => ['customer_id' => (string) $s['customer_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
+        // A share may also name the customer's vehicle, its litres and its slip number: one sale
+        // that was several vehicles' fuel, split into an invoice per vehicle for the same customer.
+        $shares = array_values(array_filter(array_map(fn ($s) => [
+            'customer_id' => (string) $s['customer_id'],
+            'amount' => round((float) $s['amount'], 2),
+            'unit_id' => ($s['unit_id'] ?? null) ?: null,
+            'quantity' => isset($s['quantity']) && (float) $s['quantity'] > 0 ? round((float) $s['quantity'], 4) : null,
+            'reference' => isset($s['reference']) && trim((string) $s['reference']) !== '' ? trim((string) $s['reference']) : null,
+        ], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {
-            throw ValidationException::withMessages(['shares' => 'Split between at least two customers.']);
+            throw ValidationException::withMessages(['shares' => 'Split into at least two parts.']);
         }
         // What is still on it: its total less anything a credit note already took off.
         $credited = (float) DB::table('acct.credit_note_applications')->where('invoice_id', $invoice->id)->sum('amount_applied');
@@ -87,8 +95,12 @@ class CorrectionService
         if (abs(array_sum(array_column($shares, 'amount')) - $open) > 0.005) {
             throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($open, 2).'.']);
         }
-        foreach ($shares as $share) {
+        foreach ($shares as $i => $share) {
             $this->customer($invoice->company_id, $share['customer_id']);
+            if ($share['unit_id'] && ! \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $invoice->company_id)
+                ->where('customer_id', $share['customer_id'])->whereKey($share['unit_id'])->exists()) {
+                throw ValidationException::withMessages(["shares.{$i}.unit_id" => "Choose one of that customer's vehicles."]);
+            }
         }
         if (! $unapplyPayments && PaymentAllocation::where('invoice_id', $invoice->id)->exists()) {
             throw ValidationException::withMessages(['shares' => 'Payments are applied to this invoice. Take them off first.']);
@@ -103,14 +115,16 @@ class CorrectionService
             $created = [];
             foreach ($shares as $share) {
                 $customer = $this->customer($invoice->company_id, $share['customer_id']);
-                $new = $this->splitInvoice($invoice, $customer, $share['amount']);
+                $new = $this->splitInvoice($invoice, $customer, $share);
                 $credit = $this->splitCredit($invoice->fresh(), $from, $share['amount'], "{$new->invoice_number} · {$customer->name}");
                 $lines[] = ['account_id' => $ar, 'type' => 'debit', 'amount' => $share['amount'], 'description' => "{$new->invoice_number} to {$customer->name} (from {$invoice->invoice_number})"];
                 $lines[] = ['account_id' => $ar, 'type' => 'credit', 'amount' => $share['amount'], 'description' => "{$credit->credit_note_number} off {$invoice->invoice_number}"];
-                $created[] = ['customer' => $customer->name, 'amount' => $share['amount'], 'invoice' => $new->invoice_number, 'invoice_id' => $new->id, 'credit_note' => $credit->credit_note_number, 'credit_note_id' => $credit->id];
+                $created[] = ['customer' => $customer->name, 'amount' => $share['amount'], 'invoice' => $new->invoice_number, 'invoice_id' => $new->id, 'credit_note' => $credit->credit_note_number, 'credit_note_id' => $credit->id,
+                    'vehicle' => $new->unit?->name, 'quantity' => $share['quantity'], 'reference' => $share['reference']];
             }
 
-            $journal = $this->journal($invoice->company_id, $invoice->currency, "Correction: {$invoice->invoice_number} split between customers", $lines);
+            $sameCustomer = collect($shares)->every(fn ($s) => $s['customer_id'] === $invoice->customer_id);
+            $journal = $this->journal($invoice->company_id, $invoice->currency, "Correction: {$invoice->invoice_number} split ".($sameCustomer ? 'by vehicle' : 'between customers'), $lines);
             foreach ($created as $c) {
                 DB::table('acct.invoices')->where('id', $c['invoice_id'])->update(['transaction_id' => $journal]);
                 DB::table('acct.credit_notes')->where('id', $c['credit_note_id'])->update(['transaction_id' => $journal]);
@@ -352,8 +366,12 @@ class CorrectionService
         }
     }
 
-    private function splitInvoice(Invoice $original, Customer $customer, float $amount): Invoice
+    private function splitInvoice(Invoice $original, Customer $customer, array $share): Invoice
     {
+        $amount = $share['amount'];
+        // With litres the share keeps the sale's own litres x rate; without, one line of the amount.
+        $quantity = $share['quantity'] ?? 1;
+        $unitPrice = $share['quantity'] ? round($amount / $share['quantity'], 6) : $amount;
         $invoice = Invoice::create([
             'company_id' => $original->company_id,
             'customer_id' => $customer->id,
@@ -373,7 +391,8 @@ class CorrectionService
             'payment_terms' => $original->payment_terms,
             'status' => 'sent',
             'sent_at' => now(),
-            'reference' => $original->reference,
+            'reference' => $share['reference'] ?? $original->reference,
+            'unit_id' => $share['unit_id'] ?? null,
             'notes' => $original->notes,
             'internal_notes' => "Split from {$original->invoice_number}",
             'created_by_user_id' => Auth::id(),
@@ -384,8 +403,8 @@ class CorrectionService
             'invoice_id' => $invoice->id,
             'line_number' => 1,
             'description' => ($line?->description ?? 'Sale')." (share of {$original->invoice_number})",
-            'quantity' => 1,
-            'unit_price' => $amount,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
             'tax_rate' => 0,
             'discount_rate' => 0,
             'line_total' => $amount,

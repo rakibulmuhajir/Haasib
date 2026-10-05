@@ -82,6 +82,7 @@ class DailyCloseReopenService
             // Any posted day can be edited unless its period is closed (or the day is locked).
             app(\App\Modules\Accounting\Services\DocumentDateLock::class)->assertOpen($companyId, $businessDate, "The {$businessDate} close");
             $this->guardReadingCorrections($close);
+            $this->guardSplitInvoices($companyId, $metadata);
             $warnings = [];
             if ($later = $this->laterPostedDates($companyId, $businessDate)) {
                 $warnings[] = 'Later days ('.implode(', ', $later).') use this day\'s closing figures.';
@@ -177,6 +178,22 @@ class DailyCloseReopenService
             ->pluck('transaction_date')
             ->map(fn ($d) => $d instanceof \Carbon\Carbon ? $d->toDateString() : substr((string) $d, 0, 10))
             ->all();
+    }
+
+    /**
+     * A credit invoice split by a correction (between customers, or by vehicle) is credited off and
+     * its shares live on new invoices the close does not know about; reopening would delete the
+     * original and leave the shares and credit notes behind, counting the sale twice.
+     */
+    private function guardSplitInvoices(string $companyId, array $metadata): void
+    {
+        $ids = collect($metadata['credit_sale_details'] ?? [])->pluck('invoice_id')->filter()->values()->all();
+        $split = $ids ? DB::table('acct.corrections')->where('company_id', $companyId)->where('entity_type', 'invoice')
+            ->where('action', 'split')->whereIn('entity_id', $ids)->pluck('entity_id')->all() : [];
+        if ($split) {
+            $numbers = Invoice::where('company_id', $companyId)->whereIn('id', $split)->pluck('invoice_number')->implode(', ');
+            throw new \RuntimeException("{$numbers} was split after posting, so this day cannot be reopened.");
+        }
     }
 
     private function guardReadingCorrections(Transaction $close): void

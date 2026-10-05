@@ -35,6 +35,8 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('bills', t('bills'), '/bills', ReceiptText),
         ...item('bills', 'Bill Payments', '/bill-payments', Banknote),
         ...item('vendors', t('vendors'), '/vendors', Truck),
+        // Credits from a supplier: claims for transit losses, returns, cashback.
+        ...item('vendorCredits', 'Vendor Credits', '/vendor-credits', FileMinus),
         ...item('settlements', 'Vendor Card Settlement', '/fuel/vendor-cards/pending', CreditCard),
         ...item('expenses', 'Record Expense', '/expenses', ReceiptText),
       ] },

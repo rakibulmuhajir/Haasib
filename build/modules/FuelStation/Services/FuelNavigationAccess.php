@@ -19,6 +19,7 @@ class FuelNavigationAccess
             'prices' => Permissions::FUEL_RATE_UPDATE,
             'products' => Permissions::ITEM_VIEW,
             'bills' => Permissions::BILL_VIEW,
+            'vendorCredits' => Permissions::VENDOR_CREDIT_VIEW,
             'vendors' => Permissions::VENDOR_VIEW,
             'settlements' => Permissions::PAYMENT_CREATE,
             'customers' => Permissions::CUSTOMER_VIEW,

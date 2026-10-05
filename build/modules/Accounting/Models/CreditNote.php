@@ -109,7 +109,9 @@ class CreditNote extends Model
         $last = DB::connection('pgsql')->table('acct.credit_notes')
             ->where('company_id', $companyId)
             ->whereNotNull('credit_note_number')
-            ->orderByDesc('created_at')
+            // The highest number, not the latest row: notes made in one go (a split into three
+            // or more) share a created_at, and the tie could hand back an earlier number.
+            ->orderByRaw("NULLIF(regexp_replace(credit_note_number, '\D', '', 'g'), '')::bigint DESC NULLS LAST")
             ->value('credit_note_number');
 
         $base = 'CN-';

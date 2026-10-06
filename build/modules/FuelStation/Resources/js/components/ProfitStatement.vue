@@ -37,22 +37,23 @@ const toggle = (k: string) => { open.value = open.value === k ? null : k }
 
 const hints: Record<string, string> = {
   sales: 'Everything sold, from the books.',
-  cost_of_sales: 'What the stock you sold cost you, with tank losses and gains.',
-  gross_profit: 'Sales less cost of sales, per product.',
+  cost_of_sales: 'What the stock you sold cost you.',
+  gross_profit: 'Sales minus cost of sales: what you earned on what you sold.',
+  dip: 'Stock the morning dip found missing (a loss) or extra (a gain), at cost.',
   expenses: 'Running costs from Money out → Expenses.',
   salaries: 'Pay and wages booked by payroll.',
   other_income: 'Rent and any other income outside sales.',
   other_costs: 'Cash short, bank and card charges, discounts.',
   net_profit: 'What is left after everything. Matches Profit & Loss.',
 }
-const costKeys = ['cost_of_sales', 'expenses', 'salaries', 'other_costs']
+const costKeys = ['cost_of_sales', 'dip', 'expenses', 'salaries', 'other_costs']
 const subtotals = ['gross_profit', 'net_profit']
 
 // Cost lines are shown with a minus; a cost that went the other way (a tank gain) shows plus.
 const shown = (key: string, v: number) => (costKeys.includes(key) ? -v : v)
 const num = (v: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(v))
 const workingText = (w: NonNullable<StatementDetail['working']>) =>
-  `Opening ${num(w.opening)} + bought ${num(w.bought)} − closing ${num(w.closing)} = used ${num(w.used)}, tank loss or gain included.`
+  `Opening ${num(w.opening)} + bought ${num(w.bought)} − closing ${num(w.closing)} = ${num(w.used)} of stock gone; what was sold cost the rest.`
 const expandable = (l: StatementLine) => l.details.length > 0
 </script>
 

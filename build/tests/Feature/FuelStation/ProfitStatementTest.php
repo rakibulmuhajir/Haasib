@@ -84,9 +84,12 @@ test('every line comes from the ledger and net profit is the ledger profit', fun
     $line = fn (string $k) => profitStatementLine($s, $k);
 
     expect($line('sales')['amount'])->toBe(100000.0)
-        // 70,000 sold + 1,000 write-down + 800 tank loss - 300 tank gain.
-        ->and($line('cost_of_sales')['amount'])->toBe(71500.0)
-        ->and($line('gross_profit')['amount'])->toBe(28500.0)
+        // 70,000 sold + 1,000 write-down: what the stock sold cost.
+        ->and($line('cost_of_sales')['amount'])->toBe(71000.0)
+        ->and($line('gross_profit')['amount'])->toBe(29000.0)
+        // The dip on its own line: 800 tank loss - 300 tank gain.
+        ->and($line('dip')['amount'])->toBe(500.0)
+        ->and($line('dip')['label'])->toBe('Dip loss')
         // Electricity 2,000 and the cash short 120: running costs, by account, however entered.
         ->and($line('expenses')['amount'])->toBe(2120.0)
         ->and($line('salaries')['amount'])->toBe(1500.0)
@@ -97,14 +100,19 @@ test('every line comes from the ledger and net profit is the ledger profit', fun
         ->and($s['ledger_total'])->toBe(25280.0)
         ->and($s['not_in_profit'])->toBe(['stock_bought' => 120000.0, 'equipment_bought' => 5000.0]);
 
-    // Petrol has its own stock account, so it takes the station's formula: opening 400,000 +
-    // bought 120,000 - closing 448,500 = 71,500, tank loss and gain inside it. Nothing is left over.
+    // Petrol's cost of sales is what its litres sold cost (71,000). Its stock formula -- opening
+    // 400,000 + bought 120,000 - closing 448,500 = 71,500 -- less that is the dip's 500.
     $cost = collect($line('cost_of_sales')['details']);
     expect($cost)->toHaveCount(1)
         ->and($cost[0]['name'])->toBe('Petrol')
-        ->and($cost[0]['amount'])->toBe(71500.0)
-        ->and($cost[0]['working'])->toBe(['opening' => 400000.0, 'bought' => 120000.0, 'closing' => 448500.0, 'used' => 71500.0])
+        ->and($cost[0]['amount'])->toBe(71000.0)
+        ->and($cost[0]['working'])->toBeNull()
         ->and($cost[0]['href'])->toContain("/{$slug}/fuel/reports/stock-statement?item={$f['item']->id}");
+    $dip = collect($line('dip')['details']);
+    expect($dip)->toHaveCount(1)
+        ->and($dip[0]['item_id'])->toBe($f['item']->id)
+        ->and($dip[0]['amount'])->toBe(500.0)
+        ->and($dip[0]['working'])->toBe(['opening' => 400000.0, 'bought' => 120000.0, 'closing' => 448500.0, 'used' => 71500.0]);
 
     $sales = $line('sales')['details'];
     expect($sales)->toHaveCount(1)->and($sales[0]['name'])->toBe('Petrol')->and($sales[0]['amount'])->toBe(100000.0);
@@ -112,8 +120,8 @@ test('every line comes from the ledger and net profit is the ledger profit', fun
     $gross = collect($line('gross_profit')['details']);
     expect($gross)->toHaveCount(1)
         ->and($gross[0]['name'])->toBe('Petrol')
-        ->and($gross[0]['amount'])->toBe(28500.0)
-        ->and($gross[0]['working']['used'])->toBe(71500.0);
+        ->and($gross[0]['amount'])->toBe(29000.0)
+        ->and($gross[0]['cost'])->toBe(71000.0);
 
     $expense = collect($line('expenses')['details'])->sortBy('name')->values()->all();
     expect($expense)->toHaveCount(2)
@@ -153,16 +161,17 @@ test('products sharing an account show per account, and what no product holds st
         ->and($sales[0]['href'])->toBe("/{$f['company']->slug}/accounts/{$a['sales']}");
 
     // No formula (the stock account is shared): the cost account's 71,000, and the tank loss 800
-    // less gain 300 is the residual that makes the details add up to the line.
+    // less gain 300 stays on the dip line as one row no product holds.
     $cost = collect(profitStatementLine($s, 'cost_of_sales')['details']);
-    expect($cost->sum('amount'))->toBe(71500.0)
-        ->and($cost->firstWhere('name', '5100')['amount'])->toBe(71000.0)
-        ->and($cost->firstWhere('name', 'Tank losses and gains not in a product')['amount'])->toBe(500.0);
+    expect($cost->sum('amount'))->toBe(71000.0)
+        ->and($cost->firstWhere('name', '5100')['amount'])->toBe(71000.0);
+    $dip = collect(profitStatementLine($s, 'dip')['details']);
+    expect($dip->sum('amount'))->toBe(500.0)
+        ->and($dip->firstWhere('name', 'Tank losses and gains not in a product')['amount'])->toBe(500.0);
 
     $gross = collect(profitStatementLine($s, 'gross_profit')['details']);
-    expect($gross->sum('amount'))->toBe(28500.0)
+    expect($gross->sum('amount'))->toBe(29000.0)
         ->and($gross->whereNotNull('working'))->toBeEmpty()
-        ->and($gross->firstWhere('name', 'Tank losses and gains not in a product')['amount'])->toBe(-500.0)
         ->and($s['net_profit'])->toBe(25280.0);
 });
 
@@ -179,8 +188,8 @@ test('discounts given reduce sales instead of landing in other income', function
     expect($line('sales')['amount'])->toBe(98000.0)
         ->and(collect($line('sales')['details'])->firstWhere('name', 'Discounts given')['amount'])->toBe(-2000.0)
         ->and($line('other_income')['amount'])->toBe(400.0)
-        ->and($line('gross_profit')['amount'])->toBe(26500.0)
-        ->and(collect($line('gross_profit')['details'])->sum('amount'))->toBe(26500.0)
+        ->and($line('gross_profit')['amount'])->toBe(27000.0)
+        ->and(collect($line('gross_profit')['details'])->sum('amount'))->toBe(27000.0)
         ->and($s['net_profit'])->toBe(23280.0)
         ->and($s['ledger_total'])->toBe(23280.0);
 

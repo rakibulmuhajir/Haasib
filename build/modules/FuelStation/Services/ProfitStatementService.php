@@ -15,8 +15,10 @@ use Illuminate\Support\Facades\Log;
  * always equals the ledger's own profit for the range:
  *
  *  - Sales          income on the items' sales accounts
- *  - Cost of sales  the items' cost accounts (month-end write-down included) plus the tank
- *                   loss and gain accounts (a gain reduces cost)
+ *  - Cost of sales  the items' cost accounts: what the stock sold cost (month-end write-down included)
+ *  - Dip loss/gain  the tank loss and gain accounts: stock the dip found missing (a cost) or extra
+ *                   (a gain), on its own line so Sales - Cost of sales = Gross profit reads as the
+ *                   trading margin a newcomer can check with a calculator
  *  - Expenses       every expense account (running costs), however the entry was made --
  *                   Money out, a bill or a close -- so one account is always on one line
  *  - Salaries       expense accounts payroll posts to
@@ -45,7 +47,12 @@ class ProfitStatementService
         $rows = $this->ledgerLines($companyId, $from, $to, false);
         $b = $this->buckets($ctx, $rows, fn () => 'all')['all'] ?? [];
 
+        $stock ??= $this->stockRuns($companyId, $from, $to);
         $purchases = $this->purchaseAmounts($companyId, $from, $to, $stock);
+        $dipLitres = [];
+        foreach ($stock as $p) {
+            $dipLitres[$p['id']] = (float) ($p['totals']['variance'] ?? 0);
+        }
         $groups = $this->productGroups($ctx, $b, $purchases, $companyId, $from, $to, $slug);
 
         $sum = fn (array $list) => round(array_sum(array_column($list, 'amount')), 2);
@@ -57,25 +64,39 @@ class ProfitStatementService
             $sales[] = $discounts;
         }
 
-        // Cost of sales: a tank fuel with its own stock account at the station's formula
-        // (opening + bought - closing, tank loss or gain included); everything else per cost account.
+        // Cost of sales: what the stock sold cost, per product (its cost account), every other cost
+        // account on its own row. The dip's difference is NOT in it -- it is the next line.
         $formulaCostAccounts = [];
         $cost = [];
+        $dip = [];
         foreach ($groups as $g) {
             if ($g['working']) {
                 $formulaCostAccounts += $g['cost_accounts'];
-                $cost[] = ['account_id' => null, 'item_id' => $g['item']->id, 'code' => null, 'name' => $g['name'], 'amount' => $g['cost'], 'working' => $g['working'], 'href' => $g['href']];
+                $cost[] = ['account_id' => null, 'item_id' => $g['item']->id, 'code' => null, 'name' => $g['name'], 'amount' => $g['ledger_cost'], 'working' => null, 'href' => $g['href']];
+                // The station's formula (opening + bought - closing) less what the litres sold cost:
+                // what the dip found missing (positive) or extra (negative) for this fuel.
+                $diff = round($g['cost'] - $g['ledger_cost'], 2);
+                if (abs($diff) >= 0.5) {
+                    $litres = (float) ($dipLitres[$g['item']->id] ?? 0);
+                    $dip[] = ['account_id' => null, 'item_id' => $g['item']->id, 'code' => null,
+                        'name' => $g['name'].$this->litresLabel($litres),
+                        'litres' => $litres, 'amount' => $diff, 'working' => $g['working'], 'href' => $g['href']];
+                }
             }
         }
         $otherCost = array_diff_key($b['cost'] ?? [], $formulaCostAccounts);
         $cost = array_merge($cost, $this->accountDetails($otherCost, $ctx['cost_items'], $slug, $from, $to));
         $tankNet = round(array_sum(array_column($b['tank'] ?? [], 'amount')), 2);
-        $costTotal = round(array_sum(array_column($b['cost'] ?? [], 'amount')) + $tankNet, 2);
+        $costTotal = round(array_sum(array_column($b['cost'] ?? [], 'amount')), 2);
         $residual = round($costTotal - $sum($cost), 2);
         if (abs($residual) >= 1) {
-            $cost[] = $this->residualRow($residual);
+            $cost[] = ['name' => 'Other cost of sales'] + $this->residualRow($residual);
         }
         usort($cost, fn ($x, $y) => abs($y['amount']) <=> abs($x['amount']));
+        $dipResidual = round($tankNet - $sum($dip), 2);
+        if (abs($dipResidual) >= 1) {
+            $dip[] = $this->residualRow($dipResidual);
+        }
 
         $expenses = $this->accountDetails($b['expenses'] ?? [], [], $slug, $from, $to);
         $salaries = $this->accountDetails($b['salaries'] ?? [], [], $slug, $from, $to);
@@ -88,7 +109,7 @@ class ProfitStatementService
         $salariesTotal = round(array_sum(array_column($b['salaries'] ?? [], 'amount')), 2);
         $otherIncomeTotal = round(array_sum(array_column($b['other_income'] ?? [], 'amount')), 2);
         $otherCostsTotal = round(array_sum(array_column($b['other_costs'] ?? [], 'amount')), 2);
-        $net = round($gross - $expensesTotal - $salariesTotal + $otherIncomeTotal - $otherCostsTotal, 2);
+        $net = round($gross - $tankNet - $expensesTotal - $salariesTotal + $otherIncomeTotal - $otherCostsTotal, 2);
 
         // The ledger's own profit for the range, worked out separately: the statement must match it.
         $ledgerTotal = round((float) $rows->sum('net'), 2);
@@ -99,8 +120,8 @@ class ProfitStatementService
         // Gross profit per product (its sales less its cost), discounts, and what is left over.
         $grossDetails = [];
         foreach ($groups as $g) {
-            $grossDetails[] = ['account_id' => null, 'item_id' => $g['item']?->id, 'code' => null, 'name' => $g['name'], 'amount' => round($g['sales'] - $g['cost'], 2),
-                'sales' => $g['sales'], 'cost' => $g['cost'], 'working' => $g['working'], 'href' => $g['href']];
+            $grossDetails[] = ['account_id' => null, 'item_id' => $g['item']?->id, 'code' => null, 'name' => $g['name'], 'amount' => round($g['sales'] - $g['ledger_cost'], 2),
+                'sales' => $g['sales'], 'cost' => $g['ledger_cost'], 'working' => null, 'href' => $g['href']];
         }
         usort($grossDetails, fn ($x, $y) => abs($y['sales']) <=> abs($x['sales']));
         if ($discounts) {
@@ -108,13 +129,14 @@ class ProfitStatementService
         }
         $grossResidual = round($gross - $sum($grossDetails), 2);
         if (abs($grossResidual) >= 1) {
-            $grossDetails[] = $this->residualRow($grossResidual) + ['sales' => null, 'cost' => null];
+            $grossDetails[] = ['name' => 'Other cost of sales'] + $this->residualRow($grossResidual) + ['sales' => null, 'cost' => null];
         }
 
         $lines = [
             ['key' => 'sales', 'label' => 'Sales', 'amount' => $salesTotal, 'details' => $sales],
             ['key' => 'cost_of_sales', 'label' => 'Cost of sales', 'amount' => $costTotal, 'details' => $cost],
             ['key' => 'gross_profit', 'label' => 'Gross profit', 'amount' => $gross, 'details' => $grossDetails],
+            ['key' => 'dip', 'label' => $tankNet > 0.005 ? 'Dip loss' : ($tankNet < -0.005 ? 'Dip gain' : 'Dip loss / gain'), 'amount' => $tankNet, 'details' => $dip],
             ['key' => 'expenses', 'label' => 'Expenses', 'amount' => $expensesTotal, 'details' => $expenses],
             ['key' => 'salaries', 'label' => 'Salaries & wages', 'amount' => $salariesTotal, 'details' => $salaries],
             ['key' => 'other_income', 'label' => 'Other income', 'amount' => $otherIncomeTotal, 'details' => $otherIncome],
@@ -404,6 +426,7 @@ class ProfitStatementService
             $cost = array_sum(array_map(fn ($id) => $b['cost'][$id]['amount'] ?? 0.0, array_keys($g['cost'])));
 
             $single = count($g['items']) === 1 ? $g['items'][0] : null;
+            $ledgerCost = $cost;
             $working = null;
             if ($single && $single->asset_account_id && in_array($single->id, $tankItemIds, true)) {
                 $shared = $ctx['items']->contains(fn ($i) => $i->id !== $single->id && $i->asset_account_id === $single->asset_account_id);
@@ -438,6 +461,8 @@ class ProfitStatementService
                 'name' => $single ? $single->name : implode(' / ', $names),
                 'sales' => round($sales, 2),
                 'cost' => round($cost, 2),
+                // What the litres sold cost (the cost account); cost minus this is the dip's difference.
+                'ledger_cost' => round($ledgerCost, 2),
                 'working' => $working,
                 'href' => $single && $slug !== '' ? $this->stockLink($slug, $single->id, $from, $to) : null,
                 'cost_accounts' => $g['cost'],
@@ -458,13 +483,7 @@ class ProfitStatementService
      */
     private function purchaseAmounts(string $companyId, string $from, string $to, ?array $stock): array
     {
-        if ($stock === null) {
-            $statement = app(StockStatementService::class);
-            $stock = [];
-            foreach ($statement->run($companyId, '', $from, $to)['products'] as $p) {
-                $stock[] = ['id' => $p['id'], 'totals' => $statement->run($companyId, $p['id'], $from, $to)['totals']];
-            }
-        }
+        $stock ??= $this->stockRuns($companyId, $from, $to);
 
         $out = [];
         foreach ($stock as $p) {
@@ -472,6 +491,28 @@ class ProfitStatementService
         }
 
         return $out;
+    }
+
+    /** Each product's stock statement totals for the range (bought, sold, dip variance ...). */
+    private function stockRuns(string $companyId, string $from, string $to): array
+    {
+        $statement = app(StockStatementService::class);
+        $stock = [];
+        foreach ($statement->run($companyId, '', $from, $to)['products'] as $p) {
+            $stock[] = ['id' => $p['id'], 'totals' => $statement->run($companyId, $p['id'], $from, $to)['totals']];
+        }
+
+        return $stock;
+    }
+
+    /** " -44 L" / " +29 L" after a fuel's name on the dip line; nothing when the litres are unknown. */
+    private function litresLabel(float $litres): string
+    {
+        if (abs($litres) < 0.005) {
+            return '';
+        }
+
+        return ' '.($litres > 0 ? '+' : '-').rtrim(rtrim(number_format(abs($litres), 2, '.', ','), '0'), '.').' L';
     }
 
     /**

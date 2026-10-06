@@ -79,6 +79,11 @@ const billTo = computed(() => ({
 }))
 const billedBy = computed(() => props.document.billed_by ?? {})
 const hasBilledBy = computed(() => Object.values(billedBy.value).some((v) => (v ?? '').trim()))
+// Stamp and signature sit over the Billed by line: one signing block, bottom right. They print
+// only; the editor's preview shows them on screen as they will print.
+const marks = computed(() => (props.document.stamp?.stampUrl || props.document.stamp?.signatureUrl ? props.document.stamp : null))
+// With no Billed by set, the line names the signer from the stamp settings instead.
+const signer = computed(() => (hasBilledBy.value ? null : props.document.stamp))
 </script>
 
 <template>
@@ -86,8 +91,7 @@ const hasBilledBy = computed(() => Object.values(billedBy.value).some((v) => (v 
     :doc-type="document.title"
     :doc-number="document.number"
     :issuer="document.issuer"
-    :stamp="document.stamp"
-    :stamp-on-screen="preview"
+    :stamp="null"
     :bill-to="billTo"
     bill-to-label="Bill to"
     :dates="[{ label: 'Date', value: document.date }]"
@@ -136,13 +140,25 @@ const hasBilledBy = computed(() => Object.values(billedBy.value).some((v) => (v 
         </tbody>
       </table>
     </template>
-    <template v-if="hasBilledBy" #footer>
-      <div class="ci-billed-by">
-        <div class="ci-billed-by__label">Billed by</div>
-        <div v-if="billedBy.name" class="ci-billed-by__name">{{ billedBy.name }}</div>
-        <div v-if="billedBy.designation">{{ billedBy.designation }}</div>
-        <div v-if="billedBy.phone">{{ billedBy.phone }}</div>
-        <div v-if="billedBy.address">{{ billedBy.address }}</div>
+    <template v-if="hasBilledBy || marks" #footer>
+      <div class="ci-sign">
+        <div v-if="marks" class="ci-sign__marks" :class="{ 'ci-sign__marks--screen': preview }">
+          <img v-if="marks.stampUrl" :src="marks.stampUrl" alt="Company stamp" class="ci-sign__stamp" />
+          <img v-if="marks.signatureUrl" :src="marks.signatureUrl" alt="Signature" class="ci-sign__signature" />
+        </div>
+        <div class="ci-billed-by">
+          <template v-if="hasBilledBy">
+            <div class="ci-billed-by__label">Billed by</div>
+            <div v-if="billedBy.name" class="ci-billed-by__name">{{ billedBy.name }}</div>
+            <div v-if="billedBy.designation">{{ billedBy.designation }}</div>
+            <div v-if="billedBy.phone">{{ billedBy.phone }}</div>
+            <div v-if="billedBy.address">{{ billedBy.address }}</div>
+          </template>
+          <template v-else-if="signer">
+            <div v-if="signer.signerName" class="ci-billed-by__name">{{ signer.signerName }}</div>
+            <div v-if="signer.signerTitle">{{ signer.signerTitle }}</div>
+          </template>
+        </div>
       </div>
     </template>
   </LedgerDocument>
@@ -153,7 +169,16 @@ const hasBilledBy = computed(() => Object.values(billedBy.value).some((v) => (v 
 .ci-table th { text-align: left; font-weight: 600; border-bottom: 1px solid currentColor; padding: 5px 6px; }
 .ci-table td { padding: 4px 6px; border-bottom: 1px solid var(--color-rule-default, rgb(0 0 0 / 0.12)); vertical-align: top; }
 .ci-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ci-billed-by { margin-top: 40px; width: 240px; border-top: 1px solid currentColor; padding-top: 4px; font-size: 12px; }
+.ci-sign { margin-top: 32px; margin-left: auto; width: 240px; display: flex; flex-direction: column; align-items: center; break-inside: avoid; text-align: center; }
+.ci-sign__marks { display: none; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ci-sign__marks--screen { display: flex; }
+.ci-sign__stamp { max-width: 120px; max-height: 120px; object-fit: contain; opacity: .85; }
+.ci-sign__signature { max-width: 160px; max-height: 60px; object-fit: contain; }
+@media print {
+  .ci-sign__marks { display: flex; }
+  .ci-sign__stamp, .ci-sign__signature { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+.ci-billed-by { width: 100%; border-top: 1px solid currentColor; padding-top: 4px; font-size: 12px; }
 .ci-billed-by__label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
 .ci-billed-by__name { font-weight: 600; }
 .ci-group td {

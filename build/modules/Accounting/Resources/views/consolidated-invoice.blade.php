@@ -65,7 +65,8 @@
     .stamp-cell { text-align: right; }
     .stamp-cell img.stamp { max-width: 120px; max-height: 120px; opacity: 0.85; }
     .stamp-cell img.signature { max-width: 160px; max-height: 60px; }
-    .stamp-line { display: inline-block; min-width: 180px; border-top: 1px solid #1c1c1c; padding-top: 4px; text-align: center; }
+    .sign-block { display: inline-block; width: 240px; text-align: center; }
+    .stamp-line { display: block; width: 100%; border-top: 1px solid #1c1c1c; padding-top: 4px; text-align: center; }
     .billed-by { margin-top: 44px; width: 240px; border-top: 1px solid #1c1c1c; padding-top: 5px; }
     .vehicle-heading { text-align: center; font-weight: bold; font-size: 14px; padding-top: 14px; padding-bottom: 6px; }
 </style>
@@ -159,22 +160,25 @@
         </tr>
     </table>
 
-    @if (!empty($billedBy))
-        <div class="billed-by">
-            <div class="label">Billed by</div>
-            @if (!empty($billedBy['name']))<div class="party-name">{{ $billedBy['name'] }}</div>@endif
-            @if (!empty($billedBy['designation']))<div class="party-line">{{ $billedBy['designation'] }}</div>@endif
-            @if (!empty($billedBy['phone']))<div class="party-line">{{ $billedBy['phone'] }}</div>@endif
-            @if (!empty($billedBy['address']))<div class="party-line">{{ $billedBy['address'] }}</div>@endif
-        </div>
-    @endif
-    @if (!empty($doc['stamp_data']) || !empty($doc['signature_data']))
+    {{-- One signing block, bottom right: stamp and signature over the line, Billed by under it
+         (or, with no Billed by set, the signer from the stamp settings). --}}
+    @if (!empty($billedBy) || !empty($doc['stamp_data']) || !empty($doc['signature_data']))
         <table class="stamp-block"><tr><td class="stamp-cell">
-            @if (!empty($doc['stamp_data']))<div><img class="stamp" src="{{ $doc['stamp_data'] }}" alt=""></div>@endif
-            @if (!empty($doc['signature_data']))<div><img class="signature" src="{{ $doc['signature_data'] }}" alt=""></div>@endif
-            <div class="stamp-line">
-                @if (!empty($doc['stamp']['signerName']))<div class="party-name">{{ $doc['stamp']['signerName'] }}</div>@endif
-                @if (!empty($doc['stamp']['signerTitle']))<div class="party-line">{{ $doc['stamp']['signerTitle'] }}</div>@endif
+            <div class="sign-block">
+                @if (!empty($doc['stamp_data']))<div><img class="stamp" src="{{ $doc['stamp_data'] }}" alt=""></div>@endif
+                @if (!empty($doc['signature_data']))<div><img class="signature" src="{{ $doc['signature_data'] }}" alt=""></div>@endif
+                <div class="stamp-line">
+                    @if (!empty($billedBy))
+                        <div class="label">Billed by</div>
+                        @if (!empty($billedBy['name']))<div class="party-name">{{ $billedBy['name'] }}</div>@endif
+                        @if (!empty($billedBy['designation']))<div class="party-line">{{ $billedBy['designation'] }}</div>@endif
+                        @if (!empty($billedBy['phone']))<div class="party-line">{{ $billedBy['phone'] }}</div>@endif
+                        @if (!empty($billedBy['address']))<div class="party-line">{{ $billedBy['address'] }}</div>@endif
+                    @else
+                        @if (!empty($doc['stamp']['signerName']))<div class="party-name">{{ $doc['stamp']['signerName'] }}</div>@endif
+                        @if (!empty($doc['stamp']['signerTitle']))<div class="party-line">{{ $doc['stamp']['signerTitle'] }}</div>@endif
+                    @endif
+                </div>
             </div>
         </td></tr></table>
     @endif

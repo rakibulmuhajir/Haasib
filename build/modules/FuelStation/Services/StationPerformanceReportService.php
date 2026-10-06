@@ -212,7 +212,9 @@ class StationPerformanceReportService
      * (ProfitStatementService), so this screen and the home page's statement agree:
      *  - Sales: income on the products' own sales accounts.
      *  - Cost of sales: the products' cost accounts, cost corrections and month-end write-down
-     *    included, plus tank losses (gains reduce it).
+     *    included: what the stock sold cost.
+     *  - Dip loss: the tank loss and gain accounts -- stock the dip found missing (a gain is
+     *    negative) -- on its own, so Sales - Cost of sales = Gross profit is the trading margin.
      *  - Expenses: expense accounts hit by expense entries (Money out > Expenses). Fixed assets
      *    bought that way are assets, not here.
      *  - Other: salaries, other income and other costs together (discounts, card charges,
@@ -231,19 +233,22 @@ class StationPerformanceReportService
         }
 
         foreach ($periods as $key => &$row) {
-            $parts = $books[$key] ?? ['sales' => [], 'cost' => [], 'expenses' => [], 'other' => []];
+            $parts = $books[$key] ?? ['sales' => [], 'cost' => [], 'dip' => [], 'expenses' => [], 'other' => []];
             $sales = array_sum(array_column($parts['sales'], 'amount'));
             $cost = array_sum(array_column($parts['cost'], 'amount'));
+            $dip = array_sum(array_column($parts['dip'] ?? [], 'amount'));
             $expenses = array_sum(array_column($parts['expenses'], 'amount'));
             $other = array_sum(array_column($parts['other'], 'amount'));
             $row['revenue'] = $sales;
             $row['cogs'] = $cost;
             $row['gross_profit'] = $sales - $cost;
+            $row['dip'] = $dip;
             $row['expenses'] = $expenses;
             $row['other'] = $other;
-            $row['net_station_profit'] = $sales - $cost - $expenses + $other;
+            $row['net_station_profit'] = $sales - $cost - $dip - $expenses + $other;
             $row['sales_lines'] = $parts['sales'];
             $row['cost_lines'] = $parts['cost'];
+            $row['dip_lines'] = $parts['dip'] ?? [];
             $row['expense_lines'] = $parts['expenses'];
             $row['other_lines'] = $parts['other'];
         }
@@ -438,6 +443,7 @@ class StationPerformanceReportService
             'cogs' => 0.0,
             'gross_profit' => 0.0,
             'gross_margin_percent' => 0.0,
+            'dip' => 0.0,
             'avg_rate' => 0.0,
             'expenses' => 0.0,
             'payroll_payouts' => 0.0,
@@ -469,6 +475,7 @@ class StationPerformanceReportService
             'other_sales' => array_sum(array_column($rows, 'other_sales')),
             'cogs' => array_sum(array_column($rows, 'cogs')),
             'gross_profit' => array_sum(array_column($rows, 'gross_profit')),
+            'dip' => array_sum(array_column($rows, 'dip')),
             'expenses' => array_sum(array_column($rows, 'expenses')),
             'payroll_payouts' => array_sum(array_column($rows, 'payroll_payouts')),
             'net_station_profit' => array_sum(array_column($rows, 'net_station_profit')),

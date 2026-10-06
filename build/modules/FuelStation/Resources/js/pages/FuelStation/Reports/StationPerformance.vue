@@ -37,6 +37,7 @@ interface Totals {
   cogs: number
   gross_profit: number
   gross_margin_percent: number
+  dip?: number
   expenses: number
   payroll_payouts: number
   net_station_profit: number
@@ -242,7 +243,7 @@ const setRange = (range: 'today' | 'yesterday' | 'last7' | 'month' | 'lastMonth'
 
 // Each money column opens into the accounts it is made of, from the books (all products only).
 interface BookLine { account_id: string; code: string; name: string; type: string; amount: number }
-type Part = 'sales' | 'cost' | 'expenses' | 'other' | 'price'
+type Part = 'sales' | 'cost' | 'dip' | 'expenses' | 'other' | 'price'
 const open = ref<{ key: string; part: Part } | null>(null)
 const toggle = (key: string, part: Part) => {
   open.value = open.value?.key === key && open.value.part === part ? null : { key, part }
@@ -251,9 +252,9 @@ const isOpen = (row: any) => open.value?.key === row.key
 const linesOf = (row: any): BookLine[] => {
   const part = open.value?.part
   if (!part || part === 'price') return []
-  return (row[{ sales: 'sales_lines', cost: 'cost_lines', expenses: 'expense_lines', other: 'other_lines' }[part]] ?? []) as BookLine[]
+  return (row[{ sales: 'sales_lines', cost: 'cost_lines', dip: 'dip_lines', expenses: 'expense_lines', other: 'other_lines' }[part]] ?? []) as BookLine[]
 }
-const partTitle: Record<Part, string> = { sales: 'Sales by product account', cost: 'Cost of sales', expenses: 'Expenses', other: 'Other income and costs', price: 'Price effect (not in the books)' }
+const partTitle: Record<Part, string> = { sales: 'Sales by product account', cost: 'Cost of sales', dip: 'Dip loss (a gain shows minus)', expenses: 'Expenses', other: 'Other income and costs', price: 'Price effect (not in the books)' }
 const priceLinesOf = (row: any): PriceLine[] => (row.price_effect_lines ?? []) as PriceLine[]
 const effectTone = (amount: number) => (amount < 0 ? 'text-status-attention' : amount > 0 ? 'text-status-success' : 'text-text-secondary')
 const rowRange = (row: any) => {
@@ -283,8 +284,9 @@ const performanceColumns = [
   { key: 'revenue', label: 'Sales', kind: 'amount' as const },
   { key: 'cogs', label: 'Cost of sales', kind: 'amount' as const },
   { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
+  { key: 'dip', label: 'Dip loss', kind: 'amount' as const },
   { key: 'expenses', label: 'Expenses', kind: 'amount' as const },
-  { key: 'other', label: 'Other', kind: 'amount' as const },
+  { key: 'other', label: 'Other income / costs', kind: 'amount' as const },
   { key: 'net_station_profit', label: 'Net', kind: 'amount' as const },
   { key: 'price_effect', label: 'Price effect', kind: 'amount' as const },
   { key: 'cash_variance', label: 'Cash variance', kind: 'amount' as const },
@@ -514,6 +516,18 @@ const movementCards = computed(() => [
               <template #cell-gross_profit="{ row }">
                 <div class="font-medium"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></div>
                 <div class="text-xs text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
+              </template>
+              <template #header-dip>
+                Dip loss
+                <Hint>
+                  <template #content>
+                    <p>Fuel the morning dip found missing, at cost. Minus when it found extra.</p>
+                  </template>
+                </Hint>
+              </template>
+              <template #cell-dip="{ row }">
+                <button v-if="hasLines(row, 'dip_lines')" type="button" :class="[cellBtn, (row.dip ?? 0) > 0 ? 'text-status-attention' : '']" @click="toggle(row.key, 'dip')"><MoneyText :amount="row.dip ?? 0" :currency="company.base_currency" /></button>
+                <MoneyText v-else :amount="row.dip ?? 0" :currency="company.base_currency" />
               </template>
               <template #cell-expenses="{ row }">
                 <button v-if="hasLines(row, 'expense_lines')" type="button" :class="cellBtn" @click="toggle(row.key, 'expenses')"><MoneyText :amount="row.expenses" :currency="company.base_currency" /></button>

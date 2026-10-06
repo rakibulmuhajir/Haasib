@@ -142,7 +142,10 @@ test('profit by day agrees with the statement', function () {
     $row = app(StationPerformanceReportService::class)->run($cid, '2026-09-01', '2026-09-30', 'month', 'all')['rows'][0];
 
     expect($row['revenue'])->toBe(100000.0)
-        ->and($row['cogs'])->toBe(71500.0)
+        ->and($row['cogs'])->toBe(71000.0)
+        ->and($row['gross_profit'])->toBe(29000.0)
+        // The dip on its own column: 800 tank loss - 300 tank gain.
+        ->and($row['dip'])->toBe(500.0)
         ->and($row['expenses'])->toBe(2120.0)
         // Salaries -1,500, rent +400 (the cash short is a running expense now).
         ->and($row['other'])->toBe(-1100.0)

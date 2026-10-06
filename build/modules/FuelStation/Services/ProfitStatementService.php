@@ -159,11 +159,11 @@ class ProfitStatementService
 
     /**
      * The same classification per period, for Profit by day. Lists carry account_id, code, name,
-     * type and amount: sales and cost as positive figures; 'other' folds salaries, other income
-     * and other costs together, signed as income (a cost is negative).
+     * type and amount: sales, cost and dip as positive figures (a dip gain is negative); 'other'
+     * folds salaries, other income and other costs together, signed as income (a cost is negative).
      *
      * @param  callable(Carbon):string  $periodKey
-     * @return array<string,array{sales:array,cost:array,expenses:array,other:array}>
+     * @return array<string,array{sales:array,cost:array,dip:array,expenses:array,other:array}>
      */
     public function periodBooks(string $companyId, string $from, string $to, callable $periodKey): array
     {
@@ -180,10 +180,6 @@ class ProfitStatementService
                     $other[$id]['amount'] += $sign * $entry['amount'];
                 }
             }
-            $cost = $b['cost'] ?? [];
-            foreach ($b['tank'] ?? [] as $id => $entry) {
-                $cost[$id] = $entry;
-            }
             $sort = function (array $list) {
                 $list = array_values(array_filter($list, fn ($a) => abs($a['amount']) >= 0.005));
                 usort($list, fn ($a, $b) => abs($b['amount']) <=> abs($a['amount']));
@@ -192,7 +188,8 @@ class ProfitStatementService
             };
             $out[$key] = [
                 'sales' => $sort(($b['sales'] ?? []) + ($b['discounts'] ?? [])),
-                'cost' => $sort($cost),
+                'cost' => $sort($b['cost'] ?? []),
+                'dip' => $sort($b['tank'] ?? []),
                 'expenses' => $sort($b['expenses'] ?? []),
                 'other' => $sort($other),
             ];

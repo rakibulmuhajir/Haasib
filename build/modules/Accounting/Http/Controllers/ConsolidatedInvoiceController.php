@@ -66,6 +66,9 @@ class ConsolidatedInvoiceController extends Controller
             'billTo' => $customer ? $this->service->billTo($customer) : null,
             'billedBy' => $this->service->billedBy($company),
             'labels' => ConsolidatedInvoiceService::labels($company),
+            // For the preview: the letterhead and stamp a document saved today would carry.
+            'issuer' => app(\App\Services\CompanyLetterhead::class)->forCompany($company),
+            'stamp' => app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice', true, now()->toDateString()),
         ]);
     }
 

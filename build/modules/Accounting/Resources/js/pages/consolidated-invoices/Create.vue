@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import ConsolidatedInvoiceForm from '../../components/ConsolidatedInvoiceForm.vue'
 import type { BillToDefaults, BilledByDefaults, InvoiceRow } from '../../components/ConsolidatedInvoiceForm.vue'
 import type { BreadcrumbItem } from '@/types'
+import type { DocumentIssuer } from '@/components/LedgerDocument.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
@@ -19,6 +21,8 @@ const props = defineProps<{
   billTo: BillToDefaults | null
   billedBy: BilledByDefaults | null
   labels: Record<string, string>
+  issuer: DocumentIssuer
+  stamp?: DocumentStampData | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -43,7 +47,7 @@ const load = (keepDates: boolean) => router.get(`/${props.company.slug}/consolid
 
   <PageShell title="New consolidated invoice" :breadcrumbs="breadcrumbs">
     <div class="space-y-6">
-      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-end">
+      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-end print:hidden">
         <div class="space-y-1.5">
           <Label for="ci-customer">Customer</Label>
           <Select :model-value="customerId" @update:model-value="(v) => { customerId = String(v); load(false) }">
@@ -76,6 +80,8 @@ const load = (keepDates: boolean) => router.get(`/${props.company.slug}/consolid
         :to="filters.to"
         :company-slug="company.slug"
         :customer-id="filters.customer_id"
+        :issuer="issuer"
+        :stamp="stamp"
       />
       <p v-else class="text-sm text-muted-foreground">Choose a customer to see their unpaid invoices.</p>
     </div>

@@ -13,7 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Save } from 'lucide-vue-next'
+import { ArrowLeft, Eye, Printer, Save } from 'lucide-vue-next'
+import ConsolidatedInvoiceDocument from './ConsolidatedInvoiceDocument.vue'
+import type { ConsolidatedDocumentData, ConsolidatedLine } from './ConsolidatedInvoiceDocument.vue'
+import type { DocumentIssuer } from '@/components/LedgerDocument.vue'
+import type { DocumentStampData } from '@/components/DocumentStamp.vue'
 
 export interface InvoiceRow {
   key: string
@@ -24,6 +28,8 @@ export interface InvoiceRow {
   booked_date?: string
   reference: string | null
   vehicle?: string | null
+  // What the printed document groups by: the vehicle's name (or, for a customer without vehicles, the reference).
+  unit?: string | null
   paid: boolean
   balance: number
   sent_in: { number: string; date: string } | null
@@ -47,6 +53,9 @@ const props = defineProps<{
   companySlug: string
   customerId: string
   labels?: Record<string, string> | null
+  // The letterhead and stamp a document saved today carries, for the preview.
+  issuer?: DocumentIssuer | null
+  stamp?: DocumentStampData | null
 }>()
 
 const form = useForm({
@@ -124,6 +133,65 @@ const toggleColumn = (key: string, on: boolean) => {
   form.hidden_columns = on ? form.hidden_columns.filter((k) => k !== key) : [...new Set([...form.hidden_columns, key])]
 }
 
+// Edit, then preview exactly what prints, then save (recorded as sent) or just print.
+const previewing = ref(false)
+const toNumber = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Math.round(Number(v) * 100) / 100)
+const previewDocument = computed<ConsolidatedDocumentData>(() => {
+  const heading = (key: string) => (form.headings[key] ?? '').trim() || props.labels?.[key] || key
+  let lines: ConsolidatedLine[] = selected.value.map((r) => ({
+    invoice_number: r.invoice_number,
+    date: form.dates[r.key] || r.date,
+    reference: (form.references[r.key] ?? r.reference ?? '').trim(),
+    vehicle: r.vehicle ?? null,
+    unit: r.unit ?? null,
+    item: (form.items[r.key] ?? '').trim() || r.item || (form.fills[r.key]?.item ?? ''),
+    description: r.description,
+    quantity: r.quantity ?? toNumber(form.fills[r.key]?.quantity),
+    rate: r.rate ?? toNumber(form.fills[r.key]?.rate),
+    amount: r.amount,
+  }))
+  // As ConsolidatedInvoiceService::document: by unit then date, a subtotal after each unit's lines.
+  if (lines.some((l) => l.unit)) {
+    lines = [...lines].sort((a, b) => (a.unit ?? '').localeCompare(b.unit ?? '') || (a.date ?? '').localeCompare(b.date ?? ''))
+    const grouped: ConsolidatedLine[] = []
+    let current: string | null = null
+    let qty = 0
+    let amount = 0
+    const close = () => grouped.push({ is_subtotal: true, unit: current, quantity: Math.round(qty * 100) / 100, amount: Math.round(amount * 100) / 100 })
+    for (const line of lines) {
+      const unit = line.unit ?? ''
+      if (current !== null && unit !== current) { close(); qty = 0; amount = 0 }
+      current = unit
+      qty += Number(line.quantity ?? 0)
+      amount += Number(line.amount)
+      grouped.push(line)
+    }
+    if (current !== null) close()
+    lines = grouped
+  }
+  const anyVehicle = selected.value.some((r) => r.vehicle)
+  const columns = (['date', 'reference', 'vehicle', 'item', 'quantity', 'rate'] as const)
+    .filter((key) => (key !== 'vehicle' || anyVehicle) && isShown(key))
+    .map((key) => ({ key, label: key === 'vehicle' ? 'Vehicle' : heading(key), num: key === 'quantity' || key === 'rate' }))
+
+  return {
+    number: 'Preview',
+    date: new Date().toISOString().slice(0, 10),
+    title: form.title.trim() || 'Invoice',
+    bill_to: { ...form.bill_to, name: form.bill_to.name.trim() || props.billTo?.name || '' },
+    billed_by: { ...form.billed_by },
+    lines,
+    total: Math.round(selected.value.reduce((sum, r) => sum + r.amount, 0) * 100) / 100,
+    currency: props.currency,
+    columns,
+    group_by_vehicle: anyVehicle,
+    labels: { ...(props.labels ?? {}), amount: heading('amount') },
+    issuer: (props.issuer ?? { name: '' }) as DocumentIssuer,
+    stamp: props.stamp ?? null,
+  }
+})
+const print = () => window.print()
+
 const save = () => {
   form.customer_id = props.customerId
   form.from = props.from
@@ -134,7 +202,20 @@ const save = () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <!-- Preview: exactly what prints. Back to edit, print it, or save it (recorded as sent). -->
+  <div v-if="previewing" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
+      <Button variant="outline" @click="previewing = false"><ArrowLeft class="mr-2 h-4 w-4" />Back</Button>
+      <div class="flex gap-2">
+        <Button variant="outline" @click="print"><Printer class="mr-2 h-4 w-4" />Print</Button>
+        <Button :disabled="form.processing" @click="save"><Save class="mr-2 h-4 w-4" />Save</Button>
+      </div>
+    </div>
+    <p v-for="(message, key) in form.errors" :key="key" class="text-sm text-destructive print:hidden">{{ message }}</p>
+    <ConsolidatedInvoiceDocument :document="previewDocument" />
+  </div>
+
+  <div v-else class="space-y-4">
 
       <div class="grid gap-3 md:grid-cols-3">
         <fieldset class="space-y-1.5">
@@ -234,7 +315,7 @@ const save = () => {
           {{ selected.length }} line(s) · Total <MoneyText class="font-semibold" :amount="total" :currency="currency" :fraction-digits="0" />
           <span v-if="form.errors.keys" class="ml-2 text-destructive">{{ form.errors.keys }}</span>
         </span>
-        <Button :disabled="!selected.length || form.processing" @click="save"><Save class="mr-2 h-4 w-4" />Save</Button>
+        <Button :disabled="!selected.length" @click="previewing = true"><Eye class="mr-2 h-4 w-4" />Preview</Button>
       </div>
   </div>
 </template>

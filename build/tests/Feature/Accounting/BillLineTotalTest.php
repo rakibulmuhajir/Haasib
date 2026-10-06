@@ -287,3 +287,48 @@ test('a received line can be revalued to a corrected line_total, but not requant
 
     expect(session('error'))->toContain('Stock on this bill has already been received');
 });
+
+/**
+ * A supplier's invoice that lists a product the bill left off (the owner's 30 Sep lubricant
+ * delivery): a line can be added after the received ones, which stay as they are apart from
+ * their price, and the new line is then received like any other. Dropping or requantifying a
+ * received line is still refused.
+ */
+test('a line can be added to a bill whose other lines were received, and received afterwards', function () {
+    $f = billLineTotalFixture();
+
+    $bill = app(CompanyContextService::class)->withContext($f['company'], function () use ($f) {
+        $result = app(CommandBus::class)->dispatch('bill.create', [
+            'vendor_id' => $f['vendor']->id, 'bill_date' => '2026-09-10', 'status' => 'received',
+            'currency' => 'PKR', 'base_currency' => 'PKR', 'payment_terms' => 0,
+            'line_items' => [['item_id' => $f['item']->id, 'warehouse_id' => $f['tank']->id, 'description' => 'Diesel delivery', 'quantity' => 7000, 'unit_price' => 338.80]],
+        ], $f['user'], true);
+        app(CommandBus::class)->dispatch('bill.receive_goods', ['id' => $result['data']['id'], 'receipt_date' => '2026-09-10'], $f['user'], true);
+
+        return Bill::findOrFail($result['data']['id']);
+    });
+    $received = ['item_id' => $f['item']->id, 'warehouse_id' => $f['tank']->id, 'description' => 'Diesel delivery', 'quantity' => 7000, 'unit_price' => 0, 'line_total' => 2371749];
+    $put = fn (array $lines) => $this->actingAs($f['user'])->put("/{$f['company']->slug}/bills/{$bill->id}", [
+        'vendor_id' => $f['vendor']->id, 'bill_date' => '2026-09-10', 'due_date' => '2026-09-10',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'payment_terms' => 0, 'line_items' => $lines,
+    ]);
+
+    $put([$received, ['item_id' => $f['item']->id, 'warehouse_id' => $f['tank']->id, 'description' => 'Second load', 'quantity' => 100, 'unit_price' => 0, 'line_total' => 34000]])
+        ->assertSessionHasNoErrors()->assertRedirect();
+
+    $bill->refresh();
+    $lines = $bill->lineItems()->orderBy('line_number')->get();
+    expect($lines)->toHaveCount(2)
+        ->and((float) $lines[0]->quantity_received)->toBe(7000.0)
+        ->and((float) $lines[1]->quantity_received)->toBe(0.0)
+        ->and((float) $bill->total_amount)->toBe(2405749.0);
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('bill.receive_goods', [
+        'id' => $bill->id, 'receipt_date' => '2026-09-10', 'lines' => [['line_id' => $lines[1]->id, 'quantity' => 100]],
+    ], $f['user'], true));
+    expect((float) StockLevel::where('company_id', $f['company']->id)->where('item_id', $f['item']->id)->where('warehouse_id', $f['tank']->id)->value('quantity'))->toBe(7100.0);
+
+    // Leaving out a received line is still refused.
+    $put([['item_id' => $f['item']->id, 'warehouse_id' => $f['tank']->id, 'description' => 'Second load', 'quantity' => 100, 'unit_price' => 0, 'line_total' => 34000]]);
+    expect(session('error'))->toContain('Stock on this bill has already been received');
+});

@@ -271,10 +271,11 @@ class UpdateAction implements PaletteAction
     }
 
     /**
-     * True when every submitted line matches the stored one on everything except
-     * unit_price/line_total: same count, same item/warehouse/quantity/direct_quantity,
-     * same tax_rate/discount_rate/expense_account_id, in the same order. That is the one
-     * shape a bill line with stock already received is still allowed to change to.
+     * True when every stored line is resubmitted matching on everything except
+     * unit_price/line_total: same item/warehouse/quantity/direct_quantity, same
+     * tax_rate/discount_rate/expense_account_id, in the same order -- the one shape a bill
+     * line with stock already received is still allowed to change to. New lines may follow
+     * the stored ones.
      *
      * @param  array<int, array<string, mixed>>  $normalizedLines
      */
@@ -282,14 +283,19 @@ class UpdateAction implements PaletteAction
     {
         $stored = BillLineItem::where('bill_id', $bill->id)->orderBy('line_number')->get()->values();
 
-        if ($stored->count() !== count($normalizedLines)) {
+        // Lines may be added after the stored ones (a product the supplier's invoice has that was
+        // left off the bill); the stored lines themselves must all still be there, in order.
+        if (count($normalizedLines) < $stored->count()) {
             return false;
         }
 
         $numEqual = fn ($a, $b, $decimals) => abs(round((float) $a, $decimals) - round((float) $b, $decimals)) < 0.0000001;
 
         foreach (array_values($normalizedLines) as $index => $line) {
-            $old = $stored[$index];
+            $old = $stored[$index] ?? null;
+            if (! $old) {
+                continue; // an added line: nothing received on it yet
+            }
 
             if ((string) ($line['item_id'] ?? '') !== (string) ($old->item_id ?? '')) return false;
             if ((string) ($line['warehouse_id'] ?? '') !== (string) ($old->warehouse_id ?? '')) return false;
@@ -318,8 +324,32 @@ class UpdateAction implements PaletteAction
         $stored = BillLineItem::where('bill_id', $bill->id)->orderBy('line_number')->get()->values();
 
         foreach ($totals as $index => $line) {
-            $lineModel = $stored[$index];
+            $lineModel = $stored[$index] ?? null;
             $src = $line['source'];
+
+            // A line added after the stored ones: created as on any bill, received later.
+            if (! $lineModel) {
+                BillLineItem::create([
+                    'company_id' => $bill->company_id,
+                    'bill_id' => $bill->id,
+                    'line_number' => $index + 1,
+                    'item_id' => $src['item_id'] ?? null,
+                    'warehouse_id' => $src['warehouse_id'] ?? null,
+                    'description' => $src['description'],
+                    'quantity' => $src['quantity'],
+                    'direct_quantity' => $src['direct_quantity'] ?? 0,
+                    'unit_price' => $src['unit_price'],
+                    'tax_rate' => $src['tax_rate'] ?? 0,
+                    'discount_rate' => $src['discount_rate'] ?? 0,
+                    'overall_discount_share' => $line['overall_discount_share'],
+                    'line_total' => $line['line_total'],
+                    'tax_amount' => $line['tax_amount'],
+                    'total' => $line['total'],
+                    'expense_account_id' => $src['expense_account_id'] ?? null,
+                    'created_by_user_id' => Auth::id(),
+                ]);
+                continue;
+            }
 
             // Stock is valued at unit_price less the line's share of the overall discount.
             $oldUnitPrice = $lineModel->effectiveUnitCost();

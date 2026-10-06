@@ -11,8 +11,11 @@
     $billTo = $doc['bill_to'];
     $billedBy = array_filter($doc['billed_by'] ?? []);
     $label = $doc['labels'];
-    // Columns before Qty, for a subtotal row's colspan: Date, Reference?, Vehicle?, Invoice no.?, Item.
-    $subtotalColspan = 2 + ($doc['show_reference'] ? 1 : 0) + ($doc['show_physical'] ? 1 : 0) + ($doc['show_vehicle'] ?? false ? 1 : 0);
+    // The columns it prints before Amount, in order (ConsolidatedInvoiceService::printedColumns).
+    $columns = $doc['columns'];
+    $keys = array_column($columns, 'key');
+    $quantityAt = array_search('quantity', $keys, true);
+    $groupByVehicle = $doc['group_by_vehicle'] ?? false;
 @endphp
 <!doctype html>
 <html>
@@ -64,6 +67,7 @@
     .stamp-cell img.signature { max-width: 160px; max-height: 60px; }
     .stamp-line { display: inline-block; min-width: 180px; border-top: 1px solid #1c1c1c; padding-top: 4px; text-align: center; }
     .billed-by { margin-top: 44px; width: 240px; border-top: 1px solid #1c1c1c; padding-top: 5px; }
+    .vehicle-heading { text-align: center; font-weight: bold; font-size: 14px; padding-top: 14px; padding-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -100,42 +104,46 @@
     </table>
 
     <table class="lines">
+        @unless ($groupByVehicle)
         <thead>
             <tr>
-                <th>{{ $label['date'] }}</th>
-                @if ($doc['show_reference'])<th>{{ $label['reference'] }}</th>@endif
-                @if ($doc['show_vehicle'] ?? false)<th>Vehicle</th>@endif
-                @if ($doc['show_physical'])<th>{{ $label['physical'] }}</th>@endif
-                <th>{{ $label['item'] }}</th>
-                <th class="num">{{ $label['quantity'] }}</th>
-                <th class="num">{{ $label['rate'] }}</th>
+                @foreach ($columns as $col)<th @if ($col['num']) class="num" @endif>{{ $col['label'] }}</th>@endforeach
                 <th class="num">{{ $label['amount'] }}</th>
             </tr>
         </thead>
+        @endunless
         <tbody>
             @php $groupStart = true; @endphp
             @foreach ($doc['lines'] as $line)
                 {{-- Each vehicle's lines start under a centred heading naming it. --}}
-                @if (($doc['show_vehicle'] ?? false) && ! ($line['is_subtotal'] ?? false) && $groupStart)
-                    <tr><td colspan="{{ $subtotalColspan + 3 }}" style="text-align:center;font-weight:bold;padding-top:8px;">Vehicle: {{ $line['vehicle'] ?: '—' }}</td></tr>
+                @if ($groupByVehicle && ! ($line['is_subtotal'] ?? false) && $groupStart)
+                    {{-- Each vehicle's lines: its name as a heading, then the column names, as on the customer's own sheets. --}}
+                    <tr><td colspan="{{ count($columns) + 1 }}" class="vehicle-heading">{{ $line['vehicle'] ?: '—' }}</td></tr>
+                    <tr class="column-names">
+                        @foreach ($columns as $col)<th @if ($col['num']) class="num" @endif>{{ $col['label'] }}</th>@endforeach
+                        <th class="num">{{ $label['amount'] }}</th>
+                    </tr>
                 @endif
                 @php $groupStart = (bool) ($line['is_subtotal'] ?? false); @endphp
                 @if ($line['is_subtotal'] ?? false)
                     <tr>
-                        <td class="mono" colspan="{{ $subtotalColspan }}"><strong>{{ $line['unit'] ?: '—' }} subtotal</strong></td>
-                        <td class="num"><strong>{{ $qty($line['quantity'] ?? null) }}</strong></td>
-                        <td></td>
+                        {{-- The label runs up to Litres, or across everything when Litres is left off. --}}
+                        <td class="mono" colspan="{{ max(1, $quantityAt === false ? count($columns) : $quantityAt) }}"><strong>{{ $line['unit'] ?: '—' }} subtotal</strong></td>
+                        @if ($quantityAt !== false)
+                            <td class="num"><strong>{{ $qty($line['quantity'] ?? null) }}</strong></td>
+                            @for ($n = $quantityAt + 1; $n < count($columns); $n++)<td></td>@endfor
+                        @endif
                         <td class="num"><strong>{{ number_format($line['amount'], 2) }}</strong></td>
                     </tr>
                 @else
                     <tr>
-                        <td class="mono">{{ $line['date'] }}</td>
-                        @if ($doc['show_reference'])<td>{{ $line['reference'] ?? '' }}</td>@endif
-                        @if ($doc['show_vehicle'] ?? false)<td>{{ $line['vehicle'] ?? '' }}</td>@endif
-                        @if ($doc['show_physical'])<td>{{ $line['physical_invoice'] ?? '' }}</td>@endif
-                        <td>{{ $line['item'] ?? '' }}</td>
-                        <td class="num">{{ $qty($line['quantity']) }}</td>
-                        <td class="num">{{ $qty($line['rate']) }}</td>
+                        @foreach ($keys as $key)
+                            @if ($key === 'date')<td class="mono">{{ $line['date'] }}</td>
+                            @elseif ($key === 'physical')<td>{{ $line['physical_invoice'] ?? '' }}</td>
+                            @elseif ($key === 'quantity' || $key === 'rate')<td class="num">{{ $qty($line[$key]) }}</td>
+                            @else<td>{{ $line[$key] ?? '' }}</td>
+                            @endif
+                        @endforeach
                         <td class="num">{{ number_format($line['amount'], 2) }}</td>
                     </tr>
                 @endif

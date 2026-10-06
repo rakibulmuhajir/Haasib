@@ -49,12 +49,36 @@ const props = defineProps<{
     show_reference?: boolean
     show_physical?: boolean
     show_vehicle?: boolean
+    // The columns it prints before Amount, in order (ConsolidatedInvoiceService::printedColumns).
+    columns?: Array<{ key: string; label: string; num: boolean }>
+    group_by_vehicle?: boolean
     labels: Record<string, string>
     file_name: string
     issuer: DocumentIssuer
     stamp?: DocumentStampData | null
   }
 }>()
+
+// Documents saved before columns could be left off carry no list: the full set, as they printed then.
+const columns = computed(() => props.document.columns ?? [
+  { key: 'date', label: props.document.labels.date, num: false },
+  ...(props.document.show_reference ? [{ key: 'reference', label: props.document.labels.reference, num: false }] : []),
+  ...(props.document.show_vehicle ? [{ key: 'vehicle', label: 'Vehicle', num: false }] : []),
+  ...(props.document.show_physical ? [{ key: 'physical', label: props.document.labels.physical, num: false }] : []),
+  { key: 'item', label: props.document.labels.item, num: false },
+  { key: 'quantity', label: props.document.labels.quantity, num: true },
+  { key: 'rate', label: props.document.labels.rate, num: true },
+])
+const groupByVehicle = computed(() => props.document.group_by_vehicle ?? !!props.document.show_vehicle)
+const quantityAt = computed(() => columns.value.findIndex((c) => c.key === 'quantity'))
+const cell = (line: any, key: string) => {
+  switch (key) {
+    case 'physical': return line.physical_invoice
+    case 'quantity': return number(line.quantity)
+    case 'rate': return number(line.rate)
+    default: return line[key]
+  }
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -107,40 +131,37 @@ const print = () => window.print()
     >
       <template #lines>
         <table class="ci-table">
-          <thead>
+          <thead v-if="!groupByVehicle">
             <tr>
-              <th>{{ document.labels.date }}</th>
-              <th v-if="document.show_reference">{{ document.labels.reference }}</th>
-              <th v-if="document.show_vehicle">Vehicle</th>
-              <th v-if="document.show_physical">{{ document.labels.physical }}</th>
-              <th>{{ document.labels.item }}</th>
-              <th class="num">{{ document.labels.quantity }}</th>
-              <th class="num">{{ document.labels.rate }}</th>
+              <th v-for="col in columns" :key="col.key" :class="{ num: col.num }">{{ col.label }}</th>
               <th class="num">{{ document.labels.amount }}</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="(line, i) in document.lines" :key="i">
-            <!-- Each vehicle's lines start under a centred heading naming it. -->
-            <tr v-if="document.show_vehicle && !line.is_subtotal && (i === 0 || document.lines[i - 1]?.is_subtotal)" class="ci-group">
-              <td :colspan="5 + (document.show_reference ? 1 : 0) + (document.show_vehicle ? 1 : 0) + (document.show_physical ? 1 : 0)">Vehicle: {{ line.vehicle || '—' }}</td>
-            </tr>
+            <!-- Each vehicle's lines: its name as a heading, then the column names, as on the customer's own sheets. -->
+            <template v-if="groupByVehicle && !line.is_subtotal && (i === 0 || document.lines[i - 1]?.is_subtotal)">
+              <tr class="ci-group">
+                <td :colspan="columns.length + 1">{{ line.vehicle || '—' }}</td>
+              </tr>
+              <tr class="ci-names">
+                <th v-for="col in columns" :key="col.key" :class="{ num: col.num }">{{ col.label }}</th>
+                <th class="num">{{ document.labels.amount }}</th>
+              </tr>
+            </template>
             <tr :class="{ 'font-semibold': line.is_subtotal }">
               <template v-if="line.is_subtotal">
-                <td :colspan="2 + (document.show_reference ? 1 : 0) + (document.show_vehicle ? 1 : 0) + (document.show_physical ? 1 : 0)">{{ line.unit || '—' }} subtotal</td>
-                <td class="num">{{ number(line.quantity) }}</td>
-                <td></td>
+                <!-- The label runs up to Litres (or across everything when Litres is left off). -->
+                <td :colspan="Math.max(1, quantityAt < 0 ? columns.length : quantityAt)">{{ line.unit || '—' }} subtotal</td>
+                <template v-if="quantityAt >= 0">
+                  <td class="num">{{ number(line.quantity) }}</td>
+                  <td v-for="n in columns.length - quantityAt - 1" :key="n"></td>
+                </template>
                 <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
               </template>
               <template v-else>
-              <td>{{ line.date }}</td>
-              <td v-if="document.show_reference">{{ line.reference }}</td>
-              <td v-if="document.show_vehicle">{{ line.vehicle }}</td>
-              <td v-if="document.show_physical">{{ line.physical_invoice }}</td>
-              <td>{{ line.item }}</td>
-              <td class="num">{{ number(line.quantity) }}</td>
-              <td class="num">{{ number(line.rate) }}</td>
-              <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
+                <td v-for="col in columns" :key="col.key" :class="{ num: col.num }">{{ cell(line, col.key) }}</td>
+                <td class="num"><MoneyText :amount="line.amount" :currency="document.currency" :show-currency="false" /></td>
               </template>
             </tr>
             </template>
@@ -170,7 +191,9 @@ const print = () => window.print()
 .ci-billed-by__name { font-weight: 600; }
 .ci-group td {
   text-align: center;
-  font-weight: 600;
-  padding-top: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  padding-top: 14px;
+  border-bottom: none;
 }
 </style>

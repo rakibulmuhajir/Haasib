@@ -61,6 +61,8 @@ const form = useForm({
   // Per line, as the customer's copy should read: the date and the detail.
   dates: {} as Record<string, string>,
   items: {} as Record<string, string>,
+  // Columns left off the paper; Amount always prints. Vehicle starts off: each vehicle's heading names it.
+  hidden_columns: ['vehicle'] as string[],
   // Cells the invoice left blank (fuel, litres, rate), filled in here.
   fills: {} as Record<string, { item?: string; quantity?: number | null; rate?: number | null }>,
   // Column headings, renamable; they print as typed.
@@ -77,6 +79,7 @@ watch(() => [props.rows, props.billTo, props.billedBy], () => {
   picked.value = Object.fromEntries(props.rows.map((r) => [r.key, false]))
   form.references = Object.fromEntries(props.rows.map((r) => [r.key, r.reference ?? '']))
   form.physical = {}
+  form.hidden_columns = ['vehicle']
   form.dates = Object.fromEntries(props.rows.map((r) => [r.key, r.date]))
   form.items = Object.fromEntries(props.rows.map((r) => [r.key, r.item ?? '']))
   form.fills = Object.fromEntries(props.rows.map((r) => [r.key, {}]))
@@ -106,6 +109,20 @@ const headingKeys = ['date', 'reference', 'item', 'quantity', 'rate', 'amount']
 const numeric = ['quantity', 'rate', 'amount']
 
 const number = (n: number | null) => (n === null ? '' : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
+
+// What can be left off, named as the paper will name it.
+const columnChoices = computed(() => [
+  { key: 'date', label: form.headings.date },
+  { key: 'reference', label: form.headings.reference },
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'item', label: form.headings.item },
+  { key: 'quantity', label: form.headings.quantity },
+  { key: 'rate', label: form.headings.rate },
+])
+const isShown = (key: string) => !form.hidden_columns.includes(key)
+const toggleColumn = (key: string, on: boolean) => {
+  form.hidden_columns = on ? form.hidden_columns.filter((k) => k !== key) : [...new Set([...form.hidden_columns, key])]
+}
 
 const save = () => {
   form.customer_id = props.customerId
@@ -158,6 +175,15 @@ const save = () => {
             <SelectItem v-if="hasUnnamed" value="none">No vehicle</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <span class="text-xs font-medium text-muted-foreground">Columns</span>
+        <label v-for="col in columnChoices" :key="col.key" class="flex items-center gap-1.5">
+          <Checkbox :model-value="isShown(col.key)" @update:model-value="(v) => toggleColumn(col.key, v === true)" />
+          {{ col.label || col.key }}
+        </label>
+        <span class="text-xs text-muted-foreground">{{ form.headings.amount }} always prints</span>
       </div>
 
       <div class="overflow-auto rounded-md border">

@@ -29,6 +29,9 @@ class StoreConsolidatedInvoiceRequest extends BaseFormRequest
             'dates' => ['nullable', 'array'],
             'dates.*' => ['nullable', 'date_format:Y-m-d'],
             'items' => ['nullable', 'array'],
+            // Columns left off the paper (Amount always prints).
+            'hidden_columns' => ['nullable', 'array'],
+            'hidden_columns.*' => ['string', 'in:'.implode(',', \App\Modules\Accounting\Services\ConsolidatedInvoiceService::OPTIONAL_COLUMNS)],
             'headings' => ['nullable', 'array'],
             'bill_to' => ['nullable', 'array'],
             'billed_by' => ['nullable', 'array'],

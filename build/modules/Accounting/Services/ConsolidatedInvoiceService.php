@@ -226,7 +226,10 @@ class ConsolidatedInvoiceService
             'address' => $text($data['billed_by']['address'] ?? '', 300),
         ];
 
-        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $lines, $headings, $userId) {
+        // Columns left off the paper; Amount always prints.
+        $hidden = array_values(array_intersect(array_map('strval', (array) ($data['hidden_columns'] ?? [])), self::OPTIONAL_COLUMNS));
+
+        return DB::transaction(function () use ($company, $customer, $data, $text, $billTo, $billedBy, $lines, $headings, $hidden, $userId) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))', [$company->id, 'consolidated_invoice_number']);
             $count = DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->count();
             $id = (string) Str::uuid();
@@ -241,6 +244,7 @@ class ConsolidatedInvoiceService
                 'bill_to' => json_encode($billTo),
                 'billed_by' => json_encode($billedBy),
                 'columns' => json_encode($headings),
+                'hidden_columns' => json_encode($hidden),
                 'lines' => json_encode($lines),
                 'total' => round(array_sum(array_column($lines, 'amount')), 2),
                 'currency' => $company->base_currency ?: 'PKR',
@@ -307,10 +311,14 @@ class ConsolidatedInvoiceService
             'bill_to' => json_decode($doc->bill_to, true),
             'billed_by' => json_decode($doc->billed_by, true),
             'lines' => $lines,
-            // Reference always prints; the station's invoice no. only when something is in it.
-            'show_reference' => true,
-            'show_vehicle' => collect($lines)->contains(fn ($l) => ! empty($l['vehicle'] ?? null)),
-            'show_physical' => collect($lines)->contains(fn ($l) => ($l['physical_invoice'] ?? '') !== ''),
+            // The columns it prints, in order, before Amount (which always prints): each one unless
+            // it was left off when saved; Vehicle only when a line names one, the old Invoice no. only
+            // when something is in it. Lines still group under a heading per vehicle either way.
+            'columns' => $columns = $this->printedColumns($doc, $lines, $labels = $this->savedLabels($company, $doc)),
+            'show_reference' => in_array('reference', array_column($columns, 'key'), true),
+            'show_vehicle' => in_array('vehicle', array_column($columns, 'key'), true),
+            'show_physical' => in_array('physical', array_column($columns, 'key'), true),
+            'group_by_vehicle' => collect($lines)->contains(fn ($l) => ! empty($l['vehicle'] ?? null)),
             'total' => (float) $doc->total,
             'currency' => $doc->currency,
             'issuer' => app(CompanyLetterhead::class)->forCompany($company),
@@ -318,11 +326,38 @@ class ConsolidatedInvoiceService
             'stamp' => app(CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice', true, substr((string) $doc->created_at, 0, 10)),
             // The headings it was sent with; older documents saved none, so they get today's defaults.
             'file_name' => self::fileName(['title' => $doc->title, 'number' => $doc->number, 'date' => substr((string) $doc->created_at, 0, 10), 'customer_name' => $doc->customer_name]),
-            'labels' => array_merge(self::labels($company), array_filter(
-                is_array($saved = json_decode((string) $doc->columns, true)) && ! array_is_list($saved) ? $saved : [],
-                fn ($v) => is_string($v) && $v !== '',
-            )),
+            'labels' => $labels,
         ];
+    }
+
+    /** Columns that may be left off a document; Amount always prints. */
+    public const OPTIONAL_COLUMNS = ['date', 'reference', 'vehicle', 'item', 'quantity', 'rate'];
+
+    /** The headings it was sent with; older documents saved none, so they get today's defaults. */
+    private function savedLabels(Company $company, object $doc): array
+    {
+        return array_merge(self::labels($company), array_filter(
+            is_array($saved = json_decode((string) $doc->columns, true)) && ! array_is_list($saved) ? $saved : [],
+            fn ($v) => is_string($v) && $v !== '',
+        ));
+    }
+
+    /** @return array<int,array{key:string,label:string,num:bool}> */
+    private function printedColumns(object $doc, array $lines, array $labels): array
+    {
+        $hidden = json_decode((string) ($doc->hidden_columns ?? '[]'), true);
+        $hidden = is_array($hidden) && array_is_list($hidden) ? $hidden : [];
+        $any = fn (string $field) => collect($lines)->contains(fn ($l) => trim((string) ($l[$field] ?? '')) !== '');
+        $present = ['date' => true, 'reference' => true, 'vehicle' => $any('vehicle'), 'physical' => $any('physical_invoice'),
+            'item' => true, 'quantity' => true, 'rate' => true];
+        $columns = [];
+        foreach ($present as $key => $shown) {
+            if ($shown && ! in_array($key, $hidden, true)) {
+                $columns[] = ['key' => $key, 'label' => $key === 'vehicle' ? 'Vehicle' : ($labels[$key] ?? $key), 'num' => in_array($key, ['quantity', 'rate'], true)];
+            }
+        }
+
+        return $columns;
     }
 
     /** A file name that says what it is: INV-CI-00001-2026-09-29-Suthra-punjab ("Invoice" shortened to INV). */

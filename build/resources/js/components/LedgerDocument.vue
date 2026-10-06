@@ -746,5 +746,31 @@ const partyLines = (party: DocumentParty) =>
         size: A4;
         margin: 16mm;
     }
+
+    /* A page holding a document prints the document and nothing else: no sidebar, header,
+       buttons or side panels pushing it down (which carried the stamp onto a second page), and
+       no app scroll area clipping it to what fitted on screen. Everything that neither holds
+       the document nor sits inside it is dropped; what holds it is flattened to plain blocks. */
+    body:has(article.doc) *:not(:has(article.doc)):not(article.doc):not(article.doc *) {
+        display: none !important;
+    }
+    html:has(article.doc),
+    body:has(article.doc),
+    body:has(article.doc) *:has(article.doc) {
+        display: block !important;
+        position: static !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        width: auto !important;
+        max-width: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+        background: transparent !important;
+    }
 }
 </style>

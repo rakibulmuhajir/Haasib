@@ -13,11 +13,12 @@ export interface DocumentStampData {
     signerTitle?: string | null
 }
 
-defineProps<{ stamp?: DocumentStampData | null }>()
+// onScreen: shown on the page too -- a preview of what prints. Otherwise it prints only.
+defineProps<{ stamp?: DocumentStampData | null; onScreen?: boolean }>()
 </script>
 
 <template>
-    <div v-if="stamp && (stamp.stampUrl || stamp.signatureUrl)" class="doc-stamp">
+    <div v-if="stamp && (stamp.stampUrl || stamp.signatureUrl)" class="doc-stamp" :class="{ 'doc-stamp--screen': onScreen }">
         <div class="doc-stamp__block">
             <img v-if="stamp.stampUrl" :src="stamp.stampUrl" alt="Company stamp" class="doc-stamp__stamp" />
             <img v-if="stamp.signatureUrl" :src="stamp.signatureUrl" alt="Signature" class="doc-stamp__signature" />
@@ -75,6 +76,10 @@ defineProps<{ stamp?: DocumentStampData | null }>()
 .doc-stamp__title {
     font-size: 12px;
     color: var(--text-secondary);
+}
+
+.doc-stamp--screen {
+    display: flex;
 }
 
 @media print {

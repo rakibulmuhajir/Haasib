@@ -119,6 +119,8 @@ const props = withDefaults(
          * for a final document of a ticked type; null/undefined renders nothing.
          */
         stamp?: DocumentStampData | null
+        // Show the stamp on screen as well (a preview); it always prints.
+        stampOnScreen?: boolean
         /** A centred heading over the lines, e.g. "Vehicle: GBE-315" -- what the lines are for. */
         linesHeading?: string | null
     }>(),
@@ -331,7 +333,7 @@ const partyLines = (party: DocumentParty) =>
             </div>
         </section>
 
-        <DocumentStamp :stamp="stamp" />
+        <DocumentStamp :stamp="stamp" :on-screen="stampOnScreen" />
 
         <footer v-if="$slots.terms || $slots.footer" class="colophon">
             <div v-if="$slots.terms" class="terms">

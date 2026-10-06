@@ -212,7 +212,7 @@ const save = () => {
       </div>
     </div>
     <p v-for="(message, key) in form.errors" :key="key" class="text-sm text-destructive print:hidden">{{ message }}</p>
-    <ConsolidatedInvoiceDocument :document="previewDocument" />
+    <ConsolidatedInvoiceDocument :document="previewDocument" preview />
   </div>
 
   <div v-else class="space-y-4">

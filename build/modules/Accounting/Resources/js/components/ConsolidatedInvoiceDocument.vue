@@ -46,7 +46,8 @@ export interface ConsolidatedDocumentData {
   stamp?: DocumentStampData | null
 }
 
-const props = defineProps<{ document: ConsolidatedDocumentData }>()
+// preview: the editor's preview, which shows the stamp on screen as it will print.
+const props = defineProps<{ document: ConsolidatedDocumentData; preview?: boolean }>()
 
 // Documents saved before columns could be left off carry no list: the full set, as they printed then.
 const columns = computed(() => props.document.columns ?? [
@@ -86,6 +87,7 @@ const hasBilledBy = computed(() => Object.values(billedBy.value).some((v) => (v 
     :doc-number="document.number"
     :issuer="document.issuer"
     :stamp="document.stamp"
+    :stamp-on-screen="preview"
     :bill-to="billTo"
     bill-to-label="Bill to"
     :dates="[{ label: 'Date', value: document.date }]"

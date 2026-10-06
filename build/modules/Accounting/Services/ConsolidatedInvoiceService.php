@@ -259,6 +259,19 @@ class ConsolidatedInvoiceService
         });
     }
 
+    /**
+     * Deletes a saved document (one made by mistake). It bills nothing itself, so no money moves:
+     * the invoices it covered stay the receivable and are no longer marked "sent in" it.
+     */
+    public function delete(Company $company, string $id): string
+    {
+        $number = DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->where('id', $id)->value('number');
+        abort_unless($number, 404);
+        DB::table('acct.consolidated_invoices')->where('company_id', $company->id)->where('id', $id)->delete();
+
+        return $number;
+    }
+
     /** A saved document, ready for the page and the PDF. */
     public function document(Company $company, string $id): array
     {

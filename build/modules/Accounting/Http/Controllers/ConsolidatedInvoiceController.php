@@ -91,7 +91,18 @@ class ConsolidatedInvoiceController extends Controller
         return Inertia::render('accounting/consolidated-invoices/Show', [
             'company' => ['id' => $companyModel->id, 'name' => $companyModel->name, 'slug' => $companyModel->slug, 'base_currency' => $companyModel->base_currency],
             'document' => $this->service->document($companyModel, $document),
+            'canDelete' => $request->user()->hasCompanyPermission(Permissions::INVOICE_DELETE),
         ]);
+    }
+
+    public function destroy(Request $request, string $company, string $document): RedirectResponse
+    {
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::INVOICE_DELETE), 403);
+        $companyModel = CompanyContext::getCompany();
+        $number = $this->service->delete($companyModel, $document);
+
+        return redirect()->route('consolidated-invoices.index', ['company' => $companyModel->slug])
+            ->with('success', "{$number} deleted");
     }
 
     public function pdf(Request $request, string $company, string $document)

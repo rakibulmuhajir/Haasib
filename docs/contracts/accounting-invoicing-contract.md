@@ -640,7 +640,9 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   `created_by_user_id`, `created_at`. RLS.
 - `acct.consolidated_invoice_items`: which invoices a document covered (`consolidated_invoice_id` CASCADE,
   `invoice_id` **no FK** — Edit day deletes and re-creates close invoices). Drives "sent in CI-…" in the picker.
-- Trigger `acct.consolidated_invoice_is_final()` refuses UPDATE and DELETE on both tables.
+- Trigger `acct.consolidated_invoice_is_final()` refuses UPDATE on both tables. DELETE is allowed (2026-10-06):
+  a document made by mistake may be deleted (`DELETE /{company}/consolidated-invoices/{id}`, `invoice.delete`
+  permission); it bills nothing, so no money moves, and its items cascade.
 - `acct.customers.billing_contact` varchar(150) null: the person/office documents are addressed to.
 - **One standard layout** (2026-09-29): Date · Coupon no. (`reference`, the station's paper slip, typed on the
   close's Sale row) · Fuel (`item`) · Litres · Rate · Amount. No column choices, no custom columns.

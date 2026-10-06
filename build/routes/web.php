@@ -121,6 +121,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'store'])->name('consolidated-invoices.store');
         Route::get('/{company}/consolidated-invoices/{document}', [ConsolidatedInvoiceController::class, 'show'])->whereUuid('document')->name('consolidated-invoices.show');
         Route::get('/{company}/consolidated-invoices/{document}/pdf', [ConsolidatedInvoiceController::class, 'pdf'])->whereUuid('document')->name('consolidated-invoices.pdf');
+        Route::delete('/{company}/consolidated-invoices/{document}', [ConsolidatedInvoiceController::class, 'destroy'])->whereUuid('document')->name('consolidated-invoices.destroy');
 
         // Company onboarding wizard
         Route::prefix('/{company}/onboarding')->group(function () {

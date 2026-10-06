@@ -315,3 +315,19 @@ test('a split invoice and its credit notes stay out of the statement and the lis
         ->and(\App\Modules\Accounting\Models\CreditNote::where('company_id', $f['company']->id)->withoutCorrectionArtifacts()->count())->toBe(0)
         ->and(\App\Modules\Accounting\Models\CreditNote::where('company_id', $f['company']->id)->count())->toBe(2);
 });
+
+test('a saved consolidated invoice can be deleted but not changed, and its invoices stay as they were', function () {
+    $f = vehicleFuelFixture();
+    $service = app(ConsolidatedInvoiceService::class);
+    $rows = $service->rowsFor($f['company']->id, $f['customer']->id, '2026-09-01', '2026-09-30');
+    $id = $service->create($f['company'], ['customer_id' => $f['customer']->id, 'from' => '2026-09-01', 'to' => '2026-09-30', 'keys' => array_column($rows, 'key')], $f['user']->id);
+    $owed = round((float) Invoice::where('company_id', $f['company']->id)->sum('balance'), 2);
+
+    expect(fn () => DB::table('acct.consolidated_invoices')->where('id', $id)->update(['title' => 'Changed']))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+
+    $service->delete($f['company'], $id);
+    expect(DB::table('acct.consolidated_invoices')->where('id', $id)->exists())->toBeFalse()
+        ->and(DB::table('acct.consolidated_invoice_items')->where('consolidated_invoice_id', $id)->exists())->toBeFalse()
+        ->and(round((float) Invoice::where('company_id', $f['company']->id)->sum('balance'), 2))->toBe($owed);
+});

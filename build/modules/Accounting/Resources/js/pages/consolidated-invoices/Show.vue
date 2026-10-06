@@ -3,12 +3,14 @@
  * A saved consolidated invoice: exactly what was sent, printed or downloaded again. It cannot be
  * changed -- a new one is made from the customer's statement. See ConsolidatedInvoiceService.
  */
-import { Head, Link } from '@inertiajs/vue3'
+import { ref } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PageShell from '@/components/PageShell.vue'
 import ConsolidatedInvoiceDocument from '../../components/ConsolidatedInvoiceDocument.vue'
 import type { ConsolidatedDocumentData } from '../../components/ConsolidatedInvoiceDocument.vue'
 import { Button } from '@/components/ui/button'
-import { Download, Printer } from 'lucide-vue-next'
+import { Download, Printer, Trash2 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
 const props = defineProps<{
@@ -22,6 +24,7 @@ const props = defineProps<{
     created_by_name: string | null
     file_name: string
   }
+  canDelete?: boolean
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -31,6 +34,15 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const print = () => window.print()
+
+const confirmingDelete = ref(false)
+const deleting = ref(false)
+const destroy = () => {
+  deleting.value = true
+  router.delete(`/${props.company.slug}/consolidated-invoices/${props.document.id}`, {
+    onFinish: () => { deleting.value = false; confirmingDelete.value = false },
+  })
+}
 </script>
 
 <template>
@@ -39,6 +51,7 @@ const print = () => window.print()
 
   <PageShell :title="`${document.title} ${document.number}`" :description="document.customer_name" :breadcrumbs="breadcrumbs">
     <template #actions>
+      <Button v-if="canDelete" variant="outline" @click="confirmingDelete = true"><Trash2 class="mr-2 h-4 w-4" />Delete</Button>
       <Button variant="outline" @click="print"><Printer class="mr-2 h-4 w-4" />Print</Button>
       <Button as-child>
         <a :href="`/${company.slug}/consolidated-invoices/${document.id}/pdf`"><Download class="mr-2 h-4 w-4" />Download PDF</a>
@@ -51,5 +64,16 @@ const print = () => window.print()
     </p>
 
     <ConsolidatedInvoiceDocument :document="document" />
+
+    <ConfirmDialog
+      v-model:open="confirmingDelete"
+      variant="destructive"
+      :title="`Delete ${document.number}?`"
+      description="Only this document goes. The invoices on it stay as they are."
+      confirm-text="Delete"
+      cancel-text="Keep it"
+      :loading="deleting"
+      @confirm="destroy"
+    />
   </PageShell>
 </template>

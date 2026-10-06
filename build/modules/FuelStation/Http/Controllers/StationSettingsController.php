@@ -76,6 +76,7 @@ class StationSettingsController extends Controller
                 'id' => $settings->id,
                 'fuel_vendor' => $settings->fuel_vendor,
                 'month_end_stock_valuation' => $settings->month_end_stock_valuation,
+                'supplier_payment_allocation' => $settings->supplier_payment_allocation ?? 'oldest_first',
                 'has_partners' => $settings->has_partners,
                 'has_amanat' => $settings->has_amanat,
                 'has_lubricant_sales' => $settings->has_lubricant_sales,

@@ -927,6 +927,12 @@ Post-close audit also covers invoice/bill lines, customer/supplier payments, Ama
 - The chosen method never posts a journal or changes the statutory inventory valuation. Missing rates, daily closes or physical counts make the management calculation unavailable, never zero.
 - Add `month_end_stock_valuation` to StationSettings `$fillable`; no cast is needed.
 
+### fuel.station_settings.supplier_payment_allocation (2026-10-06)
+- Non-null varchar(20), default `oldest_first`, CHECK IN (`oldest_first`, `keep_as_credit`).
+- What a supplier payment does with whatever no picked bill takes: a Daily Close "Pay supplier" row (`pay_suppliers.*.bill_id`, optional, pays that bill first), a card-channel supplier settlement, and the supplier's credit when its next bill posts (`VendorAdvanceService::autoApply`).
+  `oldest_first` pays the supplier's open bills oldest first (the behaviour before); `keep_as_credit` leaves it with the supplier as credit until applied from a bill (Apply advance). Rule lives in `DailyCloseService::allocateOldestFirst`.
+- A payment can be taken off a bill (`bill.unapply_payment`, POST `/{company}/bills/{bill}/payments/{payment}/unapply`): the allocation row is removed, the bill is owed that much again, the money stays as supplier credit. Nothing is posted.
+
 ### fuel.month_profit_snapshots (2026-10-03)
 - UUID `id` PK; `company_id` UUID FK auth.companies cascade delete; `month` date (first of month); `method` varchar(30) CHECK IN (`inventory_cost`, `next_month_purchase_rate`); `payload` jsonb; `finalized_by_user_id` nullable UUID FK auth.users null on delete; `finalized_at` timestamp; `reopened_at` nullable timestamp.
 - Company RLS (ENABLE + FORCE), index (company_id, month), unique partial index (company_id, month) WHERE reopened_at IS NULL.

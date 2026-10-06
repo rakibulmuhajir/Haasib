@@ -60,7 +60,11 @@ class DailyClosePaySupplierService
                 throw ValidationException::withMessages(["pay_suppliers.{$index}.amount" => 'Amount must be greater than zero.']);
             }
 
-            $allocation = $dailyCloseService->allocateOldestFirst($companyId, $vendor->id, $amount);
+            try {
+                $allocation = $dailyCloseService->allocateOldestFirst($companyId, $vendor->id, $amount, ($row['bill_id'] ?? null) ?: null);
+            } catch (ValidationException $e) {
+                throw ValidationException::withMessages(["pay_suppliers.{$index}.bill_id" => 'Choose one of this supplier\'s open bills.']);
+            }
 
             $notes = trim('Daily Close — pay supplier'.(!empty($row['reference']) ? ' — '.$row['reference'] : ''));
             if ($allocation['advance_amount'] > 0.004) {
@@ -92,6 +96,7 @@ class DailyClosePaySupplierService
                 'payment_account_name' => trim(($account->code ? $account->code.' — ' : '').$account->name),
                 'affects_cash_drawer' => $account->subtype === 'cash',
                 'reference' => $row['reference'] ?? null,
+                'bill_id' => ($row['bill_id'] ?? null) ?: null,
             ];
         }
 

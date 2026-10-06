@@ -252,20 +252,35 @@ class DailyCloseService
      *
      * @return array{allocations: array<int, array{bill_id: string, amount_allocated: float}>, applied_amount: float, advance_amount: float}
      */
-    public function allocateOldestFirst(string $companyId, string $vendorId, float $amount): array
+    public function allocateOldestFirst(string $companyId, string $vendorId, float $amount, ?string $billId = null): array
     {
-        $openBills = Bill::where('company_id', $companyId)
+        // A picked bill is paid first, up to what it owes. What is left (or all of it, with no bill
+        // picked) follows the station's setting: the supplier's open bills oldest first, or kept
+        // with the supplier as credit (StationSettings::supplierPaymentAllocation).
+        $allocations = [];
+        $remaining = round($amount, 2);
+        if ($billId) {
+            $picked = Bill::where('company_id', $companyId)->where('vendor_id', $vendorId)
+                ->whereNotIn('status', ['draft', 'void', 'cancelled'])->whereKey($billId)->first(['id', 'balance']);
+            if (! $picked) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['bill_id' => 'Choose one of this supplier\'s open bills.']);
+            }
+            $take = round(min((float) $picked->balance, $remaining), 2);
+            if ($take > 0) {
+                $allocations[] = ['bill_id' => $picked->id, 'amount_allocated' => $take];
+                $remaining = round($remaining - $take, 2);
+            }
+        }
+
+        $oldestFirst = \App\Modules\FuelStation\Models\StationSettings::supplierPaymentAllocation($companyId) === 'oldest_first';
+        $openBills = $oldestFirst ? Bill::where('company_id', $companyId)
             ->where('vendor_id', $vendorId)
             ->where('balance', '>', 0.000001)
+            ->when($billId, fn ($q) => $q->whereKeyNot($billId))
             ->orderBy('bill_date')
             ->orderBy('created_at')
-            ->get(['id', 'bill_number', 'balance']);
-        $openBalance = round((float) $openBills->sum('balance'), 2);
-        $appliedAmount = round(min($amount, $openBalance), 2);
-        $advanceAmount = round($amount - $appliedAmount, 2);
+            ->get(['id', 'bill_number', 'balance']) : collect();
 
-        $allocations = [];
-        $remaining = $appliedAmount;
         foreach ($openBills as $bill) {
             if ($remaining <= 0.000001) {
                 break;
@@ -278,7 +293,9 @@ class DailyCloseService
             $remaining = round($remaining - $take, 2);
         }
 
-        return ['allocations' => $allocations, 'applied_amount' => $appliedAmount, 'advance_amount' => $advanceAmount];
+        $appliedAmount = round(array_sum(array_column($allocations, 'amount_allocated')), 2);
+
+        return ['allocations' => $allocations, 'applied_amount' => $appliedAmount, 'advance_amount' => round($amount - $appliedAmount, 2)];
     }
 
     /**

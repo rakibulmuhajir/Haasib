@@ -27,6 +27,12 @@ class VendorAdvanceService
 {
     public function autoApply(Bill $bill): array
     {
+        // A station that keeps supplier payments as credit applies them only when asked.
+        if (\Illuminate\Support\Facades\DB::table('fuel.station_settings')->where('company_id', $bill->company_id)
+            ->value('supplier_payment_allocation') === 'keep_as_credit') {
+            return ['applied' => 0.0, 'payments' => []];
+        }
+
         return $this->apply($bill, null);
     }
 

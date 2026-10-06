@@ -148,8 +148,18 @@ const props = defineProps<{
   canCorrect?: boolean
   correctionSuppliers?: { id: string; name: string }[]
   corrections?: Correction[]
-  appliedPayments?: { number: string; party: string | null; amount: number | string }[]
+  appliedPayments?: { payment_id?: string; number: string; date?: string | null; party: string | null; amount: number | string }[]
 }>()
+
+// Take a payment off this bill: the bill is owed that much again, the money stays as credit.
+const unapplying = ref<string | null>(null)
+const unapply = (paymentId: string) => {
+  unapplying.value = paymentId
+  router.post(`/${props.company.slug}/bills/${props.bill.id}/payments/${paymentId}/unapply`, {}, {
+    preserveScroll: true,
+    onFinish: () => { unapplying.value = null },
+  })
+}
 
 const correcting = ref(false)
 const canCorrectNow = computed(() => props.canCorrect && !['void', 'cancelled', 'draft'].includes(props.bill.status))
@@ -636,6 +646,18 @@ const navigateToVendor = () => {
               <p v-for="row in paidFromAdvances" :key="row.payment_id">
                 Paid <MoneyText :amount="row.amount" :currency="bill.currency" :show-currency="false" /> from advance {{ row.payment_number ?? row.payment_id }}
               </p>
+            </div>
+
+            <!-- Payments on this bill: each can be taken off (kept as credit with the supplier). -->
+            <div v-if="appliedPayments?.length" class="space-y-1 text-sm">
+              <p class="text-xs font-medium text-muted-foreground">Payments applied</p>
+              <div v-for="p in appliedPayments" :key="p.payment_id ?? p.number" class="flex items-center justify-between gap-2">
+                <span class="min-w-0 truncate">{{ p.number }}<span v-if="p.date" class="text-muted-foreground"> · {{ String(p.date).slice(0, 10) }}</span></span>
+                <span class="flex items-center gap-2">
+                  <MoneyText :amount="Number(p.amount)" :currency="bill.currency" :show-currency="false" />
+                  <Button v-if="canCorrect && p.payment_id" variant="ghost" size="sm" class="h-7 px-2 text-xs" :disabled="unapplying !== null" @click="unapply(p.payment_id)">Take off</Button>
+                </span>
+              </div>
             </div>
 
             <!-- Apply advance -->

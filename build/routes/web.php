@@ -260,6 +260,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/bills/{bill}/supplier-claims/receive', [BillController::class, 'receiveSupplierClaim'])->name('bills.supplier-claims.receive');
         Route::post('/{company}/bills/{bill}/void', [BillController::class, 'void'])->name('bills.void');
         Route::post('/{company}/bills/{bill}/apply-advance', [BillController::class, 'applyAdvance'])->name('bills.apply-advance');
+        Route::post('/{company}/bills/{bill}/payments/{payment}/unapply', [BillController::class, 'unapplyPayment'])->whereUuid('payment')->name('bills.unapply-payment');
         Route::post('/{company}/bills/{bill}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'bill'])->name('bills.correct');
 
         // Bill Payments

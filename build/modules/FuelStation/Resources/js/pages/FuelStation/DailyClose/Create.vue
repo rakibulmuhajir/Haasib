@@ -369,6 +369,9 @@ const props = defineProps<{
     approvedPayrollPayouts: PayrollPayout[];
     pendingBillPayments: PendingBillPayment[];
     stationCashAccountId?: string | null;
+    // Each supplier's open bills, for the bill a Pay supplier row pays; what happens with none picked.
+    openBills?: Array<{ id: string; vendor_id: string; number: string; date: string | null; reference: string | null; balance: number }>;
+    supplierPaymentAllocation?: 'oldest_first' | 'keep_as_credit';
     pendingFuelInvoices?: PendingFuelInvoice[];
     pendingAccountingInvoices?: PendingAccountingInvoice[];
     unpaidDirectDeliveries?: Array<{ id: string; invoice_number: string; customer_name: string | null; balance: number }>;
@@ -1278,6 +1281,7 @@ const form = useForm({
         amount: number;
         payment_account_id: string;
         reference: string;
+        bill_id?: string;
     }[],
     amanat_disbursements: [] as {
         customer_id: string;
@@ -1653,7 +1657,7 @@ const sectionAdders: Record<string, () => void> = {
     bank_deposits: () => addBankDeposit(),
     partner_withdrawals: () => addPartnerWithdrawal(),
     employee_advances: () => addEmployeeAdvance(),
-    pay_suppliers: () => form.pay_suppliers.push({ vendor_id: '', vendor_name: '', amount: 0, payment_account_id: props.stationCashAccountId ?? '', reference: '' }),
+    pay_suppliers: () => form.pay_suppliers.push({ vendor_id: '', vendor_name: '', amount: 0, payment_account_id: props.stationCashAccountId ?? '', reference: '', bill_id: '' }),
     amanat_disbursements: () => addAmanat(),
     expenses: () => addExpense(),
 };
@@ -5692,6 +5696,8 @@ const cashFlowOut = computed(() => [
                             :payment-accounts="(props as any).paymentAccounts ?? []"
                             :default-account-id="props.stationCashAccountId"
                             :currency="currencyCode"
+                            :open-bills="props.openBills ?? []"
+                            :allocation="props.supplierPaymentAllocation ?? 'oldest_first'"
                         />
 
                         <!-- Amanat Disbursements (only if amanat feature enabled) -->

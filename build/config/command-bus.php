@@ -115,6 +115,7 @@ return [
     'bill.receive_goods' => \App\Modules\Accounting\Actions\Bill\ReceiveGoodsAction::class,
     'bill.receive_supplier_claim' => \App\Modules\Accounting\Actions\Bill\ReceiveSupplierClaimAction::class,
     'bill.apply_advance' => \App\Modules\Accounting\Actions\Bill\ApplyAdvanceAction::class,
+    'bill.unapply_payment' => \App\Modules\Accounting\Actions\Bill\UnapplyPaymentAction::class,
 
     // Bill Payment
     'bill_payment.list' => \App\Modules\Accounting\Actions\BillPayment\IndexAction::class,

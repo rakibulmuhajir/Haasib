@@ -54,6 +54,7 @@ interface StationSettingsData {
   id: string
   fuel_vendor: string
   month_end_stock_valuation: 'inventory_cost' | 'next_month_purchase_rate'
+  supplier_payment_allocation?: 'oldest_first' | 'keep_as_credit'
   has_partners: boolean
   has_amanat: boolean
   has_lubricant_sales: boolean
@@ -101,6 +102,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const form = useForm({
   month_end_stock_valuation: props.settings.month_end_stock_valuation,
+  supplier_payment_allocation: props.settings.supplier_payment_allocation ?? 'oldest_first',
   has_partners: props.settings.has_partners,
   has_amanat: props.settings.has_amanat,
   has_lubricant_sales: props.settings.has_lubricant_sales,
@@ -432,6 +434,28 @@ const formatFuelCategory = (category: string | null) => {
             </template>
           </div>
           <InputError :message="form.errors.month_end_stock_valuation" />
+        </CardContent>
+      </Card>
+
+      <Card id="supplier-payments" class="scroll-mt-4">
+        <CardHeader>
+          <CardTitle>Supplier payments</CardTitle>
+          <CardDescription>A payment to a supplier with no bill picked: on Pay supplier in the daily close, or a card settlement.</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-2">
+          <Label for="supplier_payment_allocation">With no bill picked</Label>
+          <Select v-model="form.supplier_payment_allocation">
+            <SelectTrigger id="supplier_payment_allocation" class="max-w-md"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="oldest_first">Pay the oldest bills first</SelectItem>
+              <SelectItem value="keep_as_credit">Keep as credit until applied</SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="max-w-2xl text-xs text-muted-foreground">
+            <template v-if="form.supplier_payment_allocation === 'keep_as_credit'">The money stays with the supplier as credit. Apply it from the bill it is for (Apply advance).</template>
+            <template v-else>The supplier's open bills are paid oldest first; anything more is kept as credit and goes on their next bill.</template>
+          </p>
+          <InputError :message="form.errors.supplier_payment_allocation" />
         </CardContent>
       </Card>
 

@@ -105,6 +105,7 @@ class StationSettings extends Model
         'company_id',
         'fuel_vendor',
         'month_end_stock_valuation',
+        'supplier_payment_allocation',
         'has_partners',
         'has_amanat',
         'has_lubricant_sales',
@@ -236,6 +237,13 @@ class StationSettings extends Model
     /**
      * Get or create settings for a company with defaults
      */
+    /** 'oldest_first' (pay the supplier's open bills, oldest first) or 'keep_as_credit'. */
+    public static function supplierPaymentAllocation(string $companyId): string
+    {
+        return (string) (\Illuminate\Support\Facades\DB::table('fuel.station_settings')->where('company_id', $companyId)
+            ->value('supplier_payment_allocation') ?: 'oldest_first');
+    }
+
     public static function forCompany(string $companyId): self
     {
         return self::firstOrCreate(

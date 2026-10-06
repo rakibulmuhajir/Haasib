@@ -903,6 +903,15 @@ class DailyCloseController extends Controller
             'openInvoices' => $openInvoices,
             'cashAccountIds' => $cashAccountIds,
             'paymentAccounts' => $paymentAccounts,
+            // Each supplier's open bills, for the bill a Pay supplier row pays.
+            'openBills' => \App\Modules\Accounting\Models\Bill::where('company_id', $companyId)
+                ->whereNotIn('status', ['draft', 'void', 'cancelled'])->where('balance', '>', 0.005)
+                ->orderBy('bill_date')->orderBy('created_at')
+                ->get(['id', 'vendor_id', 'bill_number', 'bill_date', 'vendor_invoice_number', 'balance'])
+                ->map(fn ($b) => ['id' => $b->id, 'vendor_id' => $b->vendor_id, 'number' => $b->bill_number,
+                    'date' => $b->bill_date?->toDateString(), 'reference' => $b->vendor_invoice_number, 'balance' => round((float) $b->balance, 2)])
+                ->values(),
+            'supplierPaymentAllocation' => \App\Modules\FuelStation\Models\StationSettings::supplierPaymentAllocation($companyId),
             'expenseAccounts' => $expenseAccounts,
             'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,

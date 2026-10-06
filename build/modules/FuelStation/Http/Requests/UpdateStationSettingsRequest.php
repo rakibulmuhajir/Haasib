@@ -28,6 +28,7 @@ class UpdateStationSettingsRequest extends BaseFormRequest
 
         return [
             'month_end_stock_valuation' => ['sometimes', 'required', Rule::in(['inventory_cost', 'next_month_purchase_rate'])],
+            'supplier_payment_allocation' => ['sometimes', 'required', Rule::in(['oldest_first', 'keep_as_credit'])],
             'has_partners' => 'boolean',
             'has_amanat' => 'boolean',
             'has_lubricant_sales' => 'boolean',

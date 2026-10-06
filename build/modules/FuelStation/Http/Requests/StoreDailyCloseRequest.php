@@ -213,6 +213,8 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'pay_suppliers.*.amount' => 'nullable|numeric|min:0.01',
             'pay_suppliers.*.payment_account_id' => 'nullable|uuid',
             'pay_suppliers.*.reference' => 'nullable|string|max:100',
+            // The bill this payment is for; none = the station's setting (oldest first, or credit).
+            'pay_suppliers.*.bill_id' => 'nullable|uuid',
 
             // Tab 5: Summary
             'closing_cash' => 'required|numeric|min:0',

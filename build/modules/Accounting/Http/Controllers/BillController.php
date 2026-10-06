@@ -463,7 +463,7 @@ class BillController extends Controller
                 ->join('acct.bill_payments as p', 'p.id', '=', 'a.bill_payment_id')
                 ->leftJoin('acct.vendors as v', 'v.id', '=', 'p.vendor_id')
                 ->where('a.bill_id', $record->id)->whereNull('p.deleted_at')
-                ->get(['p.payment_number as number', 'v.name as party', 'a.amount_allocated as amount']),
+                ->get(['p.id as payment_id', 'p.payment_number as number', 'p.payment_date as date', 'v.name as party', 'a.amount_allocated as amount']),
         ]);
     }
 
@@ -664,6 +664,20 @@ class BillController extends Controller
                 ->back()
                 ->with('error', $e->getMessage())
                 ->withInput();
+        }
+    }
+
+    /** Take a payment off this bill; the money stays with the supplier as credit. */
+    public function unapplyPayment(Request $request, string $company, string $bill, string $payment): RedirectResponse
+    {
+        try {
+            $result = app(CommandBus::class)->dispatch('bill.unapply_payment', ['id' => $bill, 'payment_id' => $payment], $request->user());
+
+            return back()->with('success', $result['message'] ?? 'Payment taken off');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 

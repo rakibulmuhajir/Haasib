@@ -112,7 +112,18 @@ class OpeningStockService
         ];
 
         if ($movement) {
+            // The stock level follows a movement only when it is inserted (the database trigger
+            // inv.update_stock_level_on_movement is AFTER INSERT), so a changed opening quantity
+            // moves the level by the difference here, or stock on hand would keep the old figure.
+            $delta = round($quantity - (float) $movement->quantity, 6);
             $movement->update($payload);
+            if (abs($delta) > 0.0000001) {
+                \Illuminate\Support\Facades\DB::statement(
+                    'INSERT INTO inv.stock_levels (company_id, warehouse_id, item_id, quantity, reserved_quantity) VALUES (?, ?, ?, ?, 0)
+                     ON CONFLICT (company_id, warehouse_id, item_id) DO UPDATE SET quantity = inv.stock_levels.quantity + EXCLUDED.quantity, updated_at = NOW()',
+                    [$companyId, $warehouseId, $itemId, $delta]
+                );
+            }
 
             return $movement;
         }

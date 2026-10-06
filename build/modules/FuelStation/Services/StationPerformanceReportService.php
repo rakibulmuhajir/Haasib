@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\DB;
 
 class StationPerformanceReportService
 {
+    /** Entries that belong to a whole month, not the day they are dated (see applyBooks). */
+    private const MONTH_END_TYPES = ['fuel_lubricant_cost', 'fuel_stock_writedown', 'payroll_accrual'];
+
+    /** "2026-09-month-end": sorts after the month's last day and before the next month's first. */
+    private const MONTH_END_SUFFIX = '-month-end';
+
     /**
      * @return array{
      *   filters: array{start_date:string,end_date:string,group_by:string,product:string},
@@ -225,10 +231,22 @@ class StationPerformanceReportService
      */
     private function applyBooks(string $companyId, string $startDate, string $endDate, string $groupBy, array &$periods): void
     {
+        // By day, the month's one-time entries (a month's lubricant cost booked at once, the
+        // month-end stock revaluation, the month's salaries) get a row of their own after the
+        // month's days instead of making its last day look like a loss.
         $books = app(ProfitStatementService::class)->periodBooks(
-            $companyId, $startDate, $endDate, fn (Carbon $date) => $this->periodKey($date, $groupBy),
+            $companyId, $startDate, $endDate,
+            fn (Carbon $date, string $type = '') => $groupBy === 'day' && in_array($type, self::MONTH_END_TYPES, true)
+                ? $date->format('Y-m').self::MONTH_END_SUFFIX
+                : $this->periodKey($date, $groupBy),
         );
         foreach ($books as $key => $_) {
+            if (str_ends_with($key, self::MONTH_END_SUFFIX)) {
+                $month = Carbon::parse(substr($key, 0, 7).'-01');
+                $periods[$key] ??= $this->emptyPeriodRow($key, $month->format('F').' month-end');
+                $periods[$key]['is_month_end'] = true;
+                continue;
+            }
             $periods[$key] ??= $this->emptyPeriodRow($key, $this->periodLabel(Carbon::parse($groupBy === 'month' ? $key.'-01' : $key), $groupBy));
         }
 

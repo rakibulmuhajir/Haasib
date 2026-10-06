@@ -259,6 +259,14 @@ const priceLinesOf = (row: any): PriceLine[] => (row.price_effect_lines ?? []) a
 const effectTone = (amount: number) => (amount < 0 ? 'text-status-attention' : amount > 0 ? 'text-status-success' : 'text-text-secondary')
 const rowRange = (row: any) => {
   // A day row's key is its date; a week/month row spans to its end, clipped to the report range.
+  // A month-end row ("2026-09-month-end") covers its month.
+  if (row.is_month_end) {
+    const [y, m] = String(row.key).split('-').map(Number)
+    const last = new Date(y, m, 0).getDate()
+    const f = `${y}-${String(m).padStart(2, '0')}-01`
+    const t = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+    return { f: f < props.filters.start_date ? props.filters.start_date : f, t: t > props.filters.end_date ? props.filters.end_date : t }
+  }
   const from = props.filters.group_by === 'month' ? `${row.key}-01` : row.key
   const start = new Date(`${from}T00:00:00`)
   const end = props.filters.group_by === 'day' ? start
@@ -493,7 +501,8 @@ const movementCards = computed(() => [
               <template #cell-label="{ row }">
                 <div class="font-medium">{{ row.label }}</div>
                 <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <MetaChip tone="neutral" bare>{{ row.daily_close_count }} close{{ row.daily_close_count === 1 ? '' : 's' }}</MetaChip>
+                  <MetaChip v-if="row.is_month_end" tone="neutral" bare>Whole month: lubricant cost, stock revaluation, salaries</MetaChip>
+                  <MetaChip v-else tone="neutral" bare>{{ row.daily_close_count }} close{{ row.daily_close_count === 1 ? '' : 's' }}</MetaChip>
                   <Link
                     v-if="row.detail_url_id"
                     :href="`/${company.slug}/fuel/daily-close/${row.detail_url_id}`"

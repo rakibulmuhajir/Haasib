@@ -162,14 +162,14 @@ class ProfitStatementService
      * type and amount: sales, cost and dip as positive figures (a dip gain is negative); 'other'
      * folds salaries, other income and other costs together, signed as income (a cost is negative).
      *
-     * @param  callable(Carbon):string  $periodKey
+     * @param  callable(Carbon, string):string  $periodKey  given each line's date and transaction type
      * @return array<string,array{sales:array,cost:array,dip:array,expenses:array,other:array}>
      */
     public function periodBooks(string $companyId, string $from, string $to, callable $periodKey): array
     {
         $ctx = $this->context($companyId);
         $rows = $this->ledgerLines($companyId, $from, $to, true);
-        $buckets = $this->buckets($ctx, $rows, fn ($row) => $periodKey(Carbon::parse($row->d)));
+        $buckets = $this->buckets($ctx, $rows, fn ($row) => $periodKey(Carbon::parse($row->d), (string) $row->transaction_type));
 
         $out = [];
         foreach ($buckets as $key => $b) {

@@ -41,7 +41,7 @@ import { formatMoneyText } from '@/lib/money';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Edit, MoreHorizontal, PencilLine } from 'lucide-vue-next';
+import { ArrowLeft, Edit, Eye, MoreHorizontal, PencilLine, Printer } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import {
     allocationDisplayAmount as computeAllocationDisplayAmount,
@@ -105,6 +105,9 @@ const props = defineProps<{
 }>();
 
 const correcting = ref(false);
+// Preview: the receipt alone, stamp and signature showing, as it will print.
+const previewing = ref(false);
+const printPage = () => window.print();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     { title: 'Dashboard', href: '/dashboard' },
@@ -249,6 +252,11 @@ const summaryItems = computed(() => [
         :breadcrumbs="breadcrumbs"
     >
         <template #actions>
+            <template v-if="previewing">
+                <Button variant="outline" @click="previewing = false"><ArrowLeft class="mr-2 h-4 w-4" />Back</Button>
+                <Button @click="printPage"><Printer class="mr-2 h-4 w-4" />Print</Button>
+            </template>
+            <template v-else>
             <Button
                 variant="outline"
                 @click="router.get(`/${company.slug}/payments`)"
@@ -282,6 +290,8 @@ const summaryItems = computed(() => [
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
+            <Button variant="outline" @click="previewing = true"><Eye class="mr-2 h-4 w-4" />Preview</Button>
+            </template>
         </template>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -300,9 +310,10 @@ const summaryItems = computed(() => [
                     locale="en-PK"
                     :show-quantity="false"
                     :stamp="stamp"
+                    :stamp-on-screen="previewing"
                 />
 
-                <Card v-if="payment.notes" variant="detail">
+                <Card v-if="payment.notes && !previewing" variant="detail">
                     <CardHeader>
                         <CardTitle>Internal notes</CardTitle>
                     </CardHeader>
@@ -313,7 +324,7 @@ const summaryItems = computed(() => [
             </div>
 
             <div class="space-y-6">
-                <Card variant="detail">
+                <Card v-if="!previewing" variant="detail">
                     <CardHeader>
                         <CardTitle>How it was paid</CardTitle>
                     </CardHeader>
@@ -324,7 +335,7 @@ const summaryItems = computed(() => [
 
                 <!-- What the money did. A receipt whose allocations are hidden in a
              sidebar total is a receipt nobody can reconcile against. -->
-                <Card variant="detail">
+                <Card v-if="!previewing" variant="detail">
                     <CardHeader>
                         <CardTitle>Where it went</CardTitle>
                     </CardHeader>
@@ -381,7 +392,7 @@ const summaryItems = computed(() => [
             </div>
         </div>
 
-        <Card v-if="canApply && unapplied > 0.005 && openInvoices?.length" class="mt-6 print:hidden">
+        <Card v-if="!previewing && canApply && unapplied > 0.005 && openInvoices?.length" class="mt-6 print:hidden">
             <CardHeader>
                 <CardTitle class="text-base">Apply to invoices</CardTitle>
                 <p class="text-sm text-muted-foreground">

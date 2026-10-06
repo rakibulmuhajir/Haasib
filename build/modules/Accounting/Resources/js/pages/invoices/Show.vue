@@ -41,17 +41,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import {
-  ArrowLeft,
-  Copy,
-  DollarSign,
-  Download,
-  Edit,
-  MoreHorizontal,
-  PencilLine,
-  Send,
-  Trash2,
-} from 'lucide-vue-next'
+import { ArrowLeft, Copy, DollarSign, Download, Edit, MoreHorizontal, PencilLine, Send, Trash2, Eye, Printer } from 'lucide-vue-next'
 
 interface LineItem {
   id: string
@@ -148,6 +138,9 @@ const setVehicle = (unitId: string) => {
 }
 
 const correcting = ref(false)
+// Preview: the invoice alone, stamp and signature showing, as it will print.
+const previewing = ref(false)
+const printPage = () => window.print()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.company.name, href: `/${props.company.slug}` },
@@ -320,6 +313,11 @@ const voidInvoice = () => {
 
   <PageShell :title="`Invoice ${invoice.invoice_number}`" :breadcrumbs="breadcrumbs">
     <template #actions>
+      <template v-if="previewing">
+        <Button variant="outline" @click="previewing = false"><ArrowLeft class="mr-2 h-4 w-4" />Back</Button>
+        <Button @click="printPage"><Printer class="mr-2 h-4 w-4" />Print</Button>
+      </template>
+      <template v-else>
       <Select v-if="customerUnits?.length" :model-value="invoice.unit?.id ?? 'none'" @update:model-value="(v) => setVehicle(String(v))">
         <SelectTrigger class="h-9 w-44" aria-label="Vehicle"><SelectValue placeholder="Vehicle" /></SelectTrigger>
         <SelectContent>
@@ -362,10 +360,12 @@ const voidInvoice = () => {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <Button variant="outline" @click="previewing = true"><Eye class="mr-2 h-4 w-4" />Preview</Button>
       <Button :disabled="isSettled" @click="sendInvoice">
         <Send class="mr-2 h-4 w-4" />
         Mark as sent
       </Button>
+      </template>
     </template>
 
     <div class="page">
@@ -387,6 +387,7 @@ const voidInvoice = () => {
         locale="en-PK"
         :overprint="overprint"
         :stamp="stamp"
+        :stamp-on-screen="previewing"
       >
         <template v-if="invoice.notes" #terms>
           <p dir="auto">{{ invoice.notes }}</p>
@@ -395,7 +396,7 @@ const voidInvoice = () => {
 
       <!-- The rail: what is true *about* this invoice but does not belong on
            the sheet the customer receives. -->
-      <aside class="rail">
+      <aside v-if="!previewing" class="rail">
         <Card variant="detail">
           <CardContent class="space-y-3 pt-6">
             <div class="flex flex-wrap items-center gap-2">
@@ -503,7 +504,7 @@ const voidInvoice = () => {
       :rate="invoice.line_items.length === 1 ? Number(invoice.line_items[0].unit_price) : null"
     />
 
-    <RelatedActions screen="invoice.show" :slug="company.slug" :subject="invoice" />
+    <RelatedActions v-if="!previewing" screen="invoice.show" :slug="company.slug" :subject="invoice" />
   </PageShell>
 </template>
 

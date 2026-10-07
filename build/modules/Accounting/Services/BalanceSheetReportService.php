@@ -22,9 +22,13 @@ class BalanceSheetReportService
     private const POSTED = ['posted', 'locked'];
 
     private const ASSET_TYPES = ['asset'];
+
     private const LIABILITY_TYPES = ['liability'];
+
     private const EQUITY_TYPES = ['equity'];
+
     private const INCOME_TYPES = ['revenue', 'other_income'];
+
     private const EXPENSE_TYPES = ['expense', 'cogs', 'other_expense'];
 
     /**
@@ -38,11 +42,11 @@ class BalanceSheetReportService
      *   is_balanced: bool
      * }
      */
-    public function run(string $companyId, string $asOf): array
+    public function run(string $companyId, string $asOf, bool $includeTrail = false): array
     {
         $rows = $this->balances($companyId, $asOf, array_merge(
             self::ASSET_TYPES, self::LIABILITY_TYPES, self::EQUITY_TYPES
-        ));
+        ), $includeTrail);
 
         $assets = [];
         $liabilities = [];
@@ -78,14 +82,15 @@ class BalanceSheetReportService
             }
         }
 
-        $retainedEarnings = $this->retainedEarnings($companyId, $asOf);
+        $retainedRows = null;
+        $retainedEarnings = $this->retainedEarnings($companyId, $asOf, $includeTrail, $retainedRows);
 
         $totalAssets = round(array_sum(array_column($assets, 'amount')), 2);
         $totalLiabilities = round(array_sum(array_column($liabilities, 'amount')), 2);
         $totalEquity = round(array_sum(array_column($equity, 'amount')) + $retainedEarnings, 2);
         $liabilitiesAndEquity = round($totalLiabilities + $totalEquity, 2);
 
-        return [
+        $result = [
             'as_of' => $asOf,
             'assets' => $assets,
             'liabilities' => $liabilities,
@@ -100,15 +105,39 @@ class BalanceSheetReportService
             ],
             'is_balanced' => abs($totalAssets - $liabilitiesAndEquity) < 0.01,
         ];
+        if ($includeTrail) {
+            $builder = app(StatementValueTrail::class);
+            $graph = ['nodes' => [], 'roots' => [], 'context' => ['label' => 'Balance sheet as of '.$asOf]];
+            $sections = ['assets' => [], 'liabilities' => [], 'equity' => []];
+            foreach ($rows as $row) {
+                $key = $row->type === 'asset' ? 'assets' : ($row->type === 'liability' ? 'liabilities' : 'equity');
+                $sections[$key][] = $builder->account($graph, $row, $row->type === 'asset');
+            }
+            $retained = [];
+            foreach ($retainedRows as $row) {
+                $retained[] = $builder->account($graph, $row, false);
+            }
+            $builder->node($graph, 'account:retained-earnings', 'Retained earnings', $retainedEarnings, $retained, 'All income less all expenses to date');
+            $sections['equity'][] = 'account:retained-earnings';
+            foreach ($sections as $key => $children) {
+                $builder->node($graph, 'total:'.$key, ucfirst($key), $result['totals'][$key], $children, 'Sum of account amounts');
+            }
+            $builder->node($graph, 'total:liabilities_and_equity', 'Liabilities and equity', $liabilitiesAndEquity, ['total:liabilities', 'total:equity'], 'Liabilities + equity');
+            $builder->node($graph, 'total:difference', 'Difference', $result['totals']['difference'], ['total:assets', 'total:liabilities_and_equity'], 'Assets − liabilities and equity');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     /**
      * Everything earned less everything spent, from the first entry in the ledger up to the
      * as-of date. This is the equity the trading itself created.
      */
-    private function retainedEarnings(string $companyId, string $asOf): float
+    private function retainedEarnings(string $companyId, string $asOf, bool $includeTrail = false, ?\Illuminate\Support\Collection &$evidenceRows = null): float
     {
-        $rows = $this->balances($companyId, $asOf, array_merge(self::INCOME_TYPES, self::EXPENSE_TYPES));
+        $rows = $this->balances($companyId, $asOf, array_merge(self::INCOME_TYPES, self::EXPENSE_TYPES), $includeTrail);
+        $evidenceRows = $rows;
 
         $result = 0.0;
         foreach ($rows as $row) {
@@ -125,7 +154,7 @@ class BalanceSheetReportService
     /**
      * @param  array<int, string>  $types
      */
-    private function balances(string $companyId, string $asOf, array $types)
+    private function balances(string $companyId, string $asOf, array $types, bool $includeTrail = false)
     {
         return DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
@@ -136,6 +165,7 @@ class BalanceSheetReportService
             ->whereIn('a.type', $types)
             ->groupBy('a.id', 'a.code', 'a.name', 'a.type', 'a.subtype')
             ->selectRaw('a.id, a.code, a.name, a.type, a.subtype, SUM(je.debit_amount) AS debit, SUM(je.credit_amount) AS credit')
+            ->when($includeTrail, fn ($q) => $q->selectRaw(StatementValueTrail::EVIDENCE_SQL))
             ->orderBy('a.code')
             ->get();
     }

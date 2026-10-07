@@ -8,6 +8,10 @@
  */
 import { computed, ref, watch } from 'vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import DocumentStamp from '@/components/DocumentStamp.vue'
 import type { DocumentStampData } from '@/components/DocumentStamp.vue'
@@ -43,6 +47,8 @@ type BankOption = { id: string; code: string; name: string }
 type PartyOption = { id: string; name: string; customer_number?: string; vendor_number?: string }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; ids?: string[]; category_id?: string | null; from: string; to: string; reversed?: boolean }
   options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[]; categories?: { id: string; name: string }[] }
@@ -67,6 +73,15 @@ const props = defineProps<{
     totals?: { salary: number; earned: number; advances: number; advance_count: number; repaid: number; deductions: number; paid: number }
   }
 }>()
+
+const evidence = useValueTrail({
+  refresh: ['statement', 'filters', 'valueTrailsAvailable'],
+  context: () => props.filters,
+  snapshot: () => props.statement,
+  snapshotFromPage: (page) => page.statement,
+})
+const balanceRoot = (row: Row) => props.valueTrailsAvailable && row.type === 'opening_balance' ? 'statement:opening'
+  : props.valueTrailsAvailable && row.type === 'closing_balance' ? 'statement:closing' : false
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
@@ -398,12 +413,14 @@ const statementTitle = computed(() => (props.statement.combined
           <MoneyText :amount="row.money_out" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" dash-zero />
         </template>
         <template #cell-balance="{ row }">
-          <MoneyText :amount="row.balance" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" />
+          <Hint v-if="balanceRoot(row)" :trail="balanceRoot(row)" preview="Opening balance plus signed movements"><MoneyText :amount="row.balance" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" /></Hint>
+          <MoneyText v-else :amount="row.balance" :currency="currency" :locale="moneyLocale" :show-currency="false" :fraction-digits="0" />
         </template>
       </LedgerRegister>
 
       <DocumentStamp :stamp="stamp" />
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="currency" @retry="evidence.load" />
   </PageShell>
 </template>
 

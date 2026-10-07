@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,6 +25,8 @@ type Line = {
 }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { as_of: string }
   report: {
@@ -39,6 +45,14 @@ const props = defineProps<{
     is_balanced: boolean
   }
 }>()
+
+const evidence = useValueTrail({
+  refresh: ['report', 'filters', 'valueTrailsAvailable'],
+  context: () => props.filters,
+  snapshot: () => props.report,
+  snapshotFromPage: (page) => page.report,
+})
+const trailRoot = (key: string) => props.valueTrailsAvailable ? key : false
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
@@ -111,19 +125,19 @@ const equityLines = computed<Line[]>(() => [
         <Card variant="figure">
           <CardHeader><CardTitle>Assets</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.assets" :currency="currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:assets')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.assets" :currency="currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
           <CardHeader><CardTitle>Liabilities</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.liabilities" :currency="currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:liabilities')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.liabilities" :currency="currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
           <CardHeader><CardTitle>Equity</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.equity" :currency="currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:equity')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.equity" :currency="currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
       </div>
@@ -138,7 +152,7 @@ const equityLines = computed<Line[]>(() => [
             </p>
             <p v-if="!report.is_balanced" class="text-sm text-text-secondary">
               Out by
-              <MoneyText :amount="report.totals.difference" :currency="currency" :locale="moneyLocale" />.
+              <Hint :trail="trailRoot('total:difference')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.difference" :currency="currency" :locale="moneyLocale" /></Hint>.
               Check the trial balance first — a sheet that will not balance usually means a one-sided entry.
             </p>
           </div>
@@ -158,10 +172,10 @@ const equityLines = computed<Line[]>(() => [
       >
         <template #empty>No assets recorded on or before this date.</template>
         <template #cell-amount="{ row }">
-          <MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('account:' + row.id)" preview="Signed ledger entries" @click.stop><MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
         <template #total-amount>
-          <MoneyText :amount="report.totals.assets" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:assets')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.assets" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
       </LedgerRegister>
 
@@ -178,10 +192,10 @@ const equityLines = computed<Line[]>(() => [
       >
         <template #empty>No liabilities recorded on or before this date.</template>
         <template #cell-amount="{ row }">
-          <MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('account:' + row.id)" preview="Signed ledger entries" @click.stop><MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
         <template #total-amount>
-          <MoneyText :amount="report.totals.liabilities" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:liabilities')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.liabilities" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
       </LedgerRegister>
 
@@ -196,12 +210,13 @@ const equityLines = computed<Line[]>(() => [
       >
         <template #empty>No equity recorded on or before this date.</template>
         <template #cell-amount="{ row }">
-          <MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('account:' + row.id)" preview="Signed ledger entries" @click.stop><MoneyText :amount="row.amount" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
         <template #total-amount>
-          <MoneyText :amount="report.totals.equity" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:equity')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.equity" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
       </LedgerRegister>
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="currency" @retry="evidence.load" />
   </PageShell>
 </template>

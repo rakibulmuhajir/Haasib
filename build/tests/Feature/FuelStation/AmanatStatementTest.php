@@ -28,6 +28,15 @@ test('a holder statement runs deposits in and payouts out from the opening', fun
     $move(AmanatTransaction::TYPE_FUEL_PURCHASE, 1500, '2026-09-10');
 
     $s = app(AmanatStatementService::class)->statement($holder, '2026-09-01', '2026-09-30');
+    $traced = app(AmanatStatementService::class)->statement($holder, '2026-09-01', '2026-09-30', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($s);
+    foreach ($graph['nodes'] as $node) {
+        if ($node['children']) {
+            expect(round(collect($node['children'])->sum(fn ($id) => $graph['nodes'][$id]['value']), 2))->toBe($node['value']);
+        }
+    }
 
     expect($s['opening_balance'])->toBe(10000.0)
         ->and($s['closing_balance'])->toBe(10500.0)

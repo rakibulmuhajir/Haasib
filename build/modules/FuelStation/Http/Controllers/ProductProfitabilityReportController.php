@@ -3,21 +3,21 @@
 namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\FuelStation\Http\Requests\ViewProductProfitabilityRequest;
 use App\Modules\FuelStation\Services\ProductProfitabilityReportService;
+use App\Modules\FuelStation\Services\ProfitValueTrailPresenter;
 use App\Services\CurrentCompany;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ProductProfitabilityReportController extends Controller
 {
-    public function __construct(private readonly ProductProfitabilityReportService $reportService)
-    {
-    }
+    public function __construct(private readonly ProductProfitabilityReportService $reportService) {}
 
-    public function index(Request $request): Response
+    public function index(ViewProductProfitabilityRequest $request): Response|RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
 
@@ -27,14 +27,36 @@ class ProductProfitabilityReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        $report = $this->reportService->run(
-            $company->id,
-            $startDate->toDateString(),
-            $endDate->toDateString(),
-            (string) $request->query('group_by', 'day'),
-            (string) $request->query('product', 'all'),
-            $request->query('category_id') ? (string) $request->query('category_id') : null,
-        );
+        $includeTrail = $request->user()->showsValueTrails()
+            && $request->header('X-Inertia-Partial-Component') === 'FuelStation/Reports/ProductProfitability'
+            && in_array('valueTrail', explode(',', (string) $request->header('X-Inertia-Partial-Data')), true);
+
+        try {
+            $report = $this->reportService->run(
+                $company->id,
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+                (string) $request->query('group_by', 'day'),
+                (string) $request->query('product', 'all'),
+                $request->query('category_id') ? (string) $request->query('category_id') : null,
+                $includeTrail,
+            );
+            $trail = isset($report['valueTrail'])
+                ? app(ProfitValueTrailPresenter::class)->present($report['valueTrail'], $company, $request->user())
+                : null;
+        } catch (\Throwable $exception) {
+            Log::error('Could not load Fuel Profit.', ['company_id' => $company->id, 'exception' => $exception]);
+            if (! $includeTrail) {
+                return redirect('/'.$company->slug.'/fuel/dashboard')
+                    ->with('error', 'Could not load Fuel Profit. Please try again.');
+            }
+
+            return Inertia::render('FuelStation/Reports/ProductProfitability', [
+                'valueTrail' => Inertia::optional(fn () => ['error' => 'Could not load this calculation. Please try again.']),
+            ]);
+        }
+
+        unset($report['valueTrail']);
 
         return Inertia::render('FuelStation/Reports/ProductProfitability', [
             'company' => [
@@ -44,12 +66,13 @@ class ProductProfitabilityReportController extends Controller
                 'base_currency' => $company->base_currency ?? 'PKR',
             ],
             ...$report,
+            'valueTrail' => Inertia::optional(fn () => $trail),
         ]);
     }
 
     private function date(mixed $value, Carbon $fallback): Carbon
     {
-        if (!is_string($value) || trim($value) === '') {
+        if (! is_string($value) || trim($value) === '') {
             return $fallback->copy();
         }
 

@@ -28,7 +28,7 @@ class VendorStatementService
      * @param  string|null  $to  Rows dated after this are left out and a "Closing balance"
      *                           row is appended. Null means no upper bound and no closing row.
      */
-    public function statement(Vendor $vendor, ?string $from = null, ?string $to = null): array
+    public function statement(Vendor $vendor, ?string $from = null, ?string $to = null, bool $includeTrail = false): array
     {
         $rows = [];
 
@@ -41,8 +41,8 @@ class VendorStatementService
                     'date' => optional($bill->bill_date)->toDateString(),
                     'type' => 'bill',
                     'reference' => $bill->bill_number,
-                    'description' => 'Bill ' . $bill->bill_number
-                        . ($bill->vendor_invoice_number ? " ({$bill->vendor_invoice_number})" : ''),
+                    'description' => 'Bill '.$bill->bill_number
+                        .($bill->vendor_invoice_number ? " ({$bill->vendor_invoice_number})" : ''),
                     'debit' => 0.0,
                     'credit' => (float) $bill->total_amount,
                     'source_id' => $bill->id,
@@ -59,7 +59,7 @@ class VendorStatementService
                     'date' => optional($payment->payment_date)->toDateString(),
                     'type' => 'payment',
                     'reference' => $payment->payment_number,
-                    'description' => 'Payment made' . ($payment->reference_number ? " ({$payment->reference_number})" : ''),
+                    'description' => 'Payment made'.($payment->reference_number ? " ({$payment->reference_number})" : ''),
                     'debit' => (float) $payment->amount,
                     'credit' => 0.0,
                     'source_id' => $payment->id,
@@ -77,7 +77,7 @@ class VendorStatementService
                     'date' => optional($credit->credit_date)->toDateString(),
                     'type' => 'vendor_credit',
                     'reference' => $credit->credit_number,
-                    'description' => 'Vendor credit ' . $credit->credit_number,
+                    'description' => 'Vendor credit '.$credit->credit_number,
                     'debit' => (float) $credit->amount,
                     'credit' => 0.0,
                     'source_id' => $credit->id,
@@ -93,6 +93,7 @@ class VendorStatementService
         foreach ($rows as $row) {
             if ($from !== null && $row['date'] !== null && $row['date'] < $from) {
                 $opening = round($opening + $row['credit'] - $row['debit'], 2);
+
                 continue;
             }
             if ($to !== null && $row['date'] !== null && $row['date'] > $to) {
@@ -120,7 +121,7 @@ class VendorStatementService
             ];
         }
 
-        return [
+        $result = [
             'rows' => $statement,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -128,5 +129,10 @@ class VendorStatementService
             'to' => $to,
             'party' => $vendor->name,
         ];
+        if ($includeTrail) {
+            $result['valueTrail'] = app(StatementValueTrail::class)->party($rows, 'vendor:'.$vendor->id, $vendor->name, $from, $to, false, $opening, $running);
+        }
+
+        return $result;
     }
 }

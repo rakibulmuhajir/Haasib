@@ -16,6 +16,21 @@ class TrialBalanceReportController extends Controller
         $company = CompanyContext::getCompany();
         $asOf = $request->query('as_of') ?? now()->toDateString();
 
+        $evidence = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+        $includeTrail = $evidence->available($request->user()) && $request->header('X-Inertia-Partial-Component') === 'accounting/reports/TrialBalance' && in_array('valueTrail', explode(',', $request->header('X-Inertia-Partial-Data', '')), true);
+        try {
+            $report = app(TrialBalanceReportService::class)->run($company->id, $asOf, $includeTrail);
+        } catch (\Throwable $e) {
+            if (! $includeTrail) {
+                throw $e;
+            }
+            report($e);
+            $report = app(TrialBalanceReportService::class)->run($company->id, $asOf);
+            $report['valueTrail'] = ['error' => 'Statement evidence could not be loaded. Please try again.'];
+        }
+        $graph = $report['valueTrail'] ?? null;
+        unset($report['valueTrail']);
+
         return Inertia::render('accounting/reports/TrialBalance', [
             'company' => [
                 'id' => $company->id,
@@ -24,7 +39,9 @@ class TrialBalanceReportController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'filters' => ['as_of' => $asOf],
-            'report' => app(TrialBalanceReportService::class)->run($company->id, $asOf),
+            'valueTrailsAvailable' => $evidence->available($request->user()),
+            'valueTrail' => Inertia::optional(fn () => $evidence->present(fn () => $graph, $request->user(), $company->slug)),
+            'report' => $report,
         ]);
     }
 }

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  */
 class AmanatStatementService
 {
-    public function statement(Customer $customer, string $from, string $to): array
+    public function statement(Customer $customer, string $from, string $to, bool $includeTrail = false): array
     {
         // A movement's day is its journal's date (a close posts for its own day, keyed in the
         // next morning); a movement without a journal falls back to when it was recorded.
@@ -27,12 +27,14 @@ class AmanatStatementService
             ->where('a.customer_id', $customer->id)
             // A voided journal takes its movement with it.
             ->where(fn ($q) => $q->whereNull('t.id')->orWhereIn('t.status', ['posted', 'locked']))
-            ->selectRaw('a.*, COALESCE(t.transaction_date, a.created_at::date) as movement_date');
+            ->selectRaw('a.*, t.id as transaction_id, COALESCE(t.transaction_date, a.created_at::date) as movement_date');
 
-        $opening = (float) DB::query()->fromSub($dated, 'm')
+        $openingRow = DB::query()->fromSub($dated, 'm')
             ->where('movement_date', '<', $from)
             ->selectRaw("COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE -amount END), 0) as balance")
-            ->value('balance');
+            ->when($includeTrail, fn ($q) => $q->selectRaw('json_agg(m) as evidence'))
+            ->first();
+        $opening = (float) $openingRow->balance;
         $opening = round($opening, 2);
 
         $movements = DB::query()->fromSub($dated, 'm')
@@ -75,7 +77,7 @@ class AmanatStatementService
             'balance' => $running, 'link' => null,
         ];
 
-        return [
+        $result = [
             'rows' => $rows,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -83,6 +85,24 @@ class AmanatStatementService
             'to' => $to,
             'party' => $customer->name,
         ];
+        if ($includeTrail) {
+            $builder = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+            $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $from, 'end_date' => $to]];
+            $leaf = function (object $m) use ($builder, &$graph) {
+                return $builder->node($graph, 'amanat:'.$m->id, $this->describe($m).' · '.$m->movement_date,
+                    round($m->transaction_type === AmanatTransaction::TYPE_DEPOSIT ? (float) $m->amount : -(float) $m->amount, 2),
+                    formula: 'Deposits add; withdrawals and fuel purchases subtract', source: $m->transaction_id ? [
+                        'transaction_id' => $m->transaction_id, 'date' => $m->movement_date,
+                    ] : null);
+            };
+            $prior = array_map($leaf, json_decode($openingRow->evidence ?? '[]') ?: []);
+            $current = $movements->map($leaf)->all();
+            $builder->node($graph, 'statement:opening', 'Opening balance', $opening, $prior, 'Sum of prior signed amanat movements');
+            $builder->node($graph, 'statement:closing', 'Closing balance', $running, ['statement:opening', ...$current], 'Opening + signed amanat movements');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     private function describe(object $m): string

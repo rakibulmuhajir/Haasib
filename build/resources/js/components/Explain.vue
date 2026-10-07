@@ -16,6 +16,7 @@
  * question marks down a form reads as an apology for the form.
  */
 import { computed } from 'vue'
+import ExplanationTrigger from '@/components/ExplanationTrigger.vue'
 import { lookup } from '@/lib/glossary'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
@@ -44,9 +45,9 @@ const seeAlso = computed(() => entry.value?.see ?? [])
 
     <Popover v-else>
         <PopoverTrigger as-child>
-            <button type="button" class="explain" :aria-label="`What does ${text} mean?`">
+            <ExplanationTrigger :aria-label="`What does ${text} mean?`">
                 <slot>{{ text }}</slot>
-            </button>
+            </ExplanationTrigger>
         </PopoverTrigger>
 
         <PopoverContent class="explain-panel" align="start" :side-offset="6">
@@ -71,30 +72,6 @@ const seeAlso = computed(() => entry.value?.see ?? [])
 </template>
 
 <style scoped>
-.explain {
-    display: inline;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
-    text-align: inherit;
-    cursor: help;
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1px;
-    text-decoration-color: var(--text-metadata);
-}
-
-.explain:hover {
-    text-decoration-color: currentColor;
-}
-
-.explain:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-}
-
 .explain-panel__term {
     font-weight: 600;
     margin-bottom: 6px;

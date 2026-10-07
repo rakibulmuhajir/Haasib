@@ -4,13 +4,13 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
+use App\Models\Partner;
 use App\Modules\Accounting\Http\Requests\StatementReportRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\CustomerCategory;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\AccountStatementService;
-use App\Models\Partner;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\PartnerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
@@ -31,6 +31,8 @@ class StatementReportController extends Controller
     /** Entries undone by a reversal (and the reversal) are hidden unless ?reversed=1. */
     private bool $showReversed = false;
 
+    private bool $includeTrail = false;
+
     public function index(StatementReportRequest $request): Response
     {
         $company = CompanyContext::getCompany();
@@ -40,6 +42,9 @@ class StatementReportController extends Controller
         $to = $request->validated('to');
         $ids = array_values(array_filter(explode(',', (string) $request->validated('ids'))));
         $this->showReversed = (bool) $request->validated('reversed');
+        $evidence = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+        $available = in_array($kind, ['bank', 'customer', 'supplier', 'partner', 'expense', 'employee', 'amanat'], true) && $evidence->available($request->user());
+        $this->includeTrail = $available && $request->header('X-Inertia-Partial-Component') === 'accounting/reports/Statement' && in_array('valueTrail', explode(',', $request->header('X-Inertia-Partial-Data', '')), true);
         $categoryId = $kind === 'customer' ? $request->validated('category_id') : null;
 
         $bankAccounts = Account::where('company_id', $company->id)
@@ -126,7 +131,12 @@ class StatementReportController extends Controller
             };
         }
 
+        $graph = $statement['valueTrail'] ?? null;
+        unset($statement['valueTrail']);
+
         return Inertia::render('accounting/reports/Statement', [
+            'valueTrailsAvailable' => $available && $resolvedId !== null,
+            'valueTrail' => Inertia::optional(fn () => $evidence->present(fn () => $graph, $request->user(), $company->slug)),
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
@@ -199,6 +209,8 @@ class StatementReportController extends Controller
      */
     private function allParties($parties, callable $one, string $from, string $to): array
     {
+        $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $from, 'end_date' => $to]];
+        $openingRoots = $closingRoots = [];
         $rows = [];
         $opening = 0.0;
         $closing = 0.0;
@@ -210,6 +222,20 @@ class StatementReportController extends Controller
             $moves = array_values(array_filter($statement['rows'], fn ($r) => ! in_array($r['type'], ['opening_balance', 'closing_balance'], true)));
             if (! $moves && abs((float) $statement['opening_balance']) < 0.005 && abs((float) $statement['closing_balance']) < 0.005) {
                 continue;
+            }
+            if (isset($statement['valueTrail'])) {
+                $evidence = $statement['valueTrail'];
+                $prefix = 'party:'.$partyId.':';
+                foreach ($evidence['nodes'] as $nodeId => $node) {
+                    $node['id'] = $prefix.$nodeId;
+                    $node['children'] = array_map(fn ($child) => $prefix.$child, $node['children']);
+                    if (in_array($nodeId, [$evidence['roots']['statement:opening'], $evidence['roots']['statement:closing']], true)) {
+                        $node['label'] = $name.' · '.$node['label'];
+                    }
+                    $graph['nodes'][$node['id']] = $node;
+                }
+                $openingRoots[] = $prefix.$evidence['roots']['statement:opening'];
+                $closingRoots[] = $prefix.$evidence['roots']['statement:closing'];
             }
             $opening += (float) $statement['opening_balance'];
             $closing += (float) $statement['closing_balance'];
@@ -229,8 +255,19 @@ class StatementReportController extends Controller
             'money_in' => 0.0, 'money_out' => 0.0, 'balance' => round($balance, 2), 'link' => null,
         ];
 
+        if ($this->includeTrail) {
+            $builder = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+            $builder->node($graph, 'statement:opening', 'Opening balance', round($opening, 2), $openingRoots, 'Sum of selected parties');
+            $builder->node($graph, 'statement:closing', 'Closing balance', round($closing, 2), $closingRoots, 'Sum of selected parties');
+            foreach (['statement:opening', 'statement:closing'] as $root) {
+                $graph['nodes'][$root]['estimated'] = collect($graph['nodes'][$root]['children'])
+                    ->contains(fn ($id) => $graph['nodes'][$id]['estimated']);
+            }
+        }
+
         return [
             [
+                ...($this->includeTrail ? ['valueTrail' => $graph] : []),
                 'rows' => [$edge($from, 'opening_balance', 'Opening balance', $opening), ...$rows, $edge($to, 'closing_balance', 'Closing balance', $closing)],
                 'opening_balance' => round($opening, 2),
                 'closing_balance' => round($closing, 2),
@@ -256,7 +293,7 @@ class StatementReportController extends Controller
             return [['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null], $columns, null];
         }
 
-        return [app(PartnerStatementService::class)->statement($partner, $from, $to, $this->showReversed), $columns, $partner->id];
+        return [app(PartnerStatementService::class)->statement($partner, $from, $to, $this->showReversed, $this->includeTrail), $columns, $partner->id];
     }
 
     /** One expense account's ledger: each entry to it by date, with the running total. */
@@ -273,7 +310,7 @@ class StatementReportController extends Controller
         }
 
         return [
-            app(AccountStatementService::class)->statement(Account::find($pick->id), $from, $to, $this->showReversed),
+            app(AccountStatementService::class)->statement(Account::find($pick->id), $from, $to, $this->showReversed, $this->includeTrail),
             $columns,
             $pick->id,
         ];
@@ -296,8 +333,19 @@ class StatementReportController extends Controller
             ];
         }
 
+        try {
+            $statement = app(AccountStatementService::class)->statement($account, $from, $to, $this->showReversed, $this->includeTrail);
+        } catch (\Throwable $e) {
+            if (! $this->includeTrail) {
+                throw $e;
+            }
+            report($e);
+            $statement = app(AccountStatementService::class)->statement($account, $from, $to, $this->showReversed);
+            $statement['valueTrail'] = ['error' => 'Statement evidence could not be loaded. Please try again.'];
+        }
+
         return [
-            app(AccountStatementService::class)->statement($account, $from, $to, $this->showReversed),
+            $statement,
             ['money_in' => 'Money in', 'money_out' => 'Money out', 'balance' => 'Balance'],
             $account->id,
         ];
@@ -317,7 +365,7 @@ class StatementReportController extends Controller
             ];
         }
 
-        $statement = app(CustomerStatementService::class)->statement($customer, $from, $to);
+        $statement = app(CustomerStatementService::class)->statement($customer, $from, $to, $this->includeTrail);
         // The statement's own rows carry debit/credit; the report table wants a
         // direction-neutral money_in/money_out pair like the other two kinds.
         // For a buyer, a debit (invoice) is what they were invoiced and a
@@ -346,7 +394,7 @@ class StatementReportController extends Controller
             return [['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null], $columns, null];
         }
 
-        return [app(\App\Modules\Payroll\Services\EmployeeStatementService::class)->statement($employee, $from, $to), $columns, $employee->id];
+        return [app(\App\Modules\Payroll\Services\EmployeeStatementService::class)->statement($employee, $from, $to, $this->includeTrail), $columns, $employee->id];
     }
 
     private function amanatStatement($holders, ?string $id, string $from, string $to): array
@@ -364,7 +412,7 @@ class StatementReportController extends Controller
             ];
         }
 
-        return [app(AmanatStatementService::class)->statement($holder, $from, $to), $columns, $holder->id];
+        return [app(AmanatStatementService::class)->statement($holder, $from, $to, $this->includeTrail), $columns, $holder->id];
     }
 
     private function supplierStatement($vendors, ?string $id, string $from, string $to): array
@@ -381,7 +429,7 @@ class StatementReportController extends Controller
             ];
         }
 
-        $statement = app(VendorStatementService::class)->statement($vendor, $from, $to);
+        $statement = app(VendorStatementService::class)->statement($vendor, $from, $to, $this->includeTrail);
         // For a supplier: a credit (bill) is what they billed, a debit
         // (payment/vendor credit) is what was paid.
         $statement['rows'] = collect($statement['rows'])->map(fn ($row) => [

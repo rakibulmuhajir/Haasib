@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import Hint from '@/components/Hint.vue';
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue';
+import { useValueTrail } from '@/composables/useValueTrail';
+import type { ValueTrail } from '@/types/valueTrail';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +79,7 @@ interface Payslip {
     gross_pay: number;
     total_deductions: number;
     net_pay: number;
+    outstanding_pay: number;
     base_gross_pay: number;
     base_total_deductions: number;
     base_net_pay: number;
@@ -100,11 +105,21 @@ interface PaymentAccount {
 }
 
 const props = defineProps<{
+    valueTrail?: ValueTrail | null;
+    valueTrailsAvailable?: boolean;
     company: CompanyRef;
     payslip: Payslip;
     canDeletePayslips: boolean;
     paymentAccounts: PaymentAccount[];
 }>();
+
+const evidence = useValueTrail({
+    refresh: ['payslip', 'valueTrailsAvailable'],
+    context: () => props.payslip.id,
+    snapshot: () => props.payslip,
+    snapshotFromPage: (page) => page.payslip,
+});
+const trailRoot = (key: string) => props.valueTrailsAvailable ? `payslip:${props.payslip.id}:${key}` : false;
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -445,7 +460,7 @@ const handleVoid = () => {
                         <div class="flex items-center justify-between">
                             <span class="text-muted-foreground">Gross Pay</span>
                             <span class="font-medium">
-                                <MoneyText :amount="payslip.gross_pay" :currency="payslip.currency" />
+                                <Hint :trail="trailRoot('gross')" preview="Sum of saved earnings"><MoneyText :amount="payslip.gross_pay" :currency="payslip.currency" /></Hint>
                             </span>
                         </div>
                         <div class="flex items-center justify-between">
@@ -453,19 +468,25 @@ const handleVoid = () => {
                                 >Deductions</span
                             >
                             <span class="font-medium text-destructive">
-                                <MoneyText
+                                <Hint :trail="trailRoot('deductions')" preview="Sum of saved deductions"><MoneyText
                                     :amount="payslip.total_deductions"
                                     :currency="payslip.currency"
                                     direction="outflow"
-                                />
+                                /></Hint>
                             </span>
                         </div>
                         <hr />
                         <div class="flex items-center justify-between">
                             <span class="font-semibold">Net Pay</span>
                             <span class="text-xl font-bold text-primary">
-                                <MoneyText :amount="payslip.net_pay" :currency="payslip.currency" />
+                                <Hint :trail="trailRoot('net')" preview="Gross pay less deductions"><MoneyText :amount="payslip.net_pay" :currency="payslip.currency" /></Hint>
                             </span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted-foreground">Remaining to pay</span>
+                            <Hint :trail="trailRoot('outstanding')" preview="Net pay less recorded payment">
+                                <MoneyText :amount="payslip.outstanding_pay" :currency="payslip.currency" />
+                            </Hint>
                         </div>
                     </CardContent>
                 </Card>
@@ -542,6 +563,7 @@ const handleVoid = () => {
                 </Card>
             </div>
         </div>
+    <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="payslip.currency" @retry="evidence.load" />
     </PageShell>
 
     <Dialog v-model:open="showMarkPaidDialog">

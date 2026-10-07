@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -65,6 +69,8 @@ type RecentLine = {
 }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: CompanyRef
   filters: { start: string; end: string }
   report: {
@@ -78,6 +84,14 @@ const props = defineProps<{
 }>()
 
 const { t } = useLexicon()
+
+const evidence = useValueTrail({
+  refresh: ['report', 'filters', 'valueTrailsAvailable'],
+  context: () => props.filters,
+  snapshot: () => props.report,
+  snapshotFromPage: (page) => page.report,
+})
+const trailRoot = (key: string) => props.valueTrailsAvailable ? key : false
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
@@ -155,19 +169,19 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
         <Card variant="figure">
           <CardHeader><CardTitle>{{ t('moneyIn') }}</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.income" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:income')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.income" :currency="company.base_currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
           <CardHeader><CardTitle>{{ t('moneyOut') }}</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.expenses" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:expenses')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.expenses" :currency="company.base_currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
           <CardHeader><CardTitle>{{ t('profit') }}</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.profit" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:profit')" preview="Follow the contributing account amounts"><MoneyText :amount="report.totals.profit" :currency="company.base_currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
       </div>
@@ -188,20 +202,16 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
             {{ t('noReportData') }}
           </div>
           <div v-else class="space-y-2">
-            <Button
-              v-for="row in incomeRows"
-              :key="row.id"
-              variant="ghost"
-              class="grid h-auto w-full grid-cols-12 gap-3 px-2 py-2 text-left text-sm"
-              @click="openAccountDrilldown(row)"
-            >
-              <div class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</div>
-              <div class="col-span-5">{{ row.name }}</div>
-              <div class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</div>
+            <div v-for="row in incomeRows" :key="row.id" class="grid grid-cols-12 gap-3 px-2 py-2 text-sm">
+              <Button variant="ghost" class="col-span-10 grid h-auto grid-cols-10 gap-3 p-0 text-left" @click="openAccountDrilldown(row)">
+                <span class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</span>
+                <span class="col-span-5">{{ row.name }}</span>
+                <span class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</span>
+              </Button>
               <div class="col-span-2 text-right tabular-nums">
-                <MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" />
+                <Hint :trail="trailRoot('account:' + row.id)" preview="Signed ledger entries" @click.stop><MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" /></Hint>
               </div>
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -222,20 +232,16 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
             {{ t('noReportData') }}
           </div>
           <div v-else class="space-y-2">
-            <Button
-              v-for="row in expenseRows"
-              :key="row.id"
-              variant="ghost"
-              class="grid h-auto w-full grid-cols-12 gap-3 px-2 py-2 text-left text-sm"
-              @click="openAccountDrilldown(row)"
-            >
-              <div class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</div>
-              <div class="col-span-5">{{ row.name }}</div>
-              <div class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</div>
+            <div v-for="row in expenseRows" :key="row.id" class="grid grid-cols-12 gap-3 px-2 py-2 text-sm">
+              <Button variant="ghost" class="col-span-10 grid h-auto grid-cols-10 gap-3 p-0 text-left" @click="openAccountDrilldown(row)">
+                <span class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</span>
+                <span class="col-span-5">{{ row.name }}</span>
+                <span class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</span>
+              </Button>
               <div class="col-span-2 text-right tabular-nums">
-                <MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" />
+                <Hint :trail="trailRoot('account:' + row.id)" preview="Signed ledger entries" @click.stop><MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" /></Hint>
               </div>
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -315,5 +321,6 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
         </CardContent>
       </Card>
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="company.base_currency" @retry="evidence.load" />
   </PageShell>
 </template>

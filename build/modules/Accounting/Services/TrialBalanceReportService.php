@@ -24,7 +24,7 @@ class TrialBalanceReportService
      *   is_balanced: bool
      * }
      */
-    public function run(string $companyId, string $asOf): array
+    public function run(string $companyId, string $asOf, bool $includeTrail = false): array
     {
         $rows = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
@@ -34,6 +34,7 @@ class TrialBalanceReportService
             ->whereDate('t.transaction_date', '<=', $asOf)
             ->groupBy('a.id', 'a.code', 'a.name', 'a.type')
             ->selectRaw('a.id, a.code, a.name, a.type, SUM(je.debit_amount) AS debit, SUM(je.credit_amount) AS credit')
+            ->when($includeTrail, fn ($q) => $q->selectRaw(StatementValueTrail::EVIDENCE_SQL))
             ->orderBy('a.code')
             ->get();
 
@@ -68,7 +69,7 @@ class TrialBalanceReportService
         $totalDebit = round($totalDebit, 2);
         $totalCredit = round($totalCredit, 2);
 
-        return [
+        $result = [
             'rows' => $accounts,
             'totals' => [
                 'debit' => $totalDebit,
@@ -77,5 +78,25 @@ class TrialBalanceReportService
             ],
             'is_balanced' => abs($totalDebit - $totalCredit) < 0.01,
         ];
+        if ($includeTrail) {
+            $builder = app(StatementValueTrail::class);
+            $graph = ['nodes' => [], 'roots' => [], 'context' => ['label' => 'Trial balance as of '.$asOf]];
+            $sides = ['debit' => [], 'credit' => []];
+            foreach ($rows as $row) {
+                $balance = round((float) $row->debit - (float) $row->credit, 2);
+                if ($balance == 0) {
+                    continue;
+                }
+                $key = $balance > 0 ? 'debit' : 'credit';
+                $sides[$key][] = $builder->account($graph, $row, $balance > 0);
+            }
+            foreach ($sides as $key => $children) {
+                $builder->node($graph, 'total:'.$key, ucfirst($key).' balance', $result['totals'][$key], $children, 'Sum of net account balances on this side');
+            }
+            $builder->node($graph, 'total:difference', 'Difference', $result['totals']['difference'], ['total:debit', 'total:credit'], 'Debit balances − credit balances');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 }

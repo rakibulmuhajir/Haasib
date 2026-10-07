@@ -1,10 +1,10 @@
 <?php
 
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Services\MonthEndStockValuationService;
 use App\Modules\FuelStation\Services\ProductProfitabilityReportService;
-use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 
@@ -56,13 +56,57 @@ test('book profit is sales plus closing stock less opening stock and purchases',
     // 400,000 + 120,000 - 190,000 = 330,000 before the write-down; 725 L at 300 = 217,500 after.
     expect($valuation->accountBalance($cid, $f['accounts']['1200']->id, '2026-09-30'))->toBe(217500.0);
 
-    $report = app(ProductProfitabilityReportService::class)->run($cid, '2026-09-01', '2026-09-30', 'month');
+    $report = app(ProductProfitabilityReportService::class)->run($cid, '2026-09-01', '2026-09-30', 'month', 'all', null, true);
     $petrol = collect($report['productRows'])->firstWhere('key', 'petrol');
 
     expect($petrol['revenue'])->toBe(200000.0)
         ->and($petrol['book_profit'])->toBe(round($petrol['revenue'] + 217500 - 400000 - 120000, 2))
         ->and($petrol['book_profit'])->toBe(-102500.0)
         ->and($report['totals']['book_profit'])->toBe(-102500.0);
+
+    $trail = $report['valueTrail'];
+    $valuationNode = collect($trail['nodes'])->firstWhere('label', 'Month-end stock valuation');
+    expect($valuationNode['value'])->toBe(112500.0)
+        ->and($valuationNode['source']['kind'])->toBe('journal');
+    $costNode = $trail['nodes'][$trail['roots']['product:petrol:cogs']];
+    expect(round(array_sum(array_map(fn ($id) => $trail['nodes'][$id]['value'], $costNode['children'])), 2))->toBe(round($petrol['cogs'], 2));
+
+    $book = $trail['nodes'][$trail['roots']['product:petrol:book_profit']];
+    $values = array_map(fn ($id) => $trail['nodes'][$id]['value'], $book['children']);
+    expect($book['value'])->toBe(-102500.0)
+        ->and($book['formula'])->toBe('Sales + closing stock − opening stock − purchases')
+        ->and($values[0] + $values[1] - $values[2] - $values[3])->toBe($book['value']);
+    foreach (['Closing stock value', 'Opening stock value', 'Stock purchases'] as $label) {
+        $node = collect($trail['nodes'])->firstWhere('label', $label);
+        expect(round(array_sum(array_map(fn ($id) => $trail['nodes'][$id]['value'], $node['children'])), 2))->toBe($node['value']);
+        expect($node['children'])->not->toBeEmpty();
+    }
+    foreach (['product:petrol', 'total'] as $scope) {
+        $margin = $trail['nodes'][$trail['roots'][$scope.':margin_per_unit']];
+        expect($margin['value'])->toBe($scope === 'total' ? $report['totals']['margin_per_unit'] : $petrol['margin_per_unit']);
+        $basis = $trail['nodes'][$margin['children'][0]];
+        $quantity = $trail['nodes'][$margin['children'][1]];
+        expect($basis['value'] / $quantity['value'])->toBe($margin['value']);
+    }
+});
+
+test('stock variance trails follow tank readings and mark current valuation costs as estimates', function () {
+    $f = bookProfitFixture();
+    TankReading::where('company_id', $f['company']->id)->delete();
+    $reading = TankReading::create(['company_id' => $f['company']->id, 'tank_id' => $f['tank']->id, 'item_id' => $f['item']->id,
+        'reading_date' => '2026-09-30', 'reading_type' => 'closing', 'dip_measurement_liters' => 715, 'system_calculated_liters' => 725,
+        'variance_liters' => -10, 'variance_type' => 'loss']);
+    $report = app(ProductProfitabilityReportService::class)->run($f['company']->id, '2026-09-01', '2026-09-30', 'month', 'all', null, true);
+    $row = collect($report['productRows'])->firstWhere('key', 'petrol');
+    $trail = $report['valueTrail'];
+    $loss = $trail['nodes'][$trail['roots']['product:petrol:stock_loss_value']];
+    expect($row['stock_loss_quantity'])->toBe(10.0)
+        ->and($loss['value'])->toBe($row['stock_loss_value'])
+        ->and($loss['estimated'])->toBeTrue()
+        ->and($trail['nodes'][$trail['roots']['total:stock_variance_value']]['estimated'])->toBeTrue()
+        ->and(collect($trail['nodes'])->firstWhere('label', 'Recorded dip')['source']['id'])->toBe($reading->id);
+    $valuation = collect($trail['nodes'])->firstWhere('label', 'Stock variance valuation');
+    expect(round($trail['nodes'][$valuation['children'][0]]['value'] * $trail['nodes'][$valuation['children'][1]]['value'], 2))->toBe($valuation['value']);
 });
 
 test('book profit is blank when the stock account is shared with another product', function () {

@@ -138,6 +138,7 @@ class StockStatementService
                     $tot['sold'] += $dayDirect;
                     $tot['sale_amount'] += $dayDirectAmount;
                     $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills,
+                        'direct_invoices' => $directSales[$date]['invoices'] ?? [],
                         'sale_amount' => $dayDirectAmount, 'sale_running' => $tot['sale_amount'],
                         'purchase_amount' => $dayPurchase, 'purchase_rate' => $dayPurchaseRate, 'purchase_running' => $tot['purchase_amount']];
                 }
@@ -457,7 +458,7 @@ class StockStatementService
             ->whereNotIn('i.status', ['draft', 'void', 'cancelled'])
             ->whereBetween('i.invoice_date', [$start, $end])
             ->where(fn ($q) => $q->where('l.item_id', $itemId)->orWhereNull('l.item_id'))
-            ->get(['i.id', 'i.invoice_number', 'i.invoice_date', 'l.item_id', 'l.quantity', 'l.total']);
+            ->get(['i.id', 'i.invoice_number', 'i.invoice_date', 'l.item_id', 'l.quantity', 'l.unit_price', 'l.total']);
         foreach ($lines as $l) {
             $date = Carbon::parse($l->invoice_date)->toDateString();
             if ($l->item_id === null) {
@@ -468,7 +469,7 @@ class StockStatementService
             }
             $out[$date] ??= ['amount' => 0.0, 'invoices' => []];
             $out[$date]['amount'] += (float) $l->total;
-            $out[$date]['invoices'][] = ['id' => $l->id, 'invoice_number' => $l->invoice_number, 'quantity' => (float) $l->quantity, 'amount' => (float) $l->total];
+            $out[$date]['invoices'][] = ['id' => $l->id, 'invoice_number' => $l->invoice_number, 'quantity' => (float) $l->quantity, 'unit_price' => (float) $l->unit_price, 'amount' => (float) $l->total];
         }
 
         return $out;

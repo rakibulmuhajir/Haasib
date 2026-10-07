@@ -8,6 +8,7 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 
 require_once __DIR__.'/PendingDeliveryFixtures.php';
+require_once __DIR__.'/StockBooksFixtures.php';
 
 /*
  * Fuel sold straight off the tanker never passes a pump, so no close has it. The profitability
@@ -101,4 +102,102 @@ test('home shows the report totals, not the off-tanker sales added twice', funct
     $petrol = collect($home['products'])->firstWhere('name', 'Petrol');
     expect($petrol['direct_quantity'])->toBe(200.0)
         ->and($petrol['quantity'])->toBe((float) $report['productRows'][0]['quantity']);
+});
+
+test('value trails reconcile totals, products and periods to the actual report and reach saved prices', function () {
+    $f = offTankerFixture();
+    $service = app(ProductProfitabilityReportService::class);
+    $plain = $service->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'petrol');
+    $report = $service->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'petrol', null, true);
+    $trail = $report['valueTrail'];
+
+    expect($plain)->not->toHaveKey('valueTrail')
+        ->and($report['totals'])->toBe($plain['totals'])
+        ->and($report['productRows'])->toBe($plain['productRows'])
+        ->and($trail['context'])->toBe($report['filters']);
+
+    foreach (['revenue', 'cogs', 'quantity', 'purchased_quantity', 'gross_profit'] as $field) {
+        foreach (['total' => $report['totals'], 'product:petrol' => $report['productRows'][0]] as $scope => $row) {
+            $node = $trail['nodes'][$trail['roots'][$scope.':'.$field]];
+            expect($node['value'])->toBe((float) $row[$field]);
+            $values = array_map(fn ($id) => $trail['nodes'][$id]['value'], $node['children']);
+            $actual = $field === 'gross_profit' ? $values[0] - $values[1] : array_sum($values);
+            expect(round($actual, 2))->toBe(round($node['value'], 2));
+        }
+    }
+    foreach ($report['periodRows'] as $row) {
+        expect($trail['nodes'][$trail['roots']['period:'.$row['key'].':gross_profit']]['value'])->toBe((float) $row['gross_profit']);
+    }
+    $invoiceNode = collect($trail['nodes'])->first(fn ($node) => ($node['source']['id'] ?? null) === $f['invoice']->id && $node['label'] === 'Price used');
+    expect($invoiceNode['value'])->toBe(300.0)
+        ->and($invoiceNode['source']['date'])->toBe('2026-09-16');
+    expect(collect($trail['nodes'])->contains(fn ($node) => $node['label'] === 'Closing meter'))->toBeTrue();
+
+    $f['item']->update(['selling_price' => 999]);
+    $historical = $service->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'petrol', null, true)['valueTrail'];
+    expect(collect($historical['nodes'])->where('label', 'Price used')->pluck('value')->unique()->all())->toBe([300.0]);
+
+    // Enabling explanations once must not make subsequent report consumers collect them.
+    expect($service->run($f['company']->id, '2026-09-01', '2026-09-30'))->not->toHaveKey('valueTrail');
+});
+
+test('value trails keep filters and grouped periods and do not invent sources for empty results', function () {
+    $f = offTankerFixture();
+    $service = app(ProductProfitabilityReportService::class);
+    $report = $service->run($f['company']->id, '2026-09-01', '2026-09-30', 'month', 'petrol', null, true);
+    expect($report['valueTrail']['roots'])->toHaveKey('period:2026-09:gross_profit');
+    $empty = $service->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'diesel', null, true);
+    $trail = $empty['valueTrail'];
+    expect($trail['nodes'][$trail['roots']['total:revenue']]['children'])->toBe([])
+        ->and(collect($trail['nodes'])->filter(fn ($node) => $node['source'] !== null))->toHaveCount(0)
+        ->and($trail['context']['product'])->toBe('diesel');
+});
+
+test('value trails show cost corrections once and keep their journal source', function () {
+    $f = offTankerFixture();
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->sole();
+    $correctionId = stockBooksEntry($f['company']->id, '2026-09-15', 'fuel_close_cost_fix', [
+        [$f['accounts']['5100']->id, 1500, 'debit'], [$f['accounts']['1200']->id, 1500, 'credit'],
+    ]);
+    Transaction::whereKey($correctionId)->update(['reference_id' => $close->id, 'metadata' => [
+        'close_id' => $close->id, 'lines' => [['fuel_category' => 'petrol', 'cogs_delta' => 1500]],
+    ]]);
+    $report = app(ProductProfitabilityReportService::class)->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'petrol', null, true);
+    $trail = $report['valueTrail'];
+    $correction = collect($trail['nodes'])->where('label', 'Posted cost correction')->sole();
+    expect($correction['value'])->toBe(1500.0)->and($correction['source']['id'])->toBe($correctionId);
+    $cost = collect($trail['nodes'])->first(fn ($node) => $node['label'] === 'Petrol · cost of sales');
+    expect(round(array_sum(array_map(fn ($id) => $trail['nodes'][$id]['value'], $cost['children'])), 2))->toBe(round($cost['value'], 2));
+});
+
+test('the report lazily loads trails and refuses to collect them when the account preference is off', function () {
+    $f = offTankerFixture();
+    $f['company']->enableModule('fuel_station');
+    $url = '/'.$f['company']->slug.'/fuel/reports/product-profitability?start_date=2026-09-01&end_date=2026-09-30&product=petrol';
+    $this->actingAs($f['user'])->get($url)->assertOk()->assertInertia(fn ($page) => $page
+        ->component('FuelStation/Reports/ProductProfitability')->missing('valueTrail'));
+    $headers = [
+        'X-Inertia' => 'true',
+        'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'FuelStation/Reports/ProductProfitability',
+        'X-Inertia-Partial-Data' => 'valueTrail',
+    ];
+    $this->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail.context.product', 'petrol');
+
+    $f['user']->update(['settings' => ['show_value_trails' => false]]);
+    $this->actingAs($f['user']->fresh())->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail', null);
+});
+
+test('source references are withheld when a report reader cannot view the original documents', function () {
+    $f = offTankerFixture();
+    $report = app(ProductProfitabilityReportService::class)->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', 'petrol', null, true);
+    $reader = Mockery::mock(\App\Models\User::class)->makePartial();
+    $reader->shouldReceive('isGodMode')->andReturn(false);
+    $reader->shouldReceive('hasCompanyPermission')->andReturn(false);
+    $trail = app(\App\Modules\FuelStation\Services\ProfitValueTrailPresenter::class)->present($report['valueTrail'], $f['company'], $reader);
+    foreach ($trail['nodes'] as $node) {
+        if ($node['source']) {
+            expect($node['source'])->toBe(['restricted' => true]);
+        }
+    }
 });

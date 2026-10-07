@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +26,8 @@ type Row = {
 }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { as_of: string }
   report: {
@@ -30,6 +36,14 @@ const props = defineProps<{
     is_balanced: boolean
   }
 }>()
+
+const evidence = useValueTrail({
+  refresh: ['report', 'filters', 'valueTrailsAvailable'],
+  context: () => props.filters,
+  snapshot: () => props.report,
+  snapshotFromPage: (page) => page.report,
+})
+const trailRoot = (key: string) => props.valueTrailsAvailable ? key : false
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
@@ -98,7 +112,7 @@ const totals = computed(() => ({
             </p>
             <p v-if="!report.is_balanced" class="text-sm text-text-secondary">
               Debits and credits differ by
-              <MoneyText :amount="report.totals.difference" :currency="currency" :locale="moneyLocale" />.
+              <Hint :trail="trailRoot('total:difference')" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="report.totals.difference" :currency="currency" :locale="moneyLocale" /></Hint>.
               Something wrote a one-sided entry; figures downstream cannot be relied on until it is found.
             </p>
             <p v-else class="text-sm text-text-secondary">
@@ -120,18 +134,19 @@ const totals = computed(() => ({
       >
         <template #empty>Nothing posted on or before this date.</template>
         <template #cell-debit="{ row }">
-          <MoneyText :amount="row.debit" :currency="currency" :locale="moneyLocale" :show-currency="false" dash-zero />
+          <Hint v-if="row.debit" :trail="trailRoot('account:' + row.id)" preview="Net ledger balance on this side" @click.stop><MoneyText :amount="row.debit" :currency="currency" :locale="moneyLocale" :show-currency="false" dash-zero /></Hint><MoneyText v-else :amount="0" :currency="currency" dash-zero />
         </template>
         <template #cell-credit="{ row }">
-          <MoneyText :amount="row.credit" :currency="currency" :locale="moneyLocale" :show-currency="false" dash-zero />
+          <Hint v-if="row.credit" :trail="trailRoot('account:' + row.id)" preview="Net ledger balance on this side" @click.stop><MoneyText :amount="row.credit" :currency="currency" :locale="moneyLocale" :show-currency="false" dash-zero /></Hint><MoneyText v-else :amount="0" :currency="currency" dash-zero />
         </template>
         <template #total-debit>
-          <MoneyText :amount="report.totals.debit" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:debit')" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="report.totals.debit" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
         <template #total-credit>
-          <MoneyText :amount="report.totals.credit" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:credit')" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="report.totals.credit" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
       </LedgerRegister>
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="currency" @retry="evidence.load" />
   </PageShell>
 </template>

@@ -45,6 +45,23 @@ function fuelHomeFixture(bool $fuelStation = true): array
     return compact('company', 'user');
 }
 
+test('home profit statement evidence loads only on demand for the active range and respects personal settings', function () {
+    $f = fuelHomeFixture();
+    $this->actingAs($f['user']);
+    $url = '/'.$f['company']->slug.'?tab=history&from=2026-09-01&to=2026-09-30';
+    $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page->component('FuelStation/Home/Index')
+        ->where('valueTrailsAvailable', true)->missing('valueTrail')->missing('history.statement.valueTrail'));
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'FuelStation/Home/Index', 'X-Inertia-Partial-Data' => 'valueTrail,history,tab,range,auth,valueTrailsAvailable'];
+    $this->get($url, $headers)->assertOk()->assertJsonPath('component', 'FuelStation/Home/Index')
+        ->assertJsonPath('props.valueTrail.context.start_date', '2026-09-01')
+        ->assertJsonPath('props.valueTrail.context.end_date', '2026-09-30')
+        ->assertJsonStructure(['props' => ['valueTrail' => ['roots' => ['statement:net_profit']]]])
+        ->assertJsonMissingPath('props.history.statement.valueTrail');
+    $f['user']->update(['settings' => ['show_value_trails' => false]]);
+    $this->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail', null)->assertJsonPath('props.valueTrailsAvailable', false);
+});
+
 /** The fiscal year and the month's period a close on $date must sit in (made once, reused). */
 function fuelHomePeriodFor(Company|string $company, string $date): array
 {

@@ -5,6 +5,10 @@
 **Audience**: Product Managers, UX Designers, Frontend Developers
 **Related**: `docs/ui-screen-specifications.md` (technical field specs)
 
+**Value explanations (2026-10-06)**: Dotted report figures offer a short hover/focus hint and a click/tap panel with calculation breadcrumbs and authorized source records. An account-wide Appearance preference hides these affordances and existing detail hints. See [Value trails](value-trails.md) for the pilot scope, evidence rules and interaction contract.
+
+**Core explanation components (2026-10-07)**: All modules use `Hint` for contextual value explanations and optional source trails, with `useValueTrail` for the request lifecycle. `Hint` and glossary `Explain` share `ExplanationTrigger` so nested money values, percentages and plain text have the same dotted underline. Do not add independent trigger styling or duplicate trail loaders. A dotted figure must have an accurate explanation; a drill-down root must be backed by the module's calculation evidence. Detailed source coverage remains module-specific.
+
 ---
 
 ## Table of Contents

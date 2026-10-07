@@ -17,6 +17,8 @@ class ProductProfitabilityReportService
     /** @var array<int,string>|null Product keys of the category being reported, null for every product. */
     private ?array $categoryKeys = null;
 
+    private ?ProfitValueTrail $trail = null;
+
     /**
      * @return array{
      *   filters: array<string,string>,
@@ -27,10 +29,11 @@ class ProductProfitabilityReportService
      *   productOptions: array<int,array{key:string,name:string}>
      * }
      */
-    public function run(string $companyId, string $startDate, string $endDate, string $groupBy = 'day', string $product = 'all', ?string $categoryId = null): array
+    public function run(string $companyId, string $startDate, string $endDate, string $groupBy = 'day', string $product = 'all', ?string $categoryId = null, bool $includeTrail = false): array
     {
         $groupBy = in_array($groupBy, ['day', 'week', 'month'], true) ? $groupBy : 'day';
         $this->statements = [];
+        $this->trail = $includeTrail ? app(ProfitValueTrail::class) : null;
         $items = $this->items($companyId);
         $category = null;
         $this->categoryKeys = null;
@@ -47,10 +50,13 @@ class ProductProfitabilityReportService
             ->whereNull('reversed_by_id')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->orderBy('transaction_date')
-            ->get(['id', 'transaction_number', 'transaction_date', 'metadata']);
+            ->get(['id', 'transaction_number', 'transaction_date', 'metadata', 'posted_at', 'posted_by_user_id', 'created_at', 'created_by_user_id']);
 
         // Posted cost corrections (fuel:recost-closes) laid over each close's own figures.
         app(DailyCloseCostCorrectionService::class)->applyTo($companyId, $transactions);
+        $trailCorrections = $includeTrail
+            ? app(DailyCloseCostCorrectionService::class)->correctionsFor($companyId, $transactions->pluck('id')->all())
+            : [];
         // Month-end lubricant cost corrections (fuel:lubricant-cost): unit cost per item, by month,
         // for other-sale lines a close posted without a cost.
         $lubricantCosts = app(LubricantCostService::class)->unitCostsByMonth($companyId);
@@ -72,6 +78,7 @@ class ProductProfitabilityReportService
 
                 $this->addProductSale($products, $row);
                 $this->addPeriodSale($periods, $date, $groupBy, $row, $transaction->id, $transaction->transaction_number);
+                $this->trail?->closeSale($row, $transaction, $items[$row['key']]['id'] ?? null, $this->periodKey($date, $groupBy), $trailCorrections[$transaction->id] ?? []);
             }
 
             foreach ($this->otherSalesRows($metadata['other_sales_details'] ?? [], $items, $lubricantCosts[$date->format('Y-m')] ?? []) as $row) {
@@ -81,10 +88,11 @@ class ProductProfitabilityReportService
 
                 $this->addProductSale($products, $row);
                 $this->addPeriodSale($periods, $date, $groupBy, $row, $transaction->id, $transaction->transaction_number);
+                $this->trail?->closeSale($row, $transaction, $items[$row['key']]['id'] ?? null, $this->periodKey($date, $groupBy), []);
             }
 
-            foreach (($metadata['rate_change_segments'] ?? []) as $segment) {
-                if (!is_array($segment)) {
+            foreach (($metadata['rate_change_segments'] ?? []) as $segmentIndex => $segment) {
+                if (! is_array($segment)) {
                     continue;
                 }
 
@@ -100,6 +108,7 @@ class ProductProfitabilityReportService
                 $newRate = (float) ($segment['new_rate'] ?? 0);
 
                 $rateChangeRows[] = [
+                    'trail_key' => 'rate:'.$transaction->id.':'.$segmentIndex,
                     'date' => $date->toDateString(),
                     'date_label' => $date->format('d M Y'),
                     'transaction_id' => $transaction->id,
@@ -114,6 +123,7 @@ class ProductProfitabilityReportService
                     'revenue' => (float) ($segment['revenue'] ?? 0),
                     'estimated_rate_change_effect' => round(($newRate - $oldRate) * $newLiters, 2),
                 ];
+                $this->trail?->rateChange('rate:'.$transaction->id.':'.$segmentIndex, $rateChangeRows[array_key_last($rateChangeRows)], $transaction);
             }
         }
 
@@ -138,7 +148,7 @@ class ProductProfitabilityReportService
         }
         unset($row);
 
-        return [
+        $report = [
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
@@ -154,7 +164,14 @@ class ProductProfitabilityReportService
             'periodRows' => $periodRows,
             'rateChangeRows' => $rateChangeRows,
             'productOptions' => $this->productOptions($items),
+            'valueHints' => ProfitValueTrail::HINTS,
         ];
+
+        if ($this->trail) {
+            $report['valueTrail'] = $this->trail->finish($report);
+        }
+
+        return $report;
     }
 
     /**
@@ -223,19 +240,18 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param mixed $fuelSales
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $items
      * @return array<int,array<string,mixed>>
      */
     private function fuelSalesRows(mixed $fuelSales, array $items): array
     {
-        if (!is_array($fuelSales)) {
+        if (! is_array($fuelSales)) {
             return [];
         }
 
         $rows = [];
         foreach ($fuelSales as $key => $sale) {
-            if (!is_array($sale)) {
+            if (! is_array($sale)) {
                 continue;
             }
 
@@ -256,19 +272,18 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param mixed $otherSales
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $items
      * @return array<int,array<string,mixed>>
      */
     private function otherSalesRows(mixed $otherSales, array $items, array $correctedUnitCosts = []): array
     {
-        if (!is_array($otherSales)) {
+        if (! is_array($otherSales)) {
             return [];
         }
 
         $rows = [];
         foreach ($otherSales as $sale) {
-            if (!is_array($sale)) {
+            if (! is_array($sale)) {
                 continue;
             }
 
@@ -293,6 +308,12 @@ class ProductProfitabilityReportService
                 'cogs' => $cogs,
                 'estimated_cogs' => $estimated,
                 'source' => 'other_sale',
+                'recorded_price' => isset($sale['unit_price']) ? (float) $sale['unit_price'] : null,
+                'cost_basis' => $recorded > 0
+                    ? 'The cost recorded when this daily close posted.'
+                    : ($corrected > 0
+                        ? 'Quantity multiplied by the month’s posted lubricant cost correction. The original close did not record a cost.'
+                        : 'Estimated using the product’s current average cost (or cost price). Historical cost was not recorded; this estimate can change when the product cost changes.'),
             ];
         }
 
@@ -300,12 +321,12 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $products
-     * @param array<string,mixed> $row
+     * @param  array<string,array<string,mixed>>  $products
+     * @param  array<string,mixed>  $row
      */
     private function addProductSale(array &$products, array $row): void
     {
-        if (!isset($products[$row['key']])) {
+        if (! isset($products[$row['key']])) {
             $products[$row['key']] = $this->emptyProductRow($row['key'], $row['name'], $row['unit']);
         }
 
@@ -316,8 +337,8 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $periods
-     * @param array<string,mixed> $row
+     * @param  array<string,array<string,mixed>>  $periods
+     * @param  array<string,mixed>  $row
      */
     private function addPeriodSale(array &$periods, Carbon $date, string $groupBy, array $row, string $transactionId, string $transactionNumber): void
     {
@@ -331,12 +352,12 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $periods
+     * @param  array<string,array<string,mixed>>  $periods
      */
     private function ensurePeriod(array &$periods, Carbon $date, string $groupBy): string
     {
         $periodKey = $this->periodKey($date, $groupBy);
-        if (!isset($periods[$periodKey])) {
+        if (! isset($periods[$periodKey])) {
             $periods[$periodKey] = [
                 'key' => $periodKey,
                 'label' => $this->periodLabel($date, $groupBy),
@@ -364,9 +385,9 @@ class ProductProfitabilityReportService
      * split between suppliers keeps its own lines, and its share bills carry money only
      * (quantity 1, no warehouse), so counting those would add phantom litres.
      *
-     * @param array<string,array<string,mixed>> $items
-     * @param array<string,array<string,mixed>> $products
-     * @param array<string,array<string,mixed>> $periods
+     * @param  array<string,array<string,mixed>>  $items
+     * @param  array<string,array<string,mixed>>  $products
+     * @param  array<string,array<string,mixed>>  $periods
      */
     private function addPurchases(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
     {
@@ -379,7 +400,7 @@ class ProductProfitabilityReportService
             ->whereBetween('b.bill_date', [$startDate, $endDate])
             ->whereNotNull('l.item_id')
             ->whereNotNull('l.warehouse_id')
-            ->get(['b.bill_date', 'l.item_id', 'l.quantity']);
+            ->get(['b.id as bill_id', 'b.bill_number', 'b.bill_date', 'l.item_id', 'l.quantity']);
 
         $itemIds = array_column($items, 'id');
         foreach ($lines as $line) {
@@ -399,6 +420,7 @@ class ProductProfitabilityReportService
 
             $periodKey = $this->ensurePeriod($periods, Carbon::parse($line->bill_date), $groupBy);
             $periods[$periodKey]['purchased_quantity'] += $quantity;
+            $this->trail?->purchase($key, $periodKey, $line, (string) ($items[$key]['unit'] ?? 'L'));
         }
     }
 
@@ -407,9 +429,9 @@ class ProductProfitabilityReportService
      * statement knows it per day: the litres, what the direct-delivery invoices charged, and
      * the bills' own cost (bill amount x direct litres / bill litres).
      *
-     * @param array<string,array<string,mixed>> $items
-     * @param array<string,array<string,mixed>> $products
-     * @param array<string,array<string,mixed>> $periods
+     * @param  array<string,array<string,mixed>>  $items
+     * @param  array<string,array<string,mixed>>  $products
+     * @param  array<string,array<string,mixed>>  $periods
      */
     private function addOffTankerSales(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
     {
@@ -458,6 +480,7 @@ class ProductProfitabilityReportService
                 $periods[$periodKey]['quantity'] += $quantity;
                 $periods[$periodKey]['revenue'] += $revenue;
                 $periods[$periodKey]['cogs'] += $cogs;
+                $this->trail?->directSale($key, $periodKey, $row, $quantity, $revenue, $cogs);
             }
         }
     }
@@ -475,8 +498,8 @@ class ProductProfitabilityReportService
      * stock statement's purchase_amount). Null for anything else, and for a fuel whose inventory
      * account is shared with another product, since its balance isn't the fuel's own.
      *
-     * @param array<string,array<string,mixed>> $items
-     * @param array<int,array<string,mixed>> $productRows
+     * @param  array<string,array<string,mixed>>  $items
+     * @param  array<int,array<string,mixed>>  $productRows
      */
     private function addBookProfit(string $companyId, string $startDate, string $endDate, array $items, array &$productRows): void
     {
@@ -506,6 +529,7 @@ class ProductProfitabilityReportService
             $row['book_closing'] = round($closing, 2);
             $row['book_purchases'] = round($purchases, 2);
             $row['book_profit'] = round($row['revenue'] + $closing - $opening - $purchases, 2);
+            $this->trail?->book($companyId, $row['key'], $accountId, $dayBefore, $endDate, $row, $this->statement($companyId, (string) $item['id'], $startDate, $endDate));
             // Margins follow the books where the books have the figure (tank gains and losses,
             // later costs and the month-end write-down all in); elsewhere they stay on gross profit.
             $row['margin_per_unit'] = $row['quantity'] > 0 ? $row['book_profit'] / $row['quantity'] : 0;
@@ -519,9 +543,9 @@ class ProductProfitabilityReportService
      * of that fuel in the month that held the litres, on the journal's own date, so gross profit
      * matches the books.
      *
-     * @param array<string,array<string,mixed>> $items
-     * @param array<string,array<string,mixed>> $products
-     * @param array<string,array<string,mixed>> $periods
+     * @param  array<string,array<string,mixed>>  $items
+     * @param  array<string,array<string,mixed>>  $products
+     * @param  array<string,array<string,mixed>>  $periods
      */
     private function addWritedowns(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
     {
@@ -544,12 +568,13 @@ class ProductProfitabilityReportService
 
             $periodKey = $this->ensurePeriod($periods, Carbon::parse($writedown->transaction_date), $groupBy);
             $periods[$periodKey]['cogs'] += $amount;
+            $this->trail?->writedown($key, $periodKey, $writedown, $amount);
         }
     }
 
     /**
-     * @param array<string,array<string,mixed>> $products
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $products
+     * @param  array<string,array<string,mixed>>  $items
      */
     private function addStockVariance(string $companyId, string $startDate, string $endDate, string $product, array $items, array &$products): void
     {
@@ -564,6 +589,7 @@ class ProductProfitabilityReportService
             ->orderBy('corrections.revision')
             ->get([
                 'corrections.reading_id',
+                'corrections.close_transaction_id',
                 'corrections.effects',
                 'corrections.revision',
             ])
@@ -591,7 +617,7 @@ class ProductProfitabilityReportService
                 continue;
             }
 
-            if (!isset($products[$key])) {
+            if (! isset($products[$key])) {
                 $products[$key] = $this->emptyProductRow($key, $this->productName($key, $items, $reading->item?->name), 'L');
             }
 
@@ -620,6 +646,7 @@ class ProductProfitabilityReportService
             $unitCost = (float) ($latestEffects['unit_cost']
                 ?? ($items[$key]['avg_cost'] ?? $reading->item?->avg_cost ?? $reading->item?->cost_price ?? 0));
             $value = round(abs($variance) * $unitCost, 2);
+            $this->trail?->stockVariance($key, $reading, $variance, $unitCost, $history->all(), ! isset($latestEffects['unit_cost']));
 
             if ($variance < 0) {
                 $products[$key]['stock_loss_quantity'] += abs($variance);
@@ -665,7 +692,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,mixed> $row
+     * @param  array<string,mixed>  $row
      */
     private function finishProductRow(array &$row): void
     {
@@ -677,7 +704,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,mixed> $row
+     * @param  array<string,mixed>  $row
      */
     private function finishPeriodRow(array &$row): void
     {
@@ -691,7 +718,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<int,array<string,mixed>> $rows
+     * @param  array<int,array<string,mixed>>  $rows
      * @return array<string,float|int|null>
      */
     private function totals(array $rows): array
@@ -723,7 +750,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $items
      * @return array<int,array{key:string,name:string}>
      */
     private function productOptions(array $items): array
@@ -739,7 +766,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $items
      */
     private function itemKey(mixed $itemId, array $items, ?string $fallbackName = null, ?string $fuelCategory = null): string
     {
@@ -761,7 +788,7 @@ class ProductProfitabilityReportService
     }
 
     /**
-     * @param array<string,array<string,mixed>> $items
+     * @param  array<string,array<string,mixed>>  $items
      */
     private function productName(string $key, array $items, ?string $fallbackName = null): string
     {
@@ -780,7 +807,7 @@ class ProductProfitabilityReportService
     private function periodLabel(Carbon $date, string $groupBy): string
     {
         return match ($groupBy) {
-            'week' => 'Week of ' . $date->copy()->startOfWeek()->format('d M Y'),
+            'week' => 'Week of '.$date->copy()->startOfWeek()->format('d M Y'),
             'month' => $date->format('F Y'),
             default => $date->format('d M Y'),
         };

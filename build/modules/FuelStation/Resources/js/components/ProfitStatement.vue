@@ -8,6 +8,7 @@ import { ref } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 
 export interface StatementDetail {
@@ -30,7 +31,7 @@ export interface Statement {
   not_in_profit: { stock_bought: number; equipment_bought: number }
 }
 
-defineProps<{ statement: Statement; currency: string }>()
+defineProps<{ statement: Statement; currency: string; trailPrefix?: string }>()
 
 const open = ref<string | null>(null)
 const toggle = (k: string) => { open.value = open.value === k ? null : k }
@@ -72,13 +73,13 @@ const expandable = (l: StatementLine) => l.details.length > 0
           @click="expandable(l) && toggle(l.key)"
         >
           <span class="flex min-w-0 items-baseline gap-1.5">
-            <button v-if="expandable(l)" type="button" class="self-center text-text-secondary" :aria-expanded="open === l.key" :aria-label="`${l.label} details`" @click.stop="toggle(l.key)">
+            <Button v-if="expandable(l)" type="button" variant="ghost" class="h-auto p-0 self-center text-text-secondary" :aria-expanded="open === l.key" :aria-label="`${l.label} details`" @click.stop="toggle(l.key)">
               <component :is="open === l.key ? ChevronDown : ChevronRight" class="h-3.5 w-3.5" />
-            </button>
+            </Button>
             <span v-else class="w-3.5 shrink-0" />
             <span @click.stop><Hint>{{ l.label }}<template #content>{{ hints[l.key] }}</template></Hint></span>
           </span>
-          <span class="whitespace-nowrap"><MoneyText :amount="shown(l.key, l.amount)" :currency="currency" :fraction-digits="0" /></span>
+          <span class="whitespace-nowrap" @click.stop><Hint :trail="trailPrefix ? `${trailPrefix}:${l.key}` : false" :preview="hints[l.key]"><MoneyText :amount="shown(l.key, l.amount)" :currency="currency" :fraction-digits="0" /></Hint></span>
         </div>
 
         <ul v-if="open === l.key" class="border-t border-rule-subtle bg-surface-sunken/40 pb-1">

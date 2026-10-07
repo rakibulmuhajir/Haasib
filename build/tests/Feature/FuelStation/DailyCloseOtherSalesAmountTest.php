@@ -69,6 +69,27 @@ function lubricantClose(array $f, array $sale, float $closingCash): array
     return app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
 }
 
+test('value trails label estimated other-sale costs throughout the trail and preserve the saved sale price', function () {
+    $f = creditCloseFixture();
+    ['item' => $item] = lubricantItemFor($f);
+    lubricantClose($f, ['item_id' => $item->id, 'item_name' => $item->name, 'quantity' => 4, 'unit_price' => 2400], 49600);
+    $item->update(['avg_cost' => 400, 'selling_price' => 9999]);
+
+    $report = app(\App\Modules\FuelStation\Services\ProductProfitabilityReportService::class)
+        ->run($f['company']->id, '2026-09-01', '2026-09-30', 'day', $item->id, null, true);
+    $trail = $report['valueTrail'];
+    foreach (['total', 'product:'.$item->id, 'period:2026-09-15'] as $scope) {
+        expect($trail['nodes'][$trail['roots'][$scope.':cogs']]['estimated'])->toBeTrue()
+            ->and($trail['nodes'][$trail['roots'][$scope.':gross_profit']]['estimated'])->toBeTrue();
+    }
+    $price = collect($trail['nodes'])->firstWhere('label', 'Price used');
+    $unitCost = collect($trail['nodes'])->firstWhere('label', 'Unit cost used');
+    expect($price['value'])->toBe(2400.0)
+        ->and($unitCost['value'])->toBe(400.0)
+        ->and($unitCost['source'])->toBeNull()
+        ->and($unitCost['explanation'])->toContain('current average cost');
+});
+
 test('it posts quantity times unit price, not the amount the browser sent', function () {
     $f = creditCloseFixture();
     ['item' => $item, 'income' => $income] = lubricantItemFor($f);

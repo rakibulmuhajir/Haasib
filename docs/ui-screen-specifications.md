@@ -4,6 +4,8 @@
 **Purpose**: Complete specification for all transaction and master data screens
 **Audience**: Developers implementing UI, backend APIs, and business logic
 
+**Fuel Profit value trails (2026-10-06)**: Sales, cost, gross profit and quantities support a persistent calculation/source panel. Details are an optional Inertia prop, collected alongside the report calculation; estimates and unavailable historical detail are explicit. Personal Appearance settings can disable the feature across companies/devices. See [Value trails](value-trails.md).
+
 ---
 
 ## Related Documents

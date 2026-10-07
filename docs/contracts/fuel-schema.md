@@ -1,5 +1,7 @@
 # Schema Contract — Fuel Station Operations (fuel)
 
+Fuel Profit value trails are a read-only report contract: see [Value trails](../value-trails.md). They follow the existing report contributions and preserve company, date, product and category scope; no new fuel columns or posting behavior are introduced.
+
 Single source of truth for fuel station specific operations: pumps, rate changes, tank/pump readings, investors, amanat deposits, and attendant handovers. Read this before touching migrations, models, or services.
 
 **Module Location:** `modules/FuelStation/`

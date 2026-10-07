@@ -34,7 +34,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `stamp_documents` jsonb nullable. Map of document type => bool for where the stamp appears: `invoice`, `consolidated_invoice`, `statement` (customer statements), `payment_receipt`, `credit_note`, `bill_payment`. Missing keys use defaults (all true except `bill_payment`). Never on bills.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
-  - `settings` json nullable.  
+  - `settings` json nullable. Personal, account-wide preferences (not company settings). `show_value_trails` is a boolean, defaulting to true when absent. False hides value-trail triggers and prevents loading their detail on every company/device. Updates merge this key and preserve unrelated settings. Persisted by `2026_10_06_000001_add_user_settings`; only the authenticated user may update their own preferences.
   - `remember_token`, `created_at`, `updated_at`.
 - Defaults quick ref: `system_role: 'user'`, `is_active: true`.
 - FK behavior: `created_by_user_id` → `auth.users.id` (ON DELETE SET NULL, ON UPDATE CASCADE).

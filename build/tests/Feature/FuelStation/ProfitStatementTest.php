@@ -77,6 +77,26 @@ function profitStatementLine(array $statement, string $key): array
     return collect($statement['lines'])->firstWhere('key', $key);
 }
 
+test('profit statement trails reconcile every signed line and net profit to the original journals', function () {
+    [$f] = profitStatementFixture();
+    $service = app(ProfitStatementService::class);
+    $plain = $service->run($f['company']->id, '2026-09-01', '2026-09-30');
+    $traced = $service->run($f['company']->id, '2026-09-01', '2026-09-30', '', null, true);
+    expect($traced['net_profit'])->toBe($plain['net_profit'])
+        ->and(array_column($traced['lines'], 'amount', 'key'))->toBe(array_column($plain['lines'], 'amount', 'key'));
+    $trail = $traced['valueTrail'];
+    foreach ($traced['lines'] as $line) {
+        $root = $trail['nodes'][$trail['roots']['statement:'.$line['key']]];
+        $expected = in_array($line['key'], ['cost_of_sales', 'dip', 'expenses', 'salaries', 'other_costs']) ? -$line['amount'] : $line['amount'];
+        expect($root['value'])->toBe((float) $expected)
+            ->and(round(array_sum(array_map(fn ($id) => $trail['nodes'][$id]['value'], $root['children'])), 2))->toBe((float) $expected);
+    }
+    $journalNodes = collect($trail['nodes'])->filter(fn ($node) => $node['source'] !== null);
+    expect($journalNodes)->not->toBeEmpty()
+        ->and($journalNodes->pluck('source.kind')->unique()->all())->toBe(['journal']);
+    expect($plain)->not->toHaveKey('valueTrail');
+});
+
 test('every line comes from the ledger and net profit is the ledger profit', function () {
     [$f, $a] = profitStatementFixture();
     $slug = $f['company']->slug;

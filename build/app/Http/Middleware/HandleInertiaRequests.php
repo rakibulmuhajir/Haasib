@@ -153,6 +153,9 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+                'preferences' => [
+                    'show_value_trails' => $request->user()?->showsValueTrails() ?? true,
+                ],
                 'currentCompany' => fn () => $serializeCompany($resolve()['company']),
                 'currentCompanyRole' => fn () => $resolve()['role'],
                 'fuelNavigation' => function () use ($request) {

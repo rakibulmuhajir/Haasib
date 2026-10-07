@@ -176,6 +176,18 @@ test('a customer statement collapses a pre-range invoice into the opening balanc
 
     $statement = app(CustomerStatementService::class)->statement($f['customer']->fresh(), '2026-09-01', '2026-09-24');
 
+    $traced = app(CustomerStatementService::class)->statement($f['customer']->fresh(), '2026-09-01', '2026-09-24', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($statement);
+    $root = $graph['nodes'][$graph['roots']['statement:closing']];
+    expect(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $root['children'])))->toBe(6000.0);
+    test()->actingAs($f['user'])->get('/'.$f['company']->slug.'/reports/statements?kind=customer&id=all&from=2026-09-01&to=2026-09-24')->assertOk();
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    test()->actingAs($f['user'])->get('/'.$f['company']->slug.'/reports/statements?kind=customer&id=all&from=2026-09-01&to=2026-09-24', $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', 6000);
+
     expect($statement['opening_balance'])->toBe(10000.0);
     expect($statement['closing_balance'])->toBe(6000.0);
 
@@ -206,6 +218,18 @@ test('a supplier statement collapses a pre-range bill into the opening balance a
     ]);
 
     $statement = app(VendorStatementService::class)->statement($f['vendor']->fresh(), '2026-09-01', '2026-09-24');
+
+    $traced = app(VendorStatementService::class)->statement($f['vendor']->fresh(), '2026-09-01', '2026-09-24', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($statement);
+    $root = $graph['nodes'][$graph['roots']['statement:closing']];
+    expect(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $root['children'])))->toBe(10000.0);
+    test()->actingAs($f['user'])->get('/'.$f['company']->slug.'/reports/statements?kind=supplier&id=all&from=2026-09-01&to=2026-09-24')->assertOk();
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    test()->actingAs($f['user'])->get('/'.$f['company']->slug.'/reports/statements?kind=supplier&id=all&from=2026-09-01&to=2026-09-24', $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', 10000);
 
     expect($statement['opening_balance'])->toBe(15000.0);
     expect($statement['closing_balance'])->toBe(10000.0);
@@ -239,7 +263,17 @@ test('the statements report page renders with a 200, the right component, and th
         ->component('accounting/reports/Statement', false)
         ->where('statement.closing_balance', 7000)
         ->where('filters.kind', 'bank')
+        ->where('valueTrailsAvailable', true)
+        ->missing('valueTrail')
     );
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    test()->get("/{$f['company']->slug}/reports/statements?kind=bank&id={$f['cash']->id}", $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', 7000)
+        ->assertJsonMissingPath('props.statement.valueTrail');
+    $f['user']->update(['settings' => ['show_value_trails' => false]]);
+    test()->get("/{$f['company']->slug}/reports/statements?kind=bank&id={$f['cash']->id}", $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail', null);
 });
 
 test('a supplier statement with no one picked lists every supplier by date, named, with totals for all', function () {
@@ -681,6 +715,17 @@ test('the expense statement lists any expense account alone, several together, o
         ->where('statement.combined', true)
         ->where('statement.closing_balance', 12500)
     );
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    $response = test()->get("/{$f['company']->slug}/reports/statements?kind=expense&ids={$power->id},{$tea->id}&from=2026-09-01&to=2026-09-24", $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', 3500)
+        ->assertJsonMissingPath('props.statement.valueTrail');
+    $graph = $response->json('props.valueTrail');
+    foreach ($graph['nodes'] as $node) {
+        if ($node['children']) {
+            expect(round(collect($node['children'])->sum(fn ($id) => $graph['nodes'][$id]['value']), 2))->toBe((float) $node['value']);
+        }
+    }
 });
 
 test('an entry and its reversal inside the range are hidden unless asked for, and the balance is the same either way', function () {
@@ -750,6 +795,6 @@ test('a customer category statement lists only its customers, and opening and cl
 
     // A category from another company is refused.
     test()->actingAs($f['user'])
-        ->get("/{$f['company']->slug}/reports/statements?kind=customer&category_id=".\Illuminate\Support\Str::uuid()."&from=2026-09-01&to=2026-09-24")
+        ->get("/{$f['company']->slug}/reports/statements?kind=customer&category_id=".\Illuminate\Support\Str::uuid().'&from=2026-09-01&to=2026-09-24')
         ->assertSessionHasErrors('category_id');
 });

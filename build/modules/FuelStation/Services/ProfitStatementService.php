@@ -41,10 +41,10 @@ class ProfitStatementService
      *   not_in_profit: array{stock_bought:float,equipment_bought:float}
      * }
      */
-    public function run(string $companyId, string $from, string $to, string $slug = '', ?array $stock = null): array
+    public function run(string $companyId, string $from, string $to, string $slug = '', ?array $stock = null, bool $includeTrail = false): array
     {
         $ctx = $this->context($companyId);
-        $rows = $this->ledgerLines($companyId, $from, $to, false);
+        $rows = $this->ledgerLines($companyId, $from, $to, false, $includeTrail);
         $b = $this->buckets($ctx, $rows, fn () => 'all')['all'] ?? [];
 
         $stock ??= $this->stockRuns($companyId, $from, $to);
@@ -144,7 +144,7 @@ class ProfitStatementService
             ['key' => 'net_profit', 'label' => 'Net profit', 'amount' => $net, 'details' => []],
         ];
 
-        return [
+        $result = [
             'from' => $from,
             'to' => $to,
             'lines' => $lines,
@@ -155,6 +155,48 @@ class ProfitStatementService
                 'equipment_bought' => $this->equipmentBought($companyId, $from, $to),
             ],
         ];
+        if ($includeTrail) {
+            $result['valueTrail'] = $this->valueTrail($ctx, $rows, $lines, $from, $to);
+        }
+
+        return $result;
+    }
+
+    /** Classify the same ledger rows as the statement, retaining their original journals. */
+    private function valueTrail(array $ctx, Collection $rows, array $lines, string $from, string $to): array
+    {
+        $trail = app(ProfitValueTrail::class);
+        $children = [];
+        $mapping = ['cost' => 'cost_of_sales', 'tank' => 'dip', 'discounts' => 'sales'];
+        foreach ($rows as $row) {
+            $bucket = $this->classify($ctx, $row);
+            $key = $mapping[$bucket] ?? $bucket;
+            $children[$key][] = $trail->node($row->name.' · '.substr((string) $row->transaction_date, 0, 10), (float) $row->net, 'money',
+                'This posted account contribution is classified by the same rules as the statement. Costs are negative; reversals offset their original postings.', [],
+                ['kind' => 'journal', 'id' => $row->transaction_id, 'label' => $row->transaction_number, 'date' => substr((string) $row->transaction_date, 0, 10)], 'Credit − debit');
+        }
+        $roots = [];
+        $costKeys = ['cost_of_sales', 'dip', 'expenses', 'salaries', 'other_costs'];
+        foreach ($lines as $line) {
+            $key = $line['key'];
+            if (in_array($key, ['gross_profit', 'net_profit'])) {
+                continue;
+            }
+            $roots[$key] = $trail->node($line['label'], in_array($key, $costKeys) ? -$line['amount'] : $line['amount'], 'money',
+                'Signed total of the contributing posted account entries within this range.', $children[$key] ?? [], null, 'Sum of signed ledger contributions');
+            $trail->root('statement:'.$key, $roots[$key]);
+        }
+        foreach ($lines as $line) {
+            if (! in_array($line['key'], ['gross_profit', 'net_profit'])) {
+                continue;
+            }
+            $keys = $line['key'] === 'gross_profit' ? ['sales', 'cost_of_sales'] : ['sales', 'cost_of_sales', 'dip', 'expenses', 'salaries', 'other_income', 'other_costs'];
+            $id = $trail->node($line['label'], $line['amount'], 'money', 'Costs carry a minus sign, so the contributing figures add to this profit without counting gross profit twice.',
+                array_map(fn ($key) => $roots[$key], $keys), null, 'Sum of signed income and cost contributions');
+            $trail->root('statement:'.$line['key'], $id);
+        }
+
+        return $trail->graph(['start_date' => $from, 'end_date' => $to, 'label' => 'Profit statement · '.$from.' — '.$to]);
     }
 
     /**
@@ -262,7 +304,7 @@ class ProfitStatementService
     }
 
     /** Every P&L line on a live posted journal, per account and entry type (and per day when asked). */
-    private function ledgerLines(string $companyId, string $from, string $to, bool $byDate): Collection
+    private function ledgerLines(string $companyId, string $from, string $to, bool $byDate, bool $withSources = false): Collection
     {
         $query = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
@@ -275,6 +317,10 @@ class ProfitStatementService
 
         $group = ['a.id', 'a.code', 'a.name', 'a.type', 'a.normal_balance', 'a.subtype', 't.transaction_type'];
         $select = 'a.id AS account_id, a.code, a.name, a.type, a.normal_balance, a.subtype, t.transaction_type, SUM(je.credit_amount) - SUM(je.debit_amount) AS net';
+        if ($withSources) {
+            array_push($group, 't.id', 't.transaction_number', 't.transaction_date');
+            $select .= ', t.id AS transaction_id, t.transaction_number, t.transaction_date';
+        }
         if ($byDate) {
             $group[] = DB::raw('t.transaction_date::date');
             $select = 't.transaction_date::date AS d, '.$select;
@@ -285,8 +331,8 @@ class ProfitStatementService
 
     /**
      * @return array<string,array<string,array<string,array<string,mixed>>>> period => bucket => account => entry.
-     *   Entries read in their own direction: income buckets as income, every cost bucket as a
-     *   positive cost (a gain on a cost account is negative).
+     *                                                                       Entries read in their own direction: income buckets as income, every cost bucket as a
+     *                                                                       positive cost (a gain on a cost account is negative).
      */
     private function buckets(array $ctx, Collection $rows, callable $periodOf): array
     {

@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
     user: User;
+    preferences?: { show_value_trails: boolean };
 }
 
 export interface BreadcrumbItem {

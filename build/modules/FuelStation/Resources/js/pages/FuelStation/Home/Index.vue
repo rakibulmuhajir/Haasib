@@ -8,6 +8,9 @@ import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import HomeBreakdowns from '../../../components/HomeBreakdowns.vue'
 import type { PurchaseLine } from '../../../components/HomeBreakdowns.vue'
 import ProfitStatement from '../../../components/ProfitStatement.vue'
@@ -118,11 +121,22 @@ interface History {
 
 const props = defineProps<{
   company: Company
+  valueTrailsAvailable?: boolean
+  valueTrail?: ValueTrail | null
   tab: 'today' | 'history'
   today: Today
   history?: History
   range?: { from: string; to: string }
 }>()
+
+const { open: trailOpen, loading: trailLoading, error: trailError, root: trailRoot,
+  trail: loadedTrail, load: loadTrail, reset: resetTrail } = useValueTrail({
+  refresh: ['today', 'history', 'range', 'tab', 'valueTrailsAvailable'],
+  context: () => [props.tab, props.range],
+  snapshot: () => props.tab === 'history' ? props.history?.statement : props.today.month.statement,
+  snapshotFromPage: (page) => page.tab === 'history' ? (page.history as History)?.statement : (page.today as Today)?.month.statement,
+})
+
 
 const slug = computed(() => props.company.slug)
 const currency = computed(() => props.company.base_currency || 'PKR')
@@ -242,6 +256,7 @@ const activePreset = computed(() => presets.value.find((p) => p.from === from.va
 
 const load = (f: string, t: string) => {
   if (!f || !t) return
+  resetTrail()
   from.value = f
   to.value = t
   router.get(`/${slug.value}`, { tab: 'history', from: f, to: t }, {
@@ -252,7 +267,9 @@ const load = (f: string, t: string) => {
 }
 const onTab = (value: string | number) => {
   tab.value = String(value)
-  if (tab.value === 'history' && !props.history) load(from.value, to.value)
+  resetTrail()
+  if (tab.value === 'history') load(from.value, to.value)
+  else router.get(`/${slug.value}`, {}, { preserveState: true, preserveScroll: true, only: ['tab', 'today', 'valueTrailsAvailable'] })
 }
 
 const h = computed(() => props.history)
@@ -391,7 +408,7 @@ const quick = computed(() => [
         <Card>
           <CardHeader><CardTitle class="text-base">This month · {{ today.month.label }}</CardTitle></CardHeader>
           <CardContent class="space-y-4">
-            <ProfitStatement :statement="today.month.statement" :currency="currency" />
+            <ProfitStatement :statement="today.month.statement" :currency="currency" :trail-prefix="valueTrailsAvailable && tab === props.tab ? 'statement' : undefined" />
             <div class="flex flex-wrap gap-4">
               <div v-for="m in todayMetrics" :key="m.key">
                 <p class="text-xs text-text-secondary">
@@ -509,7 +526,7 @@ const quick = computed(() => [
               <p class="text-sm" :class="h.closes.count < h.closes.days ? 'text-status-attention' : 'text-text-secondary'">{{ closesText }}</p>
             </CardHeader>
             <CardContent class="space-y-4">
-              <ProfitStatement :statement="h.statement" :currency="currency" />
+              <ProfitStatement :statement="h.statement" :currency="currency" :trail-prefix="valueTrailsAvailable && tab === props.tab ? 'statement' : undefined" />
               <div class="flex flex-wrap gap-4">
                 <div v-for="m in histMetrics" :key="m.key">
                   <p class="text-xs text-text-secondary">
@@ -595,5 +612,6 @@ const quick = computed(() => [
         </template>
       </TabsContent>
     </Tabs>
+    <ValueTrailPanel v-model:open="trailOpen" :loading="trailLoading" :error="trailError" :trail="loadedTrail" :root="trailRoot" :currency="currency" @retry="loadTrail" />
   </PageShell>
 </template>

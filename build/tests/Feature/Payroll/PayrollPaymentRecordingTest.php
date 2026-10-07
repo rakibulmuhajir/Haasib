@@ -71,6 +71,73 @@ function payRecSetting(Company $company, string $mode, ?string $accountId = null
     $company->save();
 }
 
+test('employee statement trails preserve saved movements and mark expected salary', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-30 10:00:00'));
+    [$user, $company, $employee] = payRecCompany();
+    $service = app(\App\Modules\Payroll\Services\EmployeeStatementService::class);
+    $expected = $service->statement($employee, '2026-09-01', '2026-09-30', true);
+    expect($expected['valueTrail']['nodes']['statement:closing']['estimated'])->toBeTrue();
+    $payslip = payRecDraft($company);
+    $payslip->update(['status' => 'approved']);
+    $employee->update(['base_salary' => 90000]);
+    $plain = $service->statement($employee->fresh(), '2026-09-01', '2026-09-30');
+    $traced = $service->statement($employee->fresh(), '2026-09-01', '2026-09-30', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($plain)
+        ->and($graph['nodes']['statement:closing']['estimated'])->toBeFalse()
+        ->and($plain['closing_balance'])->toBe((float) $payslip->gross_pay);
+    foreach ($graph['nodes'] as $node) {
+        if ($node['children']) {
+            expect(round(collect($node['children'])->sum(fn ($id) => $graph['nodes'][$id]['value']), 2))->toBe($node['value']);
+        }
+    }
+    $url = "/{$company->slug}/reports/statements?kind=employee&id={$employee->id}&from=2026-09-01&to=2026-09-30";
+    test()->actingAs($user)->get($url)->assertOk();
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    test()->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', (int) $plain['closing_balance']);
+});
+
+test('payroll trails use saved payslip lines and load only on demand', function () {
+    [$user, $company, $employee] = payRecCompany();
+    $payslip = payRecDraft($company);
+    $employee->update(['base_salary' => 90000]);
+    enterCompany($company);
+    $service = app(\App\Modules\Payroll\Services\PayrollValueTrail::class);
+    $graph = app(CompanyContextService::class)->withContext($company, fn () => $service->build($company, collect([$payslip]), $user, 'September payroll'));
+    $prefix = 'payslip:'.$payslip->id;
+    expect($graph['nodes'][$prefix.':gross']['value'])->toBe(20000.0)
+        ->and($graph['nodes'][$prefix.':net']['value'])->toBe((float) $payslip->net_pay);
+    $children = $graph['nodes'][$prefix.':gross']['children'];
+    expect(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $children)))->toBe(20000.0);
+    $url = '/'.$company->slug.'/payslips/'.$payslip->id;
+    $this->actingAs($user)->get($url)->assertOk()->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('valueTrailsAvailable', true)->missing('valueTrail'));
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'Payroll/Payslips/Show', 'X-Inertia-Partial-Data' => 'payslip,valueTrail'];
+    $this->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail.nodes.'.$prefix.':gross.value', 20000);
+    $monthlyHeaders = array_merge($headers, ['X-Inertia-Partial-Component' => 'Payroll/Dashboard/Index', 'X-Inertia-Partial-Data' => 'rows,month,valueTrail']);
+    $this->get('/'.$company->slug.'/payroll?month=2026-09', $monthlyHeaders)->assertOk()
+        ->assertJsonPath('props.valueTrail.nodes.'.$prefix.':gross.value', 20000)
+        ->assertJsonPath('props.month', '2026-09');
+    $user->update(['settings' => ['show_value_trails' => false]]);
+    $this->get($url, $headers)->assertOk()->assertJsonPath('props.valueTrail', null);
+});
+
+test('payroll evidence refuses unpermitted users and does not fabricate formulas for mismatched saved totals', function () {
+    [$user, $company] = payRecCompany();
+    $payslip = payRecDraft($company);
+    $payslip->gross_pay = 21000;
+    enterCompany($company);
+    $service = app(\App\Modules\Payroll\Services\PayrollValueTrail::class);
+    $graph = app(CompanyContextService::class)->withContext($company, fn () => $service->build($company, collect([$payslip]), $user, 'Payroll'));
+    $prefix = 'payslip:'.$payslip->id;
+    expect($graph['nodes'][$prefix.':gross']['children'])->toBe([])
+        ->and($graph['nodes'][$prefix.':gross']['formula'])->toBeNull();
+    $unpermitted = User::factory()->withoutTwoFactor()->create();
+    expect($service->build($company, collect([$payslip]), $unpermitted, 'Payroll'))->toBeNull();
+});
+
 test('a payslip whose advances cover it is paid on approval, with no payment journal', function () {
     [$user, $company, $employee] = payRecCompany();
     SalaryAdvance::create([
@@ -120,6 +187,27 @@ test('on_approval pays the net from the chosen cash account when payroll is appr
     $credit = DB::table('acct.journal_entries')
         ->where('transaction_id', $payment->id)->where('account_id', $chosen->id)->sum('credit_amount');
     expect((float) $credit)->toBe(20000.0);
+});
+
+test('outstanding payroll trails follow full payment and undoing its posting', function () {
+    [$user, $company] = payRecCompany();
+    $cash = payRecAccount($company, '1011');
+    payRecSetting($company, 'on_approval', $cash->id);
+    $payslip = payRecDraft($company);
+    $posting = app(PayrollPostingService::class);
+    $posting->approve($payslip, $user->id);
+    $payslip->refresh();
+    $service = app(\App\Modules\Payroll\Services\PayrollValueTrail::class);
+    $build = fn () => app(CompanyContextService::class)->withContext($company, fn () => $service->build($company, collect([$payslip]), $user, 'Payroll'));
+    $prefix = 'payslip:'.$payslip->id;
+    $graph = $build();
+    expect($graph['nodes'][$prefix.':outstanding']['value'])->toBe(0.0)
+        ->and($graph['nodes'][$prefix.':paid']['value'])->toBe(20000.0);
+    $posting->reversePayment($payslip, $user->id, 'Wrong payment date');
+    $payslip->refresh();
+    $graph = $build();
+    expect($graph['nodes'][$prefix.':outstanding']['value'])->toBe(20000.0)
+        ->and($graph['nodes'][$prefix.':paid']['value'])->toBe(0.0);
 });
 
 test('the settings endpoint saves, keeps other keys, and rejects a non-cash account', function () {

@@ -17,7 +17,7 @@ class ProfitLossReportService
      *   totals: array{income:float,expenses:float,profit:float}
      * }
      */
-    public function run(string $companyId, string $startDate, string $endDate): array
+    public function run(string $companyId, string $startDate, string $endDate, bool $includeTrail = false): array
     {
         /** @var Collection<int, object{ id:string, code:string, name:string, type:string, normal_balance:string, debit:string|float|null, credit:string|float|null, line_count:int, transaction_count:int }> $rows */
         $rows = DB::table('acct.journal_entries as je')
@@ -29,6 +29,7 @@ class ProfitLossReportService
             ->whereIn('a.type', ['revenue', 'other_income', 'expense', 'cogs', 'other_expense'])
             ->groupBy('a.id', 'a.code', 'a.name', 'a.type', 'a.normal_balance')
             ->selectRaw('a.id, a.code, a.name, a.type, a.normal_balance, SUM(je.debit_amount) AS debit, SUM(je.credit_amount) AS credit, COUNT(*) AS line_count, COUNT(DISTINCT t.id) AS transaction_count')
+            ->when($includeTrail, fn ($q) => $q->selectRaw(StatementValueTrail::EVIDENCE_SQL))
             ->orderBy('a.type')
             ->orderBy('a.code')
             ->get();
@@ -60,7 +61,7 @@ class ProfitLossReportService
         $totalIncome = (float) $accounts->whereIn('type', $incomeTypes)->sum('net');
         $totalExpenses = (float) $accounts->whereIn('type', $expenseTypes)->sum('net');
 
-        return [
+        $result = [
             'income' => $income,
             'expenses' => $expenses,
             'period_breakdown' => $this->periodBreakdown($companyId, $startDate, $endDate),
@@ -72,9 +73,26 @@ class ProfitLossReportService
                 'profit' => round($totalIncome - $totalExpenses, 2),
             ],
         ];
+        if ($includeTrail) {
+            $builder = app(StatementValueTrail::class);
+            $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $startDate, 'end_date' => $endDate]];
+            $sections = ['income' => [], 'expenses' => []];
+            foreach ($rows as $row) {
+                $incomeRow = in_array($row->type, self::INCOME_TYPES, true);
+                $sections[$incomeRow ? 'income' : 'expenses'][] = $builder->account($graph, $row, ! $incomeRow);
+            }
+            foreach ($sections as $key => $children) {
+                $builder->node($graph, 'total:'.$key, ucfirst($key), $result['totals'][$key], $children, 'Sum of account amounts');
+            }
+            $builder->node($graph, 'total:profit', 'Profit', $result['totals']['profit'], ['total:income', 'total:expenses'], 'Income − expenses');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     private const INCOME_TYPES = ['revenue', 'other_income'];
+
     private const EXPENSE_TYPES = ['expense', 'cogs', 'other_expense'];
 
     /**

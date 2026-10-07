@@ -30,7 +30,7 @@ class FuelHomeService
     /** Days of closes the "days of stock left" average is taken over. */
     private const AVERAGE_CLOSES = 7;
 
-    public function today(Company $company): array
+    public function today(Company $company, bool $includeTrail = false): array
     {
         $id = $company->id;
         $slug = $company->slug;
@@ -53,7 +53,7 @@ class FuelHomeService
             'products' => $fig['products'],
             'expense_accounts' => $fig['expense_accounts'],
             'purchase_products' => $fig['purchase_products'],
-            'statement' => app(ProfitStatementService::class)->run($id, $monthStart, $todayDate, $slug, $stock),
+            'statement' => app(ProfitStatementService::class)->run($id, $monthStart, $todayDate, $slug, $stock, $includeTrail),
             'sales_total' => (float) ($summary['sales_total'] ?? 0),
             'gross_profit' => $fig['gross_profit'],
             'profit' => $fig['profit'],
@@ -84,7 +84,7 @@ class FuelHomeService
         ];
     }
 
-    public function period(Company $company, string $from, string $to): array
+    public function period(Company $company, string $from, string $to, bool $includeTrail = false): array
     {
         $id = $company->id;
         $slug = $company->slug;
@@ -124,7 +124,7 @@ class FuelHomeService
             'products' => $fig['products'],
             'expense_accounts' => $fig['expense_accounts'],
             'purchase_products' => $fig['purchase_products'],
-            'statement' => app(ProfitStatementService::class)->run($id, $from, $to, $slug, $stock),
+            'statement' => app(ProfitStatementService::class)->run($id, $from, $to, $slug, $stock, $includeTrail),
             'sales_total' => $fig['sales_total'],
             'gross_profit' => $fig['gross_profit'],
             'profit' => $fig['profit'],

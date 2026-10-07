@@ -12,9 +12,9 @@ use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
 use App\Modules\Payroll\Http\Requests\ReversePayslipPaymentRequest;
-use App\Modules\Payroll\Http\Requests\VoidPayslipRequest;
 use App\Modules\Payroll\Http\Requests\StorePayslipRequest;
 use App\Modules\Payroll\Http\Requests\UpdatePayslipRequest;
+use App\Modules\Payroll\Http\Requests\VoidPayslipRequest;
 use App\Modules\Payroll\Models\DeductionType;
 use App\Modules\Payroll\Models\EarningType;
 use App\Modules\Payroll\Models\Employee;
@@ -180,6 +180,7 @@ class PayslipController extends Controller
 
         $payslipData = $payslip->toArray();
         $payslipData['paid_from_account_name'] = $paidFrom;
+        $payslipData['outstanding_pay'] = app(\App\Modules\Payroll\Services\PayrollValueTrail::class)->outstanding($payslip);
 
         return Inertia::render('Payroll/Payslips/Show', [
             'company' => [
@@ -189,6 +190,8 @@ class PayslipController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payslip' => $payslipData,
+            'valueTrailsAvailable' => app(\App\Modules\Payroll\Services\PayrollValueTrail::class)->available($request->user()),
+            'valueTrail' => Inertia::optional(fn () => app(\App\Modules\Payroll\Services\PayrollValueTrail::class)->build($company, collect([$payslip]), $request->user(), $payslip->payslip_number)),
             'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
             'paymentAccounts' => $this->paymentAccountOptions($company->id),
         ]);

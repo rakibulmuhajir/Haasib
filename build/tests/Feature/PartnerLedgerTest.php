@@ -358,7 +358,24 @@ test('the partner statement closes on capital less drawings, the same figure as 
     $october = app(PartnerStatementService::class)->statement($ali, '2026-10-01', '2026-10-31');
     expect($october['opening_balance'])->toBe(78000.0)->and($october['closing_balance'])->toBe(78000.0);
 
+    foreach ([['2026-09-01', '2026-09-30', false], ['2026-09-01', '2026-09-30', true], ['2026-10-01', '2026-10-31', false]] as [$from, $to, $show]) {
+        $plain = app(PartnerStatementService::class)->statement($ali, $from, $to, $show);
+        $traced = app(PartnerStatementService::class)->statement($ali, $from, $to, $show, true);
+        $graph = $traced['valueTrail'];
+        unset($traced['valueTrail']);
+        expect($traced)->toBe($plain);
+        foreach ($graph['nodes'] as $node) {
+            if ($node['children']) {
+                expect(round(collect($node['children'])->sum(fn ($id) => $graph['nodes'][$id]['value']), 2))->toBe($node['value']);
+            }
+        }
+    }
+
     test()->get("/{$f['company']->slug}/reports/statements?kind=partner&id={$ali->id}&from=2026-09-01&to=2026-09-30")->assertOk();
+    $headers = ['X-Inertia' => 'true', 'X-Inertia-Version' => \Inertia\Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'accounting/reports/Statement', 'X-Inertia-Partial-Data' => 'statement,valueTrail'];
+    test()->get("/{$f['company']->slug}/reports/statements?kind=partner&id=all&from=2026-09-01&to=2026-09-30", $headers)
+        ->assertOk()->assertJsonPath('props.valueTrail.nodes.statement:closing.value', 78000);
 });
 
 test('the new daily close opens with partners set up (their balance needs no company on the loaded row)', function () {

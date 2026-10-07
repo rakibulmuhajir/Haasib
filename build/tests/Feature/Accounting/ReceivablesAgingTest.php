@@ -61,6 +61,16 @@ test('each invoice lands in the bucket its due date earns', function () {
     agingInvoice($f, 'Haulage Ltd', '2026-06-02', 5000);
 
     $report = app(ReceivablesAgingReportService::class)->run($f['company']->id, '2026-09-30');
+    $traced = app(ReceivablesAgingReportService::class)->run($f['company']->id, '2026-09-30', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($report);
+    foreach ($graph['nodes'] as $node) {
+        if ($node['children']) {
+            expect(round(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $node['children'])), 2))->toBe($node['value']);
+        }
+    }
+
     $row = collect($report['rows'])->firstWhere('customer_name', 'Haulage Ltd');
 
     expect($row['current'])->toBe(1000.0)

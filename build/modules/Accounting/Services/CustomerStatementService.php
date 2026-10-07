@@ -35,7 +35,7 @@ class CustomerStatementService
      * @param  string|null  $to  Rows dated after this are left out and a "Closing balance"
      *                           row is appended. Null means no upper bound and no closing row.
      */
-    public function statement(Customer $customer, ?string $from = null, ?string $to = null): array
+    public function statement(Customer $customer, ?string $from = null, ?string $to = null, bool $includeTrail = false): array
     {
         $rows = [];
 
@@ -52,7 +52,7 @@ class CustomerStatementService
                     'date' => optional($invoice->invoice_date)->toDateString(),
                     'type' => 'invoice',
                     'reference' => $invoice->invoice_number,
-                    'description' => 'Invoice ' . $invoice->invoice_number,
+                    'description' => 'Invoice '.$invoice->invoice_number,
                     // The customer's vehicle (unit) the sale was for, when the invoice names one.
                     'vehicle' => $invoice->unit?->name,
                     'debit' => (float) $invoice->total_amount,
@@ -71,7 +71,7 @@ class CustomerStatementService
                     'date' => optional($payment->payment_date)->toDateString(),
                     'type' => 'payment',
                     'reference' => $payment->payment_number,
-                    'description' => 'Payment received' . ($payment->reference_number ? " ({$payment->reference_number})" : ''),
+                    'description' => 'Payment received'.($payment->reference_number ? " ({$payment->reference_number})" : ''),
                     'debit' => 0.0,
                     'credit' => (float) $payment->amount,
                     'source_id' => $payment->id,
@@ -92,7 +92,7 @@ class CustomerStatementService
                         'type' => 'credit_note',
                         'reference' => $creditNote->credit_note_number,
                         // The reason says what it was for, e.g. a share moved to another customer's invoice.
-                        'description' => 'Credit note ' . $creditNote->credit_note_number . ($creditNote->reason ? " · {$creditNote->reason}" : ''),
+                        'description' => 'Credit note '.$creditNote->credit_note_number.($creditNote->reason ? " · {$creditNote->reason}" : ''),
                         'debit' => 0.0,
                         'credit' => (float) $creditNote->amount,
                         'source_id' => $creditNote->id,
@@ -109,6 +109,7 @@ class CustomerStatementService
         foreach ($rows as $row) {
             if ($from !== null && $row['date'] !== null && $row['date'] < $from) {
                 $opening = round($opening + $row['debit'] - $row['credit'], 2);
+
                 continue;
             }
             if ($to !== null && $row['date'] !== null && $row['date'] > $to) {
@@ -147,7 +148,7 @@ class CustomerStatementService
             ->whereHas('payment', fn ($q) => $q->where('customer_id', $customer->id))
             ->sum('amount_allocated'), 2);
 
-        return [
+        $result = [
             'rows' => $statement,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -156,5 +157,10 @@ class CustomerStatementService
             'to' => $to,
             'party' => $customer->name,
         ];
+        if ($includeTrail) {
+            $result['valueTrail'] = app(StatementValueTrail::class)->party($rows, 'customer:'.$customer->id, $customer->name, $from, $to, true, $opening, $running);
+        }
+
+        return $result;
     }
 }

@@ -22,7 +22,7 @@ class PartnerStatementService
     /**
      * @return array{rows: array<int,array<string,mixed>>, opening_balance: float, closing_balance: float, from: string, to: string, party: string, reversed_count: int}
      */
-    public function statement(Partner $partner, string $from, string $to, bool $showReversed = false): array
+    public function statement(Partner $partner, string $from, string $to, bool $showReversed = false, bool $includeTrail = false): array
     {
         $accountIds = array_values(array_filter([$partner->capital_account_id, $partner->drawing_account_id]));
         // Capital: credit adds to what the partner is owed, debit takes from it. Drawings: a debit
@@ -36,10 +36,13 @@ class PartnerStatementService
             ->whereIn('t.status', self::POSTED);
 
         $opening = 0.0;
+        $openingRows = (object) ['debit' => 0, 'credit' => 0];
         if ($accountIds) {
             $row = $base()->whereDate('t.transaction_date', '<', $from)
-                ->selectRaw('COALESCE(SUM(je.credit_amount - je.debit_amount),0) as net')->first();
+                ->selectRaw('COALESCE(SUM(je.credit_amount - je.debit_amount),0) as net, COALESCE(SUM(je.debit_amount),0) as debit, COALESCE(SUM(je.credit_amount),0) as credit')
+                ->when($includeTrail, fn ($q) => $q->selectRaw(StatementValueTrail::EVIDENCE_SQL))->first();
             $opening = round((float) $row->net, 2);
+            $openingRows = $row;
         }
 
         $lines = $accountIds
@@ -60,12 +63,25 @@ class PartnerStatementService
             $lines = $lines->reject(fn ($l) => $reversed->contains($l->transaction_id))->values();
         }
 
+        $builder = app(StatementValueTrail::class);
+        $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $from, 'end_date' => $to]];
+        if ($includeTrail) {
+            $openingRows->id = $partner->id;
+            $openingRows->name = 'Opening balance';
+            $openingRoot = $builder->account($graph, $openingRows, false);
+            $graph['roots']['statement:opening'] = $openingRoot;
+        }
+        $movementRoots = [];
         $running = $opening;
         $rows = [['date' => $from, 'type' => 'opening_balance', 'reference' => null, 'description' => 'Opening balance',
             'money_in' => 0.0, 'money_out' => 0.0, 'balance' => $opening, 'link' => null]];
         foreach ($lines as $line) {
             $net = round($sign($line), 2);
             $running = round($running + $net, 2);
+            if ($includeTrail) {
+                $movementRoots[] = $builder->node($graph, 'movement:'.count($movementRoots), 'Movement on '.$line->transaction_date,
+                    $net, formula: 'Credit − debit', source: ['transaction_id' => $line->transaction_id, 'date' => $line->transaction_date]);
+            }
             $rows[] = [
                 'date' => \Carbon\Carbon::parse($line->transaction_date)->toDateString(),
                 'type' => $line->transaction_type,
@@ -80,7 +96,7 @@ class PartnerStatementService
         $rows[] = ['date' => $to, 'type' => 'closing_balance', 'reference' => null, 'description' => 'Closing balance',
             'money_in' => 0.0, 'money_out' => 0.0, 'balance' => $running, 'link' => null];
 
-        return [
+        $result = [
             'rows' => $rows,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -89,5 +105,11 @@ class PartnerStatementService
             'party' => $partner->name,
             'reversed_count' => $reversed->count(),
         ];
+        if ($includeTrail) {
+            $builder->node($graph, 'statement:closing', 'Closing balance', $running, [$openingRoot, ...$movementRoots], 'Opening balance + signed capital/drawings movements');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 }

@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeStatementService
 {
-    public function statement(Employee $employee, string $from, string $to): array
+    public function statement(Employee $employee, string $from, string $to, bool $includeTrail = false): array
     {
         $movements = $this->movements($employee);
 
@@ -51,7 +51,7 @@ class EmployeeStatementService
         $inRange = array_filter($movements, fn ($m) => $m['date'] >= $from && $m['date'] <= $to);
         $sum = fn (string $type, string $side) => round(array_sum(array_column(array_filter($inRange, fn ($m) => $m['type'] === $type), $side)), 2);
 
-        return [
+        $result = [
             'rows' => $rows,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -69,6 +69,38 @@ class EmployeeStatementService
                 'paid' => $sum('salary_paid', 'out'),
             ],
         ];
+        if ($includeTrail) {
+            $builder = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+            $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $from, 'end_date' => $to]];
+            $prior = $current = [];
+            foreach ($movements as $i => $m) {
+                if ($m['date'] > $to) {
+                    continue;
+                }
+                $id = $builder->node($graph, 'movement:'.$i, $m['description'], round($m['in'] - $m['out'], 2),
+                    formula: 'Earned / repaid − deductions / money paid', source: $m['link'] ? [
+                        'document_link' => $m['link'], 'label' => 'Payslip', 'date' => $m['date'], 'recorded_at' => null,
+                    ] : null);
+                $graph['nodes'][$id]['estimated'] = $m['estimated'] ?? false;
+                $graph['nodes'][$id]['explanation'] = ($m['estimated'] ?? false)
+                    ? 'Expected salary from the current employee salary setting; no saved payslip yet.'
+                    : 'Saved payroll movement. Advance recovery on a payslip is excluded here because the advance was already counted when taken.';
+                if ($m['date'] < $from) {
+                    $prior[] = $id;
+                } else {
+                    $current[] = $id;
+                }
+            }
+            $builder->node($graph, 'statement:opening', 'Opening balance', $opening, $prior, 'Sum of prior signed payroll movements');
+            $builder->node($graph, 'statement:closing', 'Closing balance', $running, ['statement:opening', ...$current], 'Opening + signed payroll movements');
+            foreach (['statement:opening', 'statement:closing'] as $root) {
+                $children = $root === 'statement:opening' ? $prior : [...$prior, ...$current];
+                $graph['nodes'][$root]['estimated'] = collect($children)->contains(fn ($id) => $graph['nodes'][$id]['estimated']);
+            }
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     /** @return array<int,array{date:string,type:string,reference:?string,description:string,in:float,out:float,link:?string}> */
@@ -134,7 +166,7 @@ class EmployeeStatementService
                 $monthEnd = date('Y-m-t', strtotime($month.'-01'));
                 $movements[] = ['date' => min($monthEnd, now()->toDateString()), 'type' => 'salary_earned', 'reference' => null,
                     'description' => 'Salary '.date('M Y', strtotime($month.'-01')).' · expected, not on a payslip yet',
-                    'in' => $salary, 'out' => 0.0, 'link' => null];
+                    'in' => $salary, 'out' => 0.0, 'link' => null, 'estimated' => true];
             }
         }
 

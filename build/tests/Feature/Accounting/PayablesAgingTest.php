@@ -21,6 +21,15 @@ test('unpaid bills are aged from their due date per supplier', function () {
     $bill('B-3', '2026-09-01', '2026-09-01', 7000, 'draft'); // drafts are not owed
 
     $report = app(PayablesAgingReportService::class)->run($company->id, '2026-09-28');
+    $traced = app(PayablesAgingReportService::class)->run($company->id, '2026-09-28', true);
+    $graph = $traced['valueTrail'];
+    unset($traced['valueTrail']);
+    expect($traced)->toBe($report);
+    foreach ($graph['nodes'] as $node) {
+        if ($node['children']) {
+            expect(round(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $node['children'])), 2))->toBe($node['value']);
+        }
+    }
 
     expect($report['vendor_count'])->toBe(1)
         ->and($report['rows'][0]['current'])->toBe(100000.0)

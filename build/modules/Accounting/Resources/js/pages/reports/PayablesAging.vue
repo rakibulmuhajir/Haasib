@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import Hint from '@/components/Hint.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +29,8 @@ type Row = {
 }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { as_of: string }
   report: {
@@ -35,6 +41,14 @@ const props = defineProps<{
     vendor_count: number
   }
 }>()
+
+const evidence = useValueTrail({
+  refresh: ['report', 'filters', 'valueTrailsAvailable'],
+  context: () => props.filters,
+  snapshot: () => props.report,
+  snapshotFromPage: (page) => page.report,
+})
+const trailRoot = (key: string) => props.valueTrailsAvailable ? key : false
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: '/dashboard' },
@@ -108,13 +122,13 @@ const overdueTotal = computed(() =>
         <Card variant="figure">
           <CardHeader><CardTitle>We owe</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="report.totals.total" :currency="currency" :locale="moneyLocale" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:total')" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="report.totals.total" :currency="currency" :locale="moneyLocale" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
           <CardHeader><CardTitle>Past due</CardTitle></CardHeader>
           <CardContent>
-            <CardFigure><MoneyText :amount="overdueTotal" :currency="currency" :locale="moneyLocale" tone="overdue" /></CardFigure>
+            <CardFigure><Hint :trail="trailRoot('total:overdue')" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="overdueTotal" :currency="currency" :locale="moneyLocale" tone="overdue" /></Hint></CardFigure>
           </CardContent>
         </Card>
         <Card variant="figure">
@@ -155,9 +169,10 @@ const overdueTotal = computed(() =>
         </template>
 
         <template v-for="key in ['current', 'd1_30', 'd31_60', 'd61_90', 'd90_plus', 'total']" :key="`t-${key}`" #[`total-${key}`]>
-          <MoneyText :amount="report.totals[key]" :currency="currency" :locale="moneyLocale" :show-currency="false" />
+          <Hint :trail="trailRoot('total:' + key)" preview="Follow the contributing amounts" @click.stop><MoneyText :amount="report.totals[key]" :currency="currency" :locale="moneyLocale" :show-currency="false" /></Hint>
         </template>
       </LedgerRegister>
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="currency" @retry="evidence.load" />
   </PageShell>
 </template>

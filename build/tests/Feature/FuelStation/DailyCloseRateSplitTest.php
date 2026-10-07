@@ -100,6 +100,22 @@ test('the close records which litres went at which rate', function () {
         ->and((float) $segment['fallback_liters'])->toBe(0.0);
 });
 
+test('rate-change trails use the saved prices and expose the estimated effect as a separate calculation', function () {
+    $f = creditCloseFixture();
+    rateChangeWithSnapshot($f, oldRate: 300, newRate: 320, snapshotMeter: 40);
+    $posted = postSplitClose($f, 320, 31200);
+    $date = $f['payload']['date'];
+    $report = app(\App\Modules\FuelStation\Services\ProductProfitabilityReportService::class)->run($f['company']->id, $date, $date, 'day', 'all', null, true);
+    $row = $report['rateChangeRows'][0];
+    $trail = $report['valueTrail'];
+    $effect = $trail['nodes'][$trail['roots'][$row['trail_key'].':estimated_rate_change_effect']];
+    expect($effect['value'])->toBe(1200.0)->and($effect['estimated'])->toBeTrue()
+        ->and($effect['source']['id'])->toBe($posted['transaction_id']);
+    $values = array_map(fn ($id) => $trail['nodes'][$id]['value'], $effect['children']);
+    expect(round(($values[0] - $values[1]) * $values[2], 2))->toBe($effect['value'])
+        ->and($report['totals']['revenue'])->toBe(31200.0);
+});
+
 test('the split is taken from the meter, not the clock', function () {
     $f = creditCloseFixture();
 

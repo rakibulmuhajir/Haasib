@@ -47,7 +47,7 @@ class AccountStatementService
      *   account: string,
      * }
      */
-    public function statement(Account $account, string $from, string $to, bool $showReversed = false): array
+    public function statement(Account $account, string $from, string $to, bool $showReversed = false, bool $includeTrail = false): array
     {
         $isDebitNormal = $account->normal_balance !== 'credit';
 
@@ -58,6 +58,7 @@ class AccountStatementService
             ->whereIn('t.status', self::POSTED)
             ->whereDate('t.transaction_date', '<', $from)
             ->selectRaw('COALESCE(SUM(je.debit_amount),0) as debit, COALESCE(SUM(je.credit_amount),0) as credit')
+            ->when($includeTrail, fn ($q) => $q->selectRaw(StatementValueTrail::EVIDENCE_SQL))
             ->first();
 
         $opening = round(
@@ -98,6 +99,15 @@ class AccountStatementService
             $lines = $lines->reject(fn ($l) => $reversed->contains($l->transaction_id))->values();
         }
 
+        $builder = app(StatementValueTrail::class);
+        $graph = ['nodes' => [], 'roots' => [], 'context' => ['start_date' => $from, 'end_date' => $to]];
+        if ($includeTrail) {
+            $openingRows->id = $account->id;
+            $openingRows->name = 'Opening balance';
+            $openingRoot = $builder->account($graph, $openingRows, $isDebitNormal);
+            $graph['roots']['statement:opening'] = $openingRoot;
+        }
+        $movementRoots = [];
         $running = $opening;
         $rows = [[
             'date' => $from, 'type' => 'opening_balance', 'reference' => null,
@@ -113,6 +123,10 @@ class AccountStatementService
 
             $running = round($running + $moneyIn - $moneyOut, 2);
 
+            if ($includeTrail) {
+                $movementRoots[] = $builder->node($graph, 'movement:'.count($movementRoots), 'Movement on '.$line->transaction_date,
+                    round($moneyIn - $moneyOut, 2), formula: 'Money in − money out', source: ['transaction_id' => $line->transaction_id, 'date' => $line->transaction_date]);
+            }
             $rows[] = [
                 'date' => optional($line->transaction_date ? \Carbon\Carbon::parse($line->transaction_date) : null)->toDateString(),
                 'type' => $line->transaction_type,
@@ -131,7 +145,7 @@ class AccountStatementService
             'balance' => $running, 'link' => null,
         ];
 
-        return [
+        $result = [
             'rows' => $rows,
             'opening_balance' => $opening,
             'closing_balance' => $running,
@@ -140,6 +154,12 @@ class AccountStatementService
             'account' => $account->name,
             'reversed_count' => $reversed->count(),
         ];
+        if ($includeTrail) {
+            $builder->node($graph, 'statement:closing', 'Closing balance', $running, [$openingRoot, ...$movementRoots], 'Opening balance + signed movements');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     public function link(?string $referenceType, ?string $referenceId, string $transactionId): ?string

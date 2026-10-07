@@ -33,7 +33,7 @@ class ReceivablesAgingReportService
      *   customer_count: int
      * }
      */
-    public function run(string $companyId, string $asOf): array
+    public function run(string $companyId, string $asOf, bool $includeTrail = false): array
     {
         $asOfDate = CarbonImmutable::parse($asOf)->startOfDay();
 
@@ -45,6 +45,9 @@ class ReceivablesAgingReportService
             ->orderBy('due_date')
             ->get();
 
+        $builder = app(StatementValueTrail::class);
+        $graph = ['nodes' => [], 'roots' => [], 'context' => ['label' => 'Ageing at '.$asOf.' using current saved balances']];
+        $contributions = [];
         $rows = [];
 
         foreach ($invoices as $invoice) {
@@ -75,7 +78,14 @@ class ReceivablesAgingReportService
                 ];
             }
 
-            $rows[$customerId][$this->bucketFor($daysPastDue)] += $balance;
+            $bucket = $this->bucketFor($daysPastDue);
+            $rows[$customerId][$bucket] += $balance;
+            if ($includeTrail) {
+                $id = $builder->node($graph, 'document:'.$invoice->id, 'Saved invoice balance', $balance,
+                    source: ['document_link' => 'invoices/'.$invoice->id, 'label' => $invoice->invoice_number, 'date' => $invoice->invoice_date?->toDateString(), 'recorded_at' => $invoice->created_at?->toIso8601String()]);
+                $graph['nodes'][$id]['explanation'] = 'Current saved unpaid balance. Aged from '.($due?->toDateString() ?? 'the document date').' at '.$asOf.'. This report does not reconstruct historical payment balances.';
+                $contributions[$customerId][$bucket][] = $id;
+            }
             $rows[$customerId]['total'] = round($rows[$customerId]['total'] + $balance, 2);
             $rows[$customerId]['oldest_days_past_due'] = max($rows[$customerId]['oldest_days_past_due'], $daysPastDue);
         }
@@ -98,7 +108,7 @@ class ReceivablesAgingReportService
             }
         }
 
-        return [
+        $result = [
             'as_of' => $asOfDate->toDateString(),
             'buckets' => [
                 ['key' => 'current', 'label' => 'Not yet due'],
@@ -111,6 +121,26 @@ class ReceivablesAgingReportService
             'totals' => $totals,
             'customer_count' => count($rows),
         ];
+        if ($includeTrail) {
+            $labels = ['current' => 'Not yet due', 'd1_30' => '1 to 30 days overdue', 'd31_60' => '31 to 60 days overdue', 'd61_90' => '61 to 90 days overdue', 'd90_plus' => 'Over 90 days overdue', 'total' => 'Total unpaid'];
+            $totalChildren = [];
+            foreach ($rows as $row) {
+                $partyId = $row['customer_id'];
+                foreach (array_keys($totals) as $key) {
+                    $children = $key === 'total' ? array_merge(...array_values($contributions[$partyId] ?? [])) : ($contributions[$partyId][$key] ?? []);
+                    $id = $builder->node($graph, 'party:'.$partyId.':'.$key, $row['customer_name'].' · '.$labels[$key], $row[$key], $children, 'Sum of saved unpaid document balances');
+                    $totalChildren[$key][] = $id;
+                }
+            }
+            foreach ($totals as $key => $value) {
+                $builder->node($graph, 'total:'.$key, $labels[$key], $value, $totalChildren[$key] ?? [], 'Sum of party amounts in this bucket');
+            }
+            $overdue = ['total:d1_30', 'total:d31_60', 'total:d61_90', 'total:d90_plus'];
+            $builder->node($graph, 'total:overdue', 'Overdue', array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $overdue)), $overdue, 'Sum of overdue buckets');
+            $result['valueTrail'] = $graph;
+        }
+
+        return $result;
     }
 
     private function bucketFor(int $daysPastDue): string

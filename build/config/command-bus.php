@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'user.preferences.update' => \App\Actions\Settings\UpdatePreferencesAction::class,
     'fuel.settings.update' => \App\Modules\FuelStation\Actions\UpdateStationSettingsAction::class,
     'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
     'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,

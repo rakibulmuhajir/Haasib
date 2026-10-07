@@ -32,6 +32,7 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
+        'settings',
     ];
 
     /**
@@ -54,6 +55,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'settings' => 'array',
         ];
     }
 
@@ -70,6 +72,11 @@ class User extends Authenticatable
     public function isGodMode(): bool
     {
         return str_starts_with((string) $this->id, '00000000-0000-0000-0000-');
+    }
+
+    public function showsValueTrails(): bool
+    {
+        return ($this->settings['show_value_trails'] ?? true) !== false;
     }
 
     public function hasCompanyPermission(string $permission): bool

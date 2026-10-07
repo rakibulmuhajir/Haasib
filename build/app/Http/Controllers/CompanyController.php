@@ -10,8 +10,6 @@ use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\User;
 use App\Modules\Accounting\Services\DashboardService;
-use App\Modules\FuelStation\Services\FuelDashboardService;
-use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CommandBus;
 use App\Services\CompanyBootstrapService;
 use App\Services\CompanyRbacBootstrapper;
@@ -292,20 +290,45 @@ class CompanyController extends Controller
 
             $tab = $request->query('tab') === 'history' ? 'history' : 'today';
             $service = app(\App\Modules\FuelStation\Services\FuelHomeService::class);
-            $props = [
-                'company' => [
-                    'id' => $company->id,
-                    'name' => $company->name,
-                    'slug' => $company->slug,
-                    'base_currency' => $company->base_currency ?? 'PKR',
-                ],
-                'tab' => $tab,
-                'today' => $service->today($company),
-            ];
-            if ($tab === 'history') {
-                [$from, $to] = $this->historyRange($request->query('from'), $request->query('to'));
-                $props['history'] = $service->period($company, $from, $to);
-                $props['range'] = ['from' => $from, 'to' => $to];
+            $available = $request->user()->showsValueTrails()
+                && ($isGodMode || $request->user()->hasCompanyPermission(Permissions::REPORT_VIEW));
+            $includeTrail = $available
+                && $request->header('X-Inertia-Partial-Component') === 'FuelStation/Home/Index'
+                && in_array('valueTrail', explode(',', (string) $request->header('X-Inertia-Partial-Data')), true);
+            try {
+                $props = [
+                    'company' => [
+                        'id' => $company->id,
+                        'name' => $company->name,
+                        'slug' => $company->slug,
+                        'base_currency' => $company->base_currency ?? 'PKR',
+                    ],
+                    'tab' => $tab,
+                    'valueTrailsAvailable' => $available,
+                    'today' => $service->today($company, $includeTrail && $tab === 'today'),
+                ];
+                $trail = $props['today']['month']['statement']['valueTrail'] ?? null;
+                unset($props['today']['month']['statement']['valueTrail']);
+                if ($tab === 'history') {
+                    [$from, $to] = $this->historyRange($request->query('from'), $request->query('to'));
+                    $props['history'] = $service->period($company, $from, $to, $includeTrail);
+                    $props['range'] = ['from' => $from, 'to' => $to];
+                    $trail = $props['history']['statement']['valueTrail'] ?? null;
+                    unset($props['history']['statement']['valueTrail']);
+                }
+                if ($trail) {
+                    $trail = app(\App\Modules\FuelStation\Services\ProfitValueTrailPresenter::class)->present($trail, $company, $request->user());
+                }
+                $props['valueTrail'] = Inertia::optional(fn () => $trail);
+            } catch (\Throwable $exception) {
+                if (! $includeTrail) {
+                    throw $exception;
+                }
+                Log::error('Could not load the home profit statement trail.', ['company_id' => $company->id, 'exception' => $exception]);
+
+                return Inertia::render('FuelStation/Home/Index', [
+                    'valueTrail' => Inertia::optional(fn () => ['error' => 'Could not load this calculation. Please try again.']),
+                ]);
             }
 
             return Inertia::render('FuelStation/Home/Index', $props);

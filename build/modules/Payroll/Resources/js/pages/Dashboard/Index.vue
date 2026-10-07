@@ -8,6 +8,9 @@ import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
+import { useValueTrail } from '@/composables/useValueTrail'
+import type { ValueTrail } from '@/types/valueTrail'
 import Hint from '@/components/Hint.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +36,8 @@ interface Row {
 }
 
 const props = defineProps<{
+  valueTrail?: ValueTrail | null
+  valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   month: string
   period: { id: string; status: string } | null
@@ -43,6 +48,14 @@ const props = defineProps<{
   settings?: { payment_recording: 'on_entry' | 'on_approval'; payment_account_id: string | null }
   canUpdateSettings?: boolean
 }>()
+
+const evidence = useValueTrail({
+  refresh: ['rows', 'month', 'valueTrailsAvailable'],
+  context: () => props.month,
+  snapshot: () => props.rows,
+  snapshotFromPage: (page) => page.rows,
+})
+const trailRoot = (row: Row, key: string) => props.valueTrailsAvailable && row.payslip ? `payslip:${row.payslip.id}:${key}` : false
 
 const base = computed(() => `/${props.company.slug}`)
 const currency = computed(() => props.company.base_currency || 'PKR')
@@ -301,7 +314,7 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
             </td>
             <td class="px-3 py-2 text-right tabular-nums">
               <template v-if="row.payslip">
-                <Hint v-if="row.deduction_lines?.length">
+                <Hint v-if="row.deduction_lines?.length" :trail="trailRoot(row, 'deductions')">
                   <MoneyText :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
                   <template #content>
                     <div v-for="line in row.deduction_lines" :key="line.id" class="flex items-center justify-between gap-3">
@@ -316,12 +329,12 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
                     </div>
                   </template>
                 </Hint>
-                <MoneyText v-else :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero />
+                <Hint v-else :trail="trailRoot(row, 'deductions')" preview="Sum of saved deductions"><MoneyText :amount="row.payslip.deductions" :currency="currency" :show-currency="false" :fraction-digits="0" dash-zero /></Hint>
               </template>
               <span v-else class="text-muted-foreground">—</span>
             </td>
             <td class="px-3 py-2 text-right font-medium tabular-nums">
-              <MoneyText v-if="row.payslip" :amount="row.payslip.net" :currency="currency" :show-currency="false" :fraction-digits="0" />
+              <Hint v-if="row.payslip" :trail="trailRoot(row, 'net')" preview="Saved gross pay less deductions"><MoneyText :amount="row.payslip.net" :currency="currency" :show-currency="false" :fraction-digits="0" /></Hint>
               <span v-else class="text-muted-foreground" title="Before payroll runs: salary less this month's advances">
                 <MoneyText :amount="Math.max(0, row.salary - row.advances)" :currency="currency" :show-currency="false" :fraction-digits="0" />
               </span>
@@ -354,5 +367,6 @@ const statusVariant = (status: string): 'default' | 'secondary' | 'outline' => (
         </tfoot>
       </table>
     </div>
+  <ValueTrailPanel v-model:open="evidence.open.value" :loading="evidence.loading.value" :error="evidence.error.value" :trail="evidence.trail.value" :root="evidence.root.value" :currency="currency" @retry="evidence.load" />
   </PageShell>
 </template>

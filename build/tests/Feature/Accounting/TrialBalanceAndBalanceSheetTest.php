@@ -81,6 +81,61 @@ function ledgerFixture(): array
     return ['user' => $user, 'company' => $company, 'accounts' => $a];
 }
 
+test('statement value trails reconcile ledger accounts and preserve report figures', function () {
+    $f = ledgerFixture();
+    $company = $f['company'];
+    $trial = app(TrialBalanceReportService::class)->run($company->id, '2026-09-30', true);
+    foreach (['debit', 'credit'] as $side) {
+        $node = $trial['valueTrail']['nodes']['total:'.$side];
+        expect(array_sum(array_map(fn ($id) => $trial['valueTrail']['nodes'][$id]['value'], $node['children'])))->toBe($trial['totals'][$side]);
+    }
+    unset($trial['valueTrail']);
+    expect($trial)->toBe(app(TrialBalanceReportService::class)->run($company->id, '2026-09-30'));
+    $balance = app(BalanceSheetReportService::class)->run($company->id, '2026-09-30', true);
+    $graph = $balance['valueTrail'];
+    unset($balance['valueTrail']);
+    expect($balance)->toBe(app(BalanceSheetReportService::class)->run($company->id, '2026-09-30'));
+    foreach (['assets', 'liabilities', 'equity'] as $section) {
+        $root = $graph['nodes']['total:'.$section];
+        expect(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $root['children'])))->toBe($root['value']);
+    }
+    $profit = app(\App\Modules\Accounting\Services\ProfitLossReportService::class)->run($company->id, '2026-09-01', '2026-09-30', true);
+    expect($profit['valueTrail']['nodes']['total:profit']['value'])->toBe(18000.0);
+    $discount = $profit['valueTrail']['nodes']['account:'.$f['accounts']['4210']->id];
+    expect($discount['value'])->toBe(-2000.0);
+    $statement = app(\App\Modules\Accounting\Services\AccountStatementService::class)->statement($f['accounts']['1050'], '2026-09-01', '2026-09-30', false, true);
+    $graph = $statement['valueTrail'];
+    $presenter = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+    expect($presenter->present(fn () => $graph, $f['user'], $company->slug))->toBeNull();
+    $root = $graph['nodes']['statement:closing'];
+    expect($root['value'])->toBe(148000.0)
+        ->and(array_sum(array_map(fn ($id) => $graph['nodes'][$id]['value'], $root['children'])))->toBe(148000.0);
+});
+
+test('statement evidence honours document permissions and the personal off switch', function () {
+    $user = \Mockery::mock(User::class)->makePartial();
+    $user->shouldReceive('isGodMode')->andReturn(false);
+    $user->shouldReceive('showsValueTrails')->andReturn(true);
+    $user->shouldReceive('hasCompanyPermission')->andReturnUsing(fn ($permission) => $permission === \App\Constants\Permissions::REPORT_VIEW);
+    $service = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
+    $graph = ['nodes' => [
+        'journal' => ['source' => ['transaction_id' => 'private-journal', 'date' => '2026-09-01']],
+        'invoice' => ['source' => ['document_link' => 'invoices/private-invoice', 'label' => 'Private invoice', 'date' => '2026-09-01', 'recorded_at' => null]],
+    ], 'roots' => []];
+    $presented = $service->present(fn () => $graph, $user, 'company');
+    expect($presented['nodes']['journal']['source'])->toBe(['restricted' => true])
+        ->and($presented['nodes']['invoice']['source'])->toBe(['restricted' => true]);
+    $off = \Mockery::mock(User::class)->makePartial();
+    $off->shouldReceive('showsValueTrails')->andReturn(false);
+    $called = false;
+    expect($service->present(function () use (&$called) {
+        $called = true;
+
+        return [];
+    }, $off, 'company'))->toBeNull()
+        ->and($called)->toBeFalse();
+});
+
 test('the trial balance puts every account on its own side and the two columns agree', function () {
     $f = ledgerFixture();
 

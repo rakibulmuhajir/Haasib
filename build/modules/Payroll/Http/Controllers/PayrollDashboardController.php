@@ -2,8 +2,8 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Constants\Permissions;
+use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\SavePayrollSettingsRequest;
 use App\Modules\Payroll\Models\Employee;
@@ -109,6 +109,8 @@ class PayrollDashboardController extends Controller
             'month' => $month,
             'period' => $period ? ['id' => $period->id, 'status' => $period->status] : null,
             'rows' => $rows,
+            'valueTrailsAvailable' => app(\App\Modules\Payroll\Services\PayrollValueTrail::class)->available($request->user()),
+            'valueTrail' => Inertia::optional(fn () => app(\App\Modules\Payroll\Services\PayrollValueTrail::class)->build($company, $payslips->values(), $request->user(), 'Payroll · '.$month)),
             'deductionTypes' => $deductionTypes,
             // What "Pay" can pay from: the cash and bank accounts, Cash on Hand first.
             'paymentAccounts' => \App\Modules\Accounting\Models\Account::where('company_id', $company->id)

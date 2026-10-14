@@ -39,7 +39,7 @@ class FuelReceiptController extends Controller
             ->leftJoin('inv.items as i', 'i.id', '=', 'l.item_id')
             ->leftJoin('acct.vendors as v', 'v.id', '=', 'b.vendor_id')
             ->where('b.company_id', $company->id)
-            ->where('w.warehouse_type', 'tank')
+            ->where(fn ($q) => $q->where('w.warehouse_type', 'tank')->orWhere('w.code', \App\Modules\FuelStation\Services\TemporaryFuelStockService::CODE))
             ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
             ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
             ->whereBetween('b.bill_date', [$from, $to])
@@ -103,6 +103,9 @@ class FuelReceiptController extends Controller
                 'owed' => $rows->unique('bill_id')->sum('bill_balance'),
             ],
             'nextCloseDate' => $nextClose ? Carbon::parse($nextClose)->addDay()->toDateString() : now()->toDateString(),
+            'temporaryStock' => \App\Modules\Inventory\Models\Item::where('company_id', $company->id)->whereNotNull('fuel_category')->get()->map(fn ($item) => [
+                'id' => $item->id, 'name' => $item->name, ...app(\App\Modules\FuelStation\Services\TemporaryFuelStockService::class)->balance($company->id, $item->id),
+            ]),
             // For "Add delivery": who from, what into which tank, paid from where.
             'suppliers' => DB::table('acct.vendors')->where('company_id', $company->id)->whereNull('deleted_at')
                 ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -140,6 +143,7 @@ class FuelReceiptController extends Controller
                 'payment_account_id' => $data['payment_account_id'] ?? null,
                 'lines' => [[
                     'item_id' => $data['item_id'],
+                    'temporary_storage' => $data['temporary_storage'] ?? false,
                     'tank_id' => $data['tank_id'] ?? null,
                     'quantity' => $data['quantity'],
                     'direct_quantity' => $data['direct_quantity'] ?? null,
@@ -155,7 +159,9 @@ class FuelReceiptController extends Controller
 
         $number = DB::table('acct.bills')->where('id', $result['bill_id'])->value('bill_number');
 
-        return back()->with('success', "{$number} added. Received into the tank when the ".Carbon::parse($data['date'])->format('j M').' close is posted.');
+        return back()->with('success', ! empty($data['temporary_storage'])
+            ? "{$number} received into temporary storage. It can be sold on a later day."
+            : "{$number} added. Received into the tank when the ".Carbon::parse($data['date'])->format('j M').' close is posted.');
     }
 
     /** A delivery is its bill. */

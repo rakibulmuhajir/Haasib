@@ -16,6 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import EntitySearch from '@/components/forms/EntitySearch.vue';
 import FloatingCalculator from '@/components/FloatingCalculator.vue';
 import CloseEntryList from '../../../components/CloseEntryList.vue';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
     Dialog,
     DialogContent,
@@ -79,6 +80,7 @@ interface FuelItem {
 const { t } = useLexicon();
 
 interface PurchaseLine {
+    temporary_storage?: boolean;
     item_id: string;
     quantity: number | null;
     unit_cost: number | null;
@@ -92,6 +94,7 @@ interface PurchaseLine {
 // Fuel sold straight from the tanker, entered on the close: becomes a direct-delivery invoice
 // (and a cash payment when paid in cash) on posting -- see DailyCloseEntryService::directSale.
 interface DirectSaleRow {
+    temporary_storage?: boolean;
     kept_invoice_id?: string;
     kept_invoice_number?: string;
     item_id: string;
@@ -488,6 +491,10 @@ const props = defineProps<{
             reference: string;
         }>;
         amanat_disbursements?: Array<{
+            kind?: 'withdrawal' | 'fuel_purchase';
+            fuel_item_id?: string;
+            fuel_quantity?: number;
+            fuel_rate?: number;
             customer_id?: string;
             customer_name?: string;
             amount: number;
@@ -1284,6 +1291,10 @@ const form = useForm({
         bill_id?: string;
     }[],
     amanat_disbursements: [] as {
+        kind?: 'withdrawal' | 'fuel_purchase';
+        fuel_item_id?: string;
+        fuel_quantity?: number;
+        fuel_rate?: number;
         customer_id: string;
         customer_name: string;
         available_balance: number;
@@ -1857,6 +1868,7 @@ const normalizePurchases = () => {
                   item_id: row.item_id, quantity: row.quantity ?? null, unit_cost: row.unit_cost ?? null,
                   line_total: row.line_total ?? null, amount_driven: Boolean(row.amount_driven), tank_id: row.tank_id ?? '',
                   direct_quantity: row.direct_quantity ?? null, show_direct: Number(row.direct_quantity) > 0,
+                  temporary_storage: Boolean(row.temporary_storage),
               }]
             : [];
         return {
@@ -2196,6 +2208,11 @@ const hydrateFormForAmendment = () => {
                 customer_name: holder?.name ?? ad.customer_name ?? '',
                 available_balance: holder?.amanat_balance ?? 0,
                 amount: ad.amount,
+                kind: ad.kind ?? 'withdrawal',
+                fuel_item_id: ad.fuel_item_id ?? '',
+                fuel_quantity: ad.fuel_quantity ?? 0,
+                fuel_rate: ad.fuel_rate ?? 0,
+                payment_account_id: ad.payment_account_id ?? '',
             };
         });
     }
@@ -2692,7 +2709,7 @@ const totalMoneyOut = computed(() => {
     const cashBillPayments = totalCashBillPayments.value;
     const cashPaySuppliers = totalCashPaySuppliers.value;
     const amanat = form.amanat_disbursements.reduce(
-        (sum, a) => sum + a.amount,
+        (sum, a) => sum + (a.kind === 'fuel_purchase' || !a.payment_account_id || (props.cashAccountIds ?? []).includes(a.payment_account_id) ? Number(a.amount || 0) : 0),
         0,
     );
     const expenses = form.expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -3303,8 +3320,8 @@ const getCleanedFormData = () => {
 
     // Filter out incomplete amanat disbursements
     data.amanat_disbursements = (data.amanat_disbursements || []).filter(
-        (a: { customer_id: string; amount: number }) =>
-            a.customer_id && a.amount > 0,
+        (a: { customer_id: string; amount: number; kind?: string }) =>
+            a.customer_id && (a.amount > 0 || a.kind === 'fuel_purchase'),
     );
 
     // Filter out incomplete other sales
@@ -3554,7 +3571,8 @@ const cashFlowOut = computed(() => [
     { label: 'Expenses', amount: sumOf(form.expenses) },
     { label: 'Salaries / advances', amount: sumOf(form.employee_advances) + sumOf(form.payroll_payouts) },
     { label: 'Partner withdrawals', amount: sumOf(form.partner_withdrawals) },
-    { label: 'Amanat withdrawals', amount: sumOf(form.amanat_disbursements) },
+    { label: 'Amanat withdrawals', amount: sumOf(form.amanat_disbursements.filter((row) => row.kind !== 'fuel_purchase')) },
+    { label: 'Fuel paid from amanat', amount: sumOf(form.amanat_disbursements.filter((row) => row.kind === 'fuel_purchase')) },
 ].filter((l) => Math.abs(l.amount) >= 0.5));
 </script>
 
@@ -3843,22 +3861,23 @@ const cashFlowOut = computed(() => [
                                         <Input :model-value="line.line_total" type="number" min="0" @focus="selectZeroValue" @update:model-value="(v) => onLineTotal(line, v)" />
                                     </div>
                                     <div class="flex flex-wrap items-end gap-3 text-xs">
-                                        <div v-if="isFuelPurchaseItem(line.item_id) && tanksForItem(line.item_id).length !== 1" class="w-40">
-                                            <Label class="text-xs">Tank</Label>
-                                            <Select v-model="line.tank_id">
+                                        <div v-if="isFuelPurchaseItem(line.item_id)" class="w-40">
+                                            <Label class="text-xs">Storage</Label>
+                                            <Select :model-value="line.temporary_storage ? 'temporary' : line.tank_id" @update:model-value="(v) => { line.temporary_storage = v === 'temporary'; line.tank_id = line.temporary_storage ? '' : String(v); if (line.temporary_storage) line.direct_quantity = 0; }">
                                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem v-for="t in (tanksForItem(line.item_id).length ? tanksForItem(line.item_id) : tanks)" :key="t.id" :value="t.id">{{ t.name }}</SelectItem>
+                                                    <SelectItem value="temporary">Temporary storage</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
                                         <span v-else-if="line.tank_id" class="pb-2 text-muted-foreground">Into {{ tanks.find((t) => t.id === line.tank_id)?.name }}</span>
-                                        <div v-if="line.show_direct || Number(line.direct_quantity) > 0" class="w-28">
+                                        <div v-if="!line.temporary_storage && (line.show_direct || Number(line.direct_quantity) > 0)" class="w-28">
                                             <Label class="text-xs">Sold directly (L)</Label>
                                             <Input v-model.number="line.direct_quantity" type="number" min="0" @focus="selectZeroValue" />
                                         </div>
                                         <button
-                                            v-else-if="isFuelPurchaseItem(line.item_id)"
+                                            v-else-if="!line.temporary_storage && isFuelPurchaseItem(line.item_id)"
                                             type="button"
                                             class="pb-2 text-primary underline-offset-2 hover:underline"
                                             @click="line.show_direct = true"
@@ -4449,6 +4468,7 @@ const cashFlowOut = computed(() => [
                                         </SelectContent>
                                     </Select>
                                     <InputError :message="(form.errors as Record<string, string>)[`direct_sales.${index}.item_id`]" />
+                                    <Label class="mt-2 flex items-center gap-2 text-xs"><Checkbox v-model="sale.temporary_storage" />Temporary stock</Label>
                                 </div>
                                 <div>
                                     <Label class="text-xs">Litres</Label>
@@ -5705,19 +5725,33 @@ const cashFlowOut = computed(() => [
 
                         <div v-if="isExpanded('amanat_disbursements')" style="order: -1" class="space-y-2 border-t border-rule-default pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div class="flex items-baseline justify-between">
-                                <h4 class="font-medium">Amanat withdrawals</h4>
+                                <h4 class="font-medium">Amanat withdrawal</h4>
                                 <MoneyText class="text-sm font-medium" :amount="sectionTotal['amanat_disbursements']()" :currency="currencyCode" :fraction-digits="0" />
                             </div>
                             <CloseEntryList
                                 v-model="form.amanat_disbursements"
                                 :party="{ key: 'customer_id', nameKey: 'customer_name', label: 'Depositor', options: holderOptions }"
-                                :extra="{ key: 'payment_account_id', label: 'Pay from', placeholder: 'Cash on Hand', options: paymentAccountOptions }"
+                                :extra="{ key: 'payment_account_id', label: 'Pay from', placeholder: 'Cash on Hand', options: paymentAccountOptions, disabled: (row: any) => row.kind === 'fuel_purchase' }"
                                 :on-party="holderBalance"
                                 :hint="(row: any) => row.customer_id ? `Balance ${formatMoneyText(Number(row.available_balance ?? 0), currencyCode)}` : null"
                                 errors-prefix="amanat_disbursements"
                                 :errors="form.errors as Record<string, string>"
                                 :disabled="submitting || form.processing"
-                            />
+                            >
+                                <template #after-row="{ row, index }">
+                                    <RadioGroup v-if="row.customer_id" :model-value="row.kind ?? 'withdrawal'" class="mb-2 flex gap-4" :disabled="submitting || form.processing" @update:model-value="(v) => { row.kind = v; if (v === 'fuel_purchase') row.payment_account_id = ''; }">
+                                        <Label class="flex items-center gap-2"><RadioGroupItem value="withdrawal" />Money</Label>
+                                        <Label class="flex items-center gap-2"><RadioGroupItem value="fuel_purchase" />Fuel</Label>
+                                    </RadioGroup>
+                                    <div v-if="row.customer_id && row.kind === 'fuel_purchase'" class="mb-2 grid gap-2 sm:grid-cols-3">
+                                        <div><Label>Fuel type</Label><Select v-model="row.fuel_item_id" :disabled="submitting || form.processing" @update:model-value="(v) => { row.fuel_rate = props.rates[String(v)]?.sale_rate ?? 0; row.amount = Math.round(Number(row.fuel_quantity || 0) * row.fuel_rate * 100) / 100; }"><SelectTrigger><SelectValue placeholder="Select fuel" /></SelectTrigger><SelectContent><SelectItem v-for="item in props.fuelItems" :key="item.id" :value="item.id">{{ item.name }}</SelectItem></SelectContent></Select><InputError :message="amanatDisbursementError(index, 'fuel_item_id')" /></div>
+                                        <div><Label>Quantity (L)</Label><Input v-model.number="row.fuel_quantity" type="number" min="0.01" step="0.01" :disabled="submitting || form.processing" @update:model-value="() => row.amount = Math.round(Number(row.fuel_quantity || 0) * Number(row.fuel_rate || 0) * 100) / 100" /><InputError :message="amanatDisbursementError(index, 'fuel_quantity')" /></div>
+                                        <div><Label>Rate per litre</Label><Input v-model.number="row.fuel_rate" type="number" min="0.01" step="0.0001" :disabled="submitting || form.processing" @update:model-value="() => row.amount = Math.round(Number(row.fuel_quantity || 0) * Number(row.fuel_rate || 0) * 100) / 100" /><InputError :message="amanatDisbursementError(index, 'fuel_rate')" /></div>
+                                    </div>
+                                    <p v-if="row.kind === 'fuel_purchase'" class="mb-2 text-xs text-muted-foreground">Fuel already counted by today's meters. Amount = quantity × rate; no cash payout.</p>
+                                </template>
+                            </CloseEntryList>
+                            <InputError :message="form.errors.amanat_disbursements" />
                             <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" @click="openSection('amanat_disbursements')">+ Add another</button>
                         </div>
 

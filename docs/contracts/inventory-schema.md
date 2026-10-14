@@ -136,6 +136,7 @@ Single source of truth for items, categories, warehouses, stock levels, movement
 - Update/delete is blocked by trigger `prevent_item_price_change_mutation` (cascade from item/company delete allowed). RLS forced, same policies as above.
 
 ### inv.warehouses
+- Fuel temporary storage uses the existing `standard` warehouse type, reserved company code `TEMP-FUEL`, and normal stock movements. It is neither primary storage nor a meter tank. Dated quantities and values carry forward until sale; see the fuel contract. No new warehouse columns are introduced.
 - Purpose: storage locations.
 - Columns:
   - `id` uuid PK.

@@ -46,6 +46,7 @@ const props = defineProps<{
   suppliers: Array<{ id: string; name: string }>
   products: Array<{ item_id: string; item_name: string; tank_id: string; tank_name: string }>
   paymentAccounts: Array<{ id: string; code: string; name: string }>
+  temporaryStock: Array<{ id: string; name: string; quantity: number; value: number }>
 }>()
 
 // Add a delivery on its own: it becomes a bill whose litres wait for that day's close, which shows
@@ -58,6 +59,7 @@ const form = useForm({
   tank: '', // "item_id|tank_id"
   item_id: '',
   tank_id: '',
+  temporary_storage: false,
   quantity: null as number | null,
   direct_quantity: null as number | null,
   unit_cost: null as number | null,
@@ -79,7 +81,9 @@ const total = computed(() => {
 const save = () => {
   const [itemId, tankId] = form.tank.split('|')
   form.item_id = itemId ?? ''
-  form.tank_id = tankId ?? ''
+  form.temporary_storage = tankId === 'temporary'
+  form.tank_id = form.temporary_storage ? '' : (tankId ?? '')
+  if (form.temporary_storage) form.direct_quantity = 0
   form.post(`${base}/fuel/receipts`, {
     preserveScroll: true,
     onSuccess: () => { adding.value = false },
@@ -135,11 +139,12 @@ const breadcrumbs: BreadcrumbItem[] = [
             <InputError :message="form.errors.supplier_id" />
           </div>
           <div class="grid gap-1.5">
-            <Label>Fuel · tank</Label>
+            <Label>Fuel · storage</Label>
             <Select v-model="form.tank">
-              <SelectTrigger><SelectValue placeholder="Fuel and tank" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Fuel and storage" /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="p in products" :key="p.tank_id" :value="`${p.item_id}|${p.tank_id}`">{{ p.item_name }} · {{ p.tank_name }}</SelectItem>
+                <SelectItem v-for="p in temporaryStock" :key="`temp-${p.id}`" :value="`${p.id}|temporary`">{{ p.name }} · Temporary storage</SelectItem>
               </SelectContent>
             </Select>
             <InputError :message="form.errors.item_id || form.errors.tank_id" />
@@ -167,7 +172,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <template #content>Litres sold straight to a customer from the tanker; they never go into the tank.</template>
               </Hint>
             </Label>
-            <Input id="d_direct" v-model.number="form.direct_quantity" type="number" min="0" placeholder="0" />
+            <Input id="d_direct" v-model.number="form.direct_quantity" type="number" min="0" placeholder="0" :disabled="form.tank.endsWith('|temporary')" />
             <InputError :message="form.errors.direct_quantity" />
           </div>
           <div class="flex items-center gap-2">
@@ -185,7 +190,8 @@ const breadcrumbs: BreadcrumbItem[] = [
             <InputError :message="form.errors.payment_account_id" />
           </div>
           <p class="text-xs text-muted-foreground">
-            <Hint>
+            <span v-if="form.tank.endsWith('|temporary')">Received into temporary storage on this date. Its quantity and purchase cost carry forward until sold.</span>
+            <Hint v-else>
               Shows on that day's close
               <template #content>Listed under the tank as delivered; received into the tank when that day's close is posted. Paid from cash, it counts in that day's cash too.</template>
             </Hint>
@@ -199,6 +205,10 @@ const breadcrumbs: BreadcrumbItem[] = [
     </Dialog>
 
     <div class="space-y-4">
+      <div v-if="temporaryStock.some((p) => p.quantity > 0)" class="border-b pb-3 text-sm">
+        <p class="mb-1 font-medium">Temporary fuel on hand</p>
+        <p v-for="p in temporaryStock.filter((p) => p.quantity > 0)" :key="p.id" class="text-muted-foreground">{{ p.name }} · {{ litres(p.quantity) }} L · <MoneyText :amount="p.value" :currency="company.base_currency" /> <Link :href="`${base}/fuel/sales/form`" class="ml-2 text-primary underline">Sell directly</Link></p>
+      </div>
       <div class="flex flex-wrap items-end gap-3">
         <div class="grid gap-1.5">
           <Label for="start_date">From</Label>
@@ -217,7 +227,7 @@ const breadcrumbs: BreadcrumbItem[] = [
             <tr>
               <th class="px-3 py-2 text-left font-normal">Date</th>
               <th class="px-3 py-2 text-left font-normal">Supplier · bill</th>
-              <th class="px-3 py-2 text-left font-normal">Fuel · tank</th>
+              <th class="px-3 py-2 text-left font-normal">Fuel · storage</th>
               <th class="px-3 py-2 text-right font-normal">Litres</th>
               <th class="px-3 py-2 text-right font-normal">Amount</th>
               <th class="px-3 py-2 text-left font-normal">Received</th>

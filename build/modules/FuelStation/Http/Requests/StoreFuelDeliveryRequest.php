@@ -32,6 +32,7 @@ class StoreFuelDeliveryRequest extends BaseFormRequest
 
         return [
             'date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'temporary_storage' => ['nullable', 'boolean'],
             'supplier_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'supplier_invoice_number' => ['nullable', 'string', 'max:100'],
             'item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')->where('company_id', $companyId)],
@@ -55,7 +56,10 @@ class StoreFuelDeliveryRequest extends BaseFormRequest
                 return;
             }
             $intoTank = (float) $this->input('quantity') - (float) $this->input('direct_quantity', 0);
-            if ($intoTank > 0.0005 && ! $this->input('tank_id')) {
+            if ($this->boolean('temporary_storage') && (float) $this->input('direct_quantity', 0) > 0) {
+                $validator->errors()->add('direct_quantity', 'Temporary fuel is held in stock; record its sale separately.');
+            }
+            if ($intoTank > 0.0005 && ! $this->input('tank_id') && ! $this->boolean('temporary_storage')) {
                 $validator->errors()->add('tank_id', 'Pick the tank it went into.');
             }
             $closed = Transaction::where('company_id', app(CurrentCompany::class)->get()->id)

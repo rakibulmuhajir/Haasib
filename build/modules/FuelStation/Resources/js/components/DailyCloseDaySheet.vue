@@ -171,7 +171,7 @@ const moneyOut = computed<Line[]>(() => {
     lines.push({ label: 'Paid supplier', detail: [p.vendor_name, n(p.advance_amount) ? `advance ${round0(n(p.advance_amount)).toLocaleString()}` : null].filter(Boolean).join(' · '), amount: n(p.amount) })
   }
   for (const b of (m.value.bill_payment_details || []) as any[]) lines.push({ label: 'Supplier bill payment', detail: b.vendor_name ?? b.payment_number, amount: n(b.amount) })
-  for (const a of (m.value.amanat_disbursement_details || []) as any[]) lines.push({ label: 'Amanat withdrawal', detail: a.customer_name, amount: n(a.amount) })
+  for (const a of (m.value.amanat_disbursement_details || []) as any[]) lines.push({ label: a.kind === 'fuel_purchase' ? 'Fuel paid from amanat' : 'Amanat withdrawal', detail: a.customer_name, amount: n(a.amount) })
   for (const e of (input.value.expenses || []) as any[]) {
     const account = props.expenseAccounts?.find((x) => x.id === e.account_id)?.name ?? accountName(e.account_id)
     lines.push({ label: 'Expense', detail: [account, e.description].filter(Boolean).join(' · '), amount: n(e.amount) })

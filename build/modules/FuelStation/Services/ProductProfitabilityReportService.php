@@ -128,6 +128,7 @@ class ProductProfitabilityReportService
         }
 
         $this->addOffTankerSales($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
+        $this->addTemporarySales($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
         $this->addWritedowns($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
         $this->addStockVariance($companyId, $startDate, $endDate, $product, $items, $products);
         $this->addPurchases($companyId, $startDate, $endDate, $groupBy, $product, $items, $products, $periods);
@@ -424,6 +425,36 @@ class ProductProfitabilityReportService
         }
     }
 
+    private function addTemporarySales(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
+    {
+        $movements = DB::table('inv.stock_movements as sm')->join('inv.warehouses as w', 'w.id', '=', 'sm.warehouse_id')
+            ->join('acct.invoices as i', 'i.id', '=', 'sm.reference_id')
+            ->where('sm.company_id', $companyId)->where('i.company_id', $companyId)->where('w.code', TemporaryFuelStockService::CODE)
+            ->where('sm.reference_type', 'acct.invoices')->where('sm.movement_type', 'sale')->whereNull('i.deleted_at')
+            ->whereNotIn('i.status', ['draft', 'void', 'cancelled'])->whereBetween('sm.movement_date', [$startDate, $endDate])
+            ->get(['sm.*', 'i.invoice_number', 'i.total_amount']);
+        foreach ($movements as $movement) {
+            $key = $this->itemKey($movement->item_id, $items);
+            if ($this->skipsKey($key, $product)) {
+                continue;
+            }
+            $quantity = abs((float) $movement->quantity);
+            $revenue = (float) $movement->total_amount;
+            $cost = abs((float) $movement->total_cost);
+            $products[$key] ??= $this->emptyProductRow($key, $this->productName($key, $items), 'L');
+            $products[$key]['quantity'] += $quantity;
+            $products[$key]['revenue'] += $revenue;
+            $products[$key]['cogs'] += $cost;
+            $products[$key]['direct_quantity'] += $quantity;
+            $products[$key]['direct_revenue'] += $revenue;
+            $period = $this->ensurePeriod($periods, Carbon::parse($movement->movement_date), $groupBy);
+            $periods[$period]['quantity'] += $quantity;
+            $periods[$period]['revenue'] += $revenue;
+            $periods[$period]['cogs'] += $cost;
+            $this->trail?->temporarySale($key, $period, $movement, $quantity, $revenue, $cost);
+        }
+    }
+
     /**
      * Fuel sold straight off the tanker never passes a pump, so no close has it. The stock
      * statement knows it per day: the litres, what the direct-delivery invoices charged, and
@@ -522,14 +553,23 @@ class ProductProfitabilityReportService
             if ($shared) {
                 continue;
             }
-            $purchases = (float) ($this->statement($companyId, (string) $item['id'], $startDate, $endDate)['totals']['purchase_amount'] ?? 0);
+            $statement = $this->statement($companyId, (string) $item['id'], $startDate, $endDate);
+            $temporaryBills = DB::table('acct.bill_line_items as l')->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+                ->join('inv.warehouses as w', 'w.id', '=', 'l.warehouse_id')->where('b.company_id', $companyId)
+                ->where('l.item_id', $item['id'])->where('w.code', TemporaryFuelStockService::CODE)
+                ->whereNull('b.deleted_at')->whereNull('l.deleted_at')->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+                ->whereBetween('b.bill_date', [$startDate, $endDate])->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.total']);
+            foreach ($temporaryBills as $bill) {
+                $statement['rows'][] = ['date' => (string) $bill->bill_date, 'bills' => [['id' => $bill->id, 'bill_number' => $bill->bill_number, 'amount' => (float) $bill->total]]];
+            }
+            $purchases = (float) ($statement['totals']['purchase_amount'] ?? 0) + (float) $temporaryBills->sum('total');
             $opening = $valuation->accountBalance($companyId, $accountId, $dayBefore);
             $closing = $valuation->accountBalance($companyId, $accountId, $endDate);
             $row['book_opening'] = round($opening, 2);
             $row['book_closing'] = round($closing, 2);
             $row['book_purchases'] = round($purchases, 2);
             $row['book_profit'] = round($row['revenue'] + $closing - $opening - $purchases, 2);
-            $this->trail?->book($companyId, $row['key'], $accountId, $dayBefore, $endDate, $row, $this->statement($companyId, (string) $item['id'], $startDate, $endDate));
+            $this->trail?->book($companyId, $row['key'], $accountId, $dayBefore, $endDate, $row, $statement);
             // Margins follow the books where the books have the figure (tank gains and losses,
             // later costs and the month-end write-down all in); elsewhere they stay on gross profit.
             $row['margin_per_unit'] = $row['quantity'] > 0 ? $row['book_profit'] / $row['quantity'] : 0;

@@ -15,6 +15,7 @@ function directSaleFixture(): array
 {
     test()->travelTo(\Carbon\Carbon::parse('2026-09-15 09:00:00'));
     $f = pendingDeliveryFixture();
+    $f['company']->enableModule('fuel_station');
     $f['item']->update(['income_account_id' => $f['accounts']['4100']->id]);
 
     return $f;
@@ -70,6 +71,7 @@ test('a cash direct sale needs no customer: it goes to the walk-in customer', fu
         'sale_date' => '2026-09-15',
         'paid_in_cash' => true,
     ])->assertRedirect()->assertSessionHasNoErrors();
+    expect(session('error'))->toBeNull();
 
     $invoice = Invoice::where('company_id', $f['company']->id)->where('is_direct_delivery', true)->with('customer')->sole();
     expect($invoice->customer->customer_number)->toBe('CASH-FUEL')

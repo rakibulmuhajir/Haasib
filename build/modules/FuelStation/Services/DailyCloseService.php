@@ -3,23 +3,21 @@
 namespace App\Modules\FuelStation\Services;
 
 use App\Models\Partner;
-use App\Models\PartnerTransaction;
-use App\Services\PartnerLedgerService;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Modules\FuelStation\Models\AmanatTransaction;
+use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\NozzleReading;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
-use App\Modules\FuelStation\Models\AmanatTransaction;
-use App\Modules\FuelStation\Models\CustomerProfile;
-use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
@@ -29,6 +27,7 @@ use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CommandBus;
+use App\Services\PartnerLedgerService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -161,7 +160,7 @@ class DailyCloseService
      */
     public function getPreviousDayClosing(string $companyId, string $date): array
     {
-        $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
+        $previousDate = date('Y-m-d', strtotime($date.' -1 day'));
 
         // Look for the most recent daily close transaction before this date
         $previousClose = Transaction::where('company_id', $companyId)
@@ -171,7 +170,7 @@ class DailyCloseService
             ->orderByDesc('transaction_date')
             ->first();
 
-        if (!$previousClose) {
+        if (! $previousClose) {
             // No prior daily close exists (typically the very first close for this
             // station). Opening cash for today is not zero in that case — it is
             // whatever cash the ledger already carries as of the day before, most
@@ -202,7 +201,7 @@ class DailyCloseService
 
         // Get the closing cash from metadata or calculate from entries
         $metadata = $previousClose->metadata ?? [];
-        if (!is_array($metadata)) {
+        if (! is_array($metadata)) {
             $metadata = [];
         }
 
@@ -322,10 +321,7 @@ class DailyCloseService
     /**
      * Process the complete daily close.
      *
-     * @param string $companyId
-     * @param array $data
-     * @param User $user
-     * @param bool $isCorrection Whether this is a correction entry (allows multiple per date)
+     * @param  bool  $isCorrection  Whether this is a correction entry (allows multiple per date)
      */
     public function processDailyClose(string $companyId, array $data, User $user, bool $isCorrection = false): array
     {
@@ -336,7 +332,7 @@ class DailyCloseService
             // previous day; posting this day on top of that would freeze figures nobody has
             // confirmed. Parking stays allowed (see DailyCloseReconciliationService::park) —
             // only posting is blocked here.
-            $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
+            $previousDate = date('Y-m-d', strtotime($date.' -1 day'));
             if (app(DailyCloseReconciliationService::class)->parkedClosingFigures($companyId, $previousDate)) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'date' => "Post {$previousDate} first — this day's openings come from it.",
@@ -401,7 +397,9 @@ class DailyCloseService
             }
             $data['direct_sales'] = [];
 
-            $createdAmanat = []; $createdPartners = []; $createdAdvances = [];
+            $createdAmanat = [];
+            $createdPartners = [];
+            $createdAdvances = [];
             $reconciliation = app(DailyCloseReconciliationService::class);
             $canonicalSources = $reconciliation->sources($companyId, $date);
             foreach (array_filter($purchaseTransactionIds) as $purchaseTransactionId) {
@@ -467,7 +465,7 @@ class DailyCloseService
 
                     $fuelCategory = $item?->fuel_category ?? 'unknown';
                     $fuelLabel = $item?->name ?? str_replace('_', ' ', ucfirst($fuelCategory));
-                    if (!isset($salesByFuel[$fuelCategory])) {
+                    if (! isset($salesByFuel[$fuelCategory])) {
                         $salesByFuel[$fuelCategory] = ['liters' => 0, 'revenue' => 0, 'cogs' => 0];
                     }
                     $salesByFuel[$fuelCategory]['liters'] += $liters;
@@ -559,7 +557,7 @@ class DailyCloseService
             $otherSalesInventoryPostings = [];
             $otherSalesStockMovements = [];
             $tankItemIds = Warehouse::where('company_id', $companyId)->whereNotNull('linked_item_id')->pluck('linked_item_id')->all();
-            if (!empty($data['other_sales'])) {
+            if (! empty($data['other_sales'])) {
                 foreach ($data['other_sales'] as $sale) {
                     // Derived here, never taken from the request.
                     //
@@ -660,11 +658,11 @@ class DailyCloseService
             // it up the same way it would any other receipt.
             // ─────────────────────────────────────────────────────────────────
             $deliveriesReceived = [];
-            if (!empty($data['tank_readings'])) {
+            if (! empty($data['tank_readings'])) {
                 foreach ($data['tank_readings'] as $tankData) {
                     $tank = Warehouse::where('company_id', $companyId)->find($tankData['tank_id']);
                     $itemId = $tank?->linked_item_id;
-                    if (!$itemId) {
+                    if (! $itemId) {
                         continue;
                     }
 
@@ -681,8 +679,8 @@ class DailyCloseService
                                 'quantity' => $delivery['remaining'],
                                 'warehouse_id' => $tankData['tank_id'],
                             ]],
-                        // Part of posting the close, which already checked its own permission:
-                        // a cashier who may close the day need not also be allowed to edit bills.
+                            // Part of posting the close, which already checked its own permission:
+                            // a cashier who may close the day need not also be allowed to edit bills.
                         ], $user, true);
 
                         $deliveriesReceived[] = [
@@ -710,14 +708,14 @@ class DailyCloseService
             $shrinkageInventoryPostings = [];
             $gainInventoryPostings = [];
 
-            if (!empty($data['tank_readings'])) {
+            if (! empty($data['tank_readings'])) {
                 foreach ($data['tank_readings'] as $tankData) {
                     // Get the tank to find linked item
                     $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $companyId)
                         ->find($tankData['tank_id']);
                     $itemId = $tank?->linked_item_id;
 
-                    if (!$itemId) {
+                    if (! $itemId) {
                         continue;
                     }
 
@@ -877,7 +875,7 @@ class DailyCloseService
             $partnerCapitalLines = [];
             $partnerDrawingsLines = [];
             $partnerDepositsTotal = 0;
-            if (!empty($data['partner_deposits'])) {
+            if (! empty($data['partner_deposits'])) {
                 foreach ($data['partner_deposits'] as $deposit) {
                     $partner = Partner::where('company_id', $companyId)->findOrFail($deposit['partner_id']);
                     $partnerDepositsTotal += (float) $deposit['amount'];
@@ -893,7 +891,7 @@ class DailyCloseService
             // Amanat deposits/top-ups received in cash or a selected bank account.
             $amanatDepositsTotal = 0;
             $amanatDepositDetails = [];
-            if (!empty($data['amanat_deposits'])) {
+            if (! empty($data['amanat_deposits'])) {
                 foreach ($data['amanat_deposits'] as $deposit) {
                     $amount = (float) ($deposit['amount'] ?? 0);
                     if ($amount <= 0) {
@@ -901,7 +899,7 @@ class DailyCloseService
                     }
 
                     $customerId = $deposit['customer_id'] ?? null;
-                    if (!$customerId) {
+                    if (! $customerId) {
                         throw new \RuntimeException('Select an Amanat depositor before posting a deposit.');
                     }
 
@@ -912,7 +910,7 @@ class DailyCloseService
                         ->lockForUpdate()
                         ->first();
 
-                    if (!$profile) {
+                    if (! $profile) {
                         throw new \RuntimeException('Selected Amanat depositor was not found.');
                     }
 
@@ -928,7 +926,7 @@ class DailyCloseService
                         'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
                         'amount' => $amount,
                         'payment_account_id' => $paymentAccount->id,
-                        'reference' => $deposit['reference'] ?? 'Daily close ' . $date,
+                        'reference' => $deposit['reference'] ?? 'Daily close '.$date,
                         'notes' => $deposit['notes'] ?? 'Daily close Amanat deposit',
                         'recorded_by_user_id' => $user->id,
                     ]);
@@ -953,7 +951,7 @@ class DailyCloseService
             $otherDepositsTotal = 0;
             $otherDepositPostings = [];
             $otherDepositDetails = [];
-            if (!empty($data['other_deposits'])) {
+            if (! empty($data['other_deposits'])) {
                 foreach ($data['other_deposits'] as $deposit) {
                     $amount = (float) ($deposit['amount'] ?? 0);
                     if ($amount <= 0) {
@@ -975,7 +973,7 @@ class DailyCloseService
                         $accountId = $accountId ?: $accounts['fuel_sales'];
                     }
 
-                    if (!$accountId) {
+                    if (! $accountId) {
                         throw new \RuntimeException("Select an account for {$label}.");
                     }
 
@@ -986,12 +984,12 @@ class DailyCloseService
                         ->whereIn('type', ['revenue', 'other_income', 'liability', 'equity'])
                         ->exists();
 
-                    if (!$accountAllowed && $type !== 'loss_compensation') {
+                    if (! $accountAllowed && $type !== 'loss_compensation') {
                         throw new \RuntimeException("Selected account is not valid for {$label}.");
                     }
 
                     $otherDepositsTotal += $amount;
-                    if (!isset($otherDepositPostings[$accountId])) {
+                    if (! isset($otherDepositPostings[$accountId])) {
                         $otherDepositPostings[$accountId] = [
                             'amount' => 0,
                             'labels' => [],
@@ -1020,7 +1018,7 @@ class DailyCloseService
             $cardSwipesTotal = 0;
             $fuelCardsTotal = 0;
 
-            if (!empty($data['payment_receipts'])) {
+            if (! empty($data['payment_receipts'])) {
                 // Get station settings to understand channel types
                 $stationSettings = StationSettings::where('company_id', $companyId)->first();
                 $paymentChannels = $stationSettings?->payment_channels ?? [];
@@ -1101,7 +1099,7 @@ class DailyCloseService
             $channelSupplierSettlements = [];
             foreach ($paymentReceiptPostings as $posting) {
                 $channel = $channelMap[$posting['channel_code']] ?? null;
-                if (!$channel || ($channel['settles_to'] ?? 'clearing') !== 'supplier') {
+                if (! $channel || ($channel['settles_to'] ?? 'clearing') !== 'supplier') {
                     continue;
                 }
 
@@ -1109,12 +1107,12 @@ class DailyCloseService
                 $clearingAccountId = $posting['account_id'];
                 // What actually reached clearing: the sales less the bank's charge.
                 $channelTotal = round((float) $posting['amount'] - (float) ($posting['fee_amount'] ?? 0), 2);
-                if (!$vendorId || !$clearingAccountId || $channelTotal <= 0) {
+                if (! $vendorId || ! $clearingAccountId || $channelTotal <= 0) {
                     continue;
                 }
 
                 $vendor = Vendor::where('company_id', $companyId)->find($vendorId);
-                if (!$vendor) {
+                if (! $vendor) {
                     continue;
                 }
                 $clearingAccount = Account::where('company_id', $companyId)->find($clearingAccountId);
@@ -1130,7 +1128,7 @@ class DailyCloseService
 
                 $notes = "{$posting['channel_label']} settlement — Daily Close {$transactionNumber}";
                 if ($advanceAmount > 0.004) {
-                    $notes .= '. ' . number_format($advanceAmount, 2) . " of {$posting['channel_label']} sales are held as an advance with {$vendor->name}.";
+                    $notes .= '. '.number_format($advanceAmount, 2)." of {$posting['channel_label']} sales are held as an advance with {$vendor->name}.";
                 }
 
                 $paymentResult = app(CommandBus::class)->dispatch('bill_payment.create', [
@@ -1145,8 +1143,8 @@ class DailyCloseService
                     'allocations' => $allocations,
                     'notes' => $notes,
                     'allow_clearing_account' => true,
-                // Part of posting the close, which already checked its own permission —
-                // same reasoning as the bill.receive_goods dispatch above.
+                    // Part of posting the close, which already checked its own permission —
+                    // same reasoning as the bill.receive_goods dispatch above.
                 ], $user, true);
 
                 $channelSupplierSettlements[] = [
@@ -1170,7 +1168,7 @@ class DailyCloseService
             // sources() has something to tag) -- otherwise a same-day reconciliation
             // view would flag the close's own settlement payment as unexplained
             // "Added to this business date after posting" activity.
-            if (!empty($channelSupplierSettlements)) {
+            if (! empty($channelSupplierSettlements)) {
                 $refreshedSources = $reconciliation->sources($companyId, $date);
                 foreach ($channelSupplierSettlements as $settlement) {
                     if (empty($settlement['bill_payment_id'])) {
@@ -1216,7 +1214,7 @@ class DailyCloseService
             // Same reasoning as the card-channel supplier settlement above: tag these
             // close-initiated payments' own postings as this close's own source, so a later
             // reconciliation view never lists them as "recorded on other screens".
-            if (!empty($paySupplierDetails)) {
+            if (! empty($paySupplierDetails)) {
                 $refreshedSources = $reconciliation->sources($companyId, $date);
                 foreach ($paySupplierDetails as $detail) {
                     if (empty($detail['payment_id'])) {
@@ -1244,7 +1242,7 @@ class DailyCloseService
                     ->where('type', 'asset')->where('subtype', 'bank')
                     ->where('currency', $currency)
                     ->find($withdrawal['bank_account_id'] ?? null);
-                if (!$bank || $amount <= 0) {
+                if (! $bank || $amount <= 0) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         "bank_withdrawals.{$index}.bank_account_id" => 'Choose an active bank account in the company currency and enter a positive amount.',
                     ]);
@@ -1258,7 +1256,7 @@ class DailyCloseService
             // Bank deposits
             $bankDepositsTotal = 0;
             $bankDepositsByAccount = [];
-            if (!empty($data['bank_deposits'])) {
+            if (! empty($data['bank_deposits'])) {
                 foreach ($data['bank_deposits'] as $deposit) {
                     $amount = (float) $deposit['amount'];
                     if ($amount <= 0) {
@@ -1267,7 +1265,7 @@ class DailyCloseService
 
                     $bankDepositsTotal += $amount;
                     $accountId = $deposit['bank_account_id'] ?? $accounts['operating_bank'];
-                    if (!isset($bankDepositsByAccount[$accountId])) {
+                    if (! isset($bankDepositsByAccount[$accountId])) {
                         $bankDepositsByAccount[$accountId] = 0;
                     }
                     $bankDepositsByAccount[$accountId] += $amount;
@@ -1280,7 +1278,7 @@ class DailyCloseService
             // the drawing limit is allowed: it is noted on the close (and flashed), never blocking.
             $partnerWithdrawalsTotal = 0;
             $partnerLimitWarnings = [];
-            if (!empty($data['partner_withdrawals'])) {
+            if (! empty($data['partner_withdrawals'])) {
                 $withdrawnBy = [];
                 foreach ($data['partner_withdrawals'] as $withdrawal) {
                     $amount = (float) $withdrawal['amount'];
@@ -1304,7 +1302,7 @@ class DailyCloseService
 
             // Employee advances
             $employeeAdvancesTotal = 0;
-            if (!empty($data['employee_advances'])) {
+            if (! empty($data['employee_advances'])) {
                 // Set RLS context for pay schema (salary_advances table has RLS enabled)
                 DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
                 DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
@@ -1320,6 +1318,7 @@ class DailyCloseService
                         : null;
                     if ($kept) {
                         $createdAdvances[] = $kept;
+
                         continue;
                     }
 
@@ -1343,7 +1342,7 @@ class DailyCloseService
             $payrollPayoutsTotal = 0;
             $payrollPayoutDetails = [];
             $payrollPayoutIds = [];
-            if (!empty($data['payroll_payouts'])) {
+            if (! empty($data['payroll_payouts'])) {
                 DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
                 DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
 
@@ -1360,7 +1359,7 @@ class DailyCloseService
                         ->lockForUpdate()
                         ->find($payout['payslip_id'] ?? null);
 
-                    if (!$payslip) {
+                    if (! $payslip) {
                         throw new \RuntimeException('One approved salary payout is no longer available for this daily close.');
                     }
 
@@ -1375,7 +1374,7 @@ class DailyCloseService
                         'payslip_id' => $payslip->id,
                         'payslip_number' => $payslip->payslip_number,
                         'employee_id' => $payslip->employee_id,
-                        'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
+                        'employee_name' => trim(($payslip->employee?->first_name ?? '').' '.($payslip->employee?->last_name ?? '')) ?: 'Employee',
                         'employee_number' => $payslip->employee?->employee_number,
                         'amount' => $netPay,
                     ];
@@ -1386,8 +1385,10 @@ class DailyCloseService
 
             // Amanat disbursements paid from cash or a selected bank account.
             $amanatTotal = 0;
+            $amanatFuelTotal = 0;
+            $amanatFuelQuantities = [];
             $amanatDetails = [];
-            if (!empty($data['amanat_disbursements'])) {
+            if (! empty($data['amanat_disbursements'])) {
                 foreach ($data['amanat_disbursements'] as $amanat) {
                     $amount = (float) $amanat['amount'];
                     if ($amount <= 0) {
@@ -1395,7 +1396,7 @@ class DailyCloseService
                     }
 
                     $customerId = $amanat['customer_id'] ?? null;
-                    if (!$customerId) {
+                    if (! $customerId) {
                         throw new \RuntimeException('Select an Amanat depositor before posting a disbursement.');
                     }
 
@@ -1406,13 +1407,29 @@ class DailyCloseService
                         ->lockForUpdate()
                         ->first();
 
-                    if (!$profile) {
+                    if (! $profile) {
                         throw new \RuntimeException('Selected Amanat depositor was not found.');
                     }
 
-                    $paymentAccount = $this->resolveAmanatPaymentAccount($companyId, $amanat['payment_account_id'] ?? null, $accounts['cash_on_hand']);
-                    $amanatWithdrawalByAccount[$paymentAccount->id] = ($amanatWithdrawalByAccount[$paymentAccount->id] ?? 0) + $amount;
-                    if ($paymentAccount->id === $accounts['cash_on_hand']) {
+                    $fuelPurchase = ($amanat['kind'] ?? 'withdrawal') === 'fuel_purchase';
+                    if ($fuelPurchase) {
+                        $fuel = Item::where('company_id', $companyId)->whereNotNull('fuel_category')->find($amanat['fuel_item_id'] ?? null);
+                        $quantity = round((float) ($amanat['fuel_quantity'] ?? 0), 2);
+                        $rate = (float) ($amanat['fuel_rate'] ?? 0);
+                        if (! $fuel || $quantity <= 0 || $rate <= 0 || abs(round($quantity * $rate, 2) - $amount) > 0.005) {
+                            throw new \RuntimeException('Amanat fuel needs a valid fuel type, quantity and rate. Amount must equal quantity × rate.');
+                        }
+                        $amanatFuelQuantities[$fuel->id] = ($amanatFuelQuantities[$fuel->id] ?? 0) + $quantity;
+                        $meterQuantity = array_sum(array_map(fn ($reading) => ($reading['item_id'] ?? null) === $fuel->id ? (float) $reading['liters_dispensed'] : 0, $nozzleReadingsData));
+                        if ($amanatFuelQuantities[$fuel->id] > $meterQuantity + 0.005) {
+                            throw new \RuntimeException('Amanat fuel quantity exceeds the litres counted by the meters for '.$fuel->name.'.');
+                        }
+                    }
+                    $paymentAccount = $fuelPurchase ? null : $this->resolveAmanatPaymentAccount($companyId, $amanat['payment_account_id'] ?? null, $accounts['cash_on_hand']);
+                    if ($paymentAccount) {
+                        $amanatWithdrawalByAccount[$paymentAccount->id] = ($amanatWithdrawalByAccount[$paymentAccount->id] ?? 0) + $amount;
+                    }
+                    if ($paymentAccount?->id === $accounts['cash_on_hand']) {
                         $amanatWithdrawalsCashTotal += $amount;
                     }
 
@@ -1424,36 +1441,48 @@ class DailyCloseService
                     $createdAmanat[] = AmanatTransaction::create([
                         'company_id' => $companyId,
                         'customer_id' => $customerId,
-                        'transaction_type' => AmanatTransaction::TYPE_WITHDRAWAL,
+                        'transaction_type' => $fuelPurchase ? AmanatTransaction::TYPE_FUEL_PURCHASE : AmanatTransaction::TYPE_WITHDRAWAL,
+                        'fuel_item_id' => $fuelPurchase ? $fuel->id : null,
+                        'fuel_quantity' => $fuelPurchase ? $quantity : null,
                         'amount' => $amount,
-                        'payment_account_id' => $paymentAccount->id,
-                        'reference' => 'Daily close ' . $date,
-                        'notes' => $amanat['notes'] ?? 'Daily close cash disbursement',
+                        'payment_account_id' => $paymentAccount?->id,
+                        'reference' => 'Daily close '.$date,
+                        'notes' => $amanat['notes'] ?? ($fuelPurchase ? 'Daily close fuel purchase' : 'Daily close cash disbursement'),
                         'recorded_by_user_id' => $user->id,
                     ]);
 
                     $profile->adjustAmanatBalance(-$amount);
 
-                    $amanatTotal += $amount;
+                    if ($fuelPurchase) {
+                        $amanatFuelTotal += $amount;
+                    } else {
+                        $amanatTotal += $amount;
+                    }
                     $amanatDetails[] = [
                         'customer_id' => $customerId,
                         'customer_name' => $profile->customer?->name ?? ($amanat['customer_name'] ?? null),
                         'amount' => $amount,
-                        'payment_account_id' => $paymentAccount->id,
-                        'payment_account_name' => $paymentAccount->name,
+                        'kind' => $fuelPurchase ? 'fuel_purchase' : 'withdrawal',
+                        'fuel_item_id' => $fuelPurchase ? $fuel->id : null,
+                        'fuel_quantity' => $fuelPurchase ? $quantity : null,
+                        'fuel_rate' => $fuelPurchase ? $rate : null,
+                        'payment_account_id' => $paymentAccount?->id,
+                        'payment_account_name' => $paymentAccount?->name,
                     ];
                 }
             }
             $metadata['amanat_disbursements'] = $amanatTotal;
+            $metadata['amanat_fuel_purchases'] = $amanatFuelTotal;
             $metadata['amanat_disbursement_details'] = $amanatDetails;
 
             // Expenses
             $expensesTotal = 0;
             $expensesByAccount = [];
-            if (!empty($data['expenses'])) {
+            if (! empty($data['expenses'])) {
                 foreach ($data['expenses'] as $index => $expense) {
-                    if (!isset($expense['account_id']) || empty($expense['account_id'])) {
+                    if (! isset($expense['account_id']) || empty($expense['account_id'])) {
                         \Log::warning("DailyClose: Skipping expense at index {$index} - missing account_id", $expense);
+
                         continue;
                     }
                     $amount = (float) ($expense['amount'] ?? 0);
@@ -1463,7 +1492,7 @@ class DailyCloseService
                     $expensesTotal += $amount;
 
                     $accountId = $expense['account_id'];
-                    if (!isset($expensesByAccount[$accountId])) {
+                    if (! isset($expensesByAccount[$accountId])) {
                         $expensesByAccount[$accountId] = 0;
                     }
                     $expensesByAccount[$accountId] += $amount;
@@ -1486,12 +1515,12 @@ class DailyCloseService
                     continue;
                 }
 
-                if (!$payment->payment_account_id) {
+                if (! $payment->payment_account_id) {
                     throw new \RuntimeException("Payment {$payment->payment_number} is missing a payment account.");
                 }
 
                 $apAccountId = $payment->vendor?->ap_account_id ?: $accounts['accounts_payable'];
-                if (!$apAccountId) {
+                if (! $apAccountId) {
                     throw new \RuntimeException("Payment {$payment->payment_number} needs an Accounts Payable account.");
                 }
 
@@ -1527,7 +1556,7 @@ class DailyCloseService
                     'vendor_id' => $payment->vendor_id,
                     'vendor_name' => $payment->vendor?->name ?? 'Supplier',
                     'payment_account_id' => $payment->payment_account_id,
-                    'payment_account_name' => trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code . ' — ' : '') . ($payment->paymentAccount?->name ?? 'Payment account')),
+                    'payment_account_name' => trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code.' — ' : '').($payment->paymentAccount?->name ?? 'Payment account')),
                     'payment_method' => $payment->payment_method,
                     'amount' => $amount,
                     'bill_numbers' => $billNumbers,
@@ -1555,12 +1584,15 @@ class DailyCloseService
             ))));
             $creditDetails = app(DailyCloseCreditSaleService::class)->prepare(
                 $companyId, $date, $data['credit_sales'] ?? [], $totalRevenue - $otherSalesTotal,
-                $totalRevenue - $totalNonCashReceipts, $user, $fuelRevenueAccountIds
+                $totalRevenue - $totalNonCashReceipts - $amanatFuelTotal, $user, $fuelRevenueAccountIds
             );
             $creditTotal = round(array_sum(array_column($creditDetails, 'amount')), 2);
             $metadata['credit_sales_total'] = $creditTotal;
             $metadata['credit_sale_details'] = $creditDetails;
-            $cashFromSales = $totalRevenue - $totalNonCashReceipts - $creditTotal;
+            if ($amanatFuelTotal > 0 && $amanatFuelTotal > $totalRevenue - $totalNonCashReceipts - $creditTotal + 0.005) {
+                throw new \RuntimeException('Amanat fuel purchases exceed the available meter sales.');
+            }
+            $cashFromSales = $totalRevenue - $totalNonCashReceipts - $creditTotal - $amanatFuelTotal;
 
             // Payments received: a buyer settling a credit invoice, entered inline instead
             // of at /payments. Each row is posted through the existing Payment\CreateAction
@@ -1627,7 +1659,7 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'credit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Daily sales - ' . implode(', ', $posting['labels']),
+                    'description' => 'Daily sales - '.implode(', ', $posting['labels']),
                 ];
             }
 
@@ -1637,7 +1669,7 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'debit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Cost of goods sold - ' . implode(', ', $posting['labels']),
+                    'description' => 'Cost of goods sold - '.implode(', ', $posting['labels']),
                 ];
             }
 
@@ -1646,7 +1678,7 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'credit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Inventory reduction - ' . implode(', ', $posting['labels']),
+                    'description' => 'Inventory reduction - '.implode(', ', $posting['labels']),
                 ];
             }
 
@@ -1656,7 +1688,7 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'debit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Cost of goods sold - ' . implode(', ', $posting['labels']),
+                    'description' => 'Cost of goods sold - '.implode(', ', $posting['labels']),
                 ];
             }
             foreach ($otherSalesInventoryPostings as $posting) {
@@ -1664,7 +1696,7 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'credit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Inventory reduction - ' . implode(', ', $posting['labels']),
+                    'description' => 'Inventory reduction - '.implode(', ', $posting['labels']),
                 ];
             }
 
@@ -1688,6 +1720,7 @@ class DailyCloseService
                         'customer' => $credit['customer_name'],
                         'amount' => $credit['amount'],
                     ];
+
                     continue;
                 }
                 // A discounted manual row invoices at net; the discount itself is booked
@@ -1703,7 +1736,7 @@ class DailyCloseService
             if ($creditDiscountTotal > 0) {
                 $salesDiscountAccountId = app(StationAccountMapper::class)
                     ->resolveMappedAccountId($companyId, 'sales_discount_account_id', $user->id);
-                if (!$salesDiscountAccountId) {
+                if (! $salesDiscountAccountId) {
                     throw new \RuntimeException('Set up a sales discount account before closing a date with discounted credit sales.');
                 }
                 $entries[] = ['account_id' => $salesDiscountAccountId, 'type' => 'debit',
@@ -1761,14 +1794,14 @@ class DailyCloseService
                     'account_id' => $posting['account_id'],
                     'type' => 'debit',
                     'amount' => round($posting['amount'] - $fee, 2),
-                    'description' => ($posting['channel_label'] ?? 'Payment channel') . ' receipts',
+                    'description' => ($posting['channel_label'] ?? 'Payment channel').' receipts',
                 ];
                 if ($fee > 0) {
                     $entries[] = [
                         'account_id' => $this->cardChargesAccountId($companyId),
                         'type' => 'debit',
                         'amount' => $fee,
-                        'description' => ($posting['channel_label'] ?? 'Payment channel') . " charge {$posting['fee_percent']}%",
+                        'description' => ($posting['channel_label'] ?? 'Payment channel')." charge {$posting['fee_percent']}%",
                     ];
                 }
             }
@@ -1785,7 +1818,7 @@ class DailyCloseService
 
             // Amanat deposits (increase customer liability)
             if ($amanatDepositsTotal > 0) {
-                if (!$accounts['amanat_deposits']) {
+                if (! $accounts['amanat_deposits']) {
                     throw new \RuntimeException('Amanat deposits account missing. Set up account 2200 (Amanat Deposits) or update station settings.');
                 }
                 $entries[] = [
@@ -1801,7 +1834,7 @@ class DailyCloseService
                     'account_id' => $accountId,
                     'type' => 'credit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Cash in - ' . implode(', ', array_unique($posting['labels'])),
+                    'description' => 'Cash in - '.implode(', ', array_unique($posting['labels'])),
                 ];
             }
 
@@ -1840,28 +1873,28 @@ class DailyCloseService
                     'account_id' => $posting['ap_account_id'],
                     'type' => 'debit',
                     'amount' => round($posting['amount'], 2),
-                    'description' => 'Supplier payment ' . $posting['payment_number'],
+                    'description' => 'Supplier payment '.$posting['payment_number'],
                 ];
 
-                if (!$posting['affects_cash_drawer']) {
+                if (! $posting['affects_cash_drawer']) {
                     $entries[] = [
                         'account_id' => $posting['payment_account_id'],
                         'type' => 'credit',
                         'amount' => round($posting['amount'], 2),
-                        'description' => 'Supplier payment ' . $posting['payment_number'],
+                        'description' => 'Supplier payment '.$posting['payment_number'],
                     ];
                 }
             }
 
             // Amanat disbursements (reduce liability)
-            if ($amanatTotal > 0) {
-                if (!$accounts['amanat_deposits']) {
+            if ($amanatTotal + $amanatFuelTotal > 0) {
+                if (! $accounts['amanat_deposits']) {
                     throw new \RuntimeException('Amanat deposits account missing. Set up account 2200 (Amanat Deposits) or update station settings.');
                 }
                 $entries[] = [
                     'account_id' => $accounts['amanat_deposits'],
                     'type' => 'debit',
-                    'amount' => round($amanatTotal, 2),
+                    'amount' => round($amanatTotal + $amanatFuelTotal, 2),
                     'description' => 'Amanat disbursements',
                 ];
             }
@@ -1881,7 +1914,7 @@ class DailyCloseService
 
             // Expenses by account
             foreach ($expensesByAccount as $accountId => $amount) {
-                if (!$accountId) {
+                if (! $accountId) {
                     continue;
                 }
                 $entries[] = [
@@ -1928,7 +1961,7 @@ class DailyCloseService
                         'account_id' => $posting['account_id'],
                         'type' => 'credit',
                         'amount' => round($posting['amount'], 2),
-                        'description' => 'Inventory reduction (shrinkage) - ' . implode(', ', $posting['labels']),
+                        'description' => 'Inventory reduction (shrinkage) - '.implode(', ', $posting['labels']),
                     ];
                 }
             }
@@ -1950,7 +1983,7 @@ class DailyCloseService
                         'account_id' => $posting['account_id'],
                         'type' => 'debit',
                         'amount' => round($posting['amount'], 2),
-                        'description' => 'Inventory increase (gain) - ' . implode(', ', $posting['labels']),
+                        'description' => 'Inventory increase (gain) - '.implode(', ', $posting['labels']),
                     ];
                 }
 
@@ -1986,8 +2019,8 @@ class DailyCloseService
                 'zero_sales_confirmed' => (array_sum(array_column($data['nozzle_readings'], 'liters_sold')) <= 0 && $otherSalesTotal <= 0) ? filter_var($data['zero_sales_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN) : false,
                 'zero_sales_reason' => (array_sum(array_column($data['nozzle_readings'], 'liters_sold')) <= 0 && $otherSalesTotal <= 0) ? ($data['zero_sales_reason'] ?? null) : null,
                 'totals' => [
-                    'total_revenue' => $totalRevenue + array_sum(array_column($canonicalSources, 'sales')), 'money_in' => $totalCashIn - $openingCash + $externalCashIn + $totalNonCashReceipts + $creditTotal,
-                    'money_out' => $totalCashOut + $externalCashOut + $totalNonCashReceipts + $creditTotal,
+                    'total_revenue' => $totalRevenue + array_sum(array_column($canonicalSources, 'sales')), 'money_in' => $totalCashIn - $openingCash + $externalCashIn + $totalNonCashReceipts + $creditTotal + $amanatFuelTotal,
+                    'money_out' => $totalCashOut + $externalCashOut + $totalNonCashReceipts + $creditTotal + $amanatFuelTotal,
                     'opening_cash' => $openingCash, 'closing_cash' => $closingCash,
                     'expected_closing' => $expectedClosing, 'variance' => $variance,
                 ],
@@ -2012,7 +2045,9 @@ class DailyCloseService
             // Existing subledger records reference this one posting, including its business date.
             app(DailyCloseCreditSaleService::class)->attach($companyId, $transaction->id, $creditDetails);
             $amanatEntryId = $transaction->journalEntries()->where('account_id', $accounts['amanat_deposits'])->value('id');
-            foreach ($createdAmanat as $record) { $record->update(['journal_entry_id' => $amanatEntryId]); }
+            foreach ($createdAmanat as $record) {
+                $record->update(['journal_entry_id' => $amanatEntryId]);
+            }
             foreach ($createdAdvances as $record) {
                 $record->update(['journal_entry_id' => $transaction->journalEntries()->where('account_id', $accounts['employee_advances'])->value('id')]);
             }
@@ -2099,7 +2134,7 @@ class DailyCloseService
                     ->update($nozzleUpdate);
             }
 
-            if (!empty($payrollPayoutIds)) {
+            if (! empty($payrollPayoutIds)) {
                 Payslip::where('company_id', $companyId)
                     ->whereIn('id', $payrollPayoutIds)
                     ->update([
@@ -2112,7 +2147,7 @@ class DailyCloseService
                     ]);
             }
 
-            if (!empty($billPaymentIds)) {
+            if (! empty($billPaymentIds)) {
                 BillPayment::where('company_id', $companyId)
                     ->whereIn('id', $billPaymentIds)
                     ->whereNull('transaction_id')
@@ -2244,7 +2279,7 @@ class DailyCloseService
 
         return $closes->map(function ($t) use ($activeCloseIds, $rateChangeDates) {
             $metadata = $t->metadata ?? [];
-            if (!is_array($metadata)) {
+            if (! is_array($metadata)) {
                 $metadata = [];
             }
 
@@ -2291,19 +2326,19 @@ class DailyCloseService
 
     private function generateTransactionNumber(string $companyId, string $date, bool $isCorrection = false): string
     {
-        $base = 'FDC-' . str_replace('-', '', $date);
+        $base = 'FDC-'.str_replace('-', '', $date);
 
         // For corrections, we need to find the next available suffix
         if ($isCorrection) {
             // Find existing corrections for this date
             $existing = Transaction::where('company_id', $companyId)
                 ->whereNull('deleted_at')
-                ->where('transaction_number', 'like', $base . '-C%')
+                ->where('transaction_number', 'like', $base.'-C%')
                 ->pluck('transaction_number')
                 ->all();
 
             if (empty($existing)) {
-                return $base . '-C1';
+                return $base.'-C1';
             }
 
             // Extract the highest correction number
@@ -2317,7 +2352,7 @@ class DailyCloseService
                 }
             }
 
-            return $base . '-C' . ($maxNum + 1);
+            return $base.'-C'.($maxNum + 1);
         }
 
         // For original entries, check if ANY entry exists for this date (including reversed)
@@ -2360,7 +2395,7 @@ class DailyCloseService
         // extra supplier-settlement step happens separately, after this account is resolved.
         if ($settlesTo === 'bank' && in_array($type, ['card_pos', 'fuel_card', 'mobile_wallet'], true)) {
             $accountId = $channel['bank_account_id'] ?? null;
-            if (!$accountId) {
+            if (! $accountId) {
                 throw new \RuntimeException("No bank account configured for payment channel: {$label}.");
             }
 
@@ -2376,7 +2411,7 @@ class DailyCloseService
             default => $channel['bank_account_id'] ?? $channel['clearing_account_id'] ?? $accounts['operating_bank'] ?? null,
         };
 
-        if (!$accountId) {
+        if (! $accountId) {
             throw new \RuntimeException("No GL account configured for payment channel: {$label}.");
         }
 
@@ -2497,7 +2532,7 @@ class DailyCloseService
         ];
 
         foreach (['cash_on_hand', 'fuel_sales', 'fuel_cogs', 'fuel_inventory'] as $key) {
-            if (!$required[$key]) {
+            if (! $required[$key]) {
                 throw new \RuntimeException("Required account missing: {$key}. Ensure fuel station COA is set up.");
             }
         }
@@ -2529,7 +2564,7 @@ class DailyCloseService
 
         $label = trim($label) !== '' ? trim($label) : 'Fuel';
 
-        if (!isset($postings[$accountId])) {
+        if (! isset($postings[$accountId])) {
             $postings[$accountId] = [
                 'account_id' => $accountId,
                 'amount' => 0,
@@ -2538,7 +2573,7 @@ class DailyCloseService
         }
 
         $postings[$accountId]['amount'] += $amount;
-        if (!in_array($label, $postings[$accountId]['labels'], true)) {
+        if (! in_array($label, $postings[$accountId]['labels'], true)) {
             $postings[$accountId]['labels'][] = $label;
         }
     }
@@ -2616,7 +2651,7 @@ class DailyCloseService
      * whatever came back. It can never exceed the meter litres themselves.
      *
      * @throws \Illuminate\Validation\ValidationException when a pair of readings is impossible,
-     *         or more litres are declared returned than the meter moved
+     *                                                    or more litres are declared returned than the meter moved
      */
     private function litresFromReadings(array $readings): array
     {

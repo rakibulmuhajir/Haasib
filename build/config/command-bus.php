@@ -7,6 +7,7 @@ return [
     'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
     'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,
     'fuel.amanat.movement' => \App\Modules\FuelStation\Actions\AmanatMovementAction::class,
+    'fuel.direct_sale' => \App\Modules\FuelStation\Actions\DirectFuelSaleAction::class,
     'calculator.save' => \App\Modules\FuelStation\Actions\Calculator\SaveCalculatorFormulaAction::class,
     'calculator.delete' => \App\Modules\FuelStation\Actions\Calculator\DeleteCalculatorFormulaAction::class,
     'company.create' => \App\Modules\Accounting\Actions\Company\CreateAction::class,

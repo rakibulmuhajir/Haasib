@@ -11,8 +11,8 @@ use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Services\FuelSaleService;
 use App\Modules\Inventory\Models\Item;
-use App\Services\CurrentCompany;
 use App\Modules\Inventory\Services\ProductCatalogService;
+use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -62,6 +62,7 @@ class FuelSaleController extends Controller
             ->values();
 
         return Inertia::render('FuelStation/Sales/Form', [
+            'temporaryStock' => Item::where('company_id', $company->id)->whereNotNull('fuel_category')->get()->mapWithKeys(fn ($item) => [$item->id => app(\App\Modules\FuelStation\Services\TemporaryFuelStockService::class)->balance($company->id, $item->id)]),
             // The form labels each pump with the fuel its tank holds, reading
             // tank.linked_item — without that relation every pump reads "No fuel".
             'pumps' => Pump::where('company_id', $company->id)->where('is_active', true)
@@ -133,52 +134,10 @@ class FuelSaleController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $data = $request->validated();
-        $item = Item::where('company_id', $company->id)->findOrFail($data['item_id']);
         $paidInCash = (bool) $data['paid_in_cash'];
-        $cashAccountId = $paidInCash
-            ? app(\App\Modules\FuelStation\Services\DailyCloseService::class)->cashAccountId($company->id)
-            : null;
-        if ($paidInCash && ! $cashAccountId) {
-            return back()->with('error', 'No cash account is set for this station.');
-        }
-
         try {
-            $invoiceNumber = \Illuminate\Support\Facades\DB::transaction(function () use ($company, $data, $item, $paidInCash, $cashAccountId, $request) {
-                $bus = app(\App\Services\CommandBus::class);
-                // No customer on a cash sale: the same walk-in fuel customer a retail pump sale uses.
-                $customerId = $this->fuelSaleService->resolveCustomerId($company, \App\Modules\FuelStation\Models\SaleMetadata::TYPE_RETAIL, $data);
-                $result = $bus->dispatch('invoice.create', [
-                    'customer' => $customerId,
-                    'currency' => $company->base_currency ?: 'PKR',
-                    'date' => $data['sale_date'],
-                    'payment_terms' => $paidInCash ? 0 : null,
-                    'is_direct_delivery' => true,
-                    'unit_id' => ! empty($data['customer_id']) ? ($data['unit_id'] ?? null) : null,
-                    'reference' => $data['reference'] ?? null,
-                    'line_items' => [[
-                        'description' => rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
-                        'quantity' => $data['quantity'],
-                        'unit_price' => $data['unit_price'],
-                        'income_account_id' => $item->income_account_id,
-                    ]],
-                ], $request->user());
-
-                $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)->findOrFail($result['data']['id']);
-                if ($paidInCash) {
-                    $amount = round((float) $invoice->balance, 2);
-                    $bus->dispatch('payment.create', [
-                        'customer_id' => $invoice->customer_id,
-                        'allocations' => [['invoice_id' => $invoice->id, 'amount' => $amount]],
-                        'amount' => $amount,
-                        'method' => 'cash',
-                        'date' => $data['sale_date'],
-                        'deposit_account_id' => $cashAccountId,
-                        'reference' => $invoice->invoice_number,
-                    ], $request->user());
-                }
-
-                return $invoice->invoice_number;
-            });
+            $result = app(\App\Services\CommandBus::class)->dispatch('fuel.direct_sale', $data, $request->user());
+            $invoiceNumber = \App\Modules\Accounting\Models\Invoice::where('company_id', $company->id)->findOrFail($result['invoice_id'])->invoice_number;
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {

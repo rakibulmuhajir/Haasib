@@ -35,6 +35,7 @@ class StoreDirectFuelSaleRequest extends BaseFormRequest
             'unit_price' => ['required', 'numeric', 'min:0.01'],
             'sale_date' => ['required', 'date', 'before_or_equal:today'],
             'paid_in_cash' => ['required', 'boolean'],
+            'temporary_storage' => ['nullable', 'boolean'],
         ];
     }
 }

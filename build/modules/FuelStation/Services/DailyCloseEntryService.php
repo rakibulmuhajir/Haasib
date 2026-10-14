@@ -45,8 +45,10 @@ class DailyCloseEntryService
             'date' => $date,
             'payment_terms' => $paidInCash ? 0 : null,
             'is_direct_delivery' => true,
+            'unit_id' => $row['unit_id'] ?? null,
+            'reference' => $row['reference'] ?? null,
             'line_items' => [[
-                'description' => rtrim(rtrim(number_format($litres, 2, '.', ''), '0'), '.')." L {$item->name} - direct from tanker",
+                'description' => rtrim(rtrim(number_format($litres, 2, '.', ''), '0'), '.')." L {$item->name} - ".(! empty($row['temporary_storage']) ? 'from temporary storage' : 'direct from tanker'),
                 'quantity' => $litres,
                 'unit_price' => (float) $row['rate'],
                 'income_account_id' => $item->income_account_id,
@@ -54,6 +56,9 @@ class DailyCloseEntryService
             ]],
         ], $user);
         $invoice = \App\Modules\Accounting\Models\Invoice::where('company_id', $companyId)->findOrFail($result['data']['id']);
+        if (! empty($row['temporary_storage'])) {
+            app(TemporaryFuelStockService::class)->issue($company, $item, $invoice, $litres, $date, $user);
+        }
 
         $paymentId = null;
         $paymentTransactionId = null;
@@ -91,10 +96,11 @@ class DailyCloseEntryService
                 ->moneyOutTarget()->findOrFail($expense['account_id']);
             $cashId = app(DailyCloseService::class)->cashAccountId($companyId);
             $amount = round((float) $expense['amount'], 2);
-            if ($amount <= 0 || !$cashId) {
+            if ($amount <= 0 || ! $cashId) {
                 throw new \InvalidArgumentException('A positive amount and a configured cash account are required.');
             }
             $currency = \App\Models\Company::whereKey($companyId)->value('base_currency') ?: 'PKR';
+
             return app(GlPostingService::class)->postBalancedTransaction([
                 'company_id' => $companyId, 'transaction_type' => 'expense', 'date' => $date,
                 'currency' => $currency, 'description' => $expense['description'],
@@ -144,6 +150,17 @@ class DailyCloseEntryService
         foreach (self::purchaseLines($purchase) as $line) {
             $item = Item::where('company_id', $companyId)->find($line['item_id']);
             $directQuantity = round((float) ($line['direct_quantity'] ?? 0), 3);
+            if (! empty($line['temporary_storage'])) {
+                if (! $item?->fuel_category || ! $item->track_inventory) {
+                    throw new \InvalidArgumentException('Temporary storage requires a fuel product tracked in inventory.');
+                }
+                if ($directQuantity > 0) {
+                    throw new \InvalidArgumentException('Temporary fuel is held as inventory. Record its later sale separately.');
+                }
+                $temporary = app(TemporaryFuelStockService::class);
+                $temporary->assertDate($companyId, $item->id, $date);
+                $line['tank_id'] = $temporary->location($company, $user)->id;
+            }
             // A delivery sold entirely straight to a customer never reaches a tank.
             if ($item?->fuel_category && empty($line['tank_id']) && (float) $line['quantity'] - $directQuantity > 0.0005) {
                 throw new \InvalidArgumentException("A tank is required for {$item->name}.");
@@ -203,7 +220,8 @@ class DailyCloseEntryService
             ->values()
             ->all();
 
-        if ($receive && !empty($receiveLines)) {
+        $receiveLines = array_values(array_filter($receiveLines, fn ($line) => $receive || \App\Modules\Inventory\Models\Warehouse::whereKey($line['warehouse_id'])->where('code', TemporaryFuelStockService::CODE)->exists()));
+        if (! empty($receiveLines)) {
             app(CommandBus::class)->dispatch('bill.receive_goods', [
                 'id' => $bill->id,
                 'receipt_date' => $date,
@@ -216,7 +234,7 @@ class DailyCloseEntryService
 
         if (filter_var($purchase['paid_now'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
             $cashId = ($purchase['payment_account_id'] ?? null) ?: app(DailyCloseService::class)->cashAccountId($companyId);
-            if (!$cashId) {
+            if (! $cashId) {
                 throw new \RuntimeException('No cash account is configured for this company.');
             }
             $paidFromSubtype = \App\Modules\Accounting\Models\Account::where('company_id', $companyId)->whereKey($cashId)->value('subtype');

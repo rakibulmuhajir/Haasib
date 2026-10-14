@@ -248,6 +248,16 @@ class ProfitValueTrail
         $this->contribute($key, $period, ['purchased_quantity' => $id]);
     }
 
+    public function temporarySale(string $key, string $period, object $movement, float $quantity, float $revenue, float $cost): void
+    {
+        $source = ['kind' => 'invoice', 'id' => $movement->reference_id, 'label' => $movement->invoice_number, 'date' => (string) $movement->movement_date];
+        $this->contribute($key, $period, [
+            'quantity' => $this->node('Fuel sold from temporary storage', $quantity, 'L', 'The saved issue from temporary storage, outside pump meters.', [], $source),
+            'revenue' => $this->node('Temporary fuel sale', $revenue, 'money', 'The saved direct-sale invoice total.', [], $source),
+            'cogs' => $this->node('Temporary fuel cost', $cost, 'money', 'Recorded cost issued from this location on the sale date.', [], ['kind' => 'journal', 'id' => $movement->gl_transaction_id, 'label' => 'Temporary fuel cost', 'date' => (string) $movement->movement_date]),
+        ]);
+    }
+
     public function writedown(string $key, string $period, Transaction $transaction, float $amount): void
     {
         $id = $this->node('Month-end stock valuation', $amount, 'money', 'The posted valuation adjustment for this fuel. A positive amount increases cost; a negative amount reduces it.', [], $this->source($transaction, 'journal') + ['field' => 'metadata.amount']);

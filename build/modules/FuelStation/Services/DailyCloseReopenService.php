@@ -3,7 +3,6 @@
 namespace App\Modules\FuelStation\Services;
 
 use App\Models\Partner;
-use App\Models\PartnerTransaction;
 use App\Models\User;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
@@ -123,7 +122,7 @@ class DailyCloseReopenService
             // Read before the invoices go: a vehicle named on one after the close was posted.
             $vehicles = $this->creditSaleVehicles($companyId, $metadata);
             $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
-            $this->reverseDirectSales($companyId, $metadata, $keptDirectSales);
+            $this->reverseDirectSales($companyId, $metadata, $keptDirectSales, $user->id);
             $this->reversePaymentsReceived($companyId, $metadata);
             $this->reversePaySuppliers($companyId, $metadata);
             $this->reverseChannelSupplierSettlements($companyId, $metadata);
@@ -257,6 +256,7 @@ class DailyCloseReopenService
                 if (in_array($t->id, $usedIds, true) || $t->description !== $description) {
                     return false;
                 }
+
                 return $t->journalEntries->contains(
                     fn ($je) => $je->account_id === $accountId && round((float) $je->debit_amount, 2) === $amount
                 );
@@ -315,6 +315,7 @@ class DailyCloseReopenService
                 if (in_array($bill->id, $usedIds, true) || $bill->vendor_id !== $row['supplier_id']) {
                     return false;
                 }
+
                 return $bill->lineItems->contains(fn ($line) => $line->item_id === $row['item_id']
                     && round((float) $line->quantity, 6) === $quantity
                     && round((float) $line->unit_price, 6) === $unitCost);
@@ -403,6 +404,7 @@ class DailyCloseReopenService
             if ($externalAllocated > 0.004) {
                 $kept[$bill->id] = $bill->bill_number;
                 $warnings[] = "{$bill->bill_number} paid elsewhere: kept.";
+
                 continue;
             }
             $receivedElsewhere = (float) $bill->lineItems()->sum('quantity_received') > 0
@@ -473,7 +475,7 @@ class DailyCloseReopenService
             $after = (float) $level - $removed;
             if ($after < -0.5) {
                 throw new \RuntimeException("Tank {$tank['tank_name']} would go below zero ("
-                    .number_format($after, 0)."L) without the stock this day added. Later days have already sold it; edit those days first.");
+                    .number_format($after, 0).'L) without the stock this day added. Later days have already sold it; edit those days first.');
             }
         }
     }
@@ -543,6 +545,7 @@ class DailyCloseReopenService
             $source = $credit['source'] ?? 'manual';
             if ($source === 'accounting_invoice') {
                 $invoice->update(['included_in_close_id' => null]);
+
                 continue;
             }
             $paidElsewhere = PaymentAllocation::where('company_id', $companyId)
@@ -555,6 +558,7 @@ class DailyCloseReopenService
                 $invoice->update($paidElsewhere
                     ? ['transaction_id' => null]
                     : ['transaction_id' => null, 'status' => 'draft', 'sent_at' => null]);
+
                 continue;
             }
             if ($paidElsewhere) {
@@ -562,6 +566,7 @@ class DailyCloseReopenService
                 // payment) and detach it; the draft row points at it so the re-post re-uses it.
                 $invoice->update(['transaction_id' => null]);
                 $kept[$invoice->id] = $invoice->invoice_number;
+
                 continue;
             }
             // 'manual': the close itself created this invoice via invoice.create -- delete it
@@ -598,7 +603,7 @@ class DailyCloseReopenService
     }
 
     /** Direct sales the close created: its cash payment, then the invoice and its journal. */
-    private function reverseDirectSales(string $companyId, array $metadata, array $kept = []): void
+    private function reverseDirectSales(string $companyId, array $metadata, array $kept = [], ?string $actorId = null): void
     {
         $details = array_values(array_filter($metadata['direct_sale_details'] ?? [], fn ($d) => ! isset($kept[$d['invoice_id'] ?? ''])));
         $this->reversePaymentsReceived($companyId, ['payments_received_details' => array_values(array_filter(
@@ -610,6 +615,7 @@ class DailyCloseReopenService
             if (! $invoice) {
                 continue;
             }
+            app(TemporaryFuelStockService::class)->reverse($invoice, $invoice->invoice_date->toDateString(), $actorId);
             if ($invoice->transaction_id) {
                 JournalEntry::where('company_id', $companyId)->where('transaction_id', $invoice->transaction_id)->delete();
                 Transaction::where('company_id', $companyId)->whereKey($invoice->transaction_id)->delete();
@@ -846,6 +852,9 @@ class DailyCloseReopenService
             }
 
             foreach (StockMovement::where('company_id', $companyId)->where('reference_type', 'acct.bills')->where('reference_id', $bill->id)->get() as $movement) {
+                if (\App\Modules\Inventory\Models\Warehouse::whereKey($movement->warehouse_id)->where('code', TemporaryFuelStockService::CODE)->exists()) {
+                    app(TemporaryFuelStockService::class)->assertDate($companyId, $movement->item_id, $bill->bill_date->toDateString());
+                }
                 $this->removeStockMovement($companyId, $movement);
             }
 
@@ -933,6 +942,7 @@ class DailyCloseReopenService
                 // Kept (see advancesRepaid()): unhook it from the journal line about to be
                 // deleted; the re-posted close points it at its new line.
                 $advance->update(['journal_entry_id' => null]);
+
                 continue;
             }
             $advance->delete();

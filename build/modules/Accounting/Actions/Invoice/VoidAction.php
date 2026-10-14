@@ -2,8 +2,8 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
-use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
@@ -43,20 +43,20 @@ class VoidAction implements PaletteAction
 
         // Validate current status
         if (in_array($invoice->status, ['cancelled', 'void'])) {
-            throw new \Exception("Invoice is already void/cancelled");
+            throw new \Exception('Invoice is already void/cancelled');
         }
 
         if ($invoice->status === 'paid') {
-            throw new \Exception("Cannot void a paid invoice. Create a credit note instead.");
+            throw new \Exception('Cannot void a paid invoice. Create a credit note instead.');
         }
 
         // Check for payments
         $amountPaid = $invoice->total_amount - $invoice->balance;
         if ($amountPaid > 0) {
             throw new \Exception(
-                "Invoice has payments totaling " .
-                PaletteFormatter::money($amountPaid, $invoice->currency) .
-                ". Refund payments first."
+                'Invoice has payments totaling '.
+                PaletteFormatter::money($amountPaid, $invoice->currency).
+                '. Refund payments first.'
             );
         }
 
@@ -88,11 +88,13 @@ class VoidAction implements PaletteAction
         }
 
         // Update invoice status
+        app(\App\Modules\FuelStation\Services\TemporaryFuelStockService::class)->reverse($invoice, $params['reversal_date'] ?? now()->toDateString(), auth()->id());
+
         $invoice->update([
             'status' => 'void',
             'balance' => 0,
             'voided_at' => now(),
-            'notes' => ($invoice->notes ?? '') .
+            'notes' => ($invoice->notes ?? '').
                 ($params['reason'] ? "\n\nVoid reason: {$params['reason']}" : ''),
         ]);
 
@@ -113,20 +115,26 @@ class VoidAction implements PaletteAction
             $invoice = Invoice::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($invoice) return $invoice;
+            if ($invoice) {
+                return $invoice;
+            }
         }
 
         // Try invoice number (exact)
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', $identifier)
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         // Try partial number match (e.g., "00001" matches "INV-2024-00001")
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', 'like', "%{$identifier}")
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
     }

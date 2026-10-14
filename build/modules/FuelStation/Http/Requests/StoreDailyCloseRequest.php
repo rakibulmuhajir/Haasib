@@ -42,7 +42,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             // RequiresSalesOrZeroConfirmation rule below is what stops an
             // accidental empty *post* from permanently claiming the date
             // (park stays lenient).
-            'nozzle_readings' => ['present', 'array', new RequiresSalesOrZeroConfirmation()],
+            'nozzle_readings' => ['present', 'array', new RequiresSalesOrZeroConfirmation],
             'zero_sales_confirmed' => 'nullable|boolean',
             'zero_sales_reason' => 'nullable|string|max:500|required_if:zero_sales_confirmed,1',
             'nozzle_readings.*.nozzle_id' => 'required|uuid',
@@ -139,10 +139,14 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'payroll_payouts.*.employee_id' => 'required|uuid',
             'payroll_payouts.*.amount' => 'required|numeric|min:0',
 
-            'amanat_disbursements' => 'nullable|array',
+            'amanat_disbursements' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompleteAmanatFuelRows],
             'amanat_disbursements.*.customer_id' => 'required|uuid',
             'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
             'amanat_disbursements.*.amount' => 'required|numeric|min:0',
+            'amanat_disbursements.*.kind' => 'nullable|in:withdrawal,fuel_purchase',
+            'amanat_disbursements.*.fuel_item_id' => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('inv.items', 'id')->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)->whereNotNull('fuel_category')],
+            'amanat_disbursements.*.fuel_quantity' => 'nullable|numeric|min:0|decimal:0,2',
+            'amanat_disbursements.*.fuel_rate' => 'nullable|numeric|min:0',
             'amanat_disbursements.*.payment_account_id' => 'nullable|string',
 
             'expenses' => 'nullable|array',
@@ -153,7 +157,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             // Supplier bills / fuel purchases entered inline, instead of via the Bills
             // module. Same shape for park (stored as-is) and post (each row must be
             // complete and becomes a canonical bill through Bill\CreateAction).
-            'purchases' => ['nullable', 'array', new RequiresBillCreatePermission(), new RequiresCompletePurchaseRows()],
+            'purchases' => ['nullable', 'array', new RequiresBillCreatePermission, new RequiresCompletePurchaseRows],
             'purchases.*.supplier_id' => 'nullable|uuid',
             'purchases.*.item_id' => 'nullable|uuid',
             'purchases.*.description' => 'nullable|string|max:255',
@@ -174,11 +178,14 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'direct_sales.*.litres' => 'nullable|numeric|min:0',
             'direct_sales.*.rate' => 'nullable|numeric|min:0',
             'direct_sales.*.paid_in_cash' => 'nullable|boolean',
+            'direct_sales.*.temporary_storage' => 'nullable|boolean',
             'direct_sales.*.customer_id' => 'nullable|uuid|required_if:direct_sales.*.paid_in_cash,false,0',
             // One purchase = one supplier bill; each product on it is a line.
             'purchases.*.lines' => 'nullable|array',
             'purchases.*.lines.*.quantity' => 'nullable|numeric|min:0',
             'purchases.*.lines.*.direct_quantity' => 'nullable|numeric|min:0',
+            'purchases.*.lines.*.temporary_storage' => 'nullable|boolean',
+            'purchases.*.temporary_storage' => 'nullable|boolean',
             'purchases.*.lines.*.unit_cost' => 'nullable|numeric|min:0',
             'purchases.*.lines.*.line_total' => 'nullable|numeric|min:0|decimal:0,2',
 
@@ -194,7 +201,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             // /payments. Same shape for park and post; on post each row must be complete
             // (see RequiresCompletePaymentsReceivedRows) and becomes a canonical payment
             // through Payment\CreateAction dispatched via the CommandBus.
-            'payments_received' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaymentsReceivedRows()],
+            'payments_received' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaymentsReceivedRows],
             'payments_received.*.customer_id' => 'nullable|uuid',
             'payments_received.*.customer_name' => 'nullable|string|max:255',
             'payments_received.*.invoice_id' => 'nullable|uuid',
@@ -207,7 +214,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             // Same shape for park and post; on post each row must be complete (see
             // RequiresCompletePaySupplierRows) and becomes a canonical bill payment through
             // bill_payment.create dispatched via the CommandBus (DailyClosePaySupplierService).
-            'pay_suppliers' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaySupplierRows()],
+            'pay_suppliers' => ['nullable', 'array', new \App\Modules\FuelStation\Http\Requests\Rules\RequiresCompletePaySupplierRows],
             'pay_suppliers.*.vendor_id' => 'nullable|uuid',
             'pay_suppliers.*.vendor_name' => 'nullable|string|max:255',
             'pay_suppliers.*.amount' => 'nullable|numeric|min:0.01',
@@ -254,6 +261,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             $rules[$field] = ['nullable', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')
                 ->where('company_id', $companyId)->where('is_active', true)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')];
         }
+
         return $rules;
     }
 

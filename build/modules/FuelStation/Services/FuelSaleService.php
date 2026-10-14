@@ -11,11 +11,9 @@ use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\Investor;
-use App\Modules\FuelStation\Services\CustomerFuelDiscountService;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\SaleMetadata;
-use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Services\CurrentCompany;
@@ -95,7 +93,7 @@ class FuelSaleService
                 } elseif ($percent > 0) {
                     $discount = $discountService->amount(['discount_type' => 'percent', 'value' => $percent], $quantity, $lineTotal);
                     $discountReason = SaleMetadata::DISCOUNT_BULK;
-                } elseif (!empty($data['customer_id'])) {
+                } elseif (! empty($data['customer_id'])) {
                     $stored = $discountService->for($company->id, $data['customer_id'], $data['item_id']);
                     if ($stored) {
                         $discount = $discountService->amount($stored, $quantity, $lineTotal);
@@ -203,6 +201,7 @@ class FuelSaleService
             'payment_terms' => 0,
             'is_active' => true,
             'created_by_user_id' => Auth::id(),
+            'ar_account_id' => Account::where('company_id', $company->id)->where('subtype', 'accounts_receivable')->where('is_active', true)->value('id'),
         ]);
         if (! $customer->is_active) {
             throw new \InvalidArgumentException('Activate the walk-in fuel customer or select another customer.');

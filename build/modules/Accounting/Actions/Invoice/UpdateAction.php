@@ -2,19 +2,18 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
-use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
-use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Support\PaletteFormatter;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class UpdateAction implements PaletteAction
 {
@@ -71,6 +70,10 @@ class UpdateAction implements PaletteAction
 
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
         app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+        if (\App\Modules\Inventory\Models\StockMovement::where('company_id', $company->id)->where('reference_type', 'acct.invoices')->where('reference_id', $invoice->id)->where('movement_type', 'sale')
+            ->whereIn('warehouse_id', \App\Modules\Inventory\Models\Warehouse::where('company_id', $company->id)->where('code', \App\Modules\FuelStation\Services\TemporaryFuelStockService::CODE)->select('id'))->exists()) {
+            throw new \RuntimeException('This sale issued temporary fuel stock. Cancel it and record the corrected sale so quantity and cost stay together.');
+        }
 
         // An invoice stops being amendable once its figures have been reported
         // somewhere else — money received against it, or the document itself
@@ -98,7 +101,7 @@ class UpdateAction implements PaletteAction
         return \App\Services\AccountingWriteTransaction::run(function () use ($params, $company, $customer, $invoice) {
             // Calculate dates
             $paymentTerms = $params['payment_terms'] ?? $customer->payment_terms ?? 30;
-            $invoiceDate = !empty($params['date'])
+            $invoiceDate = ! empty($params['date'])
                 ? Carbon::parse($params['date'])
                 : $invoice->invoice_date->copy();
 
@@ -110,7 +113,7 @@ class UpdateAction implements PaletteAction
                 $dateLock->assertOpen($company->id, $newInvoiceDate, "Invoice {$invoice->invoice_number}");
             }
 
-            $dueDate = !empty($params['due'])
+            $dueDate = ! empty($params['due'])
                 ? Carbon::parse($params['due'])
                 : $invoiceDate->copy()->addDays($paymentTerms);
 
@@ -255,7 +258,7 @@ class UpdateAction implements PaletteAction
         float $total,
         array $lineItems
     ): bool {
-        if (!$invoice->transaction_id) {
+        if (! $invoice->transaction_id) {
             return false;
         }
 
@@ -313,7 +316,9 @@ class UpdateAction implements PaletteAction
                 ->where('company_id', $companyId)
                 ->where('is_active', true)
                 ->first();
-            if ($customer) return $customer;
+            if ($customer) {
+                return $customer;
+            }
         }
 
         // Try exact customer number
@@ -321,21 +326,27 @@ class UpdateAction implements PaletteAction
             ->where('customer_number', $identifier)
             ->where('is_active', true)
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         // Try exact email
         $customer = Customer::where('company_id', $companyId)
             ->where('email', $identifier)
             ->where('is_active', true)
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         // Try exact name (case-insensitive)
         $customer = Customer::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = ?', [strtolower($identifier)])
             ->where('is_active', true)
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         // Try fuzzy match
         $customer = Customer::where('company_id', $companyId)
@@ -343,7 +354,9 @@ class UpdateAction implements PaletteAction
             ->whereRaw('similarity(name, ?) > 0.3', [$identifier])
             ->orderByRaw('similarity(name, ?) DESC', [$identifier])
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
     }

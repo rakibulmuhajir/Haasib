@@ -98,6 +98,7 @@ const setParty = (row: any, value: unknown) => {
           <Trash2 class="h-4 w-4" />
         </Button>
       </div>
+      <slot name="after-row" :row="row" :index="index" />
       <button v-if="action?.(row)" type="button" class="mt-0.5 text-xs text-primary underline-offset-2 hover:underline" :disabled="disabled" @click="action(row)!.run()">{{ action(row)!.label }}</button>
     </div>
   </div>

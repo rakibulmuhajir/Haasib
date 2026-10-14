@@ -18,11 +18,11 @@ class InventoryService
      * Receive a single line item from a bill and create stock movement.
      * Called by ReceiveGoodsAction for each line being received.
      *
-     * @param Bill $bill The bill
-     * @param BillLineItem $line The line item being received
-     * @param float $quantity The quantity being received (may be partial)
-     * @param string $warehouseId The warehouse to receive into
-     * @param string|null $movementDate Override movement date (Y-m-d)
+     * @param  Bill  $bill  The bill
+     * @param  BillLineItem  $line  The line item being received
+     * @param  float  $quantity  The quantity being received (may be partial)
+     * @param  string  $warehouseId  The warehouse to receive into
+     * @param  string|null  $movementDate  Override movement date (Y-m-d)
      * @return StockMovement|null The created movement, or null if not tracked
      */
     public function receiveLineItem(Bill $bill, BillLineItem $line, float $quantity, string $warehouseId, ?string $movementDate = null): ?StockMovement
@@ -55,16 +55,21 @@ class InventoryService
         ]);
 
         // Update item's cost price (weighted average)
-        $this->updateItemCost($line->item, $quantity, $unitCost);
+        // Temporary fuel is valued from its own dated movements; a receipt there must
+        // not change the average cost charged to fuel sold through the station tanks.
+        if (! Warehouse::where('company_id', $bill->company_id)->whereKey($warehouseId)->where('code', 'TEMP-FUEL')->exists()) {
+            $this->updateItemCost($line->item, $quantity, $unitCost);
+        }
 
         return $movement;
     }
 
     /**
      * Create stock movements for ALL inventory items when a bill is received.
+     *
      * @deprecated Use receiveLineItem() via ReceiveGoodsAction for proper goods receipt tracking
      *
-     * @param Bill $bill The bill being received
+     * @param  Bill  $bill  The bill being received
      * @return array Array of created StockMovement instances
      */
     public function receiveFromBill(Bill $bill): array
@@ -94,7 +99,7 @@ class InventoryService
     /**
      * Reverse stock movements when a bill is voided.
      *
-     * @param Bill $bill The bill being voided
+     * @param  Bill  $bill  The bill being voided
      * @return array Array of created reversal StockMovement instances
      */
     public function reverseFromBill(Bill $bill): array
@@ -251,6 +256,13 @@ class InventoryService
         if (abs($newUnitPrice - $oldUnitPrice) < 0.0000001) {
             return;
         }
+        $temporary = Warehouse::where('company_id', $line->company_id)->whereKey($line->warehouse_id)->where('code', 'TEMP-FUEL')->exists();
+        if ($temporary && StockMovement::where('company_id', $line->company_id)->where('warehouse_id', $line->warehouse_id)
+            ->where('item_id', $line->item_id)->where('movement_type', 'sale')
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('inv.stock_movements as returned')->whereColumn('returned.related_movement_id', 'inv.stock_movements.id')->whereColumn('returned.company_id', 'inv.stock_movements.company_id'))
+            ->exists()) {
+            throw new \InvalidArgumentException('Temporary fuel from this location has sales with saved costs. Cancel those sales before correcting the purchase price.');
+        }
 
         $receiptLines = StockReceiptLine::where('bill_line_item_id', $line->id)->get();
         if ($receiptLines->isEmpty()) {
@@ -280,13 +292,16 @@ class InventoryService
         if ($revaluedQuantity <= 0) {
             return;
         }
+        if ($temporary) {
+            return;
+        }
 
         $item = $line->item ?? $line->item()->first();
         if (! $item) {
             return;
         }
 
-        $currentQty = (float) $item->stockLevels()->sum('quantity');
+        $currentQty = (float) $item->stockLevels()->whereNotIn('warehouse_id', Warehouse::where('company_id', $item->company_id)->where('code', 'TEMP-FUEL')->select('id'))->sum('quantity');
         if ($currentQty <= 0) {
             return;
         }
@@ -311,7 +326,7 @@ class InventoryService
         // StockAdjustmentService::updateItemCost.
         // avg_cost is written too: it is what the fuel daily close charges as cost of sales.
         // Writing only cost_price left a fuel item's cost frozen at whatever was last typed.
-        $currentQty = max(0.0, (float) $item->stockLevels()->sum('quantity') - $newQty);
+        $currentQty = max(0.0, (float) $item->stockLevels()->whereNotIn('warehouse_id', Warehouse::where('company_id', $item->company_id)->where('code', 'TEMP-FUEL')->select('id'))->sum('quantity') - $newQty);
         $currentCost = (float) ($item->avg_cost ?: $item->cost_price ?: $newUnitCost);
 
         // Calculate weighted average

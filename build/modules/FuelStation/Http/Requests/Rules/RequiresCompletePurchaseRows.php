@@ -33,7 +33,7 @@ class RequiresCompletePurchaseRows implements DataAwareRule, ValidationRule
         }
 
         $rows = is_array($value) ? $value : [];
-        if (!$rows) {
+        if (! $rows) {
             return;
         }
 
@@ -59,7 +59,7 @@ class RequiresCompletePurchaseRows implements DataAwareRule, ValidationRule
                     $fail("purchases.{$index}: enter a rate or total for every product on the purchase.");
                 }
                 $intoTank = (float) $line['quantity'] - (float) ($line['direct_quantity'] ?? 0);
-                if (in_array($line['item_id'], $fuelItemIds, true) && empty($line['tank_id']) && $intoTank > 0.0005) {
+                if (in_array($line['item_id'], $fuelItemIds, true) && empty($line['tank_id']) && $intoTank > 0.0005 && empty($line['temporary_storage'])) {
                     $fail("purchases.{$index}.tank_id: A tank is required for a fuel purchase.");
                 }
             }

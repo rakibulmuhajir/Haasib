@@ -69,6 +69,7 @@ const props = defineProps<{
   customers: Customer[]
   rates: Rate[]
   customerFuelDiscounts: Record<string, Record<string, FuelDiscount>>
+  temporaryStock: Record<string, { quantity: number; value: number }>
 }>()
 
 const page = usePage()
@@ -109,9 +110,11 @@ const discountTouched = ref(false)
 const isDirect = ref(false)
 const directRate = ref<number | null>(null)
 const directPaidInCash = ref(true)
+const temporaryStorage = ref(false)
+const directSaving = ref(false)
 const directTotal = computed(() => Math.round((quantity.value || 0) * (directRate.value || 0) * 100) / 100)
 const canSubmitDirect = computed(() =>
-  !!selectedFuelItem.value && (quantity.value || 0) > 0 && (directRate.value || 0) > 0 && !!saleDate.value
+  !directSaving.value && !!selectedFuelItem.value && (quantity.value || 0) > 0 && (directRate.value || 0) > 0 && !!saleDate.value
     && (directPaidInCash.value || !!selectedCustomer.value),
 )
 
@@ -248,6 +251,7 @@ const resetForm = () => {
   isDirect.value = false
   directRate.value = null
   directPaidInCash.value = true
+  temporaryStorage.value = false
   saleType.value = 'retail'
   selectedCustomer.value = null
   selectedUnitId.value = ''
@@ -312,9 +316,12 @@ const submitDirectSale = () => {
     unit_price: directRate.value!,
     sale_date: saleDate.value,
     paid_in_cash: directPaidInCash.value,
+    temporary_storage: temporaryStorage.value,
   }, {
     preserveScroll: true,
-    onSuccess: () => resetForm(),
+    onStart: () => { directSaving.value = true },
+    onFinish: () => { directSaving.value = false },
+    onSuccess: (page) => { if ((page.props as any).flash?.success) resetForm() },
     onError: (errors) => {
       formErrors.value = Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, [v as string]]))
     },
@@ -400,10 +407,9 @@ rememberEntryDate(companySlug.value, saleDate)
             <div class="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 p-3">
               <Checkbox id="direct-sale" v-model="isDirect" class="mt-0.5" />
               <div class="space-y-0.5">
-                <Label for="direct-sale" class="font-medium">Direct from tanker — not from the pumps</Label>
+                <Label for="direct-sale" class="font-medium">Direct sale — not from the pumps</Label>
                 <p class="text-xs text-muted-foreground">
-                  Fuel delivered straight to a customer. No pump or tank is touched; on its bill,
-                  enter these litres under "Sold directly".
+                  Fuel sold without a pump. For a sale off the supplier's tanker, mark the bill's litres as "Sold directly". For stored fuel, choose temporary storage below.
                 </p>
               </div>
             </div>
@@ -469,6 +475,8 @@ rememberEntryDate(companySlug.value, saleDate)
               <div v-if="isDirect" class="space-y-2">
                 <Label for="direct-rate">Rate per litre *</Label>
                 <Input id="direct-rate" v-model.number="directRate" type="number" min="0.01" step="0.01" />
+                <Label class="mt-3 flex items-center gap-2"><Checkbox v-model="temporaryStorage" />Sell from temporary storage</Label>
+                <p v-if="temporaryStorage" class="text-xs text-muted-foreground">Available: {{ selectedFuelItem ? props.temporaryStock[selectedFuelItem.id]?.quantity ?? 0 : 0 }} L. Its recorded cost is charged on this sale date.</p>
                 <InputError :message="formErrors.unit_price?.[0]" />
               </div>
               <div v-else class="space-y-2">

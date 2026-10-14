@@ -4,6 +4,12 @@ Fuel Profit value trails are a read-only report contract: see [Value trails](../
 
 Single source of truth for fuel station specific operations: pumps, rate changes, tank/pump readings, investors, amanat deposits, and attendant handovers. Read this before touching migrations, models, or services.
 
+### Amanat fuel and temporary stock
+
+- Daily Close `amanat_disbursements[].kind` is `withdrawal` (legacy default) or `fuel_purchase`. Under the existing Amanat withdrawal action, choose the holder first, then Money/Fuel radios. Fuel rows carry `fuel_item_id`, `fuel_quantity` (two decimal litres) and `fuel_rate` in the close snapshot; amount must equal quantity × rate. Incomplete rows may be parked. Fuel purchases settle meter sales already included in revenue: debit amanat liability and reduce cash from sales; never post revenue or stock twice. Withdrawals debit liability and credit the selected cash/bank account. Both respect borrowing permission and are reversed with the close.
+- Fuel deliveries may choose `temporary_storage: true`, placing their unsold quantity in a company-owned standard warehouse with reserved code `TEMP-FUEL` and name Temporary fuel storage. Existing inventory tables hold quantity and dated purchase cost; no dip, capacity or nozzle linkage applies. Such deliveries must have `direct_quantity = 0` and are received on their delivery date. They may be sold on later business dates through direct sales with `temporary_storage: true`. Stock availability is checked at the sale date and against remaining stock; cost is issued from this location on the sale date, never on purchase. Tank meters and dip reconciliation exclude this warehouse.
+- Temporary stock has its own weighted purchase cost and does not change tank average costs. Its direct-sale invoice posts revenue normally; a `fuel_temporary_cogs` journal and linked stock issue post cost on the sale date. Cancellation reverses the cost and returns the stock once. Issued invoices cannot be edited into inconsistent quantity/cost figures. Temporary movements must be entered chronologically; purchase costs cannot be rewritten after issued sales. Profit reports include temporary sales and purchases once, with saved source trails; tank stock statements exclude them.
+
 **Module Location:** `modules/FuelStation/`
 **Namespace:** `App\Modules\FuelStation`
 

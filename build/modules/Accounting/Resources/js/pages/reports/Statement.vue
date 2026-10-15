@@ -7,7 +7,7 @@
  * shows what comes back.
  */
 import { computed, ref, watch } from 'vue'
-import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import Hint from '@/components/Hint.vue'
 import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
 import { useValueTrail } from '@/composables/useValueTrail'
@@ -28,7 +28,8 @@ import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Printer } from 'lucide-vue-next'
 
-type Kind = 'bank' | 'customer' | 'supplier' | 'amanat' | 'employee' | 'expense' | 'partner'
+// Core kinds, plus whatever kinds modules add (extraKinds).
+type Kind = 'bank' | 'customer' | 'supplier' | 'employee' | 'expense' | 'partner' | (string & {})
 
 type Row = {
   date: string | null
@@ -52,7 +53,10 @@ const props = defineProps<{
   valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
   filters: { kind: Kind; id: string | null; ids?: string[]; category_id?: string | null; from: string; to: string; reversed?: boolean }
-  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; amanat?: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[]; categories?: { id: string; name: string }[] }
+  options: { bank: BankOption[]; customer: PartyOption[]; supplier: PartyOption[]; employee?: PartyOption[]; expense?: BankOption[]; partner?: PartyOption[]; groups?: { id: string; name: string; member_ids: string[] }[]; categories?: { id: string; name: string }[] } & Record<string, unknown>
+  // Kinds modules add (one tab each, options in options[key]) and links to their other statement pages.
+  extraKinds?: { key: string; label: string; party: string; all: string }[]
+  kindLinks?: { key: string; label: string; href: string }[]
   columns: { money_in: string; money_out: string; balance: string }
   // Company stamp + signature; sent only for a customer statement when ticked.
   stamp?: DocumentStampData | null
@@ -115,6 +119,8 @@ watch(() => props.filters, (f) => {
 const currency = computed(() => props.company.base_currency || 'PKR')
 const moneyLocale = computed(() => (currency.value === 'PKR' ? 'en-PK' : 'en-US'))
 
+const extraKind = computed(() => (props.extraKinds ?? []).find((k) => k.key === kind.value))
+
 const currentOptions = computed<{ id: string; label: string; sublabel?: string }[]>(() => {
   if (kind.value === 'bank') {
     return props.options.bank.map((a) => ({ id: a.id, label: a.name, sublabel: a.code }))
@@ -131,8 +137,8 @@ const currentOptions = computed<{ id: string; label: string; sublabel?: string }
   if (kind.value === 'employee') {
     return (props.options.employee ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number ?? undefined }))
   }
-  if (kind.value === 'amanat') {
-    return (props.options.amanat ?? []).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
+  if (extraKind.value) {
+    return ((props.options[extraKind.value.key] ?? []) as PartyOption[]).map((c) => ({ id: c.id, label: c.name, sublabel: c.customer_number }))
   }
   return props.options.supplier.map((v) => ({ id: v.id, label: v.name, sublabel: v.vendor_number }))
 })
@@ -161,12 +167,11 @@ const toggleReversed = (v: boolean | 'indeterminate') => {
   reload()
 }
 
-// A fuel station's stock statement is a statement too: its tab opens that page.
-const isFuelStation = computed(() => Boolean((usePage().props.auth as { fuelNavigation?: unknown } | undefined)?.fuelNavigation))
-
+// A module's own statement page is a statement too: its tab opens that page.
 const changeKind = (value: Kind | string) => {
-  if (value === 'stock') {
-    router.visit(`/${props.company.slug}/fuel/reports/stock-statement?start_date=${from.value}&end_date=${to.value}`)
+  const link = (props.kindLinks ?? []).find((l) => l.key === value)
+  if (link) {
+    router.visit(link.href.replace(/start_date=[^&]*/, `start_date=${from.value}`).replace(/end_date=[^&]*/, `end_date=${to.value}`))
     return
   }
   kind.value = value as Kind
@@ -216,7 +221,7 @@ const showPicked = () => {
 const partyLabel = computed(() => {
   if (kind.value === 'bank') return 'Account'
   if (kind.value === 'customer') return 'Customer'
-  if (kind.value === 'amanat') return 'Holder'
+  if (extraKind.value) return extraKind.value.party
   if (kind.value === 'employee') return 'Employee'
   if (kind.value === 'expense') return 'Account'
   if (kind.value === 'partner') return 'Partner'
@@ -243,7 +248,7 @@ const openRow = (row: Row) => {
 const printStatement = () => window.print()
 
 
-const allLabel = computed(() => ({ customer: 'All customers', supplier: 'All suppliers', amanat: 'All holders', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' })[kind.value])
+const allLabel = computed(() => extraKind.value?.all ?? ({ customer: 'All customers', supplier: 'All suppliers', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' } as Record<string, string>)[kind.value])
 const categoryName = computed(() => (props.options.categories ?? []).find((c) => c.id === categoryId.value)?.name ?? 'Category')
 const pickedLabel = computed(() => {
   const group = (props.options.groups ?? []).find((g) => g.member_ids.length === picked.value.length && g.member_ids.every((id) => picked.value.includes(id)))
@@ -271,11 +276,13 @@ const statementTitle = computed(() => (props.statement.combined
               <TabsTrigger value="bank">Bank &amp; Cash</TabsTrigger>
               <TabsTrigger value="customer">Customer</TabsTrigger>
               <TabsTrigger value="supplier">Supplier</TabsTrigger>
-              <TabsTrigger v-if="(options.amanat ?? []).length > 0" value="amanat">Amanat</TabsTrigger>
+              <template v-for="k in extraKinds ?? []" :key="k.key">
+                <TabsTrigger v-if="((options[k.key] as PartyOption[] | undefined) ?? []).length > 0" :value="k.key">{{ k.label }}</TabsTrigger>
+              </template>
               <TabsTrigger v-if="(options.employee ?? []).length > 0" value="employee">Employee</TabsTrigger>
               <TabsTrigger v-if="(options.expense ?? []).length > 0" value="expense">Expense</TabsTrigger>
               <TabsTrigger v-if="(options.partner ?? []).length > 0" value="partner">Partner</TabsTrigger>
-              <TabsTrigger v-if="isFuelStation" value="stock">Stock</TabsTrigger>
+              <TabsTrigger v-for="l in kindLinks ?? []" :key="l.key" :value="l.key">{{ l.label }}</TabsTrigger>
             </TabsList>
           </Tabs>
 

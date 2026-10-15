@@ -113,6 +113,14 @@ class FuelStationServiceProvider extends ServiceProvider
             'Held for the customer and used up against fuel. Shows on their amanat page.',
         );
 
+        \App\Modules\Accounting\Extensions\StatementKinds::register(new \App\Modules\FuelStation\Reports\AmanatStatementKind);
+        \App\Modules\Accounting\Extensions\StatementKinds::registerLink(
+            'stock',
+            'Stock',
+            fn ($c) => $c->hasModule('fuel_station'),
+            fn ($c, $from, $to) => "/{$c->slug}/fuel/reports/stock-statement?start_date={$from}&end_date={$to}",
+        );
+
         Invoice::resolveRelationUsing('saleMetadata', fn (Invoice $invoice) => $invoice->hasOne(SaleMetadata::class, 'invoice_id'));
     }
 }

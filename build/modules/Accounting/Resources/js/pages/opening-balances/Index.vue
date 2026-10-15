@@ -187,7 +187,7 @@ const err = (key: string) => (form.errors as Record<string, string>)[key]
 function submit() {
   form.post(`/${props.company.slug}/accounting/opening-balances`, {
     preserveScroll: true,
-    onSuccess: () => toast.success('Opening balances saved'),
+    // The server's flash message is the success toast; a second one here doubled it.
     onError: (errors) => {
       const first = Object.values(errors)[0]
       if (first && !Object.keys(errors).some(k => k.includes('.'))) toast.error(first as string)
@@ -204,7 +204,6 @@ function lock() {
     preserveScroll: true,
     onSuccess: () => {
       showLockDialog.value = false
-      toast.success('Opening balances locked')
     },
     onError: (errors) => toast.error((Object.values(errors)[0] as string) || 'Could not lock'),
     onFinish: () => {

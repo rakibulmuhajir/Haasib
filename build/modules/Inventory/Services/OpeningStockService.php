@@ -2,7 +2,7 @@
 
 namespace App\Modules\Inventory\Services;
 
-use App\Modules\FuelStation\Services\OpeningStockLedgerService;
+use App\Modules\Inventory\Events\OpeningStockChanged;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
@@ -59,7 +59,7 @@ class OpeningStockService
     /** Post the opening-stock journal; a books problem is logged, not thrown. */
     public function syncLedger(string $companyId, ?string $userId = null): void
     {
-        app(OpeningStockLedgerService::class)->syncQuietly($companyId, $userId);
+        OpeningStockChanged::dispatch($companyId, $userId, true);
     }
 
     public function resolveStandardWarehouse(string $companyId, ?string $userId = null): Warehouse

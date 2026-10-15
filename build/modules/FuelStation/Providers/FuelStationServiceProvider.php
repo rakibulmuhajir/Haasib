@@ -123,6 +123,13 @@ class FuelStationServiceProvider extends ServiceProvider
             fn ($c, $from, $to) => "/{$c->slug}/fuel/reports/stock-statement?start_date={$from}&end_date={$to}",
         );
 
+        // Event::listen is not keyed; attach once per app instance.
+        if (! Event::hasListeners(\App\Modules\Inventory\Events\OpeningStockChanged::class)) {
+            Event::listen(\App\Modules\Inventory\Events\OpeningStockChanged::class, \App\Modules\FuelStation\Listeners\SyncOpeningStockLedger::class);
+        }
+
+        \App\Modules\FuelStation\Extensions\InventoryHooks::register();
+
         Invoice::resolveRelationUsing('saleMetadata', fn (Invoice $invoice) => $invoice->hasOne(SaleMetadata::class, 'invoice_id'));
     }
 }

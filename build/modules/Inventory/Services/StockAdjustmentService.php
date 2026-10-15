@@ -136,7 +136,7 @@ class StockAdjustmentService
         );
         $movement->forceFill(['reason' => $reasonLabel])->save();
 
-        app(\App\Modules\FuelStation\Services\OpeningStockLedgerService::class)->sync($company->id, $userId);
+        \App\Modules\Inventory\Events\OpeningStockChanged::dispatch($company->id, $userId, false);
         $this->updateItemCost($item, $quantity, $unitCost);
 
         return $movement->fresh();

@@ -16,6 +16,12 @@ abstract class ModuleManifest
     /** settings.modules key, e.g. 'fuel_station'. */
     abstract public function key(): string;
 
+    /** Display name used in messages, e.g. 'Fuel Station'. */
+    public function name(): string
+    {
+        return ucfirst(str_replace('_', ' ', $this->key()));
+    }
+
     /** Industry codes that imply this module even when settings.modules lacks it. */
     public function industryCodes(): array
     {

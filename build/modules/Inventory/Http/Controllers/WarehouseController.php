@@ -82,13 +82,15 @@ class WarehouseController extends Controller
         $company = CompanyContext::getCompany();
 
         // Get fuel items for tank linking
-        $fuelItems = Item::where('company_id', $company->id)
-            ->whereNotNull('fuel_category')
-            ->where('is_active', true)
-            ->select(['id', 'name', 'fuel_category'])
-            ->orderBy('fuel_category')
-            ->orderBy('name')
-            ->get();
+        $fuelItems = $company->hasModule('fuel_station')
+            ? Item::where('company_id', $company->id)
+                ->whereNotNull('fuel_category')
+                ->where('is_active', true)
+                ->select(['id', 'name', 'fuel_category'])
+                ->orderBy('fuel_category')
+                ->orderBy('name')
+                ->get()
+            : [];
 
         return Inertia::render('inventory/warehouses/Create', [
             'company' => [

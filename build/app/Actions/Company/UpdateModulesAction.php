@@ -5,6 +5,7 @@ namespace App\Actions\Company;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Services\CurrentCompany;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Validation\ValidationException;
 
 class UpdateModulesAction implements PaletteAction
@@ -32,10 +33,14 @@ class UpdateModulesAction implements PaletteAction
         $inventoryEnabled = (bool) $params['inventory'];
         $payrollEnabled = (bool) $params['payroll'];
 
-        if (! $inventoryEnabled && $company->isModuleEnabled('fuel_station')) {
-            throw ValidationException::withMessages([
-                'inventory' => 'Inventory cannot be disabled while the Fuel Station module is enabled.',
-            ]);
+        if (! $inventoryEnabled) {
+            foreach (app(ModuleRegistry::class)->all() as $manifest) {
+                if (in_array('inventory', $manifest->requires(), true) && $company->isModuleEnabled($manifest->key())) {
+                    throw ValidationException::withMessages([
+                        'inventory' => "Inventory cannot be disabled while the {$manifest->name()} module is enabled.",
+                    ]);
+                }
+            }
         }
 
         if ($inventoryEnabled) {

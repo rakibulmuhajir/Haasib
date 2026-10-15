@@ -363,7 +363,7 @@ const voidInvoice = () => {
       </DropdownMenu>
 
       <Button variant="outline" @click="previewing = true"><Eye class="mr-2 h-4 w-4" />Preview</Button>
-      <Button :disabled="isSettled" @click="sendInvoice">
+      <Button v-if="['draft', 'approved'].includes(invoice.status)" :disabled="isSettled" @click="sendInvoice">
         <Send class="mr-2 h-4 w-4" />
         Mark as sent
       </Button>

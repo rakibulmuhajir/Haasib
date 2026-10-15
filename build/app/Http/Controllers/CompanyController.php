@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\User;
 use App\Modules\Accounting\Services\DashboardService;
+use App\Modules\Accounting\Services\GeneralHomeFigures;
 use App\Services\CommandBus;
 use App\Services\CompanyBootstrapService;
 use App\Services\CompanyRbacBootstrapper;
@@ -327,11 +328,13 @@ class CompanyController extends Controller
             ->where('user_id', Auth::id())
             ->value('role');
 
-        // Financial snapshot (AR only; AP/expenses placeholder)
+        // Financial snapshot (AR here; cash, AP and profit come from GeneralHomeFigures)
         $openInvoices = DB::table('acct.invoices')
             ->where('company_id', $company->id)
             ->where('balance', '>', 0)
-            ->whereNotIn('status', ['paid', 'void', 'cancelled']);
+            // Same set the receivables aging report counts, which the card links to.
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled']);
 
         $arOutstanding = (clone $openInvoices)->sum('balance');
         $arOutstandingCount = (clone $openInvoices)->count();
@@ -356,7 +359,8 @@ class CompanyController extends Controller
             ")
             ->where('company_id', $company->id)
             ->where('balance', '>', 0)
-            ->whereNotIn('status', ['paid', 'void', 'cancelled'])
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
             ->first();
 
         $quickStats = [
@@ -516,7 +520,7 @@ class CompanyController extends Controller
                 'ar_overdue' => (float) $arOverdue,
                 'ar_overdue_count' => $arOverdueCount,
                 'payments_mtd' => (float) $paymentsMTD,
-                'expenses_mtd_placeholder' => 'Not implemented yet',
+                ...app(GeneralHomeFigures::class)->for($company, now()),
                 'aging' => [
                     'current' => (float) ($agingBuckets->current_bucket ?? 0),
                     'bucket_1_30' => (float) ($agingBuckets->bucket_1_30 ?? 0),

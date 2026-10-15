@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -69,7 +69,12 @@ interface Financials {
   ar_overdue: number
   ar_overdue_count: number
   payments_mtd: number
-  expenses_mtd_placeholder: string
+  cash_and_bank: number
+  ap_outstanding: number
+  ap_overdue: number
+  revenue_mtd: number
+  expenses_mtd: number
+  profit_mtd: number
   aging: {
     current: number
     bucket_1_30: number
@@ -505,6 +510,41 @@ const startActions = computed(() => {
                 Money customers still owe you is not counted here — it is not yours until it arrives.
               </template>
             </Derivation>
+          </section>
+
+          <!-- The books ------------------------------------------------------
+               Four figures, each one click from the report that proves it. Ruled
+               cells, not cards. -->
+          <section class="books">
+            <h2 class="reckon__title">The books</h2>
+            <div class="books__strip">
+              <Link :href="`/${company.slug}/reports/balance-sheet`" class="books__cell">
+                <span class="books__label">Cash & bank</span>
+                <MoneyText :amount="financials.cash_and_bank" :currency="baseCurrency" :locale="baseLocale" />
+              </Link>
+              <Link :href="`/${company.slug}/reports/receivables-aging`" class="books__cell">
+                <span class="books__label">To collect</span>
+                <MoneyText :amount="financials.ar_outstanding" :currency="baseCurrency" :locale="baseLocale" />
+                <span v-if="financials.ar_overdue > 0" class="books__sub">
+                  <MoneyText :amount="financials.ar_overdue" :currency="baseCurrency" :locale="baseLocale" :show-currency="false" /> overdue
+                </span>
+              </Link>
+              <Link :href="`/${company.slug}/reports/payables-aging`" class="books__cell">
+                <span class="books__label">To pay</span>
+                <MoneyText :amount="financials.ap_outstanding" :currency="baseCurrency" :locale="baseLocale" />
+                <span v-if="financials.ap_overdue > 0" class="books__sub">
+                  <MoneyText :amount="financials.ap_overdue" :currency="baseCurrency" :locale="baseLocale" :show-currency="false" /> overdue
+                </span>
+              </Link>
+              <Link :href="`/${company.slug}/reports/profit-loss`" class="books__cell">
+                <span class="books__label">This month</span>
+                <MoneyText :amount="financials.profit_mtd" :currency="baseCurrency" :locale="baseLocale" />
+                <span class="books__sub">
+                  <MoneyText :amount="financials.revenue_mtd" :currency="baseCurrency" :locale="baseLocale" :show-currency="false" /> in,
+                  <MoneyText :amount="financials.expenses_mtd" :currency="baseCurrency" :locale="baseLocale" :show-currency="false" /> out
+                </span>
+              </Link>
+            </div>
           </section>
 
           <!-- What needs you -------------------------------------------------
@@ -1039,6 +1079,42 @@ const startActions = computed(() => {
     color: var(--text-tertiary);
 }
 
+.books__strip {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    border: var(--rule-w-hair, 1px) solid var(--rule-default);
+}
+
+.books__cell {
+    display: flex;
+    flex: 1 1 200px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    color: var(--text-primary);
+    background: var(--surface-raised);
+    border-right: var(--rule-w-hair, 1px) solid var(--rule-default);
+}
+
+.books__cell:last-child {
+    border-right: 0;
+}
+
+.books__cell:hover {
+    background: var(--surface-band);
+}
+
+.books__label {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.books__sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
 .start__strip {
     display: flex;
     flex-wrap: wrap;
@@ -1070,6 +1146,12 @@ const startActions = computed(() => {
 @media (max-width: 640px) {
     .ledger-home {
         gap: 32px;
+    }
+
+    .books__cell {
+        flex-basis: 100%;
+        border-right: 0;
+        border-bottom: var(--rule-w-hair, 1px) solid var(--rule-default);
     }
 
     .start__action {

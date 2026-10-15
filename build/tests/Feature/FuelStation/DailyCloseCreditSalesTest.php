@@ -63,7 +63,6 @@ test('card-only allocation is gross in both posted and current reconciliation', 
 test('invalid credit allocations roll back the entire close', function (string $invalid) {
     $f = creditCloseFixture();
     if ($invalid === 'excess') { $f['payload']['credit_sales'][0]['amount'] = 22000; }
-    if ($invalid === 'duplicate') { $f['payload']['credit_sales'][] = $f['payload']['credit_sales'][0]; }
     if ($invalid === 'foreign') {
         $other = Company::create(['name' => 'Other', 'slug' => 'other-'.str()->random(10), 'base_currency' => 'PKR']);
         enterCompany($other);
@@ -74,7 +73,18 @@ test('invalid credit allocations roll back the entire close', function (string $
     expect(fn () => creditClosePost($f))->toThrow(\Illuminate\Validation\ValidationException::class);
     expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(0);
     expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
-})->with(['excess', 'duplicate', 'foreign']);
+})->with(['excess', 'foreign']);
+
+// A customer may have several slips in a day (a0f266802 dropped the `distinct` rule), so a
+// second row for the same customer is no longer invalid -- it is a second invoice.
+test('one customer can have several credit rows on the same day', function () {
+    $f = creditCloseFixture();
+    $f['payload']['credit_sales'][] = ['customer_id' => $f['customer']->id, 'amount' => 6000, 'reference' => 'Slip 43'];
+    // Drawer: 10,000 + 30,000 sales - 9,000 card - 12,000 credit = 19,000.
+    $f['payload']['closing_cash'] = 19000;
+    creditClosePost($f);
+    expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(2);
+});
 
 test('parking credit sales creates no invoice and posting a date twice does not duplicate it', function () {
     $f = creditCloseFixture();

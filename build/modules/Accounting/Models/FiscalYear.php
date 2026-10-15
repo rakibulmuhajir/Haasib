@@ -54,4 +54,15 @@ class FiscalYear extends Model
     {
         return $this->hasMany(Transaction::class, 'fiscal_year_id');
     }
+
+    /**
+     * The one naming rule for a fiscal year: "FY 2026" when it sits inside a
+     * calendar year, "FY 2026-2027" when it spans two.
+     */
+    public static function labelFor(\DateTimeInterface $start, \DateTimeInterface $end): string
+    {
+        return $start->format('Y') === $end->format('Y')
+            ? 'FY '.$start->format('Y')
+            : 'FY '.$start->format('Y').'-'.$end->format('Y');
+    }
 }

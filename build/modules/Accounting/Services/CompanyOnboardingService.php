@@ -133,7 +133,7 @@ class CompanyOnboardingService
             // Create the first fiscal year
             $fiscalYear = FiscalYear::create([
                 'company_id' => $company->id,
-                'name' => "FY {$startDate->format('Y')}-{$endDate->format('Y')}",
+                'name' => FiscalYear::labelFor($startDate, $endDate),
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'is_current' => true,

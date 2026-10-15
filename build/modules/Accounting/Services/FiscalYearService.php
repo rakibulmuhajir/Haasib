@@ -164,9 +164,7 @@ class FiscalYearService
         }
 
         $periodType = $company?->period_frequency ?? $company?->getDefaultPeriodType() ?? 'monthly';
-        $name = $startDate->format('Y') === $endDate->format('Y')
-            ? "FY {$startDate->format('Y')}"
-            : "FY {$startDate->format('Y')}-{$endDate->format('Y')}";
+        $name = FiscalYear::labelFor($startDate, $endDate);
 
         if (FiscalYear::where('company_id', $companyId)->where('name', $name)->exists()) {
             $name = $startDate->format('Y') === $endDate->format('Y')

@@ -48,11 +48,9 @@ const fiscalYearExample = computed(() => {
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
 
-  if (currentMonth >= month) {
-    return `FY ${currentYear}-${currentYear + 1}`
-  } else {
-    return `FY ${currentYear - 1}-${currentYear}`
-  }
+  const startYear = currentMonth >= month ? currentYear : currentYear - 1
+  // Same rule as the fiscal years list: a January start stays inside one calendar year.
+  return month === 1 ? `FY ${startYear}` : `FY ${startYear}-${startYear + 1}`
 })
 </script>
 

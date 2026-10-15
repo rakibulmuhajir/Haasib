@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useFormFeedback } from '@/composables/useFormFeedback';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { useModules } from '@/composables/useModules';
 import { CreditCard, Save } from 'lucide-vue-next';
 import { computed } from 'vue';
 
@@ -57,6 +58,9 @@ interface PaymentRef {
     allocations?: Allocation[];
 }
 
+const { has } = useModules();
+
+
 const props = defineProps<{
     company: CompanyRef;
     payment: PaymentRef;
@@ -86,16 +90,16 @@ const form = useForm({
     notes: props.payment.notes ?? '',
 });
 
-const paymentMethods = [
+const paymentMethods = computed(() => [
     { value: 'cash', label: 'Cash' },
     { value: 'check', label: 'Check' },
     { value: 'card', label: 'Card' },
-    { value: 'fuel_card', label: 'Fuel Card' },
+    ...(has('fuel_station') || props.payment.payment_method === 'fuel_card' ? [{ value: 'fuel_card', label: 'Fuel Card' }] : []),
     { value: 'bank_transfer', label: 'Bank Transfer' },
     { value: 'ach', label: 'ACH' },
     { value: 'wire', label: 'Wire' },
     { value: 'other', label: 'Other' },
-];
+]);
 
 const accountLabel = (account: AccountOption) => `${account.code} — ${account.name}`;
 

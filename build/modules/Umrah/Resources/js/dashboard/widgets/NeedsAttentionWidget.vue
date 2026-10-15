@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import WidgetFrame from '@/components/dashboard/WidgetFrame.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import MetaChip from '@/components/MetaChip.vue'
-import type { DashboardWidgetProps, LooseRow } from './types'
+import type { DashboardWidgetProps, LooseRow } from '@/components/dashboard/widgets/types'
 
 const props = defineProps<DashboardWidgetProps>()
 

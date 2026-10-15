@@ -72,7 +72,7 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'apAccounts' => $apAccounts,
-            'vendorTypes' => Vendor::TYPES,
+            'vendorTypes' => $this->offeredVendorTypes($company),
         ]);
     }
 
@@ -195,7 +195,7 @@ class VendorController extends Controller
             ],
             'vendor' => $record,
             'apAccounts' => $apAccounts,
-            'vendorTypes' => Vendor::TYPES,
+            'vendorTypes' => $this->offeredVendorTypes($company, $record->vendor_type ?? null),
         ]);
     }
 
@@ -384,5 +384,29 @@ class VendorController extends Controller
                 'rate' => (float) $defaultTaxRate->rate,
             ] : null,
         ]);
+    }
+
+    /**
+     * Vendor types this company may pick. Types that belong to a module the company
+     * does not use are left out, except the type the vendor already has.
+     *
+     * @return array<string, string>
+     */
+    private function offeredVendorTypes($company, ?string $current = null): array
+    {
+        $registry = app(\App\Support\Modules\ModuleRegistry::class);
+        $enabled = $registry->enabledFor($company);
+        $hidden = [];
+        foreach ($registry->all() as $key => $manifest) {
+            if (! isset($enabled[$key])) {
+                array_push($hidden, ...$manifest->vendorTypes());
+            }
+        }
+
+        return array_filter(
+            Vendor::TYPES,
+            fn (string $label, string $type) => $type === $current || ! in_array($type, $hidden, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 }

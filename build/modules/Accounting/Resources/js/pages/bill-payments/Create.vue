@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useFormFeedback } from '@/composables/useFormFeedback';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { useModules } from '@/composables/useModules';
 import { CreditCard, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -64,6 +65,9 @@ interface PaymentSplit {
     payment_method: string;
     reference_number: string;
 }
+
+const { has } = useModules();
+
 
 const props = defineProps<{
     company: CompanyRef;
@@ -263,16 +267,16 @@ watch(
     },
 );
 
-const paymentMethods = [
+const paymentMethods = computed(() => [
     { value: 'cash', label: 'Cash' },
     { value: 'check', label: 'Check' },
     { value: 'card', label: 'Card' },
-    { value: 'fuel_card', label: 'Fuel Card' },
+    ...(has('fuel_station') ? [{ value: 'fuel_card', label: 'Fuel Card' }] : []),
     { value: 'bank_transfer', label: 'Bank Transfer' },
     { value: 'ach', label: 'ACH' },
     { value: 'wire', label: 'Wire' },
     { value: 'other', label: 'Other' },
-];
+]);
 
 const formatNumber = (
     value: number | string | null | undefined,

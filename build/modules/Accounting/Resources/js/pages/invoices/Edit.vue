@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import ModuleSlot from '@/components/ModuleSlot.vue'
 import { EntitySearch } from '@/components/forms'
 import MoneyText from '@/components/MoneyText.vue'
 import TotalRow from '@/components/TotalRow.vue'
@@ -23,7 +24,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -79,7 +79,6 @@ const props = defineProps<{
   invoice: Invoice
   currencies: CurrencyOption[]
   revenueAccounts?: AccountOption[]
-  isFuelStation?: boolean
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -424,18 +423,7 @@ const submit = () => {
         </CardContent>
       </Card>
 
-      <Card v-if="props.isFuelStation" variant="form">
-        <CardContent class="space-y-2 pt-6">
-          <div class="flex items-start gap-2">
-            <Checkbox id="is_direct_delivery" v-model:checked="form.is_direct_delivery" :disabled="!isEditable" />
-            <div>
-              <Label for="is_direct_delivery" class="font-normal">Direct delivery — not from the pumps</Label>
-              <p class="text-xs text-muted-foreground">Fuel that went straight to the customer. The daily close leaves it alone.</p>
-            </div>
-          </div>
-          <InputError :message="form.errors.is_direct_delivery" />
-        </CardContent>
-      </Card>
+      <ModuleSlot name="invoice.form.options" :form="form" :disabled="!isEditable" />
 
       <Card variant="form">
         <CardHeader>

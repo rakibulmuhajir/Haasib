@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,8 @@ interface CompanyRef {
   slug: string
   base_currency: string
 }
+
+const { has } = useModules()
 
 const props = defineProps<{
   company: CompanyRef
@@ -134,7 +137,7 @@ const handleSubmit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel suppliers.</p>
+              <p v-if="has('fuel_station')" class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel suppliers.</p>
               <InputError :message="form.errors.vendor_type" />
             </div>
 

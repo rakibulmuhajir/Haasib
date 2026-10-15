@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,8 @@ interface CompanyRef {
   slug: string
   base_currency: string
 }
+
+const { has } = useModules()
 
 const props = defineProps<{
   company: CompanyRef
@@ -112,7 +115,7 @@ const handleSubmit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-xs text-text-secondary">An Umrah agent is a customer of this type with a travel profile attached.</p>
+              <p v-if="has('umrah')" class="text-xs text-text-secondary">An Umrah agent is a customer of this type with a travel profile attached.</p>
               <InputError :message="form.errors.customer_type" />
             </div>
 

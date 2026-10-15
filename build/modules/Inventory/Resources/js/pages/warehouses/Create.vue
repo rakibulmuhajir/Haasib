@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import { computed } from 'vue'
 import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
@@ -24,6 +25,8 @@ interface ItemRef {
   name: string
   fuel_category?: string | null
 }
+
+const { has } = useModules()
 
 const props = defineProps<{
   company: CompanyRef
@@ -53,10 +56,12 @@ const form = useForm({
   notes: '',
 })
 
-const warehouseTypes = [
+const warehouseTypes = computed(() => [
   { value: 'standard', label: 'Standard Warehouse', description: 'Regular storage facility' },
-  { value: 'tank', label: 'Fuel Tank', description: 'Underground or aboveground fuel storage tank' }
-]
+  ...(has('fuel_station')
+    ? [{ value: 'tank', label: 'Fuel Tank', description: 'Underground or aboveground fuel storage tank' }]
+    : []),
+])
 
 const fuelItemOptions = computed(() => {
   if (!props.fuelItems) return []

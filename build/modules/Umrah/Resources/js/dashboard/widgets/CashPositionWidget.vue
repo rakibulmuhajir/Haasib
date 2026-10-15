@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import WidgetFrame from '@/components/dashboard/WidgetFrame.vue'
 import Derivation from '@/components/Derivation.vue'
-import type { DashboardWidgetProps } from './types'
+import type { DashboardWidgetProps } from '@/components/dashboard/widgets/types'
 
 const props = defineProps<DashboardWidgetProps>()
 

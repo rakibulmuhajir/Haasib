@@ -144,6 +144,18 @@ abstract class ModuleManifest
         return [];
     }
 
+    /** Vendor type keys (Vendor::TYPES) only this module's companies are offered. */
+    public function vendorTypes(): array
+    {
+        return [];
+    }
+
+    /** Heading the role editor groups this module's permissions under. */
+    public function permissionGroupLabel(): string
+    {
+        return $this->name();
+    }
+
     /** "What can this role do" rows for the user list; null = none. */
     public function permissionCapabilities(Company $company, string $role, callable $has): ?array
     {

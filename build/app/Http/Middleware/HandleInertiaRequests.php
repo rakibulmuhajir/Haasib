@@ -166,6 +166,17 @@ class HandleInertiaRequests extends Middleware
 
                     return $company ? array_keys(app(\App\Support\Modules\ModuleRegistry::class)->enabledFor($company)) : [];
                 },
+                // Permission-group label per module permission prefix, for the role editor.
+                'modulePermissionGroups' => function () {
+                    $groups = [];
+                    foreach (app(\App\Support\Modules\ModuleRegistry::class)->all() as $manifest) {
+                        foreach ($manifest->permissionPrefixes() as $prefix) {
+                            $groups[$prefix] = $manifest->permissionGroupLabel();
+                        }
+                    }
+
+                    return $groups;
+                },
                 // The Settings menu: what this person may set up, grouped (App\Services\SettingsMenu).
                 'settingsMenu' => function () use ($request) {
                     $company = app(CurrentCompany::class)->get();

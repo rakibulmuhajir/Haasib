@@ -8,7 +8,7 @@ import WidgetFrame from '@/components/dashboard/WidgetFrame.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
-import type { DashboardWidgetProps, LooseRow } from './types'
+import type { DashboardWidgetProps, LooseRow } from '@/components/dashboard/widgets/types'
 
 const props = defineProps<DashboardWidgetProps>()
 

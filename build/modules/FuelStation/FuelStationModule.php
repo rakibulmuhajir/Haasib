@@ -130,9 +130,16 @@ class FuelStationModule extends ModuleManifest
         ];
     }
 
+    public function vendorTypes(): array
+    {
+        return ['fuel_refinery', 'fuel_distributor', 'fuel_station', 'lubricant_supplier'];
+    }
+
+    public function permissionGroupLabel(): string { return 'Fuel station'; }
+
     public function permissionPrefixes(): array
     {
-        return ['pump', 'tank_reading', 'pump_reading', 'fuel_rate', 'fuel_product', 'investor', 'handover', 'amanat', 'fuel_sale', 'daily_close'];
+        return ['fuel', 'pump', 'tank_reading', 'pump_reading', 'fuel_rate', 'fuel_product', 'investor', 'handover', 'amanat', 'fuel_sale', 'daily_close'];
     }
 
     public function netProfit(Company $company, string $from, string $to): ?float

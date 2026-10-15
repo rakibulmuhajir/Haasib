@@ -10,7 +10,7 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import MetaChip from '@/components/MetaChip.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
-import type { DashboardWidgetProps, LooseRow } from './types'
+import type { DashboardWidgetProps, LooseRow } from '@/components/dashboard/widgets/types'
 
 const props = defineProps<DashboardWidgetProps>()
 

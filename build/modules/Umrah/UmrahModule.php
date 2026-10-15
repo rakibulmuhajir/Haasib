@@ -25,6 +25,8 @@ class UmrahModule extends ModuleManifest
 
     public function ownsPermissions(): bool { return true; }
 
+    public function permissionGroupLabel(): string { return 'Umrah operations'; }
+
     public function permissionPrefixes(): array { return ['umrah']; }
 
     public function permissionCapabilities(Company $company, string $role, callable $has): ?array

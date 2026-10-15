@@ -3,7 +3,7 @@ import WidgetFrame from '@/components/dashboard/WidgetFrame.vue';
 import { Button } from '@/components/ui/button';
 import { router } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import type { DashboardWidgetProps, LooseRow } from './types';
+import type { DashboardWidgetProps, LooseRow } from '@/components/dashboard/widgets/types';
 
 const props = defineProps<DashboardWidgetProps>();
 

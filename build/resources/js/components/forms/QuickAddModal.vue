@@ -63,6 +63,11 @@ const company = computed(() => (page.props.auth as any)?.currentCompany)
 const openingBalance = computed(() => (page.props.auth as any)?.openingBalance ?? null)
 const showOpeningSection = computed(() => !!openingBalance.value?.canManage && !openingBalance.value?.locked)
 const asOfDateFixed = computed(() => !!openingBalance.value?.asOfDate)
+// Module section behind the "paid in advance" field (amanat), when the company has one.
+interface OpeningSectionOffer { key: string; label: string; hint: string }
+const advanceSection = computed<OpeningSectionOffer | null>(() =>
+  ((openingBalance.value?.sections ?? []) as OpeningSectionOffer[]).find(s => s.key === 'amanat') ?? null,
+)
 
 // Refs
 const nameInputRef = ref<HTMLInputElement | null>(null)
@@ -268,7 +273,7 @@ watch(() => props.open, (isOpen) => {
               <InputError :message="form.errors.opening_owed" />
             </div>
 
-            <div v-if="entityType === 'customer' && openingBalance?.hasAmanat" class="space-y-2">
+            <div v-if="entityType === 'customer' && advanceSection" class="space-y-2">
               <Label for="quick-opening-advance">
                 Paid in advance
               </Label>
@@ -283,7 +288,7 @@ watch(() => props.open, (isOpen) => {
                 :class="cn(form.errors.opening_advance && 'border-destructive')"
                 autocomplete="off"
               />
-              <p class="text-sm text-muted-foreground">Held as amanat, used up against fuel.</p>
+              <p class="text-sm text-muted-foreground">{{ advanceSection.hint }}</p>
               <InputError :message="form.errors.opening_advance" />
             </div>
 

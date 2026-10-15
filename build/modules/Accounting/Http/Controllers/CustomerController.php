@@ -582,6 +582,9 @@ class CustomerController extends Controller
             }
 
             if ($advance > 0) {
+                if (! array_key_exists('amanat', app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->availableFor($company))) {
+                    throw ValidationException::withMessages(['opening_advance' => 'Advances are not available for this company.']);
+                }
                 try {
                     $commandBus->dispatch('opening_balance.set_party', [
                         'section' => 'amanat',

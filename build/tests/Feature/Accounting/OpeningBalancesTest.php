@@ -64,6 +64,7 @@ test('saving cash and bank opening balances posts one balanced journal against o
 
 test('amanat, employee advance and partner capital openings create sub-records linked to the journal', function () {
     $f = openingBalanceFixture();
+    $f['company']->enableModule('fuel_station'); // amanat is the fuel module's opening section
     $depositor = openingCustomer($f, 'Haji Saab');
     $employee = Employee::create([
         'company_id' => $f['company']->id,
@@ -356,6 +357,7 @@ test('re-saving every category across three generations never leaks balances or 
     // The fixture's accounting periods end in September; postings dated today need one open.
     test()->travelTo(\Carbon\Carbon::parse('2026-09-24 10:00:00'));
     $f = openingBalanceFixture();
+    $f['company']->enableModule('fuel_station'); // amanat is the fuel module's opening section
     $customer = openingCustomer($f, 'Truck Company');
     $depositor = openingCustomer($f, 'Haji Saab');
     $employee = Employee::create([

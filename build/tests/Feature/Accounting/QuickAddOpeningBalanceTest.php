@@ -78,6 +78,7 @@ test('customer quick-add with an owed amount and a date creates an opening recei
 
 test('customer quick-add with an advance goes to amanat, not credit_customers', function () {
     $f = openingBalanceHttpFixture();
+    $f['company']->enableModule('fuel_station'); // amanat is the fuel module's opening section
 
     $response = test()->actingAs($f['user'])->post("/{$f['company']->slug}/customers/quick-store", [
         'name' => 'Amanat Holder',

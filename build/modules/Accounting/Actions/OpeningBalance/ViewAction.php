@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Models\Partner;
 use App\Models\PartnerTransaction;
 use App\Models\User;
+use App\Modules\Accounting\Extensions\OpeningBalanceSections;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
@@ -15,7 +16,6 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
-use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
@@ -78,8 +78,12 @@ class ViewAction implements PaletteAction
         // (SaveAction::appendOnly); their lines belong to the opening position too.
         $journalIds = array_values(array_filter([$journal?->id, ...($opening['extra_journal_ids'] ?? [])]));
         $entryIds = $journalIds ? \Illuminate\Support\Facades\DB::table('acct.journal_entries')->whereIn('transaction_id', $journalIds)->pluck('id')->all() : [];
-        $amanat = $journalIds ? AmanatTransaction::whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
-            ->map(fn ($t) => ['customer_id' => $t->customer_id, 'customer_name' => $t->customer?->name, 'amount' => (float) $t->amount])->values()->all() : [];
+        // Module sections (amanat, ...): rows keyed by the section's key.
+        $sections = app(OpeningBalanceSections::class)->availableFor($company);
+        $sectionRows = [];
+        foreach ($sections as $key => $section) {
+            $sectionRows[$key] = $journalIds ? $section->rows($companyId, $entryIds) : [];
+        }
         $employees = $journalIds ? SalaryAdvance::whereIn('journal_entry_id', $entryIds)->with('employee:id,first_name,last_name')->get()
             ->map(fn ($a) => ['employee_id' => $a->employee_id, 'employee_name' => trim(($a->employee?->first_name ?? '').' '.($a->employee?->last_name ?? '')), 'amount' => (float) $a->amount, 'recovered' => (float) $a->amount_recovered])->values()->all() : [];
         $partners = $journalIds ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
@@ -112,7 +116,18 @@ class ViewAction implements PaletteAction
             ->map(fn ($b) => ['vendor_id' => $b->vendor_id, 'vendor_name' => $b->vendor?->name, 'amount' => (float) $b->total_amount, 'bill_id' => $b->id, 'paid_amount' => (float) $b->paid_amount])->values()->all();
 
         $assets = $cash + array_sum(array_column($banks, 'amount')) + array_sum(array_column($creditCustomers, 'amount')) + array_sum(array_column($employees, 'amount'));
-        $liabilities = array_sum(array_column($amanat, 'amount')) + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount')) + array_sum(array_column($salariesOwed, 'amount'));
+        $sectionTotal = function (string $side) use ($sections, $sectionRows): float {
+            $total = 0.0;
+            foreach ($sections as $key => $section) {
+                if ($section->side() === $side) {
+                    $total += array_sum(array_column($sectionRows[$key], 'amount'));
+                }
+            }
+
+            return $total;
+        };
+        $assets += $sectionTotal('asset');
+        $liabilities = $sectionTotal('liability') + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount')) + array_sum(array_column($salariesOwed, 'amount'));
 
         $earliest = SaveAction::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
@@ -131,10 +146,18 @@ class ViewAction implements PaletteAction
                 'credit_customers' => $creditCustomers,
                 'employees' => $employees,
                 'salaries_owed' => $salariesOwed,
-                'amanat' => $amanat,
                 'suppliers' => $suppliers,
                 'partners' => $partners,
-            ],
+            ] + $sectionRows,
+            'sections' => collect($sections)->map(fn ($section) => [
+                'key' => $section->key(),
+                'label' => $section->label(),
+                'description' => $section->description(),
+                'party' => $section->party(),
+                'party_label' => $section->partyLabel(),
+                'amount_label' => $section->amountLabel(),
+                'side' => $section->side(),
+            ])->values()->all(),
             'totals' => [
                 'assets' => round($assets, 2),
                 'liabilities' => round($liabilities, 2),

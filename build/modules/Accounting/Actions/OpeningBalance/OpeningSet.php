@@ -22,7 +22,7 @@ final class OpeningSet
     {
         $rows = $view['rows'];
 
-        return [
+        $payload = [
             'as_of_date' => $view['as_of_date'] ?? now()->toDateString(),
             'cash' => ['amount' => (float) ($rows['cash']['amount'] ?? 0)],
             'banks' => collect($rows['banks'] ?? [])
@@ -32,10 +32,16 @@ final class OpeningSet
             'credit_customers' => self::carry($rows['credit_customers'] ?? [], 'customer_id'),
             'employees' => self::carry($rows['employees'] ?? [], 'employee_id'),
             'salaries_owed' => self::carry($rows['salaries_owed'] ?? [], 'employee_id'),
-            'amanat' => self::carry($rows['amanat'] ?? [], 'customer_id'),
             'suppliers' => self::carry($rows['suppliers'] ?? [], 'vendor_id'),
             'partners' => self::carry($rows['partners'] ?? [], 'partner_id'),
         ];
+
+        // Module sections the view carries (amanat, ...): the same rows, keyed the same way.
+        foreach ($view['sections'] ?? [] as $section) {
+            $payload[$section['key']] = self::carry($rows[$section['key']] ?? [], $section['party'].'_id');
+        }
+
+        return $payload;
     }
 
     /**

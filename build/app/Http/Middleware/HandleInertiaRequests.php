@@ -210,11 +210,12 @@ class HandleInertiaRequests extends Middleware
                         'canManage' => $user->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE),
                         'asOfDate' => $opening['as_of_date'] ?? null,
                         'locked' => ! empty($opening['locked_at']),
-                        'hasAmanat' => Account::where('company_id', $company->id)
-                            ->whereNull('deleted_at')
-                            ->where('is_active', true)
-                            ->where('code', '2200')
-                            ->exists(),
+                        // Module sections Quick Add can offer right now (e.g. amanat advance).
+                        'sections' => collect(app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->availableFor($company))
+                            ->filter(fn ($section) => $section->ready($company))
+                            ->map(fn ($section) => ['key' => $section->key(), 'label' => $section->label(), 'hint' => $section->hint()])
+                            ->values()
+                            ->all(),
                     ];
                 },
             ],

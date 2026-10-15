@@ -113,6 +113,8 @@ class FuelStationServiceProvider extends ServiceProvider
             'Held for the customer and used up against fuel. Shows on their amanat page.',
         );
 
+        \App\Modules\Accounting\Extensions\OpeningBalanceSections::register(new \App\Modules\FuelStation\OpeningBalances\AmanatOpeningSection);
+
         \App\Modules\Accounting\Extensions\StatementKinds::register(new \App\Modules\FuelStation\Reports\AmanatStatementKind);
         \App\Modules\Accounting\Extensions\StatementKinds::registerLink(
             'stock',

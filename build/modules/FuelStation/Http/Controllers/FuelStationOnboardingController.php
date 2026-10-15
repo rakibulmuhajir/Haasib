@@ -337,7 +337,7 @@ class FuelStationOnboardingController extends Controller
             $openingSummary = [
                 'as_of_date' => $view['as_of_date'],
                 'locked_at' => $view['locked_at'],
-                'row_count' => ($rows['cash']['amount'] > 0 ? 1 : 0) + count($rows['banks']) + count($rows['credit_customers']) + count($rows['employees']) + count($rows['amanat']) + count($rows['suppliers']) + count($rows['partners']),
+                'row_count' => ($rows['cash']['amount'] > 0 ? 1 : 0) + count($rows['banks']) + count($rows['credit_customers']) + count($rows['employees']) + count($rows['amanat'] ?? []) + count($rows['suppliers']) + count($rows['partners']),
                 'assets' => $view['totals']['assets'],
                 'liabilities' => $view['totals']['liabilities'],
                 'url' => route('accounting.opening-balances.show', ['company' => $company->slug]),

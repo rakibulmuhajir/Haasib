@@ -57,7 +57,8 @@ interface BankAccountRow {
   account_number: string
   account_type: 'checking' | 'savings' | 'credit_card' | 'cash' | 'other'
   currency: string
-  current_balance: number
+  current_balance: number | string
+  ledger_balance: number | null
   is_active: boolean
   is_primary: boolean
   last_reconciled_date: string | null
@@ -147,9 +148,14 @@ const handleDelete = (account: BankAccountRow) => {
   router.delete(`/${props.company.slug}/banking/accounts/${account.id}`)
 }
 
-const totalBalance = computed(() => {
-  return props.bankAccounts.data.reduce((sum, acc) => sum + acc.current_balance, 0)
-})
+// Ledger balances are in the company's base currency; an account with no GL link falls back to its
+// stored figure, which is only comparable when it is in base currency too.
+const balanceOf = (acc: BankAccountRow) => Number(acc.ledger_balance ?? acc.current_balance) || 0
+const totalBalance = computed(() =>
+  props.bankAccounts.data
+    .filter((acc) => acc.ledger_balance !== null || acc.currency === props.company.base_currency)
+    .reduce((sum, acc) => sum + balanceOf(acc), 0),
+)
 </script>
 
 <template>
@@ -246,17 +252,18 @@ const totalBalance = computed(() => {
 
             <div class="flex items-center gap-4">
               <div class="text-right">
-                <p class="font-bold text-lg"><MoneyText :amount="account.current_balance" :currency="account.currency" /></p>
+                <p class="font-bold text-lg"><MoneyText :amount="balanceOf(account)" :currency="account.ledger_balance !== null ? company.base_currency : account.currency" /></p>
                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                   <span v-if="account.unreconciled_count > 0" class="text-status-attention">
                     {{ account.unreconciled_count }} unreconciled
                   </span>
-                  <span v-else class="text-status-success">
+                  <span v-else-if="account.last_reconciled_date" class="text-status-success">
                     All reconciled
                   </span>
                 </div>
                 <p class="text-xs text-muted-foreground">
-                  Last reconciled: {{ formatDate(account.last_reconciled_date) }}
+                  <template v-if="account.last_reconciled_date">Last reconciled: {{ formatDate(account.last_reconciled_date) }}</template>
+                  <template v-else>Never reconciled</template>
                 </p>
               </div>
 

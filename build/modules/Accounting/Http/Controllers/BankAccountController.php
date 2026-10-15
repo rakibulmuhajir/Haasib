@@ -56,6 +56,15 @@ class BankAccountController extends Controller
 
         $bankAccounts = $query->paginate(25)->withQueryString();
 
+        // The ledger is the book of record: `current_balance` on the bank account row is only the
+        // opening figure and goes stale as soon as anything is posted to the linked GL account.
+        $ledger = $this->ledgerBalances($company->id, $bankAccounts->getCollection()->pluck('gl_account_id')->filter()->all());
+        $bankAccounts->getCollection()->transform(function (BankAccount $account) use ($ledger) {
+            $account->setAttribute('ledger_balance', $ledger[$account->gl_account_id] ?? null);
+
+            return $account;
+        });
+
         return Inertia::render('accounting/bank-accounts/Index', [
             'company' => [
                 'id' => $company->id,
@@ -71,6 +80,33 @@ class BankAccountController extends Controller
                 'sort_dir' => $sortDir,
             ],
         ]);
+    }
+
+    /**
+     * Posted balance per GL account, in the account's normal direction (credit-normal accounts such
+     * as credit cards read as the amount owed). Same posted statuses as the balance sheet.
+     *
+     * @param  array<int, string>  $glAccountIds
+     * @return array<string, float>
+     */
+    private function ledgerBalances(string $companyId, array $glAccountIds): array
+    {
+        if ($glAccountIds === []) {
+            return [];
+        }
+
+        return DB::table('acct.accounts as a')
+            ->leftJoin('acct.journal_entries as je', 'je.account_id', '=', 'a.id')
+            ->leftJoin('acct.transactions as t', function ($join) {
+                $join->on('t.id', '=', 'je.transaction_id')->whereIn('t.status', ['posted', 'locked']);
+            })
+            ->where('a.company_id', $companyId)
+            ->whereIn('a.id', $glAccountIds)
+            ->groupBy('a.id', 'a.normal_balance')
+            ->selectRaw('a.id, a.normal_balance, COALESCE(SUM(CASE WHEN t.id IS NOT NULL THEN je.debit_amount END), 0) AS debit, COALESCE(SUM(CASE WHEN t.id IS NOT NULL THEN je.credit_amount END), 0) AS credit')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->id => round($r->normal_balance === 'credit' ? $r->credit - $r->debit : $r->debit - $r->credit, 2)])
+            ->all();
     }
 
     public function create(): Response

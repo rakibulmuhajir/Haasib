@@ -33,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
         // Shared across every module's service provider boot(), so widget
         // registration in one module lands in the same registry every module reads.
         $this->app->singleton(WidgetRegistry::class);
+        $this->app->singleton(\App\Support\Modules\ModuleRegistry::class);
 
         $this->app->singleton(TenantContextGuard::class, function ($app) {
             $mode = (string) config('database.tenant_context_guard.mode', TenantContextGuard::MODE_OFF);

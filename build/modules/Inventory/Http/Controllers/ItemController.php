@@ -200,7 +200,7 @@ class ItemController extends Controller
     private function defaultStockAccounts(array &$data, $company, string $userId): void
     {
         $stocked = ($data['track_inventory'] ?? false) && ($data['item_type'] ?? '') === 'product';
-        if (! $stocked || $company->industry_code !== 'fuel_station' || ! empty($data['asset_account_id'])) {
+        if (! $stocked || ! $company->hasModule('fuel_station') || ! empty($data['asset_account_id'])) {
             return;
         }
 

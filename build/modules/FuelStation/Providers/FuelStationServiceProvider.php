@@ -24,6 +24,8 @@ class FuelStationServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->app->make(\App\Support\Modules\ModuleRegistry::class)->register(new \App\Modules\FuelStation\FuelStationModule);
+
         $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
 
         Route::middleware('web')

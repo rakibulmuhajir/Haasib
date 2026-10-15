@@ -167,13 +167,16 @@ class HandleInertiaRequests extends Middleware
                         return null;
                     }
 
-                    $isFuelStation = $company->isModuleEnabled('fuel_station')
-                        || $company->industry_code === 'fuel_station'
-                        || $company->industry === 'fuel_station';
+                    $isFuelStation = $company->hasModule('fuel_station');
 
                     return $isFuelStation
                         ? app(FuelNavigationAccess::class)->forUser($company, $user)
                         : null;
+                },
+                'enabledModules' => function () {
+                    $company = app(CurrentCompany::class)->get();
+
+                    return $company ? array_keys(app(\App\Support\Modules\ModuleRegistry::class)->enabledFor($company)) : [];
                 },
                 // The Settings menu: what this person may set up, grouped (App\Services\SettingsMenu).
                 'settingsMenu' => function () use ($request) {

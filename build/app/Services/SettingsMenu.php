@@ -18,7 +18,7 @@ class SettingsMenu
     {
         $can = fn (string $permission) => $user->isGodMode() || $user->hasCompanyPermission($permission);
         $slug = $company->slug;
-        $fuel = $company->isModuleEnabled('fuel_station');
+        $fuel = $company->hasModule('fuel_station');
         $inventory = $company->isModuleEnabled('inventory');
 
         // A section is one place to go (href) or a set of pages; its items are what is inside --

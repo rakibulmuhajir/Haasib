@@ -218,9 +218,7 @@ class BillController extends Controller
         // grid to do, so the short form is the whole job.
         $hasInventoryItems = $inventoryEnabled && count($items) > 0;
         if (! $hasInventoryItems) {
-            $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
-                || ($company->industry ?? null) === 'fuel_station'
-                || $company->isModuleEnabled('fuel_station');
+            $isFuelStation = $company->hasModule('fuel_station');
 
             $defaultExpenseAccountId = $isFuelStation
                 ? (Account::where('company_id', $company->id)
@@ -252,9 +250,7 @@ class BillController extends Controller
             ]);
         }
 
-        $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station'
-            || $company->isModuleEnabled('fuel_station');
+        $isFuelStation = $company->hasModule('fuel_station');
 
         $defaultExpenseAccountId = $isFuelStation
             ? (Account::where('company_id', $company->id)

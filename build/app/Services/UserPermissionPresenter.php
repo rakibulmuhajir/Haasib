@@ -21,8 +21,7 @@ class UserPermissionPresenter
     private function belongsToEnabledModule(Company $company, string $permission): bool
     {
         $prefix = explode('.', $permission)[0];
-        $isUmrah = $company->isModuleEnabled('umrah')
-            || in_array($company->industry_code, ['umrah', 'travel'], true);
+        $isUmrah = $company->hasModule('umrah');
 
         if ($isUmrah) {
             return $prefix === 'umrah'
@@ -44,8 +43,7 @@ class UserPermissionPresenter
     private function capabilities(Company $company, string $role, array $permissions): array
     {
         $has = fn (string $permission): bool => in_array($permission, $permissions, true);
-        $isUmrah = $company->isModuleEnabled('umrah')
-            || in_array($company->industry_code, ['umrah', 'travel'], true);
+        $isUmrah = $company->hasModule('umrah');
 
         if (! $isUmrah) {
             return [];

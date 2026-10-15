@@ -35,9 +35,7 @@ class PaymentController extends Controller
             return false;
         }
 
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || $company->industry_code === 'fuel_station'
-            || $company->industry === 'fuel_station';
+        $isFuelStation = $company->hasModule('fuel_station');
 
         if (! $isFuelStation) {
             return false;

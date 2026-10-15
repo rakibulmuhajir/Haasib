@@ -133,7 +133,7 @@ class ConsolidatedInvoiceService
      */
     public static function labels(Company $company): array
     {
-        $fuel = $company->isModuleEnabled('fuel_station');
+        $fuel = $company->hasModule('fuel_station');
 
         return [
             'date' => 'Date', 'reference' => 'Reference', 'physical' => 'Invoice no.',

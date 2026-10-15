@@ -270,12 +270,8 @@ class CompanyController extends Controller
 
         // A fuel station lands on its own home; the product / tank setup page it used to open
         // on lives at /fuel/products.
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station';
-        $isUmrahCompany = $company->isModuleEnabled('umrah')
-            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
-            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
+        $isFuelStation = $company->hasModule('fuel_station');
+        $isUmrahCompany = $company->hasModule('umrah');
 
         if ($isFuelStation && ! $isUmrahCompany) {
             $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
@@ -376,9 +372,7 @@ class CompanyController extends Controller
             abort(403, 'You are not a member of this company.');
         }
 
-        $isUmrah = $company->isModuleEnabled('umrah')
-            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
-            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
+        $isUmrah = $company->hasModule('umrah');
 
         if ($isUmrah) {
             return redirect()->route('umrah.dashboard', ['company' => $company->slug]);
@@ -575,9 +569,7 @@ class CompanyController extends Controller
         $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
         $profitLoss = $this->dashboardService->getProfitLossSummary($company->id);
 
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station';
+        $isFuelStation = $company->hasModule('fuel_station');
 
         return Inertia::render('company/Show', [
             'company' => [

@@ -121,9 +121,7 @@ class InvoiceController extends Controller
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
             // Same fuel-station test as HandleInertiaRequests' fuelNavigation prop.
-            'isFuelStation' => $company->isModuleEnabled('fuel_station')
-                || $company->industry_code === 'fuel_station'
-                || $company->industry === 'fuel_station',
+            'isFuelStation' => $company->hasModule('fuel_station'),
             // Arriving from a customer, or from another invoice to the same
             // one: the party is already known, so the form should not ask.
             'preselect' => [
@@ -250,9 +248,7 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
-            'isFuelStation' => $company->isModuleEnabled('fuel_station')
-                || $company->industry_code === 'fuel_station'
-                || $company->industry === 'fuel_station',
+            'isFuelStation' => $company->hasModule('fuel_station'),
         ]);
     }
 

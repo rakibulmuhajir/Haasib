@@ -162,7 +162,7 @@ class PartnerProfitShareService
     public function netProfit(string $companyId, string $from, string $to): float
     {
         $company = Company::findOrFail($companyId);
-        if ($company->industry === 'fuel_station' || $company->isModuleEnabled('fuel_station')) {
+        if ($company->hasModule('fuel_station')) {
             return round((float) app(ProfitStatementService::class)->run($companyId, $from, $to, (string) $company->slug)['net_profit'], 2);
         }
 

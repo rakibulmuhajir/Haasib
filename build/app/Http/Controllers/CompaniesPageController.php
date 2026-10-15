@@ -99,11 +99,9 @@ class CompaniesPageController extends Controller
 
         $company = Company::where('slug', $data['slug'])->firstOrFail();
         $target = match (true) {
-            $company->isModuleEnabled('umrah')
-                || in_array($company->industry_code, ['umrah', 'travel'], true)
+            $company->hasModule('umrah')
                 => route('umrah.dashboard', ['company' => $company->slug]),
-            $company->isModuleEnabled('fuel_station')
-                || $company->industry_code === 'fuel_station'
+            $company->hasModule('fuel_station')
                 => route('fuel.dashboard', ['company' => $company->slug]),
             default => "/{$company->slug}",
         };

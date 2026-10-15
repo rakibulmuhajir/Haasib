@@ -4,6 +4,8 @@ namespace App\Modules\FuelStation\Providers;
 
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\DocumentDateLock;
+use App\Modules\Accounting\Services\SalesDiscountAccountResolver;
+use App\Modules\FuelStation\Models\StationSettings;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,10 +24,12 @@ class FuelStationServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
+        $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
 
         Route::middleware('web')
-            ->group(__DIR__ . '/../Routes/fuel.php');
+            ->group(__DIR__.'/../Routes/fuel.php');
+
+        SalesDiscountAccountResolver::extend('fuel_station', fn (string $companyId): ?string => StationSettings::where('company_id', $companyId)->value('sales_discount_account_id'));
 
         // A bill (or any other document) dated on a day whose daily close has
         // been locked can't be edited without unlocking the day first -- see

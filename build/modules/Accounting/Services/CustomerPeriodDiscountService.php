@@ -109,13 +109,7 @@ class CustomerPeriodDiscountService
                 throw ValidationException::withMessages(['credit_date' => 'The posting date cannot be before the period ends.']);
             }
             app(DocumentDateLock::class)->assertOpen($company->id, $data['credit_date'], 'This period discount');
-            $discountAccount = Account::firstOrCreate(['company_id' => $company->id, 'code' => '4210'], [
-                'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'sales',
-                'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => true,
-            ]);
-            if (! $discountAccount->is_active || $discountAccount->type !== 'revenue' || $discountAccount->normal_balance !== 'debit') {
-                throw ValidationException::withMessages(['period' => 'Account 4210 must be an active Sales Discounts account with a debit balance.']);
-            }
+            $discountAccount = app(SalesDiscountAccountResolver::class)->resolve($company);
             $ar = Account::where('company_id', $company->id)->where('is_active', true)
                 ->where('subtype', 'accounts_receivable')->find($customer->ar_account_id ?: $company->ar_account_id);
             if (! $ar || ($ar->currency && $ar->currency !== $company->base_currency)) {

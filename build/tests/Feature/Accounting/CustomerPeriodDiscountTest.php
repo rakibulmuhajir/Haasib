@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Actions\CreditNote\ApplyAction;
 use App\Modules\Accounting\Actions\CreditNote\CreateAction;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
@@ -11,6 +12,7 @@ use App\Modules\Accounting\Services\CustomerPeriodDiscountService;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\ReceivablesAgingReportService;
 use App\Modules\FuelStation\Models\CustomerFuelDiscount;
+use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\CustomerFuelDiscountService;
 use App\Modules\FuelStation\Services\FuelSaleService;
 use App\Services\CompanyContextService;
@@ -136,6 +138,45 @@ test('per litre period discount uses saved fuel quantities and creates a dated c
     expect((float) $credit->amount)->toBe(600.0)->and((float) $credit->period_discount['litres'])->toBe(300.0)
         ->and($credit->credit_date->toDateString())->toBe('2026-09-30');
 });
+
+test('period discount uses the configured account even when account 4210 is a duplicate', function (bool $oldActive) {
+    $f = periodDiscountFixture();
+    $old = Account::create(['company_id' => $f['company']->id, 'code' => '4210', 'name' => 'Sales Discounts',
+        'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => $oldActive]);
+    $mapped = Account::create(['company_id' => $f['company']->id, 'code' => '4211', 'name' => 'Sales Discounts',
+        'type' => 'revenue', 'subtype' => 'sales', 'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => true]);
+    StationSettings::where('company_id', $f['company']->id)->update(['sales_discount_account_id' => $mapped->id]);
+    periodDiscountInvoice($f);
+    $credit = postPeriodDiscount($f);
+    $debit = $credit->transaction->journalEntries->where('debit_amount', '>', 0)->sole();
+    expect($debit->account_id)->toBe($mapped->id)->and((float) $debit->debit_amount)->toBe(5000.0)
+        ->and($old->fresh()->is_active)->toBe($oldActive)
+        ->and(Account::where('company_id', $f['company']->id)->where('name', 'Sales Discounts')->count())->toBe(2);
+})->with([false, true]);
+
+test('period discount reuses the generic chart sales discount account without creating 4210', function () {
+    $f = periodDiscountFixture();
+    $existing = Account::create(['company_id' => $f['company']->id, 'code' => '4910', 'name' => 'Sales Discounts',
+        'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => true]);
+    periodDiscountInvoice($f);
+    $credit = postPeriodDiscount($f);
+    expect($credit->transaction->journalEntries->where('debit_amount', '>', 0)->sole()->account_id)->toBe($existing->id)
+        ->and(Account::where('company_id', $f['company']->id)->where('code', '4210')->exists())->toBeFalse();
+});
+
+test('an invalid explicit discount account fails atomically without using a different account', function (array $invalid) {
+    $f = periodDiscountFixture();
+    $good = ['company_id' => $f['company']->id, 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'sales',
+        'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => true];
+    Account::create($good + ['code' => '4210']);
+    $mapped = Account::create(array_merge($good, ['code' => '4211'], $invalid));
+    StationSettings::where('company_id', $f['company']->id)->update(['sales_discount_account_id' => $mapped->id]);
+    $invoice = periodDiscountInvoice($f);
+    expect(fn () => postPeriodDiscount($f))->toThrow(ValidationException::class);
+    expect(CreditNote::where('company_id', $f['company']->id)->count())->toBe(0)
+        ->and(DB::table('acct.transactions')->where('company_id', $f['company']->id)->count())->toBe(0)
+        ->and((float) $invoice->fresh()->balance)->toBe(100000.0);
+})->with(['inactive' => [['is_active' => false]], 'credit normal' => [['normal_balance' => 'credit']], 'not contra' => [['is_contra' => false]]]);
 
 test('overlap stale previews excessive credits and closed dates cannot post partial adjustments', function () {
     $f = periodDiscountFixture();

@@ -52,7 +52,7 @@ class StoreCustomerRequest extends BaseFormRequest
             'category_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('acct.customer_categories', 'id')->where(fn ($q) => $q
+                Rule::exists(\App\Modules\Accounting\Models\CustomerCategory::class, 'id')->where(fn ($q) => $q
                     ->where('company_id', app(\App\Services\CompanyContextService::class)->getCompanyId())),
             ],
         ];

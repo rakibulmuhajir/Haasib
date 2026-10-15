@@ -23,7 +23,10 @@ export type InputType = 'text' | 'number' | 'email' | 'phone' | 'date' | 'select
 export const LOOKUP_ENTITIES = ['currency', 'country', 'industry', 'role'] as const
 
 /** Entity types that use search (large lists, type to search) */
-export const SEARCH_ENTITIES = ['customer', 'company', 'invoice', 'user', 'vendor'] as const
+export const SEARCH_ENTITIES = [
+  'customer', 'company', 'invoice', 'user', 'vendor',
+  'bill', 'account', 'item', 'employee', 'warehouse',
+] as const
 
 export interface FieldDef {
   name: string
@@ -562,30 +565,121 @@ const SCHEMAS: Record<string, CommandSchema> = {
 // Exports
 // ============================================================================
 
+/** Split "fuel.amanat.movement" into entity "fuel.amanat" and verb "movement". */
+function splitKey(key: string): [string, string] {
+  const i = key.lastIndexOf('.')
+  return [key.slice(0, i), key.slice(i + 1)]
+}
+
+// ============================================================================
+// Server catalog (GET /api/palette/catalog)
+// ============================================================================
+
+export interface CatalogEntry {
+  key: string
+  entity: string
+  verb: string
+  description: string
+  query: boolean
+  form: boolean
+  form_url: string | null
+  args: FieldDef[]
+  flags: FieldDef[]
+}
+
+export interface CatalogMeta {
+  description: string
+  query: boolean
+  form: boolean
+  form_url: string | null
+}
+
+/** Schemas learned from the server. Hand-written SCHEMAS always win. */
+const CATALOG_SCHEMAS: Record<string, CommandSchema> = {}
+
+/** Per-command metadata from the catalog, keyed "entity.verb". */
+export const catalogMeta: Record<string, CatalogMeta> = {}
+
+function toFieldDef(f: FieldDef): FieldDef {
+  const def: FieldDef = { name: f.name, required: f.required, inputType: f.inputType }
+  if (f.hint) def.hint = f.hint
+  if (f.placeholder) def.placeholder = f.placeholder
+  if (f.enum) def.enum = f.enum
+  if (f.searchEntity) def.searchEntity = f.searchEntity
+  if (f.accept) def.accept = f.accept
+  return def
+}
+
+const catalogListeners: Array<() => void> = []
+
+/** grammar.ts subscribes here to rebuild GRAMMAR (avoids a circular import). */
+export function onCatalogChange(listener: () => void): void {
+  catalogListeners.push(listener)
+}
+
+/**
+ * Add server-described commands. Entries already hand-written are skipped.
+ * Returns true when anything changed (caller rebuilds the grammar).
+ */
+export function registerCatalogSchemas(entries: CatalogEntry[]): boolean {
+  Object.keys(CATALOG_SCHEMAS).forEach(k => delete CATALOG_SCHEMAS[k])
+  Object.keys(catalogMeta).forEach(k => delete catalogMeta[k])
+
+  for (const e of entries || []) {
+    if (!e?.entity || !e?.verb) continue
+    const key = `${e.entity}.${e.verb}`
+    if (SCHEMAS[key]) continue
+
+    CATALOG_SCHEMAS[key] = {
+      entity: e.entity,
+      verb: e.verb,
+      args: (e.args || []).map(toFieldDef),
+      flags: (e.flags || []).map(toFieldDef),
+    }
+    catalogMeta[key] = {
+      description: e.description || '',
+      query: !!e.query,
+      form: !!e.form,
+      form_url: e.form_url ?? null,
+    }
+  }
+
+  catalogListeners.forEach(fn => fn())
+  return true
+}
+
+export function isCatalogSchema(entity: string, verb: string): boolean {
+  const key = `${entity}.${verb}`
+  return !SCHEMAS[key] && !!CATALOG_SCHEMAS[key]
+}
+
 export function getSchema(entity: string, verb: string): CommandSchema | null {
   const key = `${entity}.${verb}`
-  return SCHEMAS[key] || null
+  return SCHEMAS[key] || CATALOG_SCHEMAS[key] || null
 }
 
 export function getEntities(): string[] {
   const entities = new Set<string>()
-  Object.keys(SCHEMAS).forEach(key => {
-    entities.add(key.split('.')[0])
-  })
+  Object.keys(SCHEMAS).forEach(key => entities.add(splitKey(key)[0]))
+  Object.keys(CATALOG_SCHEMAS).forEach(key => entities.add(splitKey(key)[0]))
   return Array.from(entities).sort()
 }
 
 export function getVerbsForEntity(entity: string): string[] {
   const verbs: string[] = []
   Object.keys(SCHEMAS).forEach(key => {
-    const [e, v] = key.split('.')
+    const [e, v] = splitKey(key)
     if (e === entity) verbs.push(v)
+  })
+  Object.keys(CATALOG_SCHEMAS).forEach(key => {
+    const [e, v] = splitKey(key)
+    if (e === entity && !verbs.includes(v)) verbs.push(v)
   })
   return verbs
 }
 
 export function getAllSchemas(): CommandSchema[] {
-  return Object.values(SCHEMAS)
+  return [...Object.values(SCHEMAS), ...Object.values(CATALOG_SCHEMAS)]
 }
 
 // Helper to check if a field needs dropdown/sidebar

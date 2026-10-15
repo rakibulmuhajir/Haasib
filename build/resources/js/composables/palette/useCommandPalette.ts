@@ -5,7 +5,7 @@ import { formatText } from '@/palette/formatter'
 import { getFrecencyScores, recordCommandUse } from '@/palette/frecency'
 import { resolveEntityShortcut, getVerbs, ENTITY_ICONS } from '@/palette/grammar'
 import { getQuickActions, resolveQuickActionCommand, getQuickActionLabel } from '@/palette/quick-actions'
-import { getFieldPlaceholder, getSchema } from '@/palette/schemas'
+import { catalogMeta, getFieldPlaceholder, getSchema, registerCatalogSchemas } from '@/palette/schemas'
 import { parse } from '@/palette/parser'
 import type { InputType } from '@/palette/schemas'
 import type { OutputLine, QuickAction, Suggestion, TableState } from '@/types/palette'
@@ -249,8 +249,45 @@ export function useCommandPalette(props: CommandPaletteProps, emit: PaletteEmit)
   // Watchers
   // ============================================================================
   
+  // Server catalog: fetched on first open and again when the company changes.
+  let catalogLoadedFor: string | null = null
+
+  async function loadCatalog() {
+    const slug = activeCompany.value?.slug || ''
+    if (catalogLoadedFor === slug) return
+    catalogLoadedFor = slug
+    try {
+      const headers: Record<string, string> = { 'Accept': 'application/json' }
+      if (slug) headers['X-Company-Slug'] = slug
+      const res = await fetch('/api/palette/catalog', { credentials: 'same-origin', headers })
+      if (!res.ok) throw new Error('catalog unavailable')
+      const data = await res.json()
+      registerCatalogSchemas(data.commands || [])
+    } catch {
+      catalogLoadedFor = null // silent; hand-written commands still work, retry next open
+    }
+  }
+
+  // Form commands are too big for one line: open the page instead of executing.
+  function openFormInstead(entity: string, verb: string): boolean {
+    const meta = catalogMeta[`${entity}.${verb}`]
+    if (!meta?.form) return false
+    if (meta.form_url) {
+      emit('update:visible', false)
+      router.visit(meta.form_url)
+    } else {
+      addOutput('output', 'Open the page to fill this in.')
+    }
+    return true
+  }
+
+  watch(() => activeCompany.value?.slug, () => {
+    if (props.visible) loadCatalog()
+  })
+
   watch(() => props.visible, (visible) => {
     if (visible) {
+      loadCatalog()
       nextTick(() => entityVerbInputEl.value?.focus())
     } else {
       resetState()
@@ -1292,6 +1329,8 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
   
     const entity = confirmedEntity.value
     const verb = confirmedVerb.value
+
+    if (openFormInstead(entity, verb)) return
   
     // Build params from chips
     const params: Record<string, string> = {}
@@ -1501,6 +1540,8 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
       addOutput('error', '✗ Invalid command format')
       return
     }
+
+    if (openFormInstead(parsed.entity, parsed.verb)) return
   
     addOutput('input', `❯ ${cmd}`)
     addToHistory(cmd)
@@ -1688,6 +1729,7 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
   
   onMounted(() => {
     if (props.visible) {
+      loadCatalog()
       nextTick(() => entityVerbInputEl.value?.focus())
     }
   })

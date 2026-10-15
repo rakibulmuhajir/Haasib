@@ -29,7 +29,9 @@ class InvestorController extends Controller
         $investors = Investor::where('company_id', $company->id)
             ->with(['activeLots'])
             ->orderBy('name')
-            ->paginate(50);
+            // The page filters and lists every investor itself (no pager), so it needs the list,
+            // not a paginator object.
+            ->get();
 
         // Get summary stats
         $summary = $this->investorService->getInvestorSummary($company->id);

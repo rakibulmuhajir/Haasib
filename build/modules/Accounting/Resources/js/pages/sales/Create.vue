@@ -63,10 +63,14 @@ const defaultDeposit = computed(() => {
     || ''
 })
 
+// The Select can't hold an empty value, so "company default" is a sentinel that
+// goes back to '' (no account) on submit.
+const DEFAULT_ACCOUNT = '__default'
+
 const lineItemTemplate = (): LineItem => ({
   description: '',
   amount: null,
-  income_account_id: '',
+  income_account_id: DEFAULT_ACCOUNT,
 })
 
 const form = useForm({
@@ -89,7 +93,13 @@ const removeLine = (index: number) => {
 }
 
 const submit = () => {
-  form.post(`/${props.company.slug}/sales`, {
+  form.transform((data) => ({
+    ...data,
+    line_items: data.line_items.map((line) => ({
+      ...line,
+      income_account_id: line.income_account_id === DEFAULT_ACCOUNT ? '' : line.income_account_id,
+    })),
+  })).post(`/${props.company.slug}/sales`, {
     preserveScroll: true,
     onSuccess: () => showSuccess('Saved'),
     onError: (errors) => showError(errors),
@@ -172,7 +182,7 @@ const submit = () => {
                 <SelectContent>
                   <SelectGroup>
                     <SelectLabel>Revenue accounts</SelectLabel>
-                    <SelectItem value="">{{ t('useCompanyDefault') }}</SelectItem>
+                    <SelectItem :value="DEFAULT_ACCOUNT">{{ t('useCompanyDefault') }}</SelectItem>
                     <SelectItem v-for="a in revenueAccounts" :key="a.id" :value="a.id">
                       {{ a.code }} — {{ a.name }}
                     </SelectItem>

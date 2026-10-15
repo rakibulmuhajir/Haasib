@@ -645,11 +645,15 @@ test('mixed party hotel approval uses destination agent rate and cancellation le
     foreach ([['1100', 'Receivable', 'asset', 'accounts_receivable', 'debit'], ['2000', 'Payable', 'liability', 'accounts_payable', 'credit'], ['4120', 'Hotels', 'revenue', 'revenue', 'credit'], ['5120', 'Hotel cost', 'cogs', 'cogs', 'debit']] as [$code, $name, $type, $subtype, $normal]) {
         \App\Modules\Accounting\Models\Account::firstOrCreate(['company_id' => $f->company->id, 'code' => $code], ['name' => $name, 'type' => $type, 'subtype' => $subtype, 'normal_balance' => $normal]);
     }
+    // Approval posts on the real date; the shared fixture only opens September 2026.
+    if (! \App\Modules\Accounting\Models\AccountingPeriod::where('company_id', $f->company->id)->whereDate('start_date', '<=', now()->addDay())->whereDate('end_date', '>=', now()->subDay())->exists()) {
+        \App\Modules\Accounting\Models\AccountingPeriod::create(['company_id' => $f->company->id, 'fiscal_year_id' => $f->fiscalYear->id, 'name' => 'Current', 'period_number' => 10, 'start_date' => now()->subDays(3)->toDateString(), 'end_date' => now()->addDays(60)->toDateString()]);
+    }
     $supplier = \App\Modules\Umrah\Models\HotelVendor::create(['company_id' => $f->company->id, 'vendor_number' => 'DEST-HOTEL', 'name' => 'Destination Hotel Supplier']);
     $hotel = \App\Modules\Umrah\Models\Hotel::create(['company_id' => $f->company->id, 'hotel_vendor_id' => $supplier->id, 'name' => 'Party Hotel', 'city' => 'Makkah', 'is_active' => true]);
     $room = \App\Modules\Umrah\Models\HotelRoomRate::create(['company_id' => $f->company->id, 'hotel_id' => $hotel->id, 'room_type' => 'double', 'retail_amount' => 100, 'cost_amount' => 60, 'is_active' => true]);
     foreach (['A' => 50, 'B' => 80] as $party => $rate) {
-        \App\Modules\Umrah\Models\CommercialRate::create(['company_id' => $f->company->id, 'service_type' => 'hotel_room', 'hotel_room_rate_id' => $room->id, 'scope_type' => 'agent', 'agent_id' => $f->{$party}->agent->id, 'calculation_type' => 'set_price', 'amount' => $rate, 'currency' => 'PKR', 'effective_from' => '2026-01-01', 'effective_until' => '2026-12-31', 'is_active' => true]);
+        \App\Modules\Umrah\Models\CommercialRate::create(['company_id' => $f->company->id, 'service_type' => 'hotel_room', 'hotel_room_rate_id' => $room->id, 'scope_type' => 'agent', 'agent_id' => $f->{$party}->agent->id, 'calculation_type' => 'set_price', 'amount' => $rate, 'currency' => 'PKR', 'effective_from' => now()->subYear()->toDateString(), 'effective_until' => now()->addYears(2)->toDateString(), 'is_active' => true]);
     }
     if ($directJoin) {
         $f->A->voucher->voucherPassengers()->where('passenger_id', $f->A->passengers->first()->id)->delete();
@@ -658,7 +662,7 @@ test('mixed party hotel approval uses destination agent rate and cancellation le
     } else {
         Bus::dispatch(new MoveVoucherPassengers($f->A->voucher, $f->B->voucher, [$f->A->passengers->first()->id]));
     }
-    $f->B->voucher->update(['service_bundle' => Voucher::SERVICE_HOTEL, 'hotel_stays' => [['source' => 'company', 'hotel_id' => $hotel->id, 'hotel_name' => $hotel->name, 'city' => 'Makkah', 'room_type' => 'double', 'room_count' => 1, 'check_in_date' => '2026-10-01', 'check_out_date' => '2026-10-03']]]);
+    $f->B->voucher->update(['service_bundle' => Voucher::SERVICE_HOTEL, 'hotel_stays' => [['source' => 'company', 'hotel_id' => $hotel->id, 'hotel_name' => $hotel->name, 'city' => 'Makkah', 'room_type' => 'double', 'room_count' => 1, 'check_in_date' => now()->addDays(30)->toDateString(), 'check_out_date' => now()->addDays(32)->toDateString()]]]);
     $original = $f->A->group->fresh()->getAttributes();
     $payments = DB::table('umrah.payment_allocations')->orderBy('id')->get()->toJson();
     $url = '/'.$f->company->slug.'/umrah/vouchers/'.$f->B->voucher->id;

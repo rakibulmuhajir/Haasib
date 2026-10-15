@@ -26,6 +26,7 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Save } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { formatDateTime } from '@/lib/datetime';
 import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate';
 import EntryDateNote from '@/components/EntryDateNote.vue';
 
@@ -497,7 +498,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                                     >
                                         {{ invoice.invoice_number }}
                                         <span class="text-muted-foreground">
-                                            ({{ invoice.invoice_date }})</span
+                                            ({{ formatDateTime(invoice.invoice_date, { mode: 'date' }) }})</span
                                         >
                                     </Label>
                                 </div>

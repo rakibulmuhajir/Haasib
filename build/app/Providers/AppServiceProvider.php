@@ -63,6 +63,8 @@ class AppServiceProvider extends ServiceProvider
             Event::listen(QueryExecuted::class, fn (QueryExecuted $event) => $guard->handle($event));
         }
 
+        \App\Support\Palette\CoreSearchSources::register();
+
         $this->runMigrationsAcrossEveryCompany();
 
         RateLimiter::for('commands', fn($request) =>

@@ -144,6 +144,12 @@ abstract class ModuleManifest
         return [];
     }
 
+    /** CommandBus key prefixes this module owns (e.g. 'abc.'); companies without the module never see them in the palette. */
+    public function commandPrefixes(): array
+    {
+        return [];
+    }
+
     /** Vendor type keys (Vendor::TYPES) only this module's companies are offered. */
     public function vendorTypes(): array
     {

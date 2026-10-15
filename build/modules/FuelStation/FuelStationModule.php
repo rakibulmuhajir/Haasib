@@ -22,6 +22,7 @@ class FuelStationModule extends ModuleManifest
     public function name(): string { return 'Fuel Station'; }
     public function industryCodes(): array { return ['fuel_station']; }
     public function requires(): array { return ['inventory']; }
+    public function commandPrefixes(): array { return ['fuel.', 'calculator.']; }
     public function capabilities(): array { return ['daily_close']; }
     public function labels(): array { return ['consolidated.item' => 'Fuel', 'consolidated.quantity' => 'Litres']; }
 

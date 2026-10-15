@@ -16,7 +16,7 @@ class CommandController extends Controller
     /**
      * Commands that work without company context (platform-level actions)
      */
-    private const GLOBAL_COMMANDS = [
+    public const GLOBAL_COMMANDS = [
         'company.list',
         'company.create',
         'company.switch',
@@ -25,7 +25,7 @@ class CommandController extends Controller
     /**
      * Commands that reference a specific company but don't require being "in" it
      */
-    private const COMPANY_TARGET_COMMANDS = [
+    public const COMPANY_TARGET_COMMANDS = [
         'company.view',
         'company.delete',
     ];

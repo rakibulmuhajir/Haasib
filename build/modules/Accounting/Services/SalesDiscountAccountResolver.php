@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class SalesDiscountAccountResolver
@@ -23,7 +24,7 @@ class SalesDiscountAccountResolver
             if ($id !== null) {
                 $account = Account::where('company_id', $company->id)->find($id);
                 if (! $account || ! $this->valid($account, $company)) {
-                    throw ValidationException::withMessages(['period' => 'The configured Sales Discounts account must be active contra-revenue with a normal debit balance and no foreign currency. Check the company account mapping.']);
+                    $this->unavailable($company, 'invalid_mapping', [$id]);
                 }
 
                 return $account;
@@ -37,13 +38,17 @@ class SalesDiscountAccountResolver
             return $valid->first();
         }
         if ($candidates->isNotEmpty()) {
-            throw ValidationException::withMessages(['period' => $valid->count() > 1
-                ? 'More than one active Sales Discounts account was found. Configure the company discount account before posting.'
-                : 'Set up an active Sales Discounts contra-revenue account with a normal debit balance before posting.']);
+            $this->unavailable($company, $valid->count() > 1 ? 'ambiguous' : 'unavailable', $candidates->pluck('id')->all());
         }
 
         return Account::create(['company_id' => $company->id, 'code' => '4210', 'name' => 'Sales Discounts',
             'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => true, 'currency' => null]);
+    }
+
+    private function unavailable(Company $company, string $reason, array $accountIds): never
+    {
+        Log::warning('period_discount_account_setup_invalid', ['company_id' => $company->id, 'reason' => $reason, 'account_ids' => $accountIds]);
+        throw ValidationException::withMessages(['period' => 'Discounts aren’t ready for this company yet. Ask your company administrator to review the discount setup, then try again.']);
     }
 
     private function valid(Account $account, Company $company): bool

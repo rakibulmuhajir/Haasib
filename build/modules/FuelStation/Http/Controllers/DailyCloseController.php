@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Http\Requests\ApplyPostCloseDiscountRequest;
 use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
+use App\Modules\FuelStation\Http\Requests\ReopenDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\UnlockDailyCloseRequest;
 use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Models\CustomerProfile;
@@ -1572,13 +1573,9 @@ class DailyCloseController extends Controller
      * date, undoing everything it created, so it can be reopened on the Create page with
      * the full form. See DailyCloseReopenService for the guards and the removal itself.
      */
-    public function reopen(Request $request, string $company, string $transaction, DailyCloseReopenService $reopenService): RedirectResponse
+    public function reopen(ReopenDailyCloseRequest $request, string $company, string $transaction, DailyCloseReopenService $reopenService): RedirectResponse
     {
         $companyModel = app(CurrentCompany::class)->get();
-        abort_unless($request->user()->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE), 403);
-
-        $request->validate(['reason' => 'required|string|min:3|max:2000']);
-
         $txn = Transaction::where('id', $transaction)
             ->where('company_id', $companyModel->id)
             ->where('transaction_type', 'fuel_daily_close')
@@ -1586,7 +1583,7 @@ class DailyCloseController extends Controller
             ->firstOrFail();
 
         try {
-            $result = $reopenService->reopen($txn, $request->user(), $request->input('reason'));
+            $result = $reopenService->reopen($txn, $request->user(), $request->validated('reason'));
             if (! empty($result['warnings'])) {
                 session()->flash('warnings', $result['warnings']);
             }
@@ -1594,8 +1591,12 @@ class DailyCloseController extends Controller
             return redirect()
                 ->route('fuel.daily-close.create', ['company' => $companyModel->slug, 'date' => $result['parked_date']])
                 ->with('success', 'Day reopened for editing. Everything it posted was removed; re-post when ready.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->withInput();
         } catch (\Throwable $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+            report($e);
+
+            return redirect()->back()->with('error', 'We couldn’t open this day for editing. No changes were made. Please try again, or contact support if it continues.')->withInput();
         }
     }
 

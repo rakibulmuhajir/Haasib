@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
 use App\Services\AccountingWriteTransaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class CustomerPeriodDiscountService
@@ -65,7 +66,7 @@ class CustomerPeriodDiscountService
             }
             $sources[] = ['id' => $invoice->id, 'number' => $invoice->invoice_number,
                 'date' => $invoice->invoice_date->toDateString(), 'gross' => $gross,
-                'balance' => round((float) $invoice->balance, 2), 'litres' => $litres];
+                'balance' => round((float) $invoice->balance, 6), 'litres' => $litres];
         }
 
         $gross = round(array_sum(array_column($sources, 'gross')), 2);
@@ -75,7 +76,7 @@ class CustomerPeriodDiscountService
             'per_litre' => $litres * $value,
             default => $value,
         }, 2);
-        $open = round(array_sum(array_column($sources, 'balance')), 2);
+        $open = round(array_sum(array_map(fn ($source) => $this->creditCapacity($source['balance']), $sources)), 2);
         $snapshot = ['from' => $from, 'to' => $to, 'method' => $method, 'value' => $value,
             'eligible_amount' => $gross, 'litres' => $litres, 'invoices' => $sources,
             'invoice_ids' => array_column($sources, 'id')];
@@ -113,7 +114,8 @@ class CustomerPeriodDiscountService
             $ar = Account::where('company_id', $company->id)->where('is_active', true)
                 ->where('subtype', 'accounts_receivable')->find($customer->ar_account_id ?: $company->ar_account_id);
             if (! $ar || ($ar->currency && $ar->currency !== $company->base_currency)) {
-                throw ValidationException::withMessages(['period' => 'Set a base-currency receivables account for this customer first.']);
+                Log::warning('period_discount_customer_setup_invalid', ['company_id' => $company->id, 'customer_id' => $customer->id, 'account_id' => $customer->ar_account_id ?: $company->ar_account_id]);
+                throw ValidationException::withMessages(['period' => 'This customer’s payment setup needs attention. Ask your company administrator to review it, then try again.']);
             }
             $reason = 'Period discount · '.$data['from'].' to '.$data['to'];
             $credit = CreditNote::create([
@@ -139,17 +141,17 @@ class CustomerPeriodDiscountService
             $credit->update(['transaction_id' => $journal->id, 'posted_at' => now()]);
             $left = $preview['amount'];
             foreach ($preview['snapshot']['invoices'] as $source) {
-                $applied = min($left, $source['balance']);
+                $applied = min($left, $this->creditCapacity($source['balance']));
                 if ($applied <= 0) {
                     continue;
                 }
                 $invoice = Invoice::where('company_id', $company->id)->findOrFail($source['id']);
-                $after = round($source['balance'] - $applied, 2);
+                $before = (float) $invoice->balance;
+                $settlement = app(PaymentAllocationService::class)->settleInvoice($invoice, $applied, $data['credit_date']);
+                $after = $settlement['balance'];
                 CreditNoteApplication::create(['company_id' => $company->id, 'credit_note_id' => $credit->id,
                     'invoice_id' => $invoice->id, 'amount_applied' => $applied, 'applied_at' => $data['credit_date'],
-                    'user_id' => $userId, 'invoice_balance_before' => $source['balance'], 'invoice_balance_after' => $after]);
-                $invoice->update(['paid_amount' => round((float) $invoice->paid_amount + $applied, 2), 'balance' => $after,
-                    'status' => $after <= 0 ? 'paid' : 'partial', 'paid_at' => $after <= 0 ? $data['credit_date'] : null]);
+                    'user_id' => $userId, 'invoice_balance_before' => $before, 'invoice_balance_after' => $after]);
                 $left = round($left - $applied, 2);
             }
             if ($left <= 0) {
@@ -171,10 +173,7 @@ class CustomerPeriodDiscountService
             app(DocumentDateLock::class)->assertOpen($credit->company_id, $credit->credit_date->toDateString(), 'This period discount');
             foreach ($credit->applications()->orderBy('invoice_id')->get() as $application) {
                 $invoice = Invoice::where('company_id', $credit->company_id)->lockForUpdate()->findOrFail($application->invoice_id);
-                $paid = max(0, round((float) $invoice->paid_amount - (float) $application->amount_applied, 2));
-                $balance = round((float) $invoice->balance + (float) $application->amount_applied, 2);
-                $invoice->update(['paid_amount' => $paid, 'balance' => $balance,
-                    'status' => $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'sent'), 'paid_at' => $balance <= 0 ? $invoice->paid_at : null]);
+                app(PaymentAllocationService::class)->unapplyInvoice($invoice, (float) $application->amount_applied);
             }
             $credit->applications()->delete();
             $journal = Transaction::where('company_id', $credit->company_id)->findOrFail($credit->transaction_id);
@@ -183,5 +182,11 @@ class CustomerPeriodDiscountService
 
             return ['message' => "Period discount {$credit->credit_note_number} voided.", 'data' => ['id' => $credit->id]];
         });
+    }
+
+    /** Credit applications store whole cents; never apply more than the exact saved balance. */
+    private function creditCapacity(float $balance): float
+    {
+        return max(0, floor(round($balance * 100, 4)) / 100);
     }
 }

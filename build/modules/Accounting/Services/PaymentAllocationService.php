@@ -16,7 +16,7 @@ class PaymentAllocationService
     /**
      * @return array{status: string, balance: float}
      */
-    public function settleInvoice(Invoice $invoice, float $invoiceCurrencyAmount): array
+    public function settleInvoice(Invoice $invoice, float $invoiceCurrencyAmount, ?string $appliedAt = null): array
     {
         $newBalance = round((float) $invoice->balance - $invoiceCurrencyAmount, 6);
         $newPaidAmount = round((float) $invoice->paid_amount + $invoiceCurrencyAmount, 6);
@@ -28,10 +28,19 @@ class PaymentAllocationService
             'status' => $newStatus,
             'paid_amount' => $newPaidAmount,
             'balance' => max(0, $newBalance),
-            'paid_at' => $newStatus === 'paid' ? now() : null,
+            'paid_at' => $newStatus === 'paid' ? ($appliedAt ?? now()) : null,
         ]);
 
         return ['status' => $newStatus, 'balance' => max(0, $newBalance)];
+    }
+
+    public function unapplyInvoice(Invoice $invoice, float $invoiceCurrencyAmount): void
+    {
+        $paid = max(0, round((float) $invoice->paid_amount - $invoiceCurrencyAmount, 6));
+        $balance = round((float) $invoice->total_amount - $paid, 6);
+        $status = $balance <= 0.000001 ? 'paid' : ($paid > 0 ? 'partial' : 'sent');
+        $invoice->update(['paid_amount' => $paid, 'balance' => $balance, 'status' => $status,
+            'paid_at' => $status === 'paid' ? $invoice->paid_at : null]);
     }
 
     /**

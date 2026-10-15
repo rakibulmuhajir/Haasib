@@ -46,7 +46,7 @@ class CustomerPeriodDiscountController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return back()->with('error', 'The discount could not be posted. '.$e->getMessage())->withInput();
+            return back()->with('error', 'We couldn’t save the discount. No changes were made. Please try again, or contact support if it continues.')->withInput();
         }
     }
 }

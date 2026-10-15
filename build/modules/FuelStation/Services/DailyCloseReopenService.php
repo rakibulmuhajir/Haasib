@@ -163,7 +163,7 @@ class DailyCloseReopenService
     private function guardLocked(Transaction $close): void
     {
         if ($close->is_locked) {
-            throw new \RuntimeException('Unlock the day first.');
+            throw \Illuminate\Validation\ValidationException::withMessages(['reason' => 'Unlock this day before opening it for editing.']);
         }
     }
 
@@ -748,14 +748,7 @@ class DailyCloseReopenService
             foreach ($payment->paymentAllocations()->with('invoice')->get() as $allocation) {
                 $invoice = $allocation->invoice;
                 if ($invoice) {
-                    $newBalance = round((float) $invoice->balance + (float) $allocation->amount_allocated, 2);
-                    $newPaid = round((float) $invoice->paid_amount - (float) $allocation->amount_allocated, 2);
-                    $invoice->update([
-                        'balance' => $newBalance,
-                        'paid_amount' => max(0, $newPaid),
-                        'status' => $newBalance >= (float) $invoice->total_amount ? 'sent' : ($newPaid > 0.004 ? 'partial' : 'sent'),
-                        'paid_at' => $newBalance > 0.004 ? null : $invoice->paid_at,
-                    ]);
+                    app(\App\Modules\Accounting\Services\PaymentAllocationService::class)->unapplyInvoice($invoice, (float) $allocation->amount_allocated);
                 }
             }
             PaymentAllocation::where('company_id', $companyId)->where('payment_id', $payment->id)->delete();

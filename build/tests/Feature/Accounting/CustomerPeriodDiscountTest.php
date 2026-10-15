@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\CustomerDiscountPolicy;
 use App\Modules\Accounting\Services\CustomerPeriodDiscountService;
 use App\Modules\Accounting\Services\CustomerStatementService;
@@ -328,4 +329,80 @@ test('opening balances are not treated as new sales eligible for period discount
     $f['company']->update(['settings' => ['opening_balances' => ['invoice_ids' => [$opening->id]]]]);
     $preview = app(CustomerPeriodDiscountService::class)->preview($f['company'], $f['customer'], periodDiscountData());
     expect($preview['snapshot']['eligible_amount'])->toBe(30000.0)->and($preview['invoice_count'])->toBe(1);
+});
+
+test('period credit and undo preserve fractional precision on a protected paid daily-close invoice', function (float $fraction) {
+    $f = periodDiscountFixture();
+    $close = Transaction::create(fixtureYearAndPeriod($f['company']->id) + ['company_id' => $f['company']->id,
+        'transaction_number' => 'PRECISION-CLOSE', 'transaction_type' => 'fuel_daily_close', 'transaction_date' => '2026-09-10',
+        'posting_date' => '2026-09-10', 'currency' => 'PKR', 'status' => 'posted', 'is_locked' => true,
+        'metadata' => ['posting_snapshot' => ['version' => 2]]]);
+    DB::select("SELECT set_config('app.reopening_close_id', ?, true)", [$close->id]);
+    $total = 35087 + $fraction;
+    $invoice = periodDiscountInvoice($f, $total, '2026-09-10', ['transaction_id' => $close->id,
+        'paid_amount' => round($total - 353.5, 6), 'balance' => 353.5, 'status' => 'partial']);
+    DB::select("SELECT set_config('app.reopening_close_id', '', true)");
+    $before = $invoice->fresh()->only(['total_amount', 'paid_amount', 'balance']);
+    $credit = postPeriodDiscount($f, ['value' => 353.5]);
+    $paid = $invoice->fresh();
+    expect((float) $paid->paid_amount)->toEqualWithDelta($total, 0.0000001)->and((float) $paid->balance)->toBe(0.0)
+        ->and($paid->status)->toBe('paid')->and($paid->paid_at->toDateString())->toBe('2026-09-30');
+    app(CustomerPeriodDiscountService::class)->void($credit, 'Check precision on undo');
+    expect($invoice->fresh()->only(['total_amount', 'paid_amount', 'balance']))->toBe($before);
+})->with([0.00004, -0.00004]);
+
+test('period credit never rounds its allocation above a fractional invoice balance', function () {
+    $f = periodDiscountFixture();
+    $invoice = periodDiscountInvoice($f, 35087, '2026-09-10', ['paid_amount' => 34733.50004, 'balance' => 353.49996, 'status' => 'partial']);
+    $data = periodDiscountData(['value' => 353.5]);
+    $preview = app(CustomerPeriodDiscountService::class)->preview($f['company'], $f['customer'], $data);
+    expect($preview['applied'])->toBe(353.49)->and($preview['remaining_credit'])->toBe(0.01);
+    $credit = postPeriodDiscount($f, ['value' => 353.5]);
+    expect((float) $credit->applications()->sole()->amount_applied)->toBe(353.49)
+        ->and((float) $invoice->fresh()->balance)->toBe(0.00996)
+        ->and(round((float) $invoice->fresh()->paid_amount + (float) $invoice->fresh()->balance, 6))->toBe(35087.0);
+    app(CustomerPeriodDiscountService::class)->void($credit, 'Restore fractional balance');
+    expect((float) $invoice->fresh()->paid_amount)->toBe(34733.50004)->and((float) $invoice->fresh()->balance)->toBe(353.49996);
+});
+
+test('period discount failures show a recovery message without SQL or record identifiers', function () {
+    $f = periodDiscountFixture();
+    periodDiscountHttpOwner($f);
+    $data = periodDiscountData() + ['preview_token' => str_repeat('a', 64), 'notes' => 'Keep my draft'];
+    $this->partialMock(\App\Services\CommandBus::class)->shouldReceive('dispatch')->once()
+        ->andThrow(new RuntimeException('SQLSTATE[P0001]: update acct.invoices set balance = 0 where id = private-record'));
+    $this->from("/{$f['company']->slug}/customers/{$f['customer']->id}/period-discount")
+        ->post("/{$f['company']->slug}/customers/{$f['customer']->id}/period-discount", $data)->assertRedirect()
+        ->assertSessionHas('error', 'We couldn’t save the discount. No changes were made. Please try again, or contact support if it continues.')
+        ->assertSessionHasInput('notes', 'Keep my draft');
+    expect(CreditNote::where('company_id', $f['company']->id)->count())->toBe(0);
+});
+
+test('discount setup diagnostics stay out of the user-facing validation message', function () {
+    $f = periodDiscountFixture();
+    $account = Account::create(['company_id' => $f['company']->id, 'code' => '4211', 'name' => 'Sales Discounts',
+        'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'is_active' => false]);
+    StationSettings::where('company_id', $f['company']->id)->update(['sales_discount_account_id' => $account->id]);
+    periodDiscountInvoice($f);
+    try {
+        postPeriodDiscount($f);
+        $this->fail('Invalid setup must be refused');
+    } catch (ValidationException $e) {
+        expect($e->errors()['period'][0])->toBe('Discounts aren’t ready for this company yet. Ask your company administrator to review the discount setup, then try again.');
+    }
+});
+
+test('credit adjustment failures also hide technical details and retain the reason', function () {
+    $f = periodDiscountFixture();
+    periodDiscountHttpOwner($f);
+    periodDiscountInvoice($f);
+    $credit = postPeriodDiscount($f);
+    $this->partialMock(\App\Services\CommandBus::class)->shouldReceive('dispatch')->once()
+        ->andThrow(new RuntimeException('SQLSTATE[P0001]: update acct.invoices private-record'));
+    $this->from("/{$f['company']->slug}/credit-notes/{$credit->id}")
+        ->post("/{$f['company']->slug}/credit-notes/{$credit->id}/void", ['reason' => 'Correct this discount'])
+        ->assertRedirect()
+        ->assertSessionHas('error', 'We couldn’t complete this credit adjustment. No changes were made. Please try again, or contact support if it continues.')
+        ->assertSessionHasInput('reason', 'Correct this discount');
+    expect($credit->fresh()->status)->not->toBe('void');
 });

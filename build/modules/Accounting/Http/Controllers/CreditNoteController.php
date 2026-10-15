@@ -311,7 +311,9 @@ class CreditNoteController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage())->withInput();
+            report($e);
+
+            return back()->with('error', 'We couldn’t complete this credit adjustment. No changes were made. Please try again, or contact support if it continues.')->withInput();
         }
     }
 

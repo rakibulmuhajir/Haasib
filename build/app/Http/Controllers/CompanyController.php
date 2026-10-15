@@ -133,7 +133,9 @@ class CompanyController extends Controller
             ]);
         }
 
-        $target = "/{$company->slug}";
+        // Companies with no module-specific landing page start in the setup wizard.
+        $company->refresh();
+        $target = $company->onboarding_completed ? "/{$company->slug}" : "/{$company->slug}/onboarding";
         foreach (app(ModuleRegistry::class)->forIndustry($data['industry_code']) as $manifest) {
             if (($url = $manifest->afterCreateUrl($company)) !== null) {
                 $target = $url;

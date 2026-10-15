@@ -59,3 +59,19 @@ test('invalid secondary currency rates still reject company creation without sav
     'rate without currency' => [['secondary_currency' => '', 'secondary_exchange_rate' => '75'], 'secondary_exchange_rate'],
     'duplicate base currency' => [['secondary_currency' => 'PKR', 'secondary_exchange_rate' => '1'], 'secondary_currency'],
 ]);
+
+test('a company with no module landing page starts in the onboarding wizard', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+    $name = 'General QA '.str()->random(12);
+
+    $response = $this->actingAs($user)->post('/companies', [
+        'name' => $name,
+        'industry_code' => 'other',
+        'country' => 'PK',
+        'base_currency' => 'PKR',
+        'timezone' => 'Asia/Karachi',
+    ]);
+
+    $company = Company::where('name', $name)->sole();
+    $response->assertRedirect("/{$company->slug}/onboarding");
+});

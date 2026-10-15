@@ -24,6 +24,7 @@ use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Services\DailyCloseLockService;
+use App\Modules\FuelStation\Services\DailyClosePeriodDiscountService;
 use App\Modules\FuelStation\Services\DailyClosePostCloseDiscountService;
 use App\Modules\FuelStation\Services\DailyCloseReopenService;
 use App\Modules\FuelStation\Services\DailyCloseService;
@@ -862,6 +863,7 @@ class DailyCloseController extends Controller
             ],
             'parkedDraft' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($companyId, $date),
             'canonicalActivity' => array_values(app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->sources($companyId, $date)),
+            'periodDiscounts' => app(DailyClosePeriodDiscountService::class)->forDate($companyId, $date),
             'date' => $date,
             'openingsFromParked' => $openingsFromParked,
             'fuelItems' => $fuelItems,
@@ -1397,6 +1399,7 @@ class DailyCloseController extends Controller
                     ->map(fn ($r) => ['id' => $r->id, 'label' => 'Nozzle '.$r->nozzle_id.' — '.$r->liters_dispensed.'L', 'current_value' => (float) $r->liters_dispensed]),
             ] : ['tank' => [], 'nozzle' => []],
             'reconciliation' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->view($txn),
+            'periodDiscounts' => app(DailyClosePeriodDiscountService::class)->forDate($companyModel->id, $txn->transaction_date->toDateString()),
             // Fresh, current figures for each credit-sale invoice this close created or
             // absorbed -- not the frozen metadata.credit_sale_details, which never changes
             // after posting. A post-close discount (see applyPostCloseDiscount()) reduces

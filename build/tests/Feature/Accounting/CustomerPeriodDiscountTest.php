@@ -406,3 +406,46 @@ test('credit adjustment failures also hide technical details and retain the reas
         ->assertSessionHasInput('reason', 'Correct this discount');
     expect($credit->fresh()->status)->not->toBe('void');
 });
+
+test('daily close displays the existing period credit on its posting date without receiving cash', function () {
+    $f = periodDiscountFixture();
+    periodDiscountInvoice($f);
+    $credit = postPeriodDiscount($f);
+    $service = app(\App\Modules\FuelStation\Services\DailyClosePeriodDiscountService::class);
+    expect($service->forDate($f['company']->id, '2026-09-29'))->toBe([]);
+    $rows = $service->forDate($f['company']->id, '2026-09-30');
+    expect($rows)->toHaveCount(1)->and($rows[0])->toBe(['id' => $credit->id, 'number' => $credit->credit_note_number,
+        'customer_name' => $f['customer']->name, 'from' => '2026-09-01', 'to' => '2026-09-30', 'amount' => 5000.0, 'currency' => 'PKR']);
+    periodDiscountHttpOwner($f);
+    $f['company']->enableModule('fuel_station');
+    $this->get("/{$f['company']->slug}/fuel/daily-close?date=2026-09-30")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('FuelStation/DailyClose/Create')->has('periodDiscounts', 1)
+            ->where('periodDiscounts.0.id', $credit->id));
+    $payload = $f['payload'];
+    $payload['date'] = '2026-09-30';
+    $result = app(\App\Modules\FuelStation\Services\DailyCloseService::class)->processDailyClose($f['company']->id, $payload, $f['user']);
+    $close = Transaction::findOrFail($result['transaction_id']);
+    $source = $close->metadata['posting_snapshot']['sources']['journal:'.$credit->transaction_id];
+    expect($source['money_in'])->toEqual(0)->and($source['money_out'])->toEqual(0)->and($source['cash_effect'])->toEqual(0)
+        ->and($close->metadata['expected_closing'])->toEqual(25000)
+        ->and(\App\Modules\Accounting\Models\Payment::where('company_id', $f['company']->id)->count())->toBe(0);
+    $this->get("/{$f['company']->slug}/fuel/daily-close/{$close->id}")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('FuelStation/DailyClose/Show')->where('periodDiscounts.0.id', $credit->id));
+    expect(CreditNote::where('company_id', $f['company']->id)->count())->toBe(1);
+});
+
+test('daily close period discounts exclude other companies and voided credits even with RLS bypass', function () {
+    $f = periodDiscountFixture();
+    periodDiscountInvoice($f);
+    $credit = postPeriodDiscount($f);
+    $other = periodDiscountFixture();
+    periodDiscountInvoice($other);
+    postPeriodDiscount($other);
+    app(CompanyContextService::class)->setContext($f['company']);
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    $service = app(\App\Modules\FuelStation\Services\DailyClosePeriodDiscountService::class);
+    expect(array_column($service->forDate($f['company']->id, '2026-09-30'), 'id'))->toBe([$credit->id]);
+    app(CustomerPeriodDiscountService::class)->void($credit, 'Replaced discount');
+    expect($service->forDate($f['company']->id, '2026-09-30'))->toBe([]);
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+});

@@ -17,6 +17,12 @@ Single source of truth for fuel station specific operations: pumps, rate changes
 
 `bank_withdrawals` is an optional list of `{bank_account_id, amount, reference?, purpose?}` in the daily-close form and saved `metadata.form_input`. Each row transfers cash from an active, company-owned bank account in the company base currency into the configured station cash drawer. It increases Money In and expected drawer cash; it does not create revenue. Posting credits the selected bank and includes the matching debit in the close's cash entry. Metadata stores `bank_withdrawals` (total) and `bank_withdrawals_by_account` (amounts by account). Park/resume preserves the rows without posting them.
 
+### Period discounts in daily close
+
+- Create/review and posted-close pages expose read-only `periodDiscounts` for the selected company and credit posting date, not the discounted sales period. Each row contains `id`, `number`, `customer_name`, `from`, `to`, `amount`, and `currency`. Only issued/applied period credit notes with a posted, unreversed journal appear; draft, void, deleted and other-company notes are excluded. Fetch only period endpoints, never the full source-invoice snapshot.
+- Review lists these as non-cash discounts linked to their existing credit notes. In a posted sheet, a discount already present in frozen sources is labelled as a non-cash sales adjustment; discounts entered after closing are listed separately. Neither path adds a receipt, payment, or expense, and neither changes drawer totals or reposts the credit. Original frozen totals and source records remain unchanged.
+- Customer payments are exclusively actual money received. A discount deducted from a customer's debt must use the period credit workflow, even if a paper register puts it in a receipts column. Register reconciliation belongs in the existing day's notes, shown on the posted sheet; an imported register balance is not a physical count.
+
 ---
 
 ## Architectural Decisions (REJECTED → ACCEPTED)

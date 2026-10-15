@@ -65,6 +65,8 @@ import { toast } from 'vue-sonner';
 import DailyCloseNav from '../../../components/DailyCloseNav.vue';
 import CreditSalesEntry from '../../../components/CreditSalesEntry.vue';
 import PaymentsReceivedEntry from '../../../components/PaymentsReceivedEntry.vue';
+import DailyClosePeriodDiscounts from '../../../components/DailyClosePeriodDiscounts.vue';
+import type { DailyClosePeriodDiscount } from '../../../types/dailyCloseDiscount';
 import PaySupplierEntry from '../../../components/PaySupplierEntry.vue';
 import { useLexicon } from '@/composables/useLexicon';
 import TankLevelGauge from '../../../components/TankLevelGauge.vue';
@@ -338,6 +340,7 @@ interface Features {
 const props = defineProps<{
     company: { id: string; name: string; slug: string; base_currency: string };
     parkedDraft?: Record<string, any> | null;
+    periodDiscounts?: DailyClosePeriodDiscount[];
     canonicalActivity?: Array<{
         id: string;
         type: string;
@@ -5337,6 +5340,7 @@ const cashFlowOut = computed(() => [
 
 
                         <!-- Money In Summary -->
+                        <DailyClosePeriodDiscounts :discounts="periodDiscounts || []" :company-slug="company.slug" />
                         <div class="space-y-3 rounded-lg bg-muted/30 p-4">
                             <h4 class="text-sm font-semibold">
                                 Money In Summary
@@ -6020,6 +6024,7 @@ const cashFlowOut = computed(() => [
                     </CardHeader>
                     <CardContent class="space-y-6">
                         <!-- Summary Grid -->
+                        <DailyClosePeriodDiscounts :discounts="periodDiscounts || []" :company-slug="company.slug" />
                         <div class="grid grid-cols-2 gap-6">
                             <!-- Left: Cash Flow -->
                             <div class="space-y-4">

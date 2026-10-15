@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DailyCloseNav from '../../../components/DailyCloseNav.vue'
 import DailyCloseDaySheet from '../../../components/DailyCloseDaySheet.vue'
+import type { DailyClosePeriodDiscount } from '../../../types/dailyCloseDiscount'
 import { computed, ref } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
@@ -88,6 +89,7 @@ interface TransactionData {
 
 const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
+  periodDiscounts?: DailyClosePeriodDiscount[]
   transaction: TransactionData
   expenseAccounts?: Array<{ id: string; name: string }>
   canAddActivity?: boolean
@@ -538,6 +540,7 @@ const unlockTransaction = () => {
       :previous-tank-dips="previousTankDips"
       :payment-sources="paymentSources"
       :credit-rows="creditRows"
+      :period-discounts="periodDiscounts || []"
       :can-apply-discount="canApplyPostCloseDiscount"
       @apply-discount="openDiscountDialog"
     />

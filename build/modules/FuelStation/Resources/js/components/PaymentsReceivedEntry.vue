@@ -98,6 +98,7 @@ const onCustomerCreated = (customer: { id: string; name: string }) => {
     <div class="flex items-center justify-between">
       <div>
         <h4 class="font-medium">Customer payments &amp; deposits</h4>
+        <p class="text-xs text-muted-foreground">Only enter money actually received. Discounts belong on the customer’s period discount, not as a payment.</p>
         <p class="text-xs text-muted-foreground">Any customer. Tick invoices to pay them, or tick none: it pays their oldest invoices first and anything more stays as credit on their account.</p>
       </div>
       <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', invoice_ids: [], amount: 0, payment_account_id: '', reference: '' })">

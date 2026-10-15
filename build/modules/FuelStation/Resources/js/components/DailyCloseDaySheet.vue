@@ -11,6 +11,9 @@ import { Link } from '@inertiajs/vue3'
 import Hint from '@/components/Hint.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
+import { formatDateTime } from '@/lib/datetime'
+import DailyClosePeriodDiscounts from './DailyClosePeriodDiscounts.vue'
+import type { DailyClosePeriodDiscount } from '../types/dailyCloseDiscount'
 
 interface Line {
   label: string
@@ -25,6 +28,7 @@ const props = defineProps<{
   metadata: Record<string, any>
   currency: string
   companySlug: string
+  periodDiscounts?: DailyClosePeriodDiscount[]
   fuelItems?: Array<{ id: string; name: string }>
   expenseAccounts?: Array<{ id: string; name: string }>
   accountNames?: Record<string, string>
@@ -63,6 +67,12 @@ const otherScreens = computed(() => {
   ) as any[]
 })
 const sourceLabel = (s: any) => `${sourceLabels[s.type] ?? String(s.type).replace(/[_:]/g, ' ')} · ${s.reference ?? ''}`.trim()
+const discountForSource = (source: any) => source.source_type === 'acct.credit_notes'
+  ? props.periodDiscounts?.find((discount) => discount.id === source.source_id)
+  : undefined
+const discountsAfterClosing = computed(() => (props.periodDiscounts || []).filter((discount) =>
+  !otherScreens.value.some((source) => discountForSource(source)?.id === discount.id),
+))
 
 /** Keeps a section honest: if its lines do not reach the posted total, say so on a line. */
 const withRemainder = (lines: Line[], total: number, label: string): Line[] => {
@@ -101,7 +111,12 @@ const salesLines = computed<Line[]>(() => {
     lines.push({ label: o.item_name ?? 'Other sale', detail: `${litres(n(o.quantity))} × ${n(o.unit_price)}`, amount: n(o.amount) })
   }
   for (const s of otherScreens.value.filter((x) => n(x.sales) !== 0)) {
-    lines.push({ label: s.type === 'invoice' ? `Direct / invoiced sale · ${s.reference}` : sourceLabel(s), amount: n(s.sales) })
+    const discount = discountForSource(s)
+    lines.push(discount
+      ? { label: 'Period discount · non-cash', amount: n(s.sales),
+          detail: `${discount.customer_name} · ${formatDateTime(discount.from, { mode: 'date' })} – ${formatDateTime(discount.to, { mode: 'date' })}`,
+          href: `/${props.companySlug}/credit-notes/${discount.id}` }
+      : { label: s.type === 'invoice' ? `Direct / invoiced sale · ${s.reference}` : sourceLabel(s), amount: n(s.sales) })
   }
   return withRemainder(lines, n(totals.value.total_revenue), 'Other sales')
 })
@@ -210,6 +225,12 @@ const cash = computed(() => ({
       </dl>
     </section>
 
+    <DailyClosePeriodDiscounts
+      :discounts="discountsAfterClosing"
+      :company-slug="companySlug"
+      title="Period discounts recorded after closing · non-cash"
+    />
+
     <div class="grid gap-6 lg:grid-cols-2">
       <!-- Fuel sales -->
       <section class="rounded-md border border-rule-default p-4">
@@ -217,7 +238,7 @@ const cash = computed(() => ({
         <ul class="space-y-2 text-sm tabular-nums">
           <li v-for="(line, i) in salesLines" :key="'s' + i">
             <div class="flex justify-between gap-3">
-              <span><span class="font-medium">{{ line.label }}</span> <span v-if="line.detail" class="text-muted-foreground">{{ line.detail }}</span></span>
+              <span><Link v-if="line.href" :href="line.href" class="font-medium hover:underline">{{ line.label }}</Link><span v-else class="font-medium">{{ line.label }}</span> <span v-if="line.detail" class="text-muted-foreground">{{ line.detail }}</span></span>
               <MoneyText :amount="line.amount" :currency="currency" :fraction-digits="0" />
             </div>
             <ul v-if="line.sub?.length" class="mt-1 space-y-0.5 pl-4 text-xs text-muted-foreground">
@@ -317,5 +338,9 @@ const cash = computed(() => ({
         </ul>
       </section>
     </div>
+    <section v-if="input.notes" class="rounded-md border border-rule-default p-4">
+      <h3 class="mb-2 font-semibold">Day notes</h3>
+      <p class="whitespace-pre-wrap text-sm text-muted-foreground">{{ input.notes }}</p>
+    </section>
   </div>
 </template>

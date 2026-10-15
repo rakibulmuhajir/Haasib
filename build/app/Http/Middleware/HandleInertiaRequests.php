@@ -5,8 +5,8 @@ namespace App\Http\Middleware;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\FuelStation\Services\FuelNavigationAccess;
 use App\Services\CurrentCompany;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -158,21 +158,9 @@ class HandleInertiaRequests extends Middleware
                 ],
                 'currentCompany' => fn () => $serializeCompany($resolve()['company']),
                 'currentCompanyRole' => fn () => $resolve()['role'],
-                'fuelNavigation' => function () use ($request) {
-                    // Resolve after IdentifyCompany has run. The display fallback above
-                    // can be a stdClass from a different, previously visited company.
-                    $company = app(CurrentCompany::class)->get();
-                    $user = $request->user();
-                    if (! $company || ! $user) {
-                        return null;
-                    }
-
-                    $isFuelStation = $company->hasModule('fuel_station');
-
-                    return $isFuelStation
-                        ? app(FuelNavigationAccess::class)->forUser($company, $user)
-                        : null;
-                },
+                // Each module's own shared props. The key is always present and null when the
+                // module is off for the company, so the frontend types stay put.
+                ...$this->moduleProps($request),
                 'enabledModules' => function () {
                     $company = app(CurrentCompany::class)->get();
 
@@ -230,5 +218,33 @@ class HandleInertiaRequests extends Middleware
                 'umrahImportedMutamers' => fn () => $request->session()->get('umrah_imported_mutamers'),
             ],
         ];
+    }
+
+    /**
+     * Shared props contributed by the module manifests, under `auth`. Each is lazy, resolved after
+     * IdentifyCompany has run (the display fallback above can be a stdClass from a different,
+     * previously visited company), and null unless the module is on for the current company.
+     *
+     * @return array<string, \Closure>
+     */
+    private function moduleProps(Request $request): array
+    {
+        $registry = app(ModuleRegistry::class);
+        $props = [];
+
+        foreach ($registry->all() as $manifest) {
+            foreach ($manifest->sharedProps() as $name => $resolver) {
+                $props[$name] = function () use ($request, $manifest, $resolver) {
+                    $company = app(CurrentCompany::class)->get();
+                    $user = $request->user();
+
+                    return $company && $user && $manifest->isEnabledFor($company)
+                        ? $resolver($company, $user)
+                        : null;
+                };
+            }
+        }
+
+        return $props;
     }
 }

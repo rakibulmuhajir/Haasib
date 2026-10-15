@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\FiscalYearService;
 use App\Modules\Accounting\Services\PostingTemplateInstaller;
-use App\Modules\FuelStation\Services\FuelStationModuleInstaller;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -42,7 +42,7 @@ class CompanyBootstrapService
     private function bootstrapWithinCompany(Company $company, string $industryCode, ?string $userId): void
     {
         try {
-            $this->ensureIndustryDefaults($company, $industryCode);
+            $this->ensureIndustryDefaults($company, $industryCode, $userId);
             $this->ensureBankAccount($company, $userId);
 
             $company = $company->fresh();
@@ -70,7 +70,7 @@ class CompanyBootstrapService
         }
     }
 
-    private function ensureIndustryDefaults(Company $company, string $industryCode): void
+    private function ensureIndustryDefaults(Company $company, string $industryCode, ?string $userId): void
     {
         try {
             app(CompanyOnboardingService::class)->setupCompanyIdentity($company, [
@@ -98,12 +98,13 @@ class CompanyBootstrapService
             ]);
         }
 
-        if ($industryCode === 'fuel_station') {
+        $registry = app(ModuleRegistry::class);
+
+        foreach ($registry->forIndustry($industryCode) as $module) {
             try {
-                app(FuelStationModuleInstaller::class)->ensureMigrationsApplied();
-                app(\App\Modules\FuelStation\Services\StationProductCategories::class)->ensureDefaults($company->id, $userId);
+                $module->prepare($company, $userId);
             } catch (\Throwable $e) {
-                Log::error('Company bootstrap failed to prepare Fuel Station module', [
+                Log::error('Company bootstrap failed to prepare '.$module->name().' module', [
                     'company_id' => $company->id,
                     'exception' => $e::class,
                     'message' => $e->getMessage(),
@@ -111,11 +112,7 @@ class CompanyBootstrapService
             }
         }
 
-        if (in_array($industryCode, ['umrah', 'travel'], true)) {
-            $company->enableModule('umrah');
-            $company->disableModule('fuel_station');
-            $company->disableModule('inventory');
-        }
+        $registry->applyIndustry($company, $industryCode);
     }
 
     private function ensureBankAccount(Company $company, ?string $userId): void

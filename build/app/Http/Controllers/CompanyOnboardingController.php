@@ -14,8 +14,8 @@ use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
-use App\Modules\FuelStation\Services\FuelStationModuleInstaller;
-use App\Modules\FuelStation\Services\FuelStationOnboardingService;
+use App\Support\Modules\ModuleManifest;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,8 +27,6 @@ class CompanyOnboardingController extends Controller
 {
     public function __construct(
         private CompanyOnboardingService $onboardingService,
-        private FuelStationModuleInstaller $fuelStationInstaller,
-        private FuelStationOnboardingService $fuelStationOnboarding,
     ) {}
 
     /**
@@ -38,8 +36,8 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        if ($company->industry_code === 'fuel_station') {
-            return redirect("/{$company->slug}/fuel/onboarding");
+        if ($url = $this->moduleOnboardingUrl($company)) {
+            return redirect($url);
         }
 
         $onboarding = $this->onboardingService->initializeOnboarding($company);
@@ -80,11 +78,13 @@ class CompanyOnboardingController extends Controller
         $data = $request->validated();
         $industryCode = $company->industry_code ?: ($data['industry_code'] ?? null);
 
-        if ($industryCode === 'fuel_station') {
+        $modules = app(ModuleRegistry::class)->forIndustry($industryCode);
+
+        foreach ($modules as $module) {
             try {
-                $this->fuelStationInstaller->ensureMigrationsApplied();
+                $module->prepareOnboarding($company);
             } catch (\Throwable $e) {
-                Log::error('FuelStation module migrations failed during onboarding', [
+                Log::error($module->name().' module migrations failed during onboarding', [
                     'company_id' => $company->id ?? null,
                     'company_slug' => $company->slug ?? null,
                     'exception' => $e::class,
@@ -92,31 +92,16 @@ class CompanyOnboardingController extends Controller
                 ]);
 
                 return redirect()->back()
-                    ->with('error', 'Failed to prepare Fuel Station module. Please try again.');
+                    ->with('error', "Failed to prepare {$module->name()} module. Please try again.");
             }
         }
 
         $this->onboardingService->setupCompanyIdentity($company, $data);
 
-        if ($industryCode === 'fuel_station') {
-            try {
-                $this->fuelStationOnboarding->ensureRequiredAccounts($company->id);
-                $this->fuelStationOnboarding->createDefaultFuelItems($company->id);
-            } catch (\Throwable $e) {
-                Log::error('FuelStation module seed failed during onboarding', [
-                    'company_id' => $company->id ?? null,
-                    'company_slug' => $company->slug ?? null,
-                    'exception' => $e::class,
-                    'message' => $e->getMessage(),
-                ]);
-
-                return redirect("/{$company->slug}/fuel/onboarding")
-                    ->with('error', 'Company saved, but Fuel Station defaults could not be created. You can continue onboarding and complete Fuel setup later.');
+        foreach ($modules as $module) {
+            if (($response = $module->afterIdentity($company)) !== null) {
+                return $response;
             }
-
-            // For fuel station industry, redirect to the fuel-specific onboarding flow
-            return redirect("/{$company->slug}/fuel/onboarding")
-                ->with('success', 'Company identity configured. Let\'s set up your fuel station!');
         }
 
         return redirect("/{$company->slug}/onboarding/fiscal-year")
@@ -157,8 +142,8 @@ class CompanyOnboardingController extends Controller
 
         $this->onboardingService->setupFiscalYear($company, $request->validated());
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Fiscal year configured successfully.');
         }
 
@@ -205,8 +190,8 @@ class CompanyOnboardingController extends Controller
                 ->with('error', 'Could not save banks and cash. Please try again.');
         }
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Banks and cash saved.');
         }
 
@@ -298,8 +283,8 @@ class CompanyOnboardingController extends Controller
 
         $this->onboardingService->setupDefaultAccounts($company, $request->validated());
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Default accounts configured successfully.');
         }
 
@@ -325,8 +310,8 @@ class CompanyOnboardingController extends Controller
 
         $this->onboardingService->setupTaxSettings($company, $request->validated());
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Tax settings configured successfully.');
         }
 
@@ -352,8 +337,8 @@ class CompanyOnboardingController extends Controller
 
         $this->onboardingService->setupNumberingPreferences($company, $request->validated());
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Numbering preferences configured successfully.');
         }
 
@@ -379,8 +364,8 @@ class CompanyOnboardingController extends Controller
 
         $this->onboardingService->setupPaymentTerms($company, $request->validated());
 
-        if ($this->isFuelOnboardingFlow($request, $company)) {
-            return redirect("/{$company->slug}/fuel/onboarding")
+        if ($flowUrl = $this->moduleFlowUrl($request, $company)) {
+            return redirect($flowUrl)
                 ->with('success', 'Payment terms configured successfully.');
         }
 
@@ -395,10 +380,10 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        // For fuel station industry, redirect to fuel-specific onboarding
-        if ($company->industry_code === 'fuel_station') {
-            return redirect("/{$company->slug}/fuel/onboarding")
-                ->with('success', 'Basic setup complete! Now let\'s configure your fuel station.');
+        // A module with its own onboarding takes over from here.
+        if ($module = $this->moduleOnboarding($company)) {
+            return redirect($module->onboardingUrl($company))
+                ->with('success', $module->onboardingHandoffMessage());
         }
 
         // Get summary statistics
@@ -431,11 +416,11 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        // For fuel station industry, redirect to fuel-specific onboarding instead of completing
-        if ($company->industry_code === 'fuel_station') {
-            // Don't mark as complete yet - fuel onboarding will do that
-            return redirect("/{$company->slug}/fuel/onboarding")
-                ->with('success', 'Basic setup complete! Now let\'s configure your fuel station.');
+        // A module with its own onboarding takes over instead of completing here.
+        if ($module = $this->moduleOnboarding($company)) {
+            // Don't mark as complete yet - the module's onboarding will do that
+            return redirect($module->onboardingUrl($company))
+                ->with('success', $module->onboardingHandoffMessage());
         }
 
         $this->onboardingService->completeOnboarding($company);
@@ -444,9 +429,29 @@ class CompanyOnboardingController extends Controller
             ->with('success', 'Congratulations! Your company is now ready to use.');
     }
 
-    private function isFuelOnboardingFlow(Request $request, Company $company): bool
+    /** The module (if any) that runs its own onboarding for this company's industry. */
+    private function moduleOnboarding(Company $company): ?ModuleManifest
     {
-        return $company->industry_code === 'fuel_station'
-            && $request->input('flow') === 'fuel';
+        foreach (app(ModuleRegistry::class)->forIndustry($company->industry_code) as $module) {
+            if ($module->onboardingUrl($company) !== null) {
+                return $module;
+            }
+        }
+
+        return null;
+    }
+
+    private function moduleOnboardingUrl(Company $company): ?string
+    {
+        return $this->moduleOnboarding($company)?->onboardingUrl($company);
+    }
+
+    /** The module's onboarding URL when this step was taken inside the module's own flow. */
+    private function moduleFlowUrl(Request $request, Company $company): ?string
+    {
+        $module = $this->moduleOnboarding($company);
+        $flow = $module?->onboardingFlow();
+
+        return $flow !== null && $request->input('flow') === $flow ? $module->onboardingUrl($company) : null;
     }
 }

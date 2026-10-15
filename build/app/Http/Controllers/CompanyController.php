@@ -14,10 +14,10 @@ use App\Services\CommandBus;
 use App\Services\CompanyBootstrapService;
 use App\Services\CompanyRbacBootstrapper;
 use App\Services\UserPermissionPresenter;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -132,9 +132,13 @@ class CompanyController extends Controller
             ]);
         }
 
-        $target = in_array($data['industry_code'], ['umrah', 'travel'], true)
-            ? route('umrah.dashboard', ['company' => $company->slug])
-            : "/{$company->slug}";
+        $target = "/{$company->slug}";
+        foreach (app(ModuleRegistry::class)->forIndustry($data['industry_code']) as $manifest) {
+            if (($url = $manifest->afterCreateUrl($company)) !== null) {
+                $target = $url;
+                break;
+            }
+        }
 
         $redirect = redirect($target)
             ->with('success', 'Company created! You can start working right away.');
@@ -266,94 +270,7 @@ class CompanyController extends Controller
 
     public function show(Request $request): Response|RedirectResponse
     {
-        $company = CompanyContext::getCompany();
-
-        // A fuel station lands on its own home; the product / tank setup page it used to open
-        // on lives at /fuel/products.
-        $isFuelStation = $company->hasModule('fuel_station');
-        $isUmrahCompany = $company->hasModule('umrah');
-
-        if ($isFuelStation && ! $isUmrahCompany) {
-            $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
-            $isMember = DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', Auth::id())
-                ->where('is_active', true)
-                ->exists();
-            if (! $isGodMode && ! $isMember) {
-                abort(403, 'You are not a member of this company.');
-            }
-
-            $tab = $request->query('tab') === 'history' ? 'history' : 'today';
-            $service = app(\App\Modules\FuelStation\Services\FuelHomeService::class);
-            $available = $request->user()->showsValueTrails()
-                && ($isGodMode || $request->user()->hasCompanyPermission(Permissions::REPORT_VIEW));
-            $includeTrail = $available
-                && $request->header('X-Inertia-Partial-Component') === 'FuelStation/Home/Index'
-                && in_array('valueTrail', explode(',', (string) $request->header('X-Inertia-Partial-Data')), true);
-            try {
-                $props = [
-                    'company' => [
-                        'id' => $company->id,
-                        'name' => $company->name,
-                        'slug' => $company->slug,
-                        'base_currency' => $company->base_currency ?? 'PKR',
-                    ],
-                    'tab' => $tab,
-                    'valueTrailsAvailable' => $available,
-                    'today' => $service->today($company, $includeTrail && $tab === 'today'),
-                ];
-                $trail = $props['today']['month']['statement']['valueTrail'] ?? null;
-                unset($props['today']['month']['statement']['valueTrail']);
-                if ($tab === 'history') {
-                    [$from, $to] = $this->historyRange($request->query('from'), $request->query('to'));
-                    $props['history'] = $service->period($company, $from, $to, $includeTrail);
-                    $props['range'] = ['from' => $from, 'to' => $to];
-                    $trail = $props['history']['statement']['valueTrail'] ?? null;
-                    unset($props['history']['statement']['valueTrail']);
-                }
-                if ($trail) {
-                    $trail = app(\App\Modules\FuelStation\Services\ProfitValueTrailPresenter::class)->present($trail, $company, $request->user());
-                }
-                $props['valueTrail'] = Inertia::optional(fn () => $trail);
-            } catch (\Throwable $exception) {
-                if (! $includeTrail) {
-                    throw $exception;
-                }
-                Log::error('Could not load the home profit statement trail.', ['company_id' => $company->id, 'exception' => $exception]);
-
-                return Inertia::render('FuelStation/Home/Index', [
-                    'valueTrail' => Inertia::optional(fn () => ['error' => 'Could not load this calculation. Please try again.']),
-                ]);
-            }
-
-            return Inertia::render('FuelStation/Home/Index', $props);
-        }
-
         return $this->renderShow($request);
-    }
-
-    /** The History tab's range: ?from & ?to as dates, last month when absent or unreadable. */
-    private function historyRange(mixed $from, mixed $to): array
-    {
-        $parse = function (mixed $v): ?Carbon {
-            try {
-                return $v ? Carbon::parse((string) $v)->startOfDay() : null;
-            } catch (\Throwable) {
-                return null;
-            }
-        };
-        $start = $parse($from);
-        $end = $parse($to);
-        if (! $start || ! $end) {
-            $start = Carbon::today()->subMonthNoOverflow()->startOfMonth();
-            $end = $start->copy()->endOfMonth();
-        }
-        if ($start->gt($end)) {
-            [$start, $end] = [$end, $start];
-        }
-
-        return [$start->toDateString(), $end->toDateString()];
     }
 
     protected function renderShow(Request $request): Response|RedirectResponse
@@ -372,10 +289,11 @@ class CompanyController extends Controller
             abort(403, 'You are not a member of this company.');
         }
 
-        $isUmrah = $company->hasModule('umrah');
-
-        if ($isUmrah) {
-            return redirect()->route('umrah.dashboard', ['company' => $company->slug]);
+        // A module with its own company home (fuel station, umrah) answers here.
+        foreach (app(ModuleRegistry::class)->enabledFor($company) as $manifest) {
+            if (($response = $manifest->homeResponse($request, $company)) !== null) {
+                return $response;
+            }
         }
 
         // Get user statistics
@@ -569,8 +487,6 @@ class CompanyController extends Controller
         $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
         $profitLoss = $this->dashboardService->getProfitLossSummary($company->id);
 
-        $isFuelStation = $company->hasModule('fuel_station');
-
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -621,8 +537,6 @@ class CompanyController extends Controller
                 'needs_attention' => $needsAttention,
                 'profit_loss' => $profitLoss,
             ],
-            'isFuelStation' => $isFuelStation,
-            'isUmrah' => $isUmrah,
         ]);
     }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Constants\Permissions;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Modules\ModuleRegistry;
 
 /**
  * Everything a company sets up, grouped, for the Settings menu. A group is one place to go (href)
@@ -18,8 +19,6 @@ class SettingsMenu
     {
         $can = fn (string $permission) => $user->isGodMode() || $user->hasCompanyPermission($permission);
         $slug = $company->slug;
-        $fuel = $company->hasModule('fuel_station');
-        $inventory = $company->isModuleEnabled('inventory');
 
         // A section is one place to go (href) or a set of pages; its items are what is inside --
         // tabs or parts of that page, or the separate pages -- listed under it, each a link.
@@ -41,17 +40,6 @@ class SettingsMenu
                 $item('Modules', 'Turn features such as payroll and inventory on or off', 'settings?tab=modules', $canCompany),
                 $item('Fiscal year', 'Year start and accounting periods', 'settings?tab=accounting', $canCompany),
             ], $canCompany ? 'settings' : null),
-            $fuel ? $section('Station settings', [
-                $item('General', 'Features the station uses', 'fuel/settings#general', $canCompany),
-                $item('Monthly fuel profit', 'How month-end stock is valued', 'fuel/settings#monthly-profit', $canCompany),
-                $item('Payment channels', 'Cards, banks and wallets the close takes', 'fuel/settings#payment-channels', $canCompany),
-                $item('Account mappings', 'The accounts the daily close posts to', 'fuel/settings#accounts', $canCompany),
-            ], $canCompany ? 'fuel/settings' : null) : null,
-            $fuel ? $section('Station equipment', [
-                $item('Tanks', 'Tanks and their fuel', 'warehouses', $inventory && $can(Permissions::WAREHOUSE_VIEW)),
-                $item('Pumps & nozzles', 'Pumps, nozzles and meters', 'fuel/pumps', $can(Permissions::PUMP_VIEW)),
-                $item('Setup wizard', 'Step-by-step station setup', 'fuel/onboarding', $canCompany),
-            ]) : null,
             $section('Accounting', [
                 $item('Chart of accounts', 'Every account in the books', 'accounts', $can(Permissions::ACCOUNT_VIEW)),
                 $item('Default accounts', 'Receivables, payables, retained earnings and other company-wide accounts', 'accounting/default-accounts', $can(Permissions::ACCOUNT_UPDATE)),
@@ -65,10 +53,21 @@ class SettingsMenu
                 $item('Leave types', 'Kinds of leave employees can take', 'leave-types', $canCompany),
                 $item('Leave requests', 'Leave asked for and approved', 'leave-requests', $canCompany),
             ]) : null,
-            $fuel ? $section('Help', [
-                $item('Help guide', 'How the station works in Haasib', 'fuel/guide'),
-            ]) : null,
         ];
+
+        // Each enabled module adds its own sections: before the core section it names, else at the end.
+        foreach (app(ModuleRegistry::class)->enabledFor($company) as $manifest) {
+            foreach ($manifest->settingsSections($company, $user, $section, $item, $can) as $entry) {
+                $at = $entry['before'] === null
+                    ? false
+                    : array_search($entry['before'], array_column(array_map(fn ($s) => $s ?? ['title' => null], $sections), 'title'), true);
+                if ($at === false) {
+                    $sections[] = $entry['section'];
+                } else {
+                    array_splice($sections, $at, 0, [$entry['section']]);
+                }
+            }
+        }
 
         return array_values(array_filter($sections, fn ($s) => $s && $s['items']));
     }

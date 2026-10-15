@@ -13,7 +13,7 @@ return [
     ],
     [
         'code' => 'other',
-        'name' => 'Other',
+        'name' => 'General business',
         'description' => 'General accounting for businesses without a dedicated module.',
     ],
 ];

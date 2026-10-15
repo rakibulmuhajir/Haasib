@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
@@ -61,7 +62,17 @@ const createPeriods = () => {
     .post(`/${props.company.slug}/fiscal-years/${props.fiscalYear.id}/periods`, { preserveScroll: true })
 }
 
-const closePeriod = (id: string) => {
+// Closing locks the period's entries, so it asks first.
+const closing = ref<{ id: string; name: string } | null>(null)
+const closeOpen = computed({
+  get: () => closing.value !== null,
+  set: (v: boolean) => { if (!v) closing.value = null },
+})
+
+const closePeriod = () => {
+  if (!closing.value) return
+  const id = closing.value.id
+  closing.value = null
   router.post(`/${props.company.slug}/accounting-periods/${id}/close`, {}, { preserveScroll: true })
 }
 
@@ -166,7 +177,7 @@ const periodColumns = [
                   v-if="!row.is_closed"
                   size="sm"
                   variant="outline"
-                  @click="closePeriod(row.id)"
+                  @click="closing = { id: row.id, name: row.name }"
                 >
                   <Lock class="mr-2 h-4 w-4" />
                   Close
@@ -183,6 +194,14 @@ const periodColumns = [
               </div>
             </template>
           </LedgerRegister>
+
+          <ConfirmDialog
+            v-model:open="closeOpen"
+            :title="`Close ${closing?.name ?? 'period'}?`"
+            description="Entries dated in it can't be changed until you reopen it."
+            confirm-text="Close"
+            @confirm="closePeriod"
+          />
         </CardContent>
       </Card>
     </div>

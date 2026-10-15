@@ -154,6 +154,7 @@ test('a booking key cannot be reused for a different purchasing agent', function
 
 test('retry of a visa purchase preserves its posted balances and transaction ids', function () {
     $f = mutamerBookingFixture();
+    ticketingOpenPeriodForToday($f); // the import posts on the real date
     foreach ([['1100', 'Receivable', 'asset', 'accounts_receivable', 'debit'], ['2000', 'Payable', 'liability', 'accounts_payable', 'credit'], ['4100', 'Visa sales', 'revenue', 'revenue', 'credit'], ['5100', 'Visa cost', 'cogs', 'cogs', 'debit']] as [$code,$name,$type,$subtype,$normal]) {
         App\Modules\Accounting\Models\Account::firstOrCreate(['company_id' => $f->company->id, 'code' => $code], ['name' => $name, 'type' => $type, 'subtype' => $subtype, 'normal_balance' => $normal]);
     }

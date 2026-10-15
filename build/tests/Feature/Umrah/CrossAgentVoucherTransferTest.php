@@ -645,10 +645,7 @@ test('mixed party hotel approval uses destination agent rate and cancellation le
     foreach ([['1100', 'Receivable', 'asset', 'accounts_receivable', 'debit'], ['2000', 'Payable', 'liability', 'accounts_payable', 'credit'], ['4120', 'Hotels', 'revenue', 'revenue', 'credit'], ['5120', 'Hotel cost', 'cogs', 'cogs', 'debit']] as [$code, $name, $type, $subtype, $normal]) {
         \App\Modules\Accounting\Models\Account::firstOrCreate(['company_id' => $f->company->id, 'code' => $code], ['name' => $name, 'type' => $type, 'subtype' => $subtype, 'normal_balance' => $normal]);
     }
-    // Approval posts on the real date; the shared fixture only opens September 2026.
-    if (! \App\Modules\Accounting\Models\AccountingPeriod::where('company_id', $f->company->id)->whereDate('start_date', '<=', now()->addDay())->whereDate('end_date', '>=', now()->subDay())->exists()) {
-        \App\Modules\Accounting\Models\AccountingPeriod::create(['company_id' => $f->company->id, 'fiscal_year_id' => $f->fiscalYear->id, 'name' => 'Current', 'period_number' => 10, 'start_date' => now()->subDays(3)->toDateString(), 'end_date' => now()->addDays(60)->toDateString()]);
-    }
+    ticketingOpenPeriodForToday($f); // approval posts on the real date
     $supplier = \App\Modules\Umrah\Models\HotelVendor::create(['company_id' => $f->company->id, 'vendor_number' => 'DEST-HOTEL', 'name' => 'Destination Hotel Supplier']);
     $hotel = \App\Modules\Umrah\Models\Hotel::create(['company_id' => $f->company->id, 'hotel_vendor_id' => $supplier->id, 'name' => 'Party Hotel', 'city' => 'Makkah', 'is_active' => true]);
     $room = \App\Modules\Umrah\Models\HotelRoomRate::create(['company_id' => $f->company->id, 'hotel_id' => $hotel->id, 'room_type' => 'double', 'retail_amount' => 100, 'cost_amount' => 60, 'is_active' => true]);

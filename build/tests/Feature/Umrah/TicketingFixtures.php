@@ -88,6 +88,29 @@ function ticketingCompany(array $overrides = []): object
     ];
 }
 
+/**
+ * The fixture opens September 2026 only. A test whose code path posts on the
+ * real date (not a fixed one) calls this so the run date has an open period.
+ */
+function ticketingOpenPeriodForToday(object $f): void
+{
+    $covers = AccountingPeriod::where('company_id', $f->company->id)
+        ->whereDate('start_date', '<=', now()->addDay())
+        ->whereDate('end_date', '>=', now()->subDay())
+        ->exists();
+
+    if (! $covers) {
+        AccountingPeriod::create([
+            'company_id' => $f->company->id,
+            'fiscal_year_id' => $f->fiscalYear->id,
+            'name' => 'Current',
+            'period_number' => 10,
+            'start_date' => now()->subDays(3)->toDateString(),
+            'end_date' => now()->addDays(60)->toDateString(),
+        ]);
+    }
+}
+
 function ticketingCustomer(Company $company, array $overrides = []): Customer
 {
     return Customer::create(array_merge([

@@ -70,11 +70,7 @@ class UpdateAction implements PaletteAction
 
         app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($company->id, $invoice->id);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
-        app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
-        if (\App\Modules\Inventory\Models\StockMovement::where('company_id', $company->id)->where('reference_type', 'acct.invoices')->where('reference_id', $invoice->id)->where('movement_type', 'sale')
-            ->whereIn('warehouse_id', \App\Modules\Inventory\Models\Warehouse::where('company_id', $company->id)->where('code', \App\Modules\FuelStation\Services\TemporaryFuelStockService::CODE)->select('id'))->exists()) {
-            throw new \RuntimeException('This sale issued temporary fuel stock. Cancel it and record the corrected sale so quantity and cost stay together.');
-        }
+        app(\App\Modules\Accounting\Extensions\InvoiceMutationGuard::class)->assert($invoice, 'update');
 
         // An invoice stops being amendable once its figures have been reported
         // somewhere else — money received against it, or the document itself

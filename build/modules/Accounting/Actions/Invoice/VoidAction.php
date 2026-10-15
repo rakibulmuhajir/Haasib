@@ -41,7 +41,7 @@ class VoidAction implements PaletteAction
 
         app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($company->id, $invoice->id);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
-        app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+        app(\App\Modules\Accounting\Extensions\InvoiceMutationGuard::class)->assert($invoice, 'void');
 
         // Validate current status
         if (in_array($invoice->status, ['cancelled', 'void'])) {
@@ -90,7 +90,7 @@ class VoidAction implements PaletteAction
         }
 
         // Update invoice status
-        app(\App\Modules\FuelStation\Services\TemporaryFuelStockService::class)->reverse($invoice, $params['reversal_date'] ?? now()->toDateString(), auth()->id());
+        \App\Modules\Accounting\Events\InvoiceVoided::dispatch($invoice, $params['reversal_date'] ?? now()->toDateString(), auth()->id());
 
         $invoice->update([
             'status' => 'void',

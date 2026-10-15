@@ -97,3 +97,33 @@ test('an unfinished amanat fuel withdrawal can be parked but cannot be posted', 
     expect(\Illuminate\Support\Facades\Validator::make(['intent' => 'park', 'amanat_disbursements' => [$row]], $rules)->passes())->toBeTrue()
         ->and(\Illuminate\Support\Facades\Validator::make(['intent' => 'post', 'amanat_disbursements' => [$row]], $rules)->fails())->toBeTrue();
 });
+
+test('voiding a temporary-stock sale reverses its stock exactly once', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-20 10:00:00'));
+    $f = pendingDeliveryFixture();
+    $f['company']->enableModule('fuel_station');
+    $f['tank']->update(['warehouse_type' => 'tank', 'capacity' => 20000]);
+    $f['item']->update(['income_account_id' => $f['accounts']['4100']->id]);
+    app(CompanyContextService::class)->withContext($f['company'], fn () => DB::transaction(fn () => app(DailyCloseEntryService::class)->purchase(
+        $f['company']->id, '2026-09-16', ['supplier_id' => $f['vendor']->id, 'lines' => [[
+            'item_id' => $f['item']->id, 'quantity' => 1000, 'unit_cost' => 240, 'temporary_storage' => true,
+        ]]], $f['user'], false)));
+    test()->actingAs($f['user'])->post("/{$f['company']->slug}/fuel/sales/direct", [
+        'customer_id' => $f['customer']->id, 'item_id' => $f['item']->id, 'quantity' => 200, 'unit_price' => 300,
+        'sale_date' => '2026-09-17', 'paid_in_cash' => false, 'temporary_storage' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('success');
+    $invoice = Invoice::where('company_id', $f['company']->id)->sole();
+
+    // The provider may boot more than once in a process; the listener must still be attached once.
+    expect(\Illuminate\Support\Facades\Event::getListeners(\App\Modules\Accounting\Events\InvoiceVoided::class))->toHaveCount(1);
+
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(\App\Services\CommandBus::class)->dispatch('invoice.void', [
+        'id' => $invoice->id, 'reason' => 'Wrong sale', 'reversal_date' => '2026-09-18',
+    ], $f['user']));
+
+    expect(DB::table('inv.stock_movements')
+        ->where('company_id', $f['company']->id)->where('reference_type', 'acct.invoices')
+        ->where('reference_id', $invoice->id)->where('movement_type', 'return_in')->count())->toBe(1)
+        ->and(app(TemporaryFuelStockService::class)->balance($f['company']->id, $f['item']->id))
+        ->toBe(['quantity' => 1000.0, 'value' => 240000.0]);
+});

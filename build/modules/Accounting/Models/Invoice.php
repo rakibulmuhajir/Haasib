@@ -41,12 +41,12 @@ class Invoice extends Model
                     && abs(($oldTotal - (float) $invoice->total_amount) - ((float) $invoice->discount_amount - $oldDiscount)) < 0.000001);
             if ($principalMoved || array_diff(array_keys($invoice->getDirty()), $settlement)
                 || ($invoice->isDirty('status') && in_array($invoice->status, ['draft', 'void', 'cancelled', 'reversed'], true))) {
-                app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+                app(\App\Modules\Accounting\Extensions\InvoiceMutationGuard::class)->assert($invoice, 'save');
             }
         });
         static::deleting(function (self $invoice) {
             app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
-            app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+            app(\App\Modules\Accounting\Extensions\InvoiceMutationGuard::class)->assert($invoice, 'delete');
         });
     }
 
@@ -163,12 +163,6 @@ class Invoice extends Model
     public function transaction()
     {
         return $this->belongsTo(Transaction::class, 'transaction_id');
-    }
-
-    /** 1:1 fuel-station metadata, when this invoice came from a fuel sale. */
-    public function saleMetadata()
-    {
-        return $this->hasOne(\App\Modules\FuelStation\Models\SaleMetadata::class, 'invoice_id');
     }
 
     /**

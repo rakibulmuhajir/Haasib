@@ -416,11 +416,9 @@ class CustomerController extends Controller
         $params = array_merge($request->validated(), ['id' => $customer->id]);
         $result = $commandBus->dispatch('customer.update', $params, $request->user());
 
-        // A fuel station keeps one customer page (the fuel one); saving details returns there.
-        $isFuelStation = $company->hasModule('fuel_station');
-        if ($isFuelStation) {
-            return redirect()->route('fuel.credit-customers.show', ['company' => $company->slug, 'customer' => $customer->id])
-                ->with('success', 'Customer updated');
+        // A module that keeps its own customer page (fuel station) gets saving details returned to it.
+        if ($url = app(\App\Modules\Accounting\Extensions\CustomerPages::class)->afterSaveUrl($company, $customer)) {
+            return redirect($url)->with('success', 'Customer updated');
         }
 
         return redirect()

@@ -218,19 +218,7 @@ class BillController extends Controller
         // grid to do, so the short form is the whole job.
         $hasInventoryItems = $inventoryEnabled && count($items) > 0;
         if (! $hasInventoryItems) {
-            $isFuelStation = $company->hasModule('fuel_station');
-
-            $defaultExpenseAccountId = $isFuelStation
-                ? (Account::where('company_id', $company->id)
-                    ->where('code', '1200')
-                    ->where('is_active', true)
-                    ->value('id')
-                    ?? Account::where('company_id', $company->id)
-                        ->where('subtype', 'inventory')
-                        ->where('is_active', true)
-                        ->orderBy('code')
-                        ->value('id'))
-                : null;
+            $defaultExpenseAccountId = app(\App\Modules\Accounting\Extensions\BillDefaults::class)->lineAccountId($company);
 
             return Inertia::render('accounting/bills/QuickCreate', [
                 'company' => [
@@ -250,19 +238,7 @@ class BillController extends Controller
             ]);
         }
 
-        $isFuelStation = $company->hasModule('fuel_station');
-
-        $defaultExpenseAccountId = $isFuelStation
-            ? (Account::where('company_id', $company->id)
-                ->where('code', '1200')
-                ->where('is_active', true)
-                ->value('id')
-                ?? Account::where('company_id', $company->id)
-                    ->where('subtype', 'inventory')
-                    ->where('is_active', true)
-                    ->orderBy('code')
-                    ->value('id'))
-            : null;
+        $defaultExpenseAccountId = app(\App\Modules\Accounting\Extensions\BillDefaults::class)->lineAccountId($company);
 
         return Inertia::render('accounting/bills/Create', [
             'company' => [

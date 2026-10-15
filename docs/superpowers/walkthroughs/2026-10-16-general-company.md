@@ -25,15 +25,15 @@ repo in `D:\projects\haasib-walkthrough-2026-10-16\` (94 PNGs, named by step).
 | 4 | Bank accounts page shows opening balances, not ledger; "All reconciled" + "Never reconciled" together | major | **Fixed** `26859bdf4`: balance from posted ledger entries; total sums; "Never reconciled" |
 | 5 | Bill saves with total 0.00 | major | **Fixed** `2b906b3b2`: bills and invoices need a subtotal above zero |
 | 6–8 | Fuel/umrah wording and fields in a general company (balance sheet "tanks", bill edit "tank", supplier-claims description, invoice "Slip no." / "Slip on another day", expenses "Daily Close", customer type "Agent", customer "Units" card, transit labels) | minor | **Fixed** `5d950a146` (gated to the module; units card shows for fuel or when a customer already has units) |
-| 9 | New company lands on dashboard, not onboarding | minor | open |
-| 10 | Fiscal year label "FY 2026-2027" for a Jan–Dec year; "2 Bank Accounts" counts cash | minor | open |
-| 11 | Bill numbering ignores the onboarding start number (BILL-00001 vs chosen 1001) | minor | open |
+| 9 | New company lands on dashboard, not onboarding | minor | **Fixed** `22ad42cac`: a company with no module landing page redirects to `/onboarding`; the red name field is the autofocus ring, not validation |
+| 10 | Fiscal year label "FY 2026-2027" for a Jan–Dec year; "2 Bank Accounts" counts cash | minor | **Fixed** `46095ba23`: one `FiscalYear::labelFor` rule; summary says "2 accounts" |
+| 11 | Bill numbering ignores the onboarding start number (BILL-00001 vs chosen 1001) | minor | **Fixed** `2f9671f47`: bills use the saved prefix and start number for the first bill; existing bills keep theirs |
 | 12 | Home: duplicate "Where you stand" heading; "Across 2 accounts" with no balance | cosmetic | **Fixed** `5d950a146` |
-| 13 | Chart of accounts grouping: tax/accrued/payroll liabilities under "Loans and Line of Credit"; empty groups; codes not shown | minor | open |
-| 14 | Opening balances: bank row needs "Add bank account"; pickers say "Start typing"; two toasts on save | minor | open |
+| 13 | Chart of accounts grouping: tax/accrued/payroll liabilities under "Loans and Line of Credit"; empty groups; codes not shown | minor | **Fixed** `a8e062f4c`: other liabilities grouped by name (taxes, payroll, other), empty groups hidden, code shown |
+| 14 | Opening balances: bank row needs "Add bank account"; pickers say "Start typing"; two toasts on save | minor | Toast **fixed** `df646b415`; rest open |
 | 15 | "Mark as sent" stays after sending | minor | **Fixed** `8cba23806` |
 | 16 | Vendor vs Supplier vs Buyer wording | minor | **Open — your call**: menus/forms say Vendor/Customer, reports say Supplier/Buyer; no doc fixes the word for general accounting |
 | 17 | Bill edit / bill payment pages on the older UI; unformatted amounts; raw ISO date in payment invoice row; US placeholders | minor | ISO date **fixed** `b7e2a9be5`; rest open |
 | 18 | Activity feed omits the rent expense; shows unpaid bill as outflow | minor | open |
-| 19 | Closing a period: no confirmation; no year-end close; fiscal years not in menu | minor | open |
-| 20 | Expenses and Fiscal Years missing from menus; banking menu naming | minor | open |
+| 19 | Closing a period: no confirmation; no year-end close; fiscal years not in menu | minor | Close confirmation **fixed** `4b81930f8`; Fiscal Years in menu `6b9e9bcb5`; no year-end close yet |
+| 20 | Expenses and Fiscal Years missing from menus; banking menu naming | minor | Fiscal Years and Expenses in menu **fixed** `6b9e9bcb5`; banking menu naming open |

@@ -29,7 +29,19 @@ class FuelStationServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Merge now (not on booting) so every consumer, including CommandBus built during boot, sees the keys.
+        config(['command-bus' => array_merge(config('command-bus', []), [
+            'fuel.settings.update' => \App\Modules\FuelStation\Actions\UpdateStationSettingsAction::class,
+            'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
+            'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
+            'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,
+            'fuel.amanat.movement' => \App\Modules\FuelStation\Actions\AmanatMovementAction::class,
+            'fuel.direct_sale' => \App\Modules\FuelStation\Actions\DirectFuelSaleAction::class,
+            'calculator.save' => \App\Modules\FuelStation\Actions\Calculator\SaveCalculatorFormulaAction::class,
+            'calculator.delete' => \App\Modules\FuelStation\Actions\Calculator\DeleteCalculatorFormulaAction::class,
+            'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
+            'fuel.products.setup' => \App\Modules\FuelStation\Actions\Product\SetupAction::class,
+        ])]);
     }
 
     /**
@@ -40,6 +52,18 @@ class FuelStationServiceProvider extends ServiceProvider
         $this->app->make(\App\Support\Modules\ModuleRegistry::class)->register(new \App\Modules\FuelStation\FuelStationModule);
 
         $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \App\Modules\FuelStation\Console\RecostFuelCloses::class,
+                \App\Modules\FuelStation\Console\FuelMonthEndValuation::class,
+                \App\Modules\FuelStation\Console\FuelLubricantCost::class,
+                \App\Modules\FuelStation\Console\LockMonthlyDailyCloses::class,
+            ]);
+
+            // Auto-lock previous month's daily closes on the 3rd of each month at 2 AM.
+            $this->callAfterResolving(\Illuminate\Console\Scheduling\Schedule::class, fn ($s) => $s->command('fuel:lock-month-closes')->monthlyOn(3, '02:00'));
+        }
 
         Route::middleware('web')
             ->group(__DIR__.'/../Routes/fuel.php');

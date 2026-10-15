@@ -554,7 +554,4 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
-// Module routes
-require base_path('modules/FuelStation/Routes/fuel.php');
-
 require __DIR__.'/settings.php';

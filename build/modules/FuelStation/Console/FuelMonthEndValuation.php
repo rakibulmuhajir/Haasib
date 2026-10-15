@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Modules\FuelStation\Console;
 
 use App\Models\Company;
 use App\Modules\FuelStation\Services\MonthEndStockValuationService;

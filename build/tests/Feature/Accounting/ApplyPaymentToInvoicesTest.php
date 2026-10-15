@@ -30,10 +30,11 @@ test('what a payment left on account is applied to an invoice from the payment p
     $invoice = Invoice::where('company_id', $f['company']->id)->where('customer_id', $f['customer']->id)->firstOrFail();
 
     // 1,000 received: 1 put on the invoice, 999 left on account.
-    $result = app(CommandBus::class)->dispatch('payment.create', [
+    // The bus checks the permission against the company context, which only withContext sets.
+    $result = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('payment.create', [
         'customer_id' => $f['customer']->id, 'amount' => 1000, 'date' => '2026-09-15', 'method' => 'cash', 'deposit_account_id' => $f['accounts']['1050']->id,
         'allocations' => [['invoice_id' => $invoice->id, 'amount' => 1]],
-    ], $f['user']);
+    ], $f['user']));
     $payment = Payment::findOrFail($result['data']['id']);
     $before = (float) $invoice->fresh()->balance;
 

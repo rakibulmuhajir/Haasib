@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { localToday } from '@/composables/useEntryDate'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -43,12 +43,13 @@ const form = useForm({
   transaction_date: localToday(),
   posting_date: localToday(),
   description: '',
-  post: true,
   entries: [
     { account_id: '', type: 'debit', amount: '', description: '' },
     { account_id: '', type: 'credit', amount: '', description: '' },
   ],
 })
+
+const postNow = ref(true)
 
 const totals = computed(() => {
   let debit = 0
@@ -72,7 +73,9 @@ const removeLine = (idx: number) => {
 }
 
 const submit = () => {
-  form.post(`/${props.company.slug}/journals`, {
+  // The field is `post`, but useForm's own post() method shadows a data key of that name,
+  // so it was silently dropped from the payload and every journal saved as a draft.
+  form.transform((data) => ({ ...data, post: postNow.value })).post(`/${props.company.slug}/journals`, {
     preserveScroll: true,
   })
 }
@@ -98,9 +101,9 @@ const submit = () => {
           <InputError :message="form.errors.posting_date" />
         </div>
         <div class="flex items-center gap-2 pt-6">
-          <Checkbox id="post" v-model:checked="form.post" />
+          <Checkbox id="post" v-model:checked="postNow" />
           <Label for="post">Post immediately</Label>
-          <InputError :message="form.errors.post" />
+          <InputError :message="(form.errors as Record<string, string>).post" />
         </div>
         <div class="md:col-span-3">
           <Label for="description">Description</Label>

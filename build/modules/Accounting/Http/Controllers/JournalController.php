@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Http\Requests\StoreJournalRequest;
@@ -113,6 +114,22 @@ class JournalController extends Controller
 
         return redirect()
             ->route('journals.index', ['company' => $company->slug])
+            ->with('success', $result['message']);
+    }
+
+    public function post(Request $request)
+    {
+        $company = CompanyContext::getCompany();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::JOURNAL_CREATE), 403);
+
+        $result = app(CommandBus::class)->dispatch(
+            'journal.post',
+            ['id' => $request->route('journal')],
+            $request->user()
+        );
+
+        return redirect()
+            ->route('journals.show', ['company' => $company->slug, 'journal' => $request->route('journal')])
             ->with('success', $result['message']);
     }
 

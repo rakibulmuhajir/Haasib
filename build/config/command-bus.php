@@ -136,6 +136,7 @@ return [
 
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,
+    'journal.post' => \App\Modules\Accounting\Actions\Journal\PostAction::class,
 
     // General Ledger - Opening Balances
     'opening_balance.view' => \App\Modules\Accounting\Actions\OpeningBalance\ViewAction::class,

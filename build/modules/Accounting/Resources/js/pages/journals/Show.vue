@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -57,6 +57,15 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: props.journal.transaction_number, href: `/${props.company.slug}/journals/${props.journal.id}` },
 ]
 
+const posting = ref(false)
+const postJournal = () => {
+  router.post(`/${props.company.slug}/journals/${props.journal.id}/post`, {}, {
+    preserveScroll: true,
+    onStart: () => { posting.value = true },
+    onFinish: () => { posting.value = false },
+  })
+}
+
 const sourceHref = computed(() => {
   if (!props.journal.reference_type || !props.journal.reference_id) return null
 
@@ -103,6 +112,13 @@ const tableData = computed(() =>
   >
     <template #actions>
       <div class="flex gap-2">
+        <Button
+          v-if="journal.status === 'draft'"
+          :disabled="posting"
+          @click="postJournal"
+        >
+          Post
+        </Button>
         <Button v-if="sourceHref" variant="outline" @click="router.get(sourceHref)">
           Open Source
         </Button>

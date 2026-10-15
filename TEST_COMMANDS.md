@@ -136,6 +136,23 @@ npm run format:check
 
 ---
 
+## Page crawl (browser smoke test)
+
+Opens every company page in headless Chromium against the running dev server and
+lists pages with an HTTP error, a server exception or a JavaScript error. It catches
+what `vue-tsc` can't: `tsconfig.json` only covers `resources/js`, so a missing import in a
+`modules/*/Resources/js` page only shows when the page runs.
+
+```powershell
+# Dev server running on :9001. CHROME only when Playwright's own browser isn't installed.
+$env:CHROME="$env:LOCALAPPDATA\ms-playwright\chromium-1208\chrome-win64\chrome.exe"
+node scripts/smoke-crawl.cjs demo-crescent-fuel demo-babalsalam-travel demo-meridian-trading
+```
+
+Read-only: it skips GET routes that change state (onboarding, switch, lock, …).
+
+---
+
 ## Known issues
 
 - **`tests/Feature/Umrah` has hung**, running well past its own timeout and producing no

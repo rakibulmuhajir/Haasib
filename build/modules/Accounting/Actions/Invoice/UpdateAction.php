@@ -154,6 +154,11 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             }
 
             $total = $subtotal + $taxAmount - $discountAmount;
+            if (round($subtotal, 2) <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'line_items' => 'Enter an amount above zero.',
+                ]);
+            }
             $baseAmount = round($total * ($exchangeRate ?? 1), 2);
 
             // Decide, before mutating anything, whether the journal actually needs

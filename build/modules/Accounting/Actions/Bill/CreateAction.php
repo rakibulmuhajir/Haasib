@@ -99,6 +99,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 
             $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
             $lineTotals = collect($computed['lines']);
+            BillLineTotals::assertTotalPositive((float) $computed['subtotal']);
 
             $subtotal = $computed['subtotal'];
             $taxAmount = $computed['tax_amount'];

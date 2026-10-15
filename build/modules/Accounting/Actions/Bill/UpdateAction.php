@@ -133,6 +133,7 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 
                 $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
                 $totals = collect($computed['lines']);
+                BillLineTotals::assertTotalPositive((float) $computed['subtotal']);
 
                 $overallChanged = $overallType !== $bill->overall_discount_type
                     || abs($overallValue - (float) $bill->overall_discount_value) > 0.0000001;

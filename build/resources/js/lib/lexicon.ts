@@ -35,6 +35,13 @@ export interface TermDictionary {
 // -----------------------------------------------------------------------------
 
 export const coreTerms: TermDictionary = {
+  customerDiscountTiming: 'Discount timing',
+  customerDiscountPerInvoice: 'Per invoice',
+  customerDiscountPeriodEnd: 'At period end',
+  customerDiscountAddPeriod: 'Add period discount',
+  customerDiscountPeriodTitle: 'Period discount',
+  customerDiscountPreview: 'Preview discount',
+  customerDiscountPost: 'Post discount',
   valueHintBookProfit: 'Sales + closing stock value − opening stock value − purchases, from the books.',
   valueHintBookMarginPercent: 'Profit from the books ÷ sales × 100. Uses gross profit when book profit is unavailable; zero when there are no sales.',
   valueHintBookMarginUnit: 'Profit from the books ÷ quantity sold. Uses gross profit when book profit is unavailable; zero when nothing was sold.',

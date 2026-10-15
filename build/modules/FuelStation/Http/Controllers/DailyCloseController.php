@@ -13,6 +13,7 @@ use App\Modules\FuelStation\Http\Requests\ApplyPostCloseDiscountRequest;
 use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\UnlockDailyCloseRequest;
+use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\Nozzle;
@@ -21,7 +22,6 @@ use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
-use App\Modules\FuelStation\Models\CustomerFuelDiscount;
 use App\Modules\FuelStation\Services\DailyCloseLockService;
 use App\Modules\FuelStation\Services\DailyClosePostCloseDiscountService;
 use App\Modules\FuelStation\Services\DailyCloseReopenService;
@@ -93,7 +93,7 @@ class DailyCloseController extends Controller
             'id' => $employee->id,
             'first_name' => $employee->first_name,
             'last_name' => $employee->last_name,
-            'full_name' => trim($employee->first_name . ' ' . $employee->last_name),
+            'full_name' => trim($employee->first_name.' '.$employee->last_name),
             'position' => $employee->position,
             'base_salary' => (float) ($employee->base_salary ?? 0),
             'pay_frequency' => $employee->pay_frequency,
@@ -122,7 +122,7 @@ class DailyCloseController extends Controller
                         'payslip_id' => $payslip->id,
                         'payslip_number' => $payslip->payslip_number,
                         'employee_id' => $payslip->employee_id,
-                        'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
+                        'employee_name' => trim(($payslip->employee?->first_name ?? '').' '.($payslip->employee?->last_name ?? '')) ?: 'Employee',
                         'employee_number' => $payslip->employee?->employee_number,
                         'amount' => (float) $payslip->net_pay,
                         'approved_at' => $payslip->approved_at?->toISOString(),
@@ -158,7 +158,7 @@ class DailyCloseController extends Controller
             ->orderBy('payment_number')
             ->get(['id', 'company_id', 'vendor_id', 'payment_group_number', 'payment_number', 'payment_date', 'amount', 'currency', 'payment_method', 'payment_account_id', 'reference_number'])
             ->map(function (BillPayment $payment) use ($cashAccountId) {
-                $accountLabel = trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code . ' — ' : '') . ($payment->paymentAccount?->name ?? 'Payment account'));
+                $accountLabel = trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code.' — ' : '').($payment->paymentAccount?->name ?? 'Payment account'));
                 $billNumbers = $payment->allocations
                     ->map(fn ($allocation) => $allocation->bill?->bill_number)
                     ->filter()
@@ -217,6 +217,7 @@ class DailyCloseController extends Controller
             ->get()
             ->map(function (\App\Modules\Accounting\Models\Invoice $invoice) {
                 $line = $invoice->lineItems->first();
+
                 return [
                     'invoice_id' => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
@@ -273,7 +274,7 @@ class DailyCloseController extends Controller
             ->map(fn (Item $item) => [
                 'id' => $item->id,
                 'name' => $item->name,
-                'is_fuel' => !is_null($item->fuel_category),
+                'is_fuel' => ! is_null($item->fuel_category),
                 'unit' => $item->unit_of_measure ?? 'unit',
             ]);
     }
@@ -381,6 +382,7 @@ class DailyCloseController extends Controller
                     'source_label' => 'Parked close (not posted)',
                     'as_of' => $parkedFigures['date'],
                 ]);
+
                 continue;
             }
 
@@ -632,7 +634,7 @@ class DailyCloseController extends Controller
             ->values();
 
         // Get previous day for lookups
-        $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
+        $previousDate = date('Y-m-d', strtotime($date.' -1 day'));
 
         // Owner's rule A: even when the previous day was never posted, a parked draft's
         // figures still open this day - see DailyCloseReconciliationService::parkedClosingFigures.
@@ -813,6 +815,7 @@ class DailyCloseController extends Controller
                 } elseif ($hasSellingPrice && isset($item->selling_price)) {
                     $salePrice = $item->selling_price;
                 }
+
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
@@ -874,6 +877,7 @@ class DailyCloseController extends Controller
             // manual credit-sale rows -- the same rate FuelSaleController::create hands to
             // the standalone sale form. See CustomerFuelDiscountService.
             'customerFuelDiscounts' => \App\Modules\FuelStation\Models\CustomerFuelDiscount::where('company_id', $companyId)
+                ->whereIn('customer_id', app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->invoiceCustomerIds($companyId))
                 ->get()
                 ->groupBy('customer_id')
                 ->map(fn ($rows) => $rows->keyBy('item_id')->map(fn ($d) => [
@@ -916,7 +920,7 @@ class DailyCloseController extends Controller
             'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,
             'existingTankReadings' => $existingTankReadings,
-            'previousTankReadings' => $previousTankReadings->map(fn($r) => [
+            'previousTankReadings' => $previousTankReadings->map(fn ($r) => [
                 'tank_id' => $r->tank_id,
                 'liters' => (float) $r->dip_measurement_liters,
                 'stick_reading' => (float) $r->stick_reading,
@@ -958,10 +962,9 @@ class DailyCloseController extends Controller
                 report($e);
             }
 
-
             $redirect = redirect()
                 ->route('fuel.daily-close.index', ['company' => $company->slug])
-                ->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number'] . $payrollNote);
+                ->with('success', 'Daily close processed successfully. Transaction: '.$result['transaction_number'].$payrollNote);
             // Over a partner's drawing limit: posted anyway, with a notice.
             if (! empty($result['warnings'])) {
                 $redirect->with('warning', implode('. ', $result['warnings']));
@@ -982,6 +985,7 @@ class DailyCloseController extends Controller
         $close = Transaction::where('company_id', $companyModel->id)->where('transaction_type', 'fuel_daily_close')->findOrFail($transaction);
         try {
             app(\App\Services\CommandBus::class)->dispatch('fuel.daily_close.expense', $request->validated() + ['close_id' => $close->id], $request->user());
+
             return back()->with('success', 'Expense recorded. The posted snapshot is unchanged.');
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
@@ -1195,6 +1199,7 @@ class DailyCloseController extends Controller
                 $close, $invoice, $validated['item_id'], isset($validated['litres']) ? (float) $validated['litres'] : null,
                 (float) $validated['discount_amount'], $request->user()
             );
+
             return back()->with('success', 'Discount applied to the invoice.');
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
@@ -1207,6 +1212,7 @@ class DailyCloseController extends Controller
         $close = Transaction::where('company_id', $companyModel->id)->where('transaction_type', 'fuel_daily_close')->findOrFail($transaction);
         try {
             app(\App\Services\CommandBus::class)->dispatch('fuel.daily_close.correct_reading', $request->validated() + ['close_id' => $close->id], $request->user());
+
             return back()->with('success', 'Correction recorded. The posted snapshot is unchanged.');
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
@@ -1310,7 +1316,7 @@ class DailyCloseController extends Controller
 
         // Check view permission
         $user = $request->user();
-        if (!$user->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW)) {
+        if (! $user->hasCompanyPermission(Permissions::DAILY_CLOSE_VIEW)) {
             abort(403, 'You do not have permission to view daily closes.');
         }
 
@@ -1343,7 +1349,7 @@ class DailyCloseController extends Controller
         $canEditDay = $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && $editDayDisabledReason === null;
 
         $metadata = $txn->metadata ?? [];
-        if (!is_array($metadata)) {
+        if (! is_array($metadata)) {
             $metadata = [];
         }
         $costs = app(\App\Modules\FuelStation\Services\DailyCloseCostCorrectionService::class);
@@ -1378,8 +1384,8 @@ class DailyCloseController extends Controller
             ])->values(),
             'expenseAccounts' => Account::where('company_id', $companyModel->id)->where('is_active', true)->moneyOutTarget()->get(['id', 'name']),
             'canAddActivity' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE),
-            'canCorrectReadings' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CORRECT) && !empty($metadata['posting_snapshot']),
-            'correctableReadings' => !empty($metadata['posting_snapshot']) ? [
+            'canCorrectReadings' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CORRECT) && ! empty($metadata['posting_snapshot']),
+            'correctableReadings' => ! empty($metadata['posting_snapshot']) ? [
                 'tank' => TankReading::where('company_id', $companyModel->id)
                     ->whereDate('reading_date', $txn->transaction_date->toDateString())
                     ->get(['id', 'tank_id', 'dip_measurement_liters'])
@@ -1404,9 +1410,10 @@ class DailyCloseController extends Controller
             // prefill the same discount CustomerFuelDiscountService would apply on a fresh
             // sale, before the user edits it.
             'customerFuelDiscounts' => CustomerFuelDiscount::where('company_id', $companyModel->id)
+                ->whereIn('customer_id', app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->invoiceCustomerIds($companyModel->id))
                 ->whereIn('customer_id', collect($metadata['credit_sale_details'] ?? [])->pluck('customer_id')->filter()->unique()->values()->all())
                 ->get(['customer_id', 'item_id', 'discount_type', 'value']),
-            'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && !$txn->is_locked,
+            'canApplyPostCloseDiscount' => $user->hasCompanyPermission(Permissions::DAILY_CLOSE_CREATE) && ! $txn->is_locked,
             // For the day sheet: names behind the ids the close stored, and each tank's opening
             // (the previous posted close's dip) so a tank reads opening + delivered - sold.
             'accountNames' => Account::where('company_id', $companyModel->id)->pluck('name', 'id'),
@@ -1451,7 +1458,7 @@ class DailyCloseController extends Controller
     private function creditSaleInvoicesFor(string $companyId, array $metadata): array
     {
         $details = $metadata['credit_sale_details'] ?? [];
-        if (!$details) {
+        if (! $details) {
             return [];
         }
 
@@ -1508,7 +1515,6 @@ class DailyCloseController extends Controller
         })->values()->all();
     }
 
-
     /**
      * Lock a daily close transaction.
      */
@@ -1522,12 +1528,13 @@ class DailyCloseController extends Controller
             ->whereNull('deleted_at')
             ->firstOrFail();
 
-        if (!$txn->isLockable()) {
+        if (! $txn->isLockable()) {
             return redirect()->back()->with('error', 'This entry cannot be locked. It may already be locked or reversed.');
         }
 
         try {
             $this->lockService->lockTransaction($txn, $request->user(), 'manual');
+
             return redirect()->back()->with('success', 'Daily close locked successfully.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -1547,12 +1554,13 @@ class DailyCloseController extends Controller
             ->whereNull('deleted_at')
             ->firstOrFail();
 
-        if (!$txn->is_locked) {
+        if (! $txn->is_locked) {
             return redirect()->back()->with('error', 'This entry is not locked.');
         }
 
         try {
             $this->lockService->unlockTransaction($txn, $request->user(), $request->validated()['reason']);
+
             return redirect()->back()->with('success', 'Daily close reopened. The reason has been recorded.');
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -1582,6 +1590,7 @@ class DailyCloseController extends Controller
             if (! empty($result['warnings'])) {
                 session()->flash('warnings', $result['warnings']);
             }
+
             return redirect()
                 ->route('fuel.daily-close.create', ['company' => $companyModel->slug, 'date' => $result['parked_date']])
                 ->with('success', 'Day reopened for editing. Everything it posted was removed; re-post when ready.');
@@ -1643,5 +1652,4 @@ class DailyCloseController extends Controller
 
         return redirect()->back()->with('success', "Locked {$count} daily closes for {$monthName}.");
     }
-
 }

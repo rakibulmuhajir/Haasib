@@ -2,8 +2,8 @@
 
 namespace App\Modules\Accounting\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
@@ -13,8 +13,11 @@ class CreditNote extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'acct.credit_notes';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -29,6 +32,7 @@ class CreditNote extends Model
         'base_currency',
         'base_amount',
         'reason',
+        'period_discount',
         'status',
         'notes',
         'terms',
@@ -48,6 +52,7 @@ class CreditNote extends Model
         'invoice_id' => 'string',
         'credit_date' => 'date:Y-m-d',
         'amount' => 'decimal:2',
+        'period_discount' => 'array',
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',
         'sent_at' => 'datetime',
@@ -121,7 +126,7 @@ class CreditNote extends Model
             $next = (int) $m[1] + 1;
         }
 
-        return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+        return $base.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
     }
 
     /** Credit notes against a split invoice (see Invoice::splitOriginals): kept in the books, out of everyday views. */

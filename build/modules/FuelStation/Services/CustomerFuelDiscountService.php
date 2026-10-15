@@ -19,12 +19,17 @@ class CustomerFuelDiscountService
      */
     public function for(string $companyId, string $customerId, string $itemId): ?array
     {
+        $customer = \App\Modules\Accounting\Models\Customer::where('company_id', $companyId)->findOrFail($customerId);
+        if (app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->timing($customer) !== 'invoice') {
+            return null;
+        }
+
         $discount = CustomerFuelDiscount::where('company_id', $companyId)
             ->where('customer_id', $customerId)
             ->where('item_id', $itemId)
             ->first();
 
-        if (!$discount) {
+        if (! $discount) {
             return null;
         }
 

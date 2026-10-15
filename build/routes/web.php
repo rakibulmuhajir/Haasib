@@ -15,22 +15,22 @@ use App\Modules\Accounting\Http\Controllers\BankFeedController;
 use App\Modules\Accounting\Http\Controllers\BankReconciliationController;
 use App\Modules\Accounting\Http\Controllers\BillController;
 use App\Modules\Accounting\Http\Controllers\BillPaymentController;
+use App\Modules\Accounting\Http\Controllers\ConsolidatedInvoiceController;
 use App\Modules\Accounting\Http\Controllers\CreditNoteController;
 use App\Modules\Accounting\Http\Controllers\CustomerController;
 use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use App\Modules\Accounting\Http\Controllers\InvoiceController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
+use App\Modules\Accounting\Http\Controllers\PayablesAgingReportController;
 use App\Modules\Accounting\Http\Controllers\PaymentController;
 use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
 use App\Modules\Accounting\Http\Controllers\ReceivablesAgingReportController;
-use App\Modules\Accounting\Http\Controllers\PayablesAgingReportController;
-use App\Modules\Accounting\Http\Controllers\ConsolidatedInvoiceController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
 use App\Modules\Accounting\Http\Controllers\StatementReportController;
-use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
 use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
+use App\Modules\Accounting\Http\Controllers\TrialBalanceReportController;
 use App\Modules\Accounting\Http\Controllers\VendorController;
 use App\Modules\Accounting\Http\Controllers\VendorCreditController;
 use App\Modules\Inventory\Http\Controllers\ItemCategoryController;
@@ -165,6 +165,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/customers/create', [CustomerController::class, 'create'])->name('customers.create');
         Route::post('/{company}/customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::get('/{company}/customers/{customer}', [CustomerController::class, 'show'])->whereUuid('customer')->name('customers.show');
+        Route::get('/{company}/customers/{customer}/period-discount', [\App\Modules\Accounting\Http\Controllers\CustomerPeriodDiscountController::class, 'create'])->whereUuid('customer')->name('customers.period-discount.create');
+        Route::post('/{company}/customers/{customer}/period-discount', [\App\Modules\Accounting\Http\Controllers\CustomerPeriodDiscountController::class, 'store'])->whereUuid('customer')->name('customers.period-discount.store');
         Route::get('/{company}/customers/{customer}/edit', [CustomerController::class, 'edit'])->whereUuid('customer')->name('customers.edit');
         Route::get('/{company}/customers/{customer}/tax-default', [CustomerController::class, 'taxDefault'])->whereUuid('customer')->name('customers.tax-default');
         // PUT and PATCH both, because the page has two kinds of caller. The Edit form sends
@@ -211,6 +213,8 @@ Route::middleware(['auth'])->group(function () {
         // Credit Note routes (Accounting module)
         Route::get('/{company}/credit-notes', [CreditNoteController::class, 'index'])->name('credit-notes.index');
         Route::get('/{company}/credit-notes/create', [CreditNoteController::class, 'create'])->name('credit-notes.create');
+        Route::post('/{company}/credit-notes/{credit_note}/apply', [CreditNoteController::class, 'apply'])->whereUuid('credit_note')->name('credit-notes.apply');
+        Route::post('/{company}/credit-notes/{credit_note}/void', [CreditNoteController::class, 'void'])->whereUuid('credit_note')->name('credit-notes.void');
         Route::post('/{company}/credit-notes', [CreditNoteController::class, 'store'])->name('credit-notes.store');
         Route::get('/{company}/credit-notes/{credit_note}', [CreditNoteController::class, 'show'])->name('credit-notes.show');
         Route::get('/{company}/credit-notes/{credit_note}/edit', [CreditNoteController::class, 'edit'])->name('credit-notes.edit');

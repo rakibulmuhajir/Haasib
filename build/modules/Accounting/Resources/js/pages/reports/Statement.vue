@@ -47,6 +47,7 @@ type BankOption = { id: string; code: string; name: string }
 type PartyOption = { id: string; name: string; customer_number?: string; vendor_number?: string }
 
 const props = defineProps<{
+  canCreatePeriodDiscount?: boolean
   valueTrail?: ValueTrail | null
   valueTrailsAvailable?: boolean
   company: { id: string; name: string; slug: string; base_currency: string }
@@ -335,6 +336,9 @@ const statementTitle = computed(() => (props.statement.combined
                 <FileText class="h-4 w-4" />
                 Consolidated invoice
               </Link>
+            </Button>
+            <Button v-if="canCreatePeriodDiscount && props.filters.kind === 'customer' && props.filters.id && !['all', 'some', 'category'].includes(props.filters.id)" variant="outline" as-child>
+              <Link :href="`/${company.slug}/customers/${props.filters.id}/period-discount`" :data="{ from: props.filters.from, to: props.filters.to }">Add period discount</Link>
             </Button>
           </div>
         </CardContent>

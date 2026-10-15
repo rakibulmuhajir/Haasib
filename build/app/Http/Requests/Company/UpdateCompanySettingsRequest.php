@@ -50,6 +50,7 @@ class UpdateCompanySettingsRequest extends BaseFormRequest
             'address.country' => ['sometimes', 'nullable', 'string', 'max:120'],
             'fiscal_year_start_month' => ['sometimes', 'integer', 'min:1', 'max:12'],
             'auto_create_fiscal_year' => ['sometimes', 'boolean'],
+            'customer_discount_timing' => ['sometimes', 'in:invoice,period'],
             'default_period_type' => ['sometimes', 'string', 'in:monthly,quarterly,yearly'],
         ];
     }

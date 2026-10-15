@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InputError from '@/components/InputError.vue';
 import CompanyCurrencies from '@/components/company/CompanyCurrencies.vue';
 import LedgerRegister from '@/components/LedgerRegister.vue';
 import MetaChip from '@/components/MetaChip.vue';
@@ -70,6 +71,7 @@ interface Company {
         fiscal_year_start_month?: number;
         auto_create_fiscal_year?: boolean;
         default_period_type?: string;
+        customer_discount_timing?: 'invoice' | 'period';
         modules?: Record<string, boolean>;
         contact_email?: string | null;
         contact_phone?: string | null;
@@ -287,6 +289,7 @@ const generalForm = useForm({
 });
 
 const fiscalYearForm = useForm({
+    customer_discount_timing: company.value.settings?.customer_discount_timing ?? 'invoice',
     fiscal_year_start_month:
         company.value.settings?.fiscal_year_start_month ?? 1,
     auto_create_fiscal_year:
@@ -1399,6 +1402,16 @@ const createUser = () =>
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <Label for="default-discount-timing">Customer discounts</Label>
+                                    <Select v-model="fiscalYearForm.customer_discount_timing" :disabled="!company.can_manage_company">
+                                        <SelectTrigger id="default-discount-timing"><SelectValue /></SelectTrigger>
+                                        <SelectContent><SelectItem value="invoice">Per invoice</SelectItem><SelectItem value="period">At period end</SelectItem></SelectContent>
+                                    </Select>
+                                    <p class="text-sm text-muted-foreground">Default for new sales. Each customer can override this; saved invoices stay unchanged.</p>
+                                    <InputError :message="fiscalYearForm.errors.customer_discount_timing" />
                                 </div>
 
                                 <div

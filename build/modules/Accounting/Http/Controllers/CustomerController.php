@@ -332,6 +332,7 @@ class CustomerController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'customer' => $customer,
+            'discountPolicy' => app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->describe($customer, $request->user()),
             'units' => $customer->units()->orderBy('name')->get(['id', 'name', 'is_active']),
             'summary' => [
                 'open_balance' => (float) ($invoiceSummary->open_balance ?? 0),
@@ -496,6 +497,7 @@ class CustomerController extends Controller
 
         return $customers->map(function (Customer $customer) use ($balances) {
             $customer->setAttribute('current_balance', (float) ($balances[$customer->id] ?? 0));
+
             return $customer;
         })->values();
     }

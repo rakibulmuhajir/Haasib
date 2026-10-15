@@ -46,6 +46,8 @@ import { toast } from 'vue-sonner'
 import { formatMoneyText } from '@/lib/money'
 import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
 import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
+import CustomerDiscountPolicy from '@/components/CustomerDiscountPolicy.vue'
+import type { DiscountPolicy } from '@/components/CustomerDiscountPolicy.vue'
 import CustomerUnitsCard from '@/components/CustomerUnitsCard.vue'
 import type { CustomerUnit } from '@/components/CustomerUnitsCard.vue'
 
@@ -131,6 +133,7 @@ interface PaymentRef {
 }
 
 const props = defineProps<{
+  discountPolicy: DiscountPolicy
   consolidatedInvoices?: SentDocument[]
   units?: CustomerUnit[]
   company: CompanyRef
@@ -592,6 +595,7 @@ const cancelShippingEdit = () => {
 
       <!-- Settings Tab -->
       <TabsContent value="settings" class="space-y-6">
+        <CustomerDiscountPolicy :company-slug="company.slug" :customer-id="customer.id" :policy="discountPolicy" />
         <!-- Contact Information -->
         <Card class="border-rule-default bg-surface-raised" variant="form">
           <CardHeader>

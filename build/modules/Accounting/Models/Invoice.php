@@ -2,15 +2,15 @@
 
 namespace App\Modules\Accounting\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Invoice extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
     use \App\Modules\Accounting\Models\Concerns\ProtectsOpeningDocument;
+    use HasFactory, HasUuids, SoftDeletes;
 
     protected static function booted(): void
     {
@@ -30,6 +30,10 @@ class Invoice extends Model
             // total/discount only count as settlement when they move together as a discount:
             // the discount grows and the total falls by exactly that much. Any other change to
             // them is a change of principal and goes through assertMutable like everything else.
+            if ($invoice->isDirty(['customer_id', 'invoice_date', 'currency', 'subtotal', 'tax_amount', 'discount_amount', 'total_amount'])
+                || ($invoice->isDirty('status') && in_array($invoice->status, ['draft', 'void', 'cancelled', 'reversed'], true))) {
+                app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
+            }
             $oldDiscount = (float) $invoice->getOriginal('discount_amount');
             $oldTotal = (float) $invoice->getOriginal('total_amount');
             $principalMoved = ($invoice->isDirty('total_amount') || $invoice->isDirty('discount_amount'))
@@ -40,12 +44,18 @@ class Invoice extends Model
                 app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
             }
         });
-        static::deleting(fn (self $invoice) => app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice));
+        static::deleting(function (self $invoice) {
+            app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
+            app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
+        });
     }
 
     protected $connection = 'pgsql';
+
     protected $table = 'acct.invoices';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [

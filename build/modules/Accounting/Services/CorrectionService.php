@@ -47,6 +47,9 @@ class CorrectionService
         }
 
         return $this->run($invoice->company_id, function () use ($invoice, $to, $reason) {
+            \App\Models\Company::whereKey($invoice->company_id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::where('company_id', $invoice->company_id)->lockForUpdate()->findOrFail($invoice->id);
+            app(CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
             $from = Customer::find($invoice->customer_id);
             $unapplied = $this->unapplyForeignPayments($invoice, $to->id);
             DB::table('acct.invoices')->where('id', $invoice->id)->update(['customer_id' => $to->id, 'updated_at' => now()]);
@@ -107,6 +110,9 @@ class CorrectionService
         }
 
         return $this->run($invoice->company_id, function () use ($invoice, $shares, $reason, $open) {
+            \App\Models\Company::whereKey($invoice->company_id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::where('company_id', $invoice->company_id)->lockForUpdate()->findOrFail($invoice->id);
+            app(CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
             $from = Customer::find($invoice->customer_id);
             $unapplied = $this->unapplyForeignPayments($invoice, '');
 
@@ -499,5 +505,4 @@ class CorrectionService
 
         return $id;
     }
-
 }

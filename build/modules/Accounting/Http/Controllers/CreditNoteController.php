@@ -11,10 +11,10 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Services\CommandBus;
 use App\Services\CompanyCurrencyOptions;
+use App\Services\CompanyLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Services\CompanyLetterhead;
 use Inertia\Response;
 
 class CreditNoteController extends Controller
@@ -83,7 +83,7 @@ class CreditNoteController extends Controller
         $invoices = Invoice::where('company_id', $company->id)
             ->whereNotIn('status', ['cancelled', 'void'])
             ->orderBy('invoice_number')
-            ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency']);
+            ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency', 'exchange_rate']);
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
@@ -127,6 +127,8 @@ class CreditNoteController extends Controller
             'customer' => $validated['customer_id'],
             'invoice' => $validated['invoice_id'] ?? null,
             'credit_date' => $validated['credit_date'] ?? null,
+            'currency' => $validated['currency'] ?? $validated['base_currency'] ?? $company->base_currency,
+            'exchange_rate' => $validated['exchange_rate'] ?? null,
             'reason' => $validated['reason'],
             'notes' => $validated['notes'] ?? null,
             'status' => $validated['status'] ?? 'draft',
@@ -169,7 +171,22 @@ class CreditNoteController extends Controller
             ->with(['customer', 'invoice:id,invoice_number'])
             ->findOrFail($creditNoteId);
 
+        $sources = $creditNoteRecord->period_discount['invoices'] ?? [];
+        $sourcePage = max(1, (int) $request->query('source_page', 1));
+        $sourcesPaginator = new \Illuminate\Pagination\LengthAwarePaginator(array_slice($sources, ($sourcePage - 1) * 50, 50), count($sources), 50, $sourcePage, ['path' => $request->url(), 'pageName' => 'source_page']);
+        if ($creditNoteRecord->period_discount) {
+            $creditNoteRecord->period_discount = \Illuminate\Support\Arr::except($creditNoteRecord->period_discount, ['invoices', 'invoice_ids', 'token']);
+        }
+
         return Inertia::render('accounting/credit-notes/Show', [
+            'periodSources' => $sourcesPaginator,
+            'availableCredit' => $creditNoteRecord->balance,
+            'canApply' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::CREDIT_NOTE_APPLY),
+            'canVoid' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::CREDIT_NOTE_VOID),
+            'openInvoices' => Invoice::where('company_id', $company->id)->where('customer_id', $creditNoteRecord->customer_id)
+                ->where('currency', $creditNoteRecord->currency ?? $creditNoteRecord->base_currency)->where('balance', '>', 0)
+                ->whereNotIn('status', ['draft', 'void', 'cancelled'])->withoutCorrectionArtifacts()
+                ->orderBy('invoice_date')->get(['id', 'invoice_number', 'balance']),
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
@@ -202,7 +219,7 @@ class CreditNoteController extends Controller
         $invoices = Invoice::where('company_id', $company->id)
             ->whereNotIn('status', ['cancelled', 'void'])
             ->orderBy('invoice_number')
-            ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency']);
+            ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency', 'exchange_rate']);
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
@@ -243,6 +260,8 @@ class CreditNoteController extends Controller
             'customer' => $validated['customer_id'] ?? $creditNoteRecord->customer_id,
             'invoice' => $validated['invoice_id'] ?? $creditNoteRecord->invoice_id,
             'credit_date' => $validated['credit_date'] ?? null,
+            'currency' => $validated['currency'] ?? $validated['base_currency'] ?? $creditNoteRecord->currency ?? $company->base_currency,
+            'exchange_rate' => $validated['exchange_rate'] ?? $creditNoteRecord->exchange_rate,
             'reason' => $reason,
             'notes' => $validated['notes'] ?? null,
             'status' => $validated['status'] ?? $creditNoteRecord->status,
@@ -257,11 +276,43 @@ class CreditNoteController extends Controller
             ],
         ];
 
-        $result = $commandBus->dispatch('credit_note.update', $params, $request->user());
+        try {
+            $result = $commandBus->dispatch('credit_note.update', $params, $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
 
         return redirect()
             ->route('credit-notes.show', ['company' => $company->slug, 'credit_note' => $creditNoteRecord->id])
             ->with('success', $result['message']);
+    }
+
+    public function apply(\App\Modules\Accounting\Http\Requests\ApplyCreditNoteRequest $request, string $company, string $credit_note): RedirectResponse
+    {
+        return $this->runCreditCommand($request, 'credit_note.apply', [
+            'credit_note' => $credit_note, 'invoice' => $request->validated('invoice_id'),
+            'amount' => $request->validated('amount'), 'applied_at' => $request->validated('applied_at'),
+        ]);
+    }
+
+    public function void(\App\Modules\Accounting\Http\Requests\VoidCreditNoteRequest $request, string $company, string $credit_note): RedirectResponse
+    {
+        return $this->runCreditCommand($request, 'credit_note.void', ['id' => $credit_note, 'reason' => $request->validated('reason')]);
+    }
+
+    private function runCreditCommand(Request $request, string $command, array $params): RedirectResponse
+    {
+        try {
+            $result = app(CommandBus::class)->dispatch($command, $params, $request->user());
+
+            return back()->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
     }
 
     public function destroy(Request $request): RedirectResponse

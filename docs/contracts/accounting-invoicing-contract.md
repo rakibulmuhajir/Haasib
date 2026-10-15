@@ -15,6 +15,16 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 
 ## Tables
 
+### Customer discount timing and period credits (2026-10-15)
+- `acct.customers.discount_timing` nullable varchar(10), CHECK `invoice|period`. Null inherits `auth.companies.settings.customer_discount_timing` (default `invoice`). Add to Customer `$fillable`; no cast required. Changes govern future sales only.
+- `acct.credit_notes.period_discount` nullable jsonb, cast `array`, fillable. Null is an ordinary credit note. A period credit stores immutable `from`, `to`, `method` (`fixed|percent|per_litre`), `value`, `eligible_amount`, `litres`, `invoice_ids`, and `invoices` (id, number, date, gross, balance at preview, fuel litres), plus preview token. Partial GIN index `credit_notes_period_invoice_ids` indexes coverage for non-deleted period notes. It is issued immediately, never edits original invoice amounts, quantities, discounts or dates.
+- Core routes: GET/POST `/{company}/customers/{customer}/period-discount`, permission `credit_note.create` AND `credit_note.apply`; preference PATCH uses `customer.update`. Company default uses `company.update`.
+- Preview/post use only this company's customer's posted, non-void, non-correction sales invoices in the period and company base currency. Opening-balance records, invoices already discounted or with an issued invoice credit are excluded. Active period-credit coverage prevents reusing any covered invoice; overlapping coverage is refused. Manual amount must be positive and no larger than eligible sales. Percentage is <=100; per-litre uses fuel item quantities only. Taxed invoices are excluded (tax adjustments belong in itemized credit notes).
+- Post requires an unchanged server preview, locks company/customer/invoices, checks posting date >= period end and an open posting date, then atomically issues one credit note and a balanced Dr Sales Discounts / Cr AR journal. Sales Discounts is the existing active contra-revenue account (code 4210; create default when absent). Credit applies oldest-first to eligible open invoices; surplus remains unapplied customer credit. All allocations use posting date, never the old invoice date.
+- Period credits cannot be edited/deleted. Void atomically restores allocated invoice balances, reverses the original journal, clears applications and releases coverage. Return/void/edit/reopen of covered invoices is blocked until period credit is voided.
+- Statements show period credits as one dated discount row. The fuel customer period summary shows a separate `money.period_discount` reduction on its posting date, excluded from the unexplained `other` amount; original per-product invoice totals remain unchanged. Credit-note detail exposes saved calculation and source invoice links (50 at a time). Unapplied issued credit notes are included in available customer credit, separately from payment credit.
+- Ordinary credit notes store `currency` (invoice currency or selected currency or company base), `base_currency` (company base), `exchange_rate` (null for base) and `base_amount`. A foreign note requires an enabled currency and positive manual rate; a linked invoice supplies its saved rate. UI shows a rate only for foreign currency. Company base currency is always a valid option even without secondary currencies.
+
 ### acct.customer_categories
 - Purpose: the owner's own groups of customers. No defaults are created; a customer is in at most one.
 - Columns: `id` uuid PK; `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE); `name` varchar(100) not null; `description` text null; `created_at`, `updated_at`.
@@ -40,6 +50,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `base_currency` char(3) not null default `'USD'`.
   - `payment_terms` integer not null default 30 (days).
   - `credit_limit` numeric(15,2) null.
+  - `discount_timing` varchar(10) null: `invoice|period`, null inherits the company default.
   - `notes` text null.
   - `logo_url` varchar(500) null.
   - `category_id` uuid null FK → `acct.customer_categories.id` (RESTRICT/CASCADE); index (`company_id`, `category_id`).
@@ -67,7 +78,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
     - `$connection = 'pgsql';`
     - `$table = 'acct.customers';`
     - `$keyType = 'string'; public $incrementing = false;`
-    - `$fillable = ['company_id','customer_number','name','email','phone','billing_address','shipping_address','tax_id','base_currency','payment_terms','credit_limit','notes','logo_url','is_active','created_by_user_id','updated_by_user_id'];`
+    - `$fillable = ['company_id','customer_number','name','email','phone','billing_address','shipping_address','tax_id','base_currency','payment_terms','credit_limit','discount_timing','notes','logo_url','is_active','created_by_user_id','updated_by_user_id'];`
     - `$casts = ['id'=>'string','company_id'=>'string','billing_address'=>'array','shipping_address'=>'array','credit_limit'=>'decimal:2','payment_terms'=>'integer','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
   - Relationships:
     - belongsTo Company.
@@ -284,6 +295,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `amount` numeric(15,2) not null default 0.00 (must be > 0 via check).
   - `base_currency` char(3) not null default `'USD'`.
   - `reason` varchar(255) not null.
+  - `period_discount` jsonb null: immutable period-calculation/source snapshot described above.
   - `status` varchar(20) not null default `'draft'` (enum: draft, issued, applied, void).
   - `notes` text null.
   - `terms` text null. *(Extension)*
@@ -297,8 +309,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.credit_notes'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','invoice_id','credit_note_number','credit_date','amount','base_currency','reason','status','notes','terms','sent_at','posted_at','voided_at','cancellation_reason','journal_entry_id','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','invoice_id'=>'string','credit_date'=>'date','amount'=>'decimal:2','sent_at'=>'datetime','posted_at'=>'datetime','voided_at'=>'datetime','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','invoice_id','credit_note_number','credit_date','amount','base_currency','reason','period_discount','status','notes','terms','sent_at','posted_at','voided_at','cancellation_reason','journal_entry_id','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','invoice_id'=>'string','credit_date'=>'date','amount'=>'decimal:2','period_discount'=>'array','sent_at'=>'datetime','posted_at'=>'datetime','voided_at'=>'datetime','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; belongsTo Invoice.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id.

@@ -37,7 +37,9 @@ class VoidAction implements PaletteAction
         $company = CompanyContext::requireCompany();
 
         $invoice = $this->resolveInvoice($params['id'], $company->id);
+        $invoice = Invoice::where('company_id', $company->id)->lockForUpdate()->findOrFail($invoice->id);
 
+        app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($company->id, $invoice->id);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
         app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
 

@@ -2,8 +2,8 @@
 
 namespace App\Modules\Accounting\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -12,12 +12,17 @@ class Customer extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'acct.customers';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     public const TYPE_WALK_IN = 'walk_in';
+
     public const TYPE_AGENT = 'agent';
+
     public const TYPE_B2B = 'b2b';
 
     /**
@@ -51,6 +56,7 @@ class Customer extends Model
         'base_currency',
         'payment_terms',
         'credit_limit',
+        'discount_timing',
         'is_credit_blocked',
         'ar_account_id',
         'notes',

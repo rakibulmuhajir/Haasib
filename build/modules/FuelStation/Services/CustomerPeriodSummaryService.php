@@ -132,7 +132,10 @@ class CustomerPeriodSummaryService
         $paymentCount = (clone $payments)->count();
 
         $bought = $totals['net'];
-        $other = round($closing - $opening - $bought + $paid, 2);
+        $periodDiscount = round((float) CreditNote::where('company_id', $companyId)->where('customer_id', $customerId)
+            ->whereIn('status', ['issued', 'applied'])->whereNotNull('period_discount')
+            ->whereBetween('credit_date', [$from, $to])->sum('amount'), 2);
+        $other = round($closing - $opening - $bought + $paid + $periodDiscount, 2);
 
         return [
             'from' => $from,
@@ -144,6 +147,7 @@ class CustomerPeriodSummaryService
                 'opening' => $opening,
                 'bought' => $bought,
                 'paid' => $paid,
+                'period_discount' => $periodDiscount,
                 'payment_count' => $paymentCount,
                 'payments_link' => "/{$slug}/payments?".http_build_query(['customer_id' => $customerId, 'from' => $from, 'to' => $to]),
                 'other' => abs($other) < 0.005 ? 0.0 : $other,

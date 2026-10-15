@@ -27,6 +27,8 @@ import InputError from '@/components/InputError.vue'
 import CustomerConsolidatedInvoices from '@/components/CustomerConsolidatedInvoices.vue'
 import type { SentDocument } from '@/components/CustomerConsolidatedInvoices.vue'
 import Hint from '@/components/Hint.vue'
+import CustomerDiscountPolicy from '@/components/CustomerDiscountPolicy.vue'
+import type { DiscountPolicy } from '@/components/CustomerDiscountPolicy.vue'
 import CustomerUnitsCard from '@/components/CustomerUnitsCard.vue'
 import type { CustomerUnit } from '@/components/CustomerUnitsCard.vue'
 
@@ -40,6 +42,7 @@ interface Customer {
   credit_limit: number
   current_balance: number
   available_credit: number
+  available_note_credit: number
   is_credit_blocked: boolean
 }
 
@@ -101,6 +104,7 @@ interface PeriodSummary {
     opening: number
     bought: number
     paid: number
+    period_discount: number
     payment_count: number
     payments_link: string
     other: number
@@ -109,6 +113,7 @@ interface PeriodSummary {
 }
 
 const props = defineProps<{
+  discountPolicy: DiscountPolicy
   summary: PeriodSummary
   consolidatedInvoices?: SentDocument[]
   customer: Customer
@@ -355,6 +360,11 @@ const goBack = () => {
       </Card>
     </div>
 
+    <p v-if="customer.available_note_credit > 0" class="text-sm text-muted-foreground">
+      Unapplied credit notes: <MoneyText :amount="customer.available_note_credit" :currency="props.currency" />.
+      <Link :href="`/${companySlug}/credit-notes?customer_id=${customer.id}`" class="underline underline-offset-4">View and apply</Link>
+    </p>
+
     <!-- Period summary -->
     <Card class="border-border/80">
       <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -447,6 +457,10 @@ const goBack = () => {
               </Link>
             </span>
             <span class="whitespace-nowrap"><MoneyText :amount="summary.money.paid" :currency="props.currency" /></span>
+          </li>
+          <li v-if="summary.money.period_discount > 0" class="flex items-baseline justify-between gap-3">
+            <span>− Period discount</span>
+            <span class="whitespace-nowrap"><MoneyText :amount="summary.money.period_discount" :currency="props.currency" /></span>
           </li>
           <li v-if="summary.money.other !== 0" class="flex items-baseline justify-between gap-3">
             <span>
@@ -549,11 +563,13 @@ const goBack = () => {
 
     <CustomerUnitsCard :company-slug="companySlug" :customer-id="customer.id" :units="units ?? []" />
 
+    <CustomerDiscountPolicy :company-slug="companySlug" :customer-id="customer.id" :policy="discountPolicy" :from="summary.from" :to="summary.to" />
+
     <!-- Fuel Discounts -->
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="text-base">Discounts</CardTitle>
-        <CardDescription>A negotiated rate for this buyer, per fuel item. Applies automatically on a credit sale unless overridden.</CardDescription>
+        <CardDescription>{{ discountPolicy.effective === 'period' ? 'Agreed rates are kept for reference. Period discounts are posted separately; new invoices stay at their original amounts.' : 'A negotiated rate per fuel item, applied automatically on a credit sale unless overridden.' }}</CardDescription>
       </CardHeader>
       <CardContent>
         <form novalidate @submit.prevent="submitDiscounts" class="space-y-4">

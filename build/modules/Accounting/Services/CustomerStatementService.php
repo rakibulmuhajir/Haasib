@@ -92,7 +92,8 @@ class CustomerStatementService
                         'type' => 'credit_note',
                         'reference' => $creditNote->credit_note_number,
                         // The reason says what it was for, e.g. a share moved to another customer's invoice.
-                        'description' => 'Credit note '.$creditNote->credit_note_number.($creditNote->reason ? " · {$creditNote->reason}" : ''),
+                        'description' => $creditNote->period_discount ? $creditNote->reason.' · '.$creditNote->credit_note_number
+                            : 'Credit note '.$creditNote->credit_note_number.($creditNote->reason ? " · {$creditNote->reason}" : ''),
                         'debit' => 0.0,
                         'credit' => (float) $creditNote->amount,
                         'source_id' => $creditNote->id,
@@ -148,11 +149,16 @@ class CustomerStatementService
             ->whereHas('payment', fn ($q) => $q->where('customer_id', $customer->id))
             ->sum('amount_allocated'), 2);
 
+        $noteCredit = CreditNote::where('company_id', $customer->company_id)->where('customer_id', $customer->id)
+            ->whereIn('status', ['issued', 'applied'])->withSum('applications', 'amount_applied')->get()
+            ->sum(fn ($credit) => max(0, (float) $credit->amount - (float) $credit->applications_sum_amount_applied));
+
         $result = [
             'rows' => $statement,
             'opening_balance' => $opening,
             'closing_balance' => $running,
             'available_credit' => $availableCredit,
+            'available_note_credit' => round($noteCredit, 2),
             'from' => $from,
             'to' => $to,
             'party' => $customer->name,

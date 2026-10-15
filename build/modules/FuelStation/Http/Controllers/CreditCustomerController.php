@@ -8,8 +8,8 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\FuelStation\Http\Requests\CustomerPeriodSummaryRequest;
 use App\Modules\FuelStation\Http\Requests\UpdateCustomerFuelDiscountsRequest;
-use App\Modules\FuelStation\Services\CustomerPeriodSummaryService;
 use App\Modules\FuelStation\Models\CustomerFuelDiscount;
+use App\Modules\FuelStation\Services\CustomerPeriodSummaryService;
 use App\Modules\Inventory\Models\Item;
 use App\Services\CommandBus;
 use App\Services\CurrentCompany;
@@ -58,7 +58,7 @@ class CreditCustomerController extends Controller
             ->with('category:id,name')
             ->orderBy('name')
             ->get()
-            ->map(fn($c) => [
+            ->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
                 'code' => $c->customer_number,
@@ -76,7 +76,7 @@ class CreditCustomerController extends Controller
         $stats = [
             'total_customers' => $customers->count(),
             'total_receivable' => $customers->sum('current_balance'),
-            'over_limit' => $customers->filter(fn($c) => $c['credit_limit'] > 0 && $c['current_balance'] > $c['credit_limit'])->count(),
+            'over_limit' => $customers->filter(fn ($c) => $c['credit_limit'] > 0 && $c['current_balance'] > $c['credit_limit'])->count(),
             'blocked' => $customers->where('is_credit_blocked', true)->count(),
         ];
 
@@ -100,7 +100,7 @@ class CreditCustomerController extends Controller
             ->where('id', $customer)
             ->first();
 
-        if (!$customerData) {
+        if (! $customerData) {
             abort(404);
         }
 
@@ -163,6 +163,7 @@ class CreditCustomerController extends Controller
 
         return Inertia::render('FuelStation/CreditCustomers/Show', [
             'summary' => $summary,
+            'discountPolicy' => app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->describe($customerData, $request->user()),
             'consolidatedInvoices' => app(\App\Modules\Accounting\Services\ConsolidatedInvoiceService::class)->forCustomer($companyModel->id, $customerData->id),
             'customer' => [
                 'id' => $customerData->id,
@@ -174,6 +175,7 @@ class CreditCustomerController extends Controller
                 'credit_limit' => (float) ($customerData->credit_limit ?? 0),
                 'current_balance' => $openBalance,
                 'available_credit' => $statement['available_credit'],
+                'available_note_credit' => $statement['available_note_credit'],
                 'is_credit_blocked' => (bool) $customerData->is_credit_blocked,
             ],
             'statement' => $statement['rows'],
@@ -200,6 +202,7 @@ class CreditCustomerController extends Controller
                     ->where('customer_id', $customerModel->id)
                     ->where('item_id', $row['item_id'])
                     ->delete();
+
                 continue;
             }
 
@@ -216,12 +219,12 @@ class CreditCustomerController extends Controller
     {
         $item = $discount->item;
         $label = $discount->discount_type === CustomerFuelDiscount::TYPE_PERCENT
-            ? rtrim(rtrim(number_format((float) $discount->value, 2), '0'), '.') . '%'
-            : rtrim(rtrim(number_format((float) $discount->value, 2), '0'), '.') . '/L';
+            ? rtrim(rtrim(number_format((float) $discount->value, 2), '0'), '.').'%'
+            : rtrim(rtrim(number_format((float) $discount->value, 2), '0'), '.').'/L';
 
         return [
             'item_id' => $discount->item_id,
-            'label' => $label . ' ' . ($item->fuel_category ?? $item->name ?? 'fuel'),
+            'label' => $label.' '.($item->fuel_category ?? $item->name ?? 'fuel'),
         ];
     }
 

@@ -64,10 +64,11 @@ class UpdateAction implements PaletteAction
         $company = CompanyContext::requireCompany();
 
         // Get the invoice
-        $invoice = Invoice::where('id', $params['id'])
+        $invoice = Invoice::where('id', $params['id'])->lockForUpdate()
             ->where('company_id', $company->id)
             ->firstOrFail();
 
+        app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($company->id, $invoice->id);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'invoice', $invoice->id);
         app(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::class)->assertMutable($invoice);
         if (\App\Modules\Inventory\Models\StockMovement::where('company_id', $company->id)->where('reference_type', 'acct.invoices')->where('reference_id', $invoice->id)->where('movement_type', 'sale')

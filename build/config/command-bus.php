@@ -49,6 +49,7 @@ return [
     'customer.list' => \App\Modules\Accounting\Actions\Customer\IndexAction::class,
     'customer.view' => \App\Modules\Accounting\Actions\Customer\ViewAction::class,
     'customer.update' => \App\Modules\Accounting\Actions\Customer\UpdateAction::class,
+    'customer.period_discount' => \App\Modules\Accounting\Actions\Customer\PeriodDiscountAction::class,
     'customer.delete' => \App\Modules\Accounting\Actions\Customer\DeleteAction::class,
     'customer.restore' => \App\Modules\Accounting\Actions\Customer\RestoreAction::class,
     'customer_category.create' => \App\Modules\Accounting\Actions\CustomerCategory\CreateAction::class,

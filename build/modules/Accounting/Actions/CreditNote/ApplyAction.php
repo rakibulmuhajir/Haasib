@@ -2,17 +2,17 @@
 
 namespace App\Modules\Accounting\Actions\CreditNote;
 
-use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Invoice;
 use App\Support\PaletteFormatter;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class ApplyAction implements PaletteAction
 {
@@ -34,10 +34,24 @@ class ApplyAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
+        \App\Models\Company::whereKey($company->id)->lockForUpdate()->firstOrFail();
 
         $credit = $this->resolveCredit($params['credit_note'], $company->id);
         $invoice = $this->resolveInvoice($params['invoice'], $company->id);
+        $credit = CreditNote::where('company_id', $company->id)->lockForUpdate()->findOrFail($credit->id);
+        $invoice = Invoice::where('company_id', $company->id)->lockForUpdate()->findOrFail($invoice->id);
+        if (! in_array($credit->status, ['issued', 'applied'], true)) {
+            throw new \RuntimeException('Issue this credit note before applying it.');
+        }
+        if (($credit->currency ?? $credit->base_currency) !== $invoice->currency) {
+            throw new \RuntimeException('Credit note and invoice must use the same currency.');
+        }
 
         if ($credit->customer_id !== $invoice->customer_id) {
             throw new \Exception('Credit note and invoice must belong to the same customer');
@@ -47,35 +61,41 @@ class ApplyAction implements PaletteAction
             throw new \Exception('Cannot apply a void credit note');
         }
 
-        if ($invoice->status === 'paid' || $invoice->status === 'void' || $invoice->status === 'cancelled') {
+        if ($invoice->status === 'draft' || $invoice->status === 'paid' || $invoice->status === 'void' || $invoice->status === 'cancelled') {
             throw new \Exception('Cannot apply credit to a paid/void/cancelled invoice');
         }
 
         $amount = (float) $params['amount'];
-        $appliedAt = !empty($params['applied_at']) ? Carbon::parse($params['applied_at']) : now();
+        $appliedAt = ! empty($params['applied_at']) ? Carbon::parse($params['applied_at']) : now();
+
+        if ($appliedAt->toDateString() < $credit->credit_date->toDateString()) {
+            throw new \RuntimeException('The application date cannot be before the credit note date.');
+        }
+        app(\App\Modules\Accounting\Services\DocumentDateLock::class)->assertOpen($company->id, $appliedAt->toDateString(), 'This credit application');
 
         $remainingCredit = $credit->amount - $this->appliedTotal($credit->id);
         if ($amount > $remainingCredit) {
-            throw new \Exception("Amount exceeds available credit (" . PaletteFormatter::money($remainingCredit, $credit->base_currency) . ")");
+            throw new \Exception('Amount exceeds available credit ('.PaletteFormatter::money($remainingCredit, $credit->base_currency).')');
         }
 
         if ($amount > $invoice->balance) {
-            throw new \Exception("Amount exceeds invoice balance (" . PaletteFormatter::money($invoice->balance, $invoice->currency) . ")");
+            throw new \Exception('Amount exceeds invoice balance ('.PaletteFormatter::money($invoice->balance, $invoice->currency).')');
         }
 
         return DB::transaction(function () use ($params, $credit, $invoice, $amount, $appliedAt) {
             $before = $invoice->balance;
             $after = max(0, $invoice->balance - $amount);
 
-            CreditNoteApplication::create([
+            $existing = CreditNoteApplication::where('company_id', $credit->company_id)->where('credit_note_id', $credit->id)->where('invoice_id', $invoice->id)->first();
+            CreditNoteApplication::updateOrCreate(['credit_note_id' => $credit->id, 'invoice_id' => $invoice->id], [
                 'company_id' => $credit->company_id,
                 'credit_note_id' => $credit->id,
                 'invoice_id' => $invoice->id,
-                'amount_applied' => $amount,
+                'amount_applied' => round((float) ($existing?->amount_applied ?? 0) + $amount, 2),
                 'applied_at' => $appliedAt,
                 'user_id' => Auth::id(),
                 'notes' => $params['notes'] ?? null,
-                'invoice_balance_before' => $before,
+                'invoice_balance_before' => $existing?->invoice_balance_before ?? $before,
                 'invoice_balance_after' => $after,
             ]);
 
@@ -83,7 +103,7 @@ class ApplyAction implements PaletteAction
                 'paid_amount' => $invoice->total_amount - $after,
                 'balance' => $after,
                 'status' => $after <= 0 ? 'paid' : 'partial',
-                'paid_at' => $after <= 0 ? now() : null,
+                'paid_at' => $after <= 0 ? $appliedAt : null,
             ]);
 
             // Update credit status if fully applied
@@ -95,7 +115,7 @@ class ApplyAction implements PaletteAction
             }
 
             return [
-                'message' => "Applied " . PaletteFormatter::money($amount, $credit->base_currency) .
+                'message' => 'Applied '.PaletteFormatter::money($amount, $credit->base_currency).
                     " to invoice {$invoice->invoice_number}",
                 'data' => [
                     'credit_note' => $credit->credit_note_number,
@@ -118,18 +138,24 @@ class ApplyAction implements PaletteAction
             $credit = CreditNote::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($credit) return $credit;
+            if ($credit) {
+                return $credit;
+            }
         }
 
         $credit = CreditNote::where('company_id', $companyId)
             ->where('credit_note_number', $identifier)
             ->first();
-        if ($credit) return $credit;
+        if ($credit) {
+            return $credit;
+        }
 
         $credit = CreditNote::where('company_id', $companyId)
             ->where('credit_note_number', 'like', "%{$identifier}")
             ->first();
-        if ($credit) return $credit;
+        if ($credit) {
+            return $credit;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Credit note not found: {$identifier}");
     }
@@ -140,18 +166,24 @@ class ApplyAction implements PaletteAction
             $invoice = Invoice::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($invoice) return $invoice;
+            if ($invoice) {
+                return $invoice;
+            }
         }
 
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', $identifier)
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', 'like', "%{$identifier}")
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
     }

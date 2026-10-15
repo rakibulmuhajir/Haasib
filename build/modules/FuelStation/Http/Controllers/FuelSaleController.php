@@ -101,6 +101,7 @@ class FuelSaleController extends Controller
             // the form can prefill without a round trip once both are picked. See
             // CustomerFuelDiscountService for the single place this same rate is priced.
             'customerFuelDiscounts' => CustomerFuelDiscount::where('company_id', $company->id)
+                ->whereIn('customer_id', app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->invoiceCustomerIds($company->id))
                 ->get()
                 ->groupBy('customer_id')
                 ->map(fn ($rows) => $rows->keyBy('item_id')->map(fn (CustomerFuelDiscount $d) => [

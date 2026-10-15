@@ -143,6 +143,7 @@ class StatementReportController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
+            'canCreatePeriodDiscount' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::CREDIT_NOTE_CREATE) && $request->user()->hasCompanyPermission(\App\Constants\Permissions::CREDIT_NOTE_APPLY),
             'filters' => ['kind' => $kind, 'id' => $resolvedId, 'ids' => $ids, 'category_id' => $categoryId, 'from' => $from, 'to' => $to, 'reversed' => $this->showReversed],
             'options' => [
                 'bank' => $bankAccounts,

@@ -2,8 +2,8 @@
 
 namespace App\Modules\Accounting\Actions\CreditNote;
 
-use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteItem;
@@ -11,16 +11,18 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\GlPostingService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class CreateAction implements PaletteAction
 {
     public function rules(): array
     {
         return [
+            'currency' => 'nullable|string|size:3|uppercase',
+            'exchange_rate' => 'nullable|numeric|gt:0',
             'customer' => 'required|string|max:255',
             'invoice' => 'nullable|string|max:255',
             'credit_date' => 'nullable|date',
@@ -44,18 +46,28 @@ class CreateAction implements PaletteAction
 
     public function handle(array $params): array
     {
+        return \App\Services\AccountingWriteTransaction::run(fn () => $this->execute($params));
+    }
+
+    private function execute(array $params): array
+    {
         $company = CompanyContext::requireCompany();
+        \App\Models\Company::whereKey($company->id)->lockForUpdate()->firstOrFail();
 
         $customer = $this->resolveCustomer($params['customer'], $company->id);
-        $invoice = !empty($params['invoice'])
+        $invoice = ! empty($params['invoice'])
             ? $this->resolveInvoice($params['invoice'], $company->id)
             : null;
+
+        if ($invoice) {
+            app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($company->id, $invoice->id);
+        }
 
         if ($invoice && $invoice->customer_id !== $customer->id) {
             throw new \Exception('Invoice does not belong to the provided customer');
         }
 
-        $creditDate = !empty($params['credit_date'])
+        $creditDate = ! empty($params['credit_date'])
             ? Carbon::parse($params['credit_date'])
             : now();
 
@@ -93,9 +105,9 @@ class CreateAction implements PaletteAction
             throw new \Exception('Credit note amount must be greater than zero');
         }
 
-        $baseCurrency = $customer->base_currency ?? $company->base_currency ?? 'USD';
+        $currencyFields = app(\App\Modules\Accounting\Services\CreditNoteCurrency::class)->resolve($company, $invoice, $params, $amount);
 
-        return DB::transaction(function () use ($company, $customer, $invoice, $creditDate, $status, $amount, $baseCurrency, $params, $lineItems) {
+        return DB::transaction(function () use ($company, $customer, $invoice, $creditDate, $status, $amount, $currencyFields, $params, $lineItems) {
             $creditNumber = CreditNote::generateCreditNoteNumber($company->id);
 
             $credit = CreditNote::create([
@@ -105,7 +117,7 @@ class CreateAction implements PaletteAction
                 'credit_note_number' => $creditNumber,
                 'credit_date' => $creditDate,
                 'amount' => $amount,
-                'base_currency' => $baseCurrency,
+                ...$currencyFields,
                 'reason' => $params['reason'],
                 'status' => $status,
                 'notes' => $params['notes'] ?? null,
@@ -153,23 +165,31 @@ class CreateAction implements PaletteAction
             $customer = Customer::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($customer) return $customer;
+            if ($customer) {
+                return $customer;
+            }
         }
 
         $customer = Customer::where('company_id', $companyId)
             ->where('customer_number', $identifier)
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         $customer = Customer::where('company_id', $companyId)
             ->where('email', $identifier)
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         $customer = Customer::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = ?', [strtolower($identifier)])
             ->first();
-        if ($customer) return $customer;
+        if ($customer) {
+            return $customer;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Customer not found: {$identifier}");
     }
@@ -180,18 +200,24 @@ class CreateAction implements PaletteAction
             $invoice = Invoice::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($invoice) return $invoice;
+            if ($invoice) {
+                return $invoice;
+            }
         }
 
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', $identifier)
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_number', 'like', "%{$identifier}")
             ->first();
-        if ($invoice) return $invoice;
+        if ($invoice) {
+            return $invoice;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
     }

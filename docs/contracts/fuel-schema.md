@@ -182,6 +182,7 @@ This keeps the core accounting module industry-agnostic.
   - `parco_card` sales go to Parco Clearing account, not bank.
 
 ### fuel.customer_fuel_discounts
+- Discount timing follows the core company/customer policy in `accounting-invoicing-contract.md`. Saved rates auto-apply only in `invoice` mode, in both server pricing and form previews. In `period` mode they remain saved for reference but invoices stay gross unless the user explicitly enters an invoice discount. Period credits are a core Accounting feature and never change pump quantities, stock, or old daily closes.
 - Purpose: A customer's negotiated discount, per fuel item — either a percent of the sale
   or a flat amount per litre (e.g. a transporter gets Rs 3/L on diesel, nothing on petrol).
   Set on the Fuel Credit Customer page; read by `CustomerFuelDiscountService`, the only

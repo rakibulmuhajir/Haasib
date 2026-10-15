@@ -34,17 +34,19 @@ class DailyClosePostCloseDiscountService
                 throw new \RuntimeException('Unlock the day first.');
             }
 
-            $invoice = Invoice::where('company_id', $close->company_id)->with('customer')->find($invoiceId);
-            if (!$invoice) {
+            $invoice = Invoice::where('company_id', $close->company_id)->lockForUpdate()->with('customer')->find($invoiceId);
+            if (! $invoice) {
                 throw ValidationException::withMessages(['invoice_id' => 'Invoice not found.']);
             }
+
+            app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($close->company_id, $invoice->id);
 
             // "One of this close's credit sale invoices": a manual/fuel-sale-channel row
             // carries the close's own transaction_id (see DailyCloseCreditSaleService::
             // attach()); an accounting_invoice-channel row instead only carries
             // included_in_close_id, since it keeps its own transaction. Either counts.
             $belongsToClose = $invoice->transaction_id === $close->id || $invoice->included_in_close_id === $close->id;
-            if (!$belongsToClose) {
+            if (! $belongsToClose) {
                 throw ValidationException::withMessages(['invoice_id' => 'This invoice is not one of this close\'s credit sale invoices.']);
             }
 
@@ -63,13 +65,13 @@ class DailyClosePostCloseDiscountService
             $arId = $customer?->ar_account_id ?: $company->default_ar_account_id;
             $ar = Account::where('company_id', $close->company_id)->where('is_active', true)->where('subtype', 'accounts_receivable')
                 ->when($arId, fn ($q) => $q->whereKey($arId), fn ($q) => $q->orderBy('code'))->first();
-            if (!$ar || ($ar->currency && $ar->currency !== $company->base_currency)) {
+            if (! $ar || ($ar->currency && $ar->currency !== $company->base_currency)) {
                 throw new \RuntimeException('Set up a base-currency receivables account for this buyer before applying a discount.');
             }
 
             $discountAccountId = app(StationAccountMapper::class)
                 ->resolveMappedAccountId($close->company_id, 'sales_discount_account_id', $user->id);
-            if (!$discountAccountId) {
+            if (! $discountAccountId) {
                 throw new \RuntimeException('Set up a sales discount account before applying a discount.');
             }
 

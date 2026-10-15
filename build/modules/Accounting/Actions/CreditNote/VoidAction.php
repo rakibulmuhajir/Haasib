@@ -2,8 +2,8 @@
 
 namespace App\Modules\Accounting\Actions\CreditNote;
 
-use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
@@ -35,6 +35,10 @@ class VoidAction implements PaletteAction
 
         if ($credit->status === 'void') {
             throw new \Exception('Credit note is already void');
+        }
+
+        if ($credit->period_discount) {
+            return app(\App\Modules\Accounting\Services\CustomerPeriodDiscountService::class)->void($credit, $params['reason'] ?? null);
         }
 
         $applications = CreditNoteApplication::where('credit_note_id', $credit->id)->count();
@@ -73,8 +77,8 @@ class VoidAction implements PaletteAction
             $credit->update([
                 'status' => 'void',
                 'voided_at' => now(),
-                'notes' => ($credit->notes ?? '') .
-                    (!empty($params['reason']) ? "\n\nVoid reason: {$params['reason']}" : ''),
+                'notes' => ($credit->notes ?? '').
+                    (! empty($params['reason']) ? "\n\nVoid reason: {$params['reason']}" : ''),
             ]);
 
             return [
@@ -93,18 +97,24 @@ class VoidAction implements PaletteAction
             $credit = CreditNote::where('id', $identifier)
                 ->where('company_id', $companyId)
                 ->first();
-            if ($credit) return $credit;
+            if ($credit) {
+                return $credit;
+            }
         }
 
         $credit = CreditNote::where('company_id', $companyId)
             ->where('credit_note_number', $identifier)
             ->first();
-        if ($credit) return $credit;
+        if ($credit) {
+            return $credit;
+        }
 
         $credit = CreditNote::where('company_id', $companyId)
             ->where('credit_note_number', 'like', "%{$identifier}")
             ->first();
-        if ($credit) return $credit;
+        if ($credit) {
+            return $credit;
+        }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Credit note not found: {$identifier}");
     }

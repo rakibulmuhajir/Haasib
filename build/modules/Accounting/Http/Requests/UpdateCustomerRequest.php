@@ -4,9 +4,9 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use Illuminate\Validation\Rule;
-use App\Modules\Accounting\Models\Account;
 
 class UpdateCustomerRequest extends BaseFormRequest
 {
@@ -19,6 +19,7 @@ class UpdateCustomerRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
+            'discount_timing' => ['sometimes', 'nullable', 'in:invoice,period'],
             'name' => ['nullable', 'string', 'min:1', 'max:255'],
             'customer_type' => ['nullable', Rule::in(array_keys(Customer::TYPES))],
             'email' => ['nullable', 'email', 'max:255'],

@@ -57,6 +57,8 @@ class DailyCloseReopenService
 
         return AccountingWriteTransaction::run(function () use ($close, $user, $reason) {
             $companyId = $close->company_id;
+            // A period discount may cover this close's invoices; serialize before checking/removing them.
+            \App\Models\Company::whereKey($companyId)->lockForUpdate()->firstOrFail();
             // set_config(..., true) is transaction-local, exactly like SET LOCAL -- but unlike
             // SET LOCAL it accepts a bound parameter, so the close id is never interpolated
             // into SQL text.
@@ -187,6 +189,10 @@ class DailyCloseReopenService
     private function guardSplitInvoices(string $companyId, array $metadata): void
     {
         $ids = collect($metadata['credit_sale_details'] ?? [])->pluck('invoice_id')->filter()->values()->all();
+        $directIds = collect($metadata['direct_sale_details'] ?? [])->pluck('invoice_id')->filter()->all();
+        foreach (array_unique(array_merge($ids, $directIds)) as $invoiceId) {
+            app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($companyId, $invoiceId);
+        }
         $split = $ids ? DB::table('acct.corrections')->where('company_id', $companyId)->where('entity_type', 'invoice')
             ->where('action', 'split')->whereIn('entity_id', $ids)->pluck('entity_id')->all() : [];
         if ($split) {

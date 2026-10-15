@@ -104,6 +104,15 @@ class FuelStationServiceProvider extends ServiceProvider
             ? route('fuel.credit-customers.show', ['company' => $company->slug, 'customer' => $customer->id])
             : null);
 
+        $amanat = new \App\Modules\FuelStation\Http\AmanatReceiptMode;
+        \App\Modules\Accounting\Extensions\PaymentReceiptModes::register(
+            'amanat',
+            'Amanat (advance held for the customer)',
+            [$amanat, 'available'],
+            [$amanat, 'store'],
+            'Held for the customer and used up against fuel. Shows on their amanat page.',
+        );
+
         Invoice::resolveRelationUsing('saleMetadata', fn (Invoice $invoice) => $invoice->hasOne(SaleMetadata::class, 'invoice_id'));
     }
 }

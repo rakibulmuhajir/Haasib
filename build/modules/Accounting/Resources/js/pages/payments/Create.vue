@@ -67,7 +67,7 @@ const props = defineProps<{
         customer_id?: string | null;
         invoice_id?: string | null;
     };
-    amanat?: { enabled: boolean } | null;
+    receiptModes?: Array<{ key: string; label: string; hint?: string | null }>;
 }>();
 
 // API decimal values may arrive as six-place strings (the database keeps
@@ -106,16 +106,21 @@ const form = useForm({
     payment_date: entryDateDefault(props.company.slug),
     notes: '',
     deposit_account_id: '',
-    received_as: 'invoices' as 'invoices' | 'amanat',
+    received_as: 'invoices' as string,
 });
 
-// Amanat is base-currency only (see AmanatService::deposit) - force the currency field
-// back to base whenever the user switches into that path, since the field is hidden and
-// nothing else would keep it in sync.
+// Receipt modes other than invoices (e.g. amanat) are base-currency only - force the
+// currency field back to base whenever the user switches into one, since the field is
+// hidden and nothing else would keep it in sync.
+const receiptModeOptions = computed(() => props.receiptModes ?? []);
+const activeReceiptMode = computed(() =>
+    receiptModeOptions.value.find((mode) => mode.key === form.received_as),
+);
+
 watch(
     () => form.received_as,
     (value) => {
-        if (value === 'amanat') {
+        if (value !== 'invoices') {
             form.currency = props.company.base_currency;
         }
     },
@@ -330,7 +335,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                         </div>
                     </div>
 
-                    <div v-if="amanat?.enabled">
+                    <div v-if="receiptModeOptions.length > 0">
                         <Label>Received as</Label>
                         <div class="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div class="relative">
@@ -350,31 +355,33 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                                     >
                                 </label>
                             </div>
-                            <div class="relative">
+                            <div
+                                v-for="mode in receiptModeOptions"
+                                :key="mode.key"
+                                class="relative"
+                            >
                                 <input
-                                    id="received_as_amanat"
+                                    :id="`received_as_${mode.key}`"
                                     v-model="form.received_as"
-                                    value="amanat"
+                                    :value="mode.key"
                                     type="radio"
                                     class="peer sr-only"
                                 />
                                 <label
-                                    for="received_as_amanat"
+                                    :for="`received_as_${mode.key}`"
                                     class="flex cursor-pointer flex-col rounded-lg border-2 border-muted bg-popover p-3 peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-accent hover:text-accent-foreground"
                                 >
-                                    <span class="text-sm font-medium"
-                                        >Amanat (advance held for the
-                                        customer)</span
-                                    >
+                                    <span class="text-sm font-medium">{{
+                                        mode.label
+                                    }}</span>
                                 </label>
                             </div>
                         </div>
                         <p
-                            v-if="form.received_as === 'amanat'"
+                            v-if="activeReceiptMode?.hint"
                             class="mt-1 text-sm text-muted-foreground"
                         >
-                            Held for the customer and used up against fuel.
-                            Shows on their amanat page.
+                            {{ activeReceiptMode.hint }}
                         </p>
                         <InputError :message="form.errors.received_as" />
                     </div>
@@ -458,7 +465,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                     </div>
 
                     <!-- Invoices -->
-                    <div v-if="form.customer_id && form.received_as !== 'amanat'">
+                    <div v-if="form.customer_id && form.received_as === 'invoices'">
                         <Label>Invoices</Label>
                         <p class="mt-1 text-sm text-muted-foreground">
                             Tick any invoices this payment should settle. Leave
@@ -542,7 +549,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                         </div>
                     </div>
 
-                    <div v-if="form.received_as !== 'amanat'">
+                    <div v-if="form.received_as === 'invoices'">
                         <Button
                             v-if="!showBankCharge"
                             type="button"

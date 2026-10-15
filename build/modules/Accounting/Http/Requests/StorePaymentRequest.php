@@ -65,7 +65,7 @@ class StorePaymentRequest extends BaseFormRequest
             'reference_number' => ['nullable', 'string', 'max:100'],
             'payment_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
-            'received_as' => ['nullable', 'in:invoices,amanat'],
+            'received_as' => ['nullable', 'string', 'max:40'],
             'deposit_account_id' => [
                 'required',
                 'uuid',

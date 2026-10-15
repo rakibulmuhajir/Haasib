@@ -469,14 +469,7 @@ class BillCorrectionService
     /** Mirrors Bill\CreateAction::nextNumber(); this runs inside the correction's own lock. */
     private function nextBillNumber(string $companyId): string
     {
-        // Highest by number, not by text: an odd number (a hand-typed one) must not reset the count.
-        $last = Bill::withTrashed()->where('company_id', $companyId)
-            ->where('bill_number', '~', '^BILL-[0-9]+$')
-            ->orderByRaw("CAST(substring(bill_number from '[0-9]+$') AS bigint) DESC")
-            ->value('bill_number');
-        $seq = ($last && preg_match('/(\d+)$/', $last, $m)) ? ((int) $m[1]) + 1 : 1;
-
-        return 'BILL-'.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+        return app(BillNumberService::class)->next($companyId);
     }
 
     /** Mirrors VendorCredit\CreateAction::nextNumber(). */

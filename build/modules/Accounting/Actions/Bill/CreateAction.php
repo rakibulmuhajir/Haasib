@@ -316,20 +316,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             // already used is never re-issued -- it would collide with that bill's own row
             // on the (company_id, bill_number) unique index, since a soft delete leaves the
             // row, and its number, in place. Mirrors Invoice::generateInvoiceNumber.
-            $last = Bill::withTrashed()
-                ->where('company_id', $companyId)
-                ->whereNotNull('bill_number')
-                ->lockForUpdate()
-                ->orderByDesc('bill_number')
-                ->value('bill_number');
-
-            if ($last && preg_match('/(\d+)$/', $last, $m)) {
-                $seq = ((int) $m[1]) + 1;
-            } else {
-                $seq = 1;
-            }
-
-            return 'BILL-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+            return app(\App\Modules\Accounting\Services\BillNumberService::class)->next($companyId);
         });
     }
 

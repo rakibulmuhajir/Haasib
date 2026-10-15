@@ -92,6 +92,7 @@ const equityLines = computed<Line[]>(() => [
     amount: props.report.retained_earnings,
   },
 ])
+const { has: hasModule } = useModules()
 </script>
 
 <template>
@@ -165,7 +166,7 @@ const equityLines = computed<Line[]>(() => [
         key-field="id"
         clickable
         title="Assets"
-        description="What the business owns — cash, stock in the tanks, money owed to it."
+        :description="hasModule('fuel_station') ? 'What the business owns — cash, stock in the tanks, money owed to it.' : 'What the business owns — cash, stock, money owed to it.'"
         :totals="{ amount: report.totals.assets }"
         totals-label="Total assets"
         @row-click="openAccount"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useModules } from '@/composables/useModules'
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -92,6 +93,9 @@ const submit = () => {
 }
 
 const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
+const { has: hasModule } = useModules()
+const varianceLoss = hasModule('fuel_station') ? 'transit loss' : 'shortage'
+const varianceGain = hasModule('fuel_station') ? 'transit gain' : 'overage'
 </script>
 
 <template>
@@ -208,10 +212,10 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
 
           <div class="grid gap-6 md:grid-cols-2">
             <div class="space-y-2">
-              <Label>Transit loss</Label>
+              <Label>{{ varianceLoss.charAt(0).toUpperCase() + varianceLoss.slice(1) }}</Label>
               <Select v-model="form.transit_loss_account_id" :disabled="!props.transitColumnsReady">
                 <SelectTrigger>
-                  <SelectValue placeholder="Select transit loss account" />
+                  <SelectValue :placeholder="`Select ${varianceLoss} account`" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="a in transitLossAccounts" :key="a.id" :value="a.id">{{ optionLabel(a) }}</SelectItem>
@@ -222,10 +226,10 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
             </div>
 
             <div class="space-y-2">
-              <Label>Transit gain</Label>
+              <Label>{{ varianceGain.charAt(0).toUpperCase() + varianceGain.slice(1) }}</Label>
               <Select v-model="form.transit_gain_account_id" :disabled="!props.transitColumnsReady">
                 <SelectTrigger>
-                  <SelectValue placeholder="Select transit gain account" />
+                  <SelectValue :placeholder="`Select ${varianceGain} account`" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="a in transitGainAccounts" :key="a.id" :value="a.id">{{ optionLabel(a) }}</SelectItem>

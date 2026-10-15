@@ -180,7 +180,7 @@ class DefaultAccountProvisioner
                 'is_contra' => false,
                 'is_active' => true,
                 'is_system' => false,
-                'description' => 'Recoverable shortages claimed from fuel or inventory suppliers.',
+                'description' => 'Recoverable shortages claimed from suppliers.',
             ]);
         }
 

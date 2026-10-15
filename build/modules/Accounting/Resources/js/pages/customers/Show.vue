@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useModules } from '@/composables/useModules'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import RelatedActions from '@/components/RelatedActions.vue'
@@ -132,6 +133,7 @@ interface PaymentRef {
   reference_number: string | null
 }
 
+const { has: hasModule } = useModules()
 const props = defineProps<{
   discountPolicy: DiscountPolicy
   consolidatedInvoices?: SentDocument[]
@@ -590,7 +592,7 @@ const cancelShippingEdit = () => {
           :documents="consolidatedInvoices ?? []"
           :currency="company.base_currency || 'PKR'"
         />
-        <CustomerUnitsCard :company-slug="company.slug" :customer-id="customer.id" :units="units ?? []" />
+        <CustomerUnitsCard v-if="hasModule('fuel_station') || units?.length" :company-slug="company.slug" :customer-id="customer.id" :units="units ?? []" />
       </TabsContent>
 
       <!-- Settings Tab -->

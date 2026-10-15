@@ -497,7 +497,7 @@ const startActions = computed(() => {
                is either the working that produced it or the work that changes
                it. -->
           <section class="reckon">
-            <h2 class="reckon__title">Where you stand</h2>
+            <h2 v-if="!financialPosition" class="reckon__title">Where you stand</h2>
             <Derivation
               :lines="standLines"
               total-label="Free to commit"
@@ -506,7 +506,7 @@ const startActions = computed(() => {
               :locale="baseLocale"
             >
               <template #footnote>
-                Across {{ accountCount }} {{ accountCount === 1 ? 'account' : 'accounts' }}.
+                <template v-if="props.dashboard.cash_position.total !== 0">Across {{ accountCount }} {{ accountCount === 1 ? 'account' : 'accounts' }}.</template>
                 Money customers still owe you is not counted here — it is not yours until it arrives.
               </template>
             </Derivation>

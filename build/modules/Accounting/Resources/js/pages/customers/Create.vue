@@ -22,6 +22,8 @@ interface CompanyRef {
 }
 
 const { has } = useModules()
+// Agent is an Umrah customer type; other companies don't offer it.
+const typeOptions = computed(() => Object.entries(props.customerTypes).filter(([value]) => value !== 'agent' || has('umrah')))
 
 const props = defineProps<{
   company: CompanyRef
@@ -110,7 +112,7 @@ const handleSubmit = () => {
                   <SelectValue placeholder="Select customer type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="(label, value) in customerTypes" :key="value" :value="value">
+                  <SelectItem v-for="[value, label] in typeOptions" :key="value" :value="value">
                     {{ label }}
                   </SelectItem>
                 </SelectContent>

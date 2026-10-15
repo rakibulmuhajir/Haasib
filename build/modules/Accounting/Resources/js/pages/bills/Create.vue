@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate'
 import EntryDateNote from '@/components/EntryDateNote.vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import { EntitySearch, QuickAddModal } from '@/components/forms'
 import RelatedActions from '@/components/RelatedActions.vue'
@@ -270,6 +271,7 @@ const handleSubmit = () => {
 
 // Start on the last date used in this tab, and remember changes - see useEntryDate.
 rememberEntryDate(props.company.slug, () => form.bill_date)
+const { has: hasModule } = useModules()
 </script>
 
 <template>
@@ -424,7 +426,7 @@ rememberEntryDate(props.company.slug, () => form.bill_date)
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-            Select the product. Haasib will choose its tank/warehouse and inventory account automatically.
+            Select the product. Haasib will choose its {{ hasModule('fuel_station') ? 'tank/warehouse' : 'warehouse' }} and inventory account automatically.
             Use the default account only for non-inventory bills.
           </div>
           <div

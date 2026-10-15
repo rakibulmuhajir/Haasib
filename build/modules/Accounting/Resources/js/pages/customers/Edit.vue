@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,6 +158,9 @@ const handleSubmit = () => {
     })
     .put(`/${props.company.slug}/customers/${props.customer.id}`, { preserveScroll: true })
 }
+const { has: hasModule } = useModules()
+// Agent is an Umrah customer type; keep it when this customer already has it.
+const typeOptions = computed(() => Object.entries(props.customerTypes).filter(([value]) => value !== 'agent' || hasModule('umrah') || props.customer.customer_type === 'agent'))
 </script>
 
 <template>
@@ -180,7 +184,7 @@ const handleSubmit = () => {
               <SelectValue placeholder="Select customer type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="(label, value) in customerTypes" :key="value" :value="value">
+              <SelectItem v-for="[value, label] in typeOptions" :key="value" :value="value">
                 {{ label }}
               </SelectItem>
             </SelectContent>

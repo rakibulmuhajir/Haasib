@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { billTotals, type OverallDiscountType } from './overallDiscount'
@@ -269,6 +270,7 @@ const handleSubmit = () => {
     preserveScroll: true,
   })
 }
+const { has: hasModule } = useModules()
 </script>
 
 <template>
@@ -366,7 +368,7 @@ const handleSubmit = () => {
           </Button>
         </div>
         <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-          Select the product. Haasib will choose its tank/warehouse and inventory account automatically.
+          Select the product. Haasib will choose its {{ hasModule('fuel_station') ? 'tank/warehouse' : 'warehouse' }} and inventory account automatically.
           Use the default account only for non-inventory bills.
         </div>
         <div class="space-y-4">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -88,11 +89,12 @@ const columns = [
 const tableData = computed(() => props.expenses.data.map((e) => ({ ...e, id: e.id })))
 
 const goToJournal = (row: any) => router.get(`/${companySlug.value}/journals/${row.id}`)
+const { has: hasModule } = useModules()
 </script>
 
 <template>
   <Head title="Expenses" />
-  <PageShell title="Expenses" description="Standalone expense entries, outside the Daily Close." :icon="ReceiptText" :breadcrumbs="breadcrumbs">
+  <PageShell title="Expenses" :description="hasModule('fuel_station') ? 'Standalone expense entries, outside the Daily Close.' : 'Standalone expense entries.'" :icon="ReceiptText" :breadcrumbs="breadcrumbs">
     <template #actions>
       <Button as-child>
         <Link :href="`/${companySlug}/expenses/create`"><Plus class="mr-2 h-4 w-4" />New Expense</Link>

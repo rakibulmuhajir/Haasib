@@ -41,11 +41,12 @@ interface Opening {
     salaries_owed: { employee_id: string; employee_name: string; amount: number; payslip_id?: string; paid?: boolean }[]
     suppliers: { vendor_id: string; vendor_name: string; amount: number }[]
     partners: { partner_id: string; partner_name: string; amount: number }[]
+    accounts: { account_id: string; code: string; name: string; amount: number; normal_balance: 'debit' | 'credit' }[]
   }
   /** Module sections (amanat, ...) this company has; their rows sit in `rows[key]`. */
   sections: SectionMeta[]
   totals: { assets: number; liabilities: number; equity: number }
-  options: { bank_accounts: Opt[]; customers: Opt[]; vendors: Opt[]; employees: Opt[]; partners: Opt[] }
+  options: { bank_accounts: Opt[]; customers: Opt[]; vendors: Opt[]; employees: Opt[]; partners: Opt[]; accounts: (Opt & { normal_balance: 'debit' | 'credit' })[] }
 }
 
 const props = defineProps<{
@@ -108,6 +109,7 @@ function fieldsFromOpening(o: Opening) {
     salaries_owed: o.rows.salaries_owed.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
     suppliers: o.rows.suppliers.map(r => ({ vendor_id: r.vendor_id, amount: r.amount })),
     partners: o.rows.partners.map(r => ({ partner_id: r.partner_id, amount: r.amount })),
+    accounts: (o.rows.accounts ?? []).map(r => ({ account_id: r.account_id, amount: r.amount })),
     ...sectionFields(o),
   }
 }
@@ -135,6 +137,7 @@ function seedFromOpening(o: Opening) {
   form.salaries_owed = fields.salaries_owed
   form.suppliers = fields.suppliers
   form.partners = fields.partners
+  form.accounts = fields.accounts
   for (const section of o.sections) form[section.key] = fields[section.key]
 }
 
@@ -157,10 +160,15 @@ const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + Number(r.a
 const sectionForm = (key: string): SectionRow[] => ((form as unknown as Record<string, SectionRow[]>)[key] ??= [])
 const sectionSum = (side: SectionMeta['side']) =>
   props.opening.sections.filter(s => s.side === side).reduce((total, s) => total + sum(sectionForm(s.key)), 0)
-const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees) + sectionSum('asset'))
-const liabilities = computed(() => sectionSum('liability') + sum(form.suppliers) + sum(form.partners) + sum(form.salaries_owed))
+// Other balances count as assets or liabilities by the account's normal side.
+const otherSide = (side: 'debit' | 'credit') =>
+  form.accounts
+    .filter(r => (props.opening.options.accounts.find(a => a.id === r.account_id)?.normal_balance ?? 'debit') === side)
+    .reduce((total, r) => total + Number(r.amount || 0), 0)
+const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees) + sectionSum('asset') + otherSide('debit'))
+const liabilities = computed(() => otherSide('credit') + sectionSum('liability') + sum(form.suppliers) + sum(form.partners) + sum(form.salaries_owed))
 const equity = computed(() => assets.value - liabilities.value)
-const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.salaries_owed.length + props.opening.sections.reduce((n, s) => n + sectionForm(s.key).length, 0) + form.suppliers.length + form.partners.length)
+const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.salaries_owed.length + props.opening.sections.reduce((n, s) => n + sectionForm(s.key).length, 0) + form.suppliers.length + form.partners.length + form.accounts.length)
 
 const dateGuardMessage = computed(() => {
   const earliest = props.opening.earliest_transaction_date
@@ -170,7 +178,7 @@ const dateGuardMessage = computed(() => {
 const canSave = computed(() => editable.value && rowCount.value > 0 && !!form.as_of_date && !dateGuardMessage.value && !form.processing)
 const canLock = computed(() => props.canManage && !locked.value && !!props.opening.as_of_date)
 
-const open = reactive({ cash: true, credit: true, employees: true, salariesOwed: true, suppliers: true, partners: false })
+const open = reactive({ cash: true, credit: true, employees: true, salariesOwed: true, suppliers: true, partners: false, accounts: true })
 // One card per module section, open by default.
 const sectionOpen = reactive<Record<string, boolean>>(Object.fromEntries(props.opening.sections.map(s => [s.key, true])))
 
@@ -531,6 +539,48 @@ function lock() {
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.partners.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
               <Button v-if="editable" variant="outline" size="sm" @click="form.partners.push({ partner_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add partner</Button>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      <!-- Other balances: assets, loans, capital -->
+      <Card>
+        <Collapsible v-model:open="open.accounts">
+          <CardHeader>
+            <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
+              <div>
+                <CardTitle>Other balances</CardTitle>
+                <CardDescription>Assets, loans, capital</CardDescription>
+              </div>
+              <span class="flex items-center gap-3 text-sm">
+                <MoneyText :amount="sum(form.accounts)" :currency="currency" :fraction-digits="0" />
+                <ChevronDown class="h-4 w-4" />
+              </span>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-3">
+              <InputError :message="err('accounts')" />
+              <div v-for="(row, i) in form.accounts" :key="'acc-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
+                <div class="grid gap-1">
+                  <Label :for="`accounts-${i}-account_id`" :class="i === 0 ? undefined : 'sr-only'">Account</Label>
+                  <Select v-model="row.account_id" :disabled="!editable">
+                    <SelectTrigger :id="`accounts-${i}-account_id`"><SelectValue placeholder="Choose account" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="a in opening.options.accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <InputError :message="err(`accounts.${i}.account_id`)" />
+                </div>
+                <div class="grid gap-1">
+                  <Label :for="`accounts-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Balance</Label>
+                  <Input :id="`accounts-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <InputError :message="err(`accounts.${i}.amount`)" />
+                </div>
+                <Button v-if="editable" variant="ghost" size="icon" @click="form.accounts.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
+              </div>
+              <Button v-if="editable" variant="outline" size="sm" @click="form.accounts.push({ account_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add account</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>

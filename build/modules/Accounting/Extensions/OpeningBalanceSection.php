@@ -36,6 +36,9 @@ interface OpeningBalanceSection
     /** 'liability' | 'asset'. */
     public function side(): string;
 
+    /** The ledger account this section posts to, or null when the company has none. */
+    public function accountId(string $companyId): ?string;
+
     /** Whether the company can enter and post rows of this section. */
     public function available(Company $company): bool;
 

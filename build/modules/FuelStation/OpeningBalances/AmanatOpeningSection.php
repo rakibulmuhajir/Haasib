@@ -78,7 +78,7 @@ class AmanatOpeningSection implements OpeningBalanceSection
         ];
     }
 
-    private function accountId(string $companyId): ?string
+    public function accountId(string $companyId): ?string
     {
         return Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('code', '2200')->value('id');
     }

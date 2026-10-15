@@ -16,6 +16,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
+use App\Modules\Accounting\Services\OpeningOtherAccounts;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
@@ -84,6 +85,27 @@ class ViewAction implements PaletteAction
         foreach ($sections as $key => $section) {
             $sectionRows[$key] = $journalIds ? $section->rows($companyId, $entryIds) : [];
         }
+        // Other balances: no table of their own, read back from the journal lines on the accounts
+        // no other section posts to (OpeningOtherAccounts), net on the account's normal side.
+        $otherAccounts = app(OpeningOtherAccounts::class)->eligible($company)->keyBy('id');
+        $otherNet = [];
+        if ($entryIds && $otherAccounts->isNotEmpty()) {
+            foreach (\Illuminate\Support\Facades\DB::table('acct.journal_entries')->whereIn('id', $entryIds)->whereIn('account_id', $otherAccounts->keys()->all())->get(['account_id', 'debit_amount', 'credit_amount']) as $line) {
+                $otherNet[$line->account_id] = ($otherNet[$line->account_id] ?? 0.0) + (float) $line->debit_amount - (float) $line->credit_amount;
+            }
+        }
+        $otherRows = [];
+        foreach ($otherNet as $accountId => $net) {
+            $account = $otherAccounts[$accountId];
+            $amount = round($account->normal_balance === 'credit' ? -$net : $net, 2);
+            if ($amount > 0) {
+                $otherRows[] = ['account_id' => $accountId, 'code' => $account->code, 'name' => $account->name, 'amount' => $amount, 'normal_balance' => $account->normal_balance];
+            }
+        }
+        usort($otherRows, fn ($a, $b) => strcmp((string) $a['code'], (string) $b['code']));
+        $otherAssets = array_sum(array_column(array_filter($otherRows, fn ($r) => $r['normal_balance'] !== 'credit'), 'amount'));
+        $otherLiabilities = array_sum(array_column(array_filter($otherRows, fn ($r) => $r['normal_balance'] === 'credit'), 'amount'));
+
         $employees = $journalIds ? SalaryAdvance::whereIn('journal_entry_id', $entryIds)->with('employee:id,first_name,last_name')->get()
             ->map(fn ($a) => ['employee_id' => $a->employee_id, 'employee_name' => trim(($a->employee?->first_name ?? '').' '.($a->employee?->last_name ?? '')), 'amount' => (float) $a->amount, 'recovered' => (float) $a->amount_recovered])->values()->all() : [];
         $partners = $journalIds ? PartnerTransaction::whereIn('journal_entry_id', $entryIds)->with('partner:id,name')->get()
@@ -126,8 +148,8 @@ class ViewAction implements PaletteAction
 
             return $total;
         };
-        $assets += $sectionTotal('asset');
-        $liabilities = $sectionTotal('liability') + array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount')) + array_sum(array_column($salariesOwed, 'amount'));
+        $assets += $sectionTotal('asset') + $otherAssets;
+        $liabilities = $otherLiabilities + $sectionTotal('liability') +array_sum(array_column($suppliers, 'amount')) + array_sum(array_column($partners, 'amount')) + array_sum(array_column($salariesOwed, 'amount'));
 
         $earliest = SaveAction::nonOpeningTransactions($companyId, $opening)
             ->whereIn('status', ['posted', 'locked'])
@@ -148,6 +170,7 @@ class ViewAction implements PaletteAction
                 'salaries_owed' => $salariesOwed,
                 'suppliers' => $suppliers,
                 'partners' => $partners,
+                'accounts' => $otherRows,
             ] + $sectionRows,
             'sections' => collect($sections)->map(fn ($section) => [
                 'key' => $section->key(),
@@ -170,6 +193,7 @@ class ViewAction implements PaletteAction
                 'employees' => Employee::where('company_id', $companyId)->orderBy('first_name')->get(['id', 'first_name', 'last_name'])
                     ->map(fn ($e) => ['id' => $e->id, 'name' => trim($e->first_name.' '.$e->last_name)])->values()->all(),
                 'partners' => Partner::where('company_id', $companyId)->orderBy('name')->get(['id', 'name'])->toArray(),
+                'accounts' => $otherAccounts->map(fn ($a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->name, 'normal_balance' => $a->normal_balance])->values()->all(),
             ],
         ];
     }

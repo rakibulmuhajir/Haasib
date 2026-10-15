@@ -34,6 +34,7 @@ final class OpeningSet
             'salaries_owed' => self::carry($rows['salaries_owed'] ?? [], 'employee_id'),
             'suppliers' => self::carry($rows['suppliers'] ?? [], 'vendor_id'),
             'partners' => self::carry($rows['partners'] ?? [], 'partner_id'),
+            'accounts' => self::carry($rows['accounts'] ?? [], 'account_id'),
         ];
 
         // Module sections the view carries (amanat, ...): the same rows, keyed the same way.

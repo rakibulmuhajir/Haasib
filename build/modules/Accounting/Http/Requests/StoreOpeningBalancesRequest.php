@@ -28,6 +28,7 @@ class StoreOpeningBalancesRequest extends BaseFormRequest
             'salaries_owed.*.employee_id',
             'suppliers.*.vendor_id',
             'partners.*.partner_id',
+            'accounts.*.account_id',
         ];
         $company = CompanyContext::getCompany();
         foreach ($company ? app(OpeningBalanceSections::class)->availableFor($company) : [] as $key => $section) {

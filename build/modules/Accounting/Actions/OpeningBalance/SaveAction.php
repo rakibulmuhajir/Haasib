@@ -20,6 +20,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
+use App\Modules\Accounting\Services\OpeningOtherAccounts;
 use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -76,6 +77,9 @@ class SaveAction implements PaletteAction
             'partners' => 'nullable|array',
             'partners.*.partner_id' => ['required', 'uuid', Rule::exists(Partner::class, 'id')],
             'partners.*.amount' => 'required|numeric|gt:0',
+            'accounts' => 'nullable|array',
+            'accounts.*.account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'accounts.*.amount' => 'required|numeric|gt:0',
         ];
 
         // Module sections (amanat, ...): only the ones this company has are validated, so a
@@ -145,6 +149,7 @@ class SaveAction implements PaletteAction
             $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
             $this->addSalariesOwedLines($company->id, $params, $currency, $asOf, $lines, $pending);
             $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            $this->addOtherBalanceLines($company, $params, $lines);
 
             [$journalId, $entryIdsByLine] = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
             foreach ($pending as $create) {
@@ -324,6 +329,7 @@ class SaveAction implements PaletteAction
         'salaries_owed' => 'employee_id',
         'suppliers' => 'vendor_id',
         'partners' => 'partner_id',
+        'accounts' => 'account_id',
     ];
 
     /** PARTY_KEYS plus the id field of each module section this company has. */
@@ -839,6 +845,32 @@ class SaveAction implements PaletteAction
                 ]);
                 Partner::find($partnerId)?->refreshTotals();
             };
+        }
+    }
+
+    /**
+     * Any other balance-sheet account (fixed assets, loans, prepaid, capital), posted on its
+     * normal side against the 3080 line postJournal adds. Nothing else is stored: ViewAction reads
+     * these back from the journal's lines on the same accounts (see OpeningOtherAccounts).
+     */
+    private function addOtherBalanceLines(Company $company, array $params, array &$lines): void
+    {
+        $rows = array_filter($params['accounts'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+        $allowed = app(OpeningOtherAccounts::class)->eligible($company)->keyBy('id');
+        foreach ($rows as $i => $row) {
+            $account = $allowed->get($row['account_id']);
+            if (! $account) {
+                throw ValidationException::withMessages(["accounts.{$i}.account_id" => 'Pick another account.']);
+            }
+            $lines[] = [
+                'account_id' => $account->id,
+                'type' => $account->normal_balance === 'credit' ? 'credit' : 'debit',
+                'amount' => round((float) $row['amount'], 2),
+                'description' => "Opening balance — {$account->name}",
+            ];
         }
     }
 

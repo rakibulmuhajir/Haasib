@@ -30,6 +30,21 @@ class OpeningBalanceSections
     }
 
     /**
+     * The section that holds money a customer paid in advance (a customer liability),
+     * when this company has one. Quick Add's "paid in advance" field posts to it.
+     */
+    public function customerAdvanceFor(Company $company): ?OpeningBalanceSection
+    {
+        foreach ($this->availableFor($company) as $section) {
+            if ($section->party() === 'customer' && $section->side() === 'liability') {
+                return $section;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Every registered section, available or not: re-entering must undo what a section
      * posted even if the company has since lost the module.
      *

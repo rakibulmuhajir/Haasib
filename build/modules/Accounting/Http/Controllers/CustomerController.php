@@ -568,6 +568,8 @@ class CustomerController extends Controller
 
             $customer = Customer::find($result['data']['id']);
 
+            $advanceSection = app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->customerAdvanceFor($company);
+
             if ($owed > 0) {
                 try {
                     $commandBus->dispatch('opening_balance.set_party', [
@@ -577,23 +579,23 @@ class CustomerController extends Controller
                         'as_of_date' => $openingDate,
                     ], $user);
                 } catch (ValidationException $e) {
-                    throw $this->remapOpeningError($e, 'opening_owed');
+                    throw $this->remapOpeningError($e, 'opening_owed', $advanceSection?->key());
                 }
             }
 
             if ($advance > 0) {
-                if (! array_key_exists('amanat', app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->availableFor($company))) {
+                if (! $advanceSection) {
                     throw ValidationException::withMessages(['opening_advance' => 'Advances are not available for this company.']);
                 }
                 try {
                     $commandBus->dispatch('opening_balance.set_party', [
-                        'section' => 'amanat',
+                        'section' => $advanceSection->key(),
                         'party_id' => $customer->id,
                         'amount' => $advance,
                         'as_of_date' => $openingDate,
                     ], $user);
                 } catch (ValidationException $e) {
-                    throw $this->remapOpeningError($e, 'opening_advance');
+                    throw $this->remapOpeningError($e, 'opening_advance', $advanceSection->key());
                 }
             }
 
@@ -614,19 +616,19 @@ class CustomerController extends Controller
 
     /**
      * opening_balance.set_party's errors are keyed for its own params (amount, as_of_date,
-     * party_id, or whatever SaveAction itself threw against, e.g. 'amanat' when account 2200
-     * is missing). Quick Add's form has none of those fields — it has opening_owed,
+     * party_id, or whatever SaveAction itself threw against under the section's own key, e.g.
+     * a module section whose account is missing). Quick Add's form has none of those fields — it has opening_owed,
      * opening_advance and opening_date — so a validation failure has to be re-keyed onto the
      * field the user actually sees, or the message lands nowhere on screen.
      */
-    private function remapOpeningError(ValidationException $e, string $amountField): ValidationException
+    private function remapOpeningError(ValidationException $e, string $amountField, ?string $sectionKey = null): ValidationException
     {
         $remapped = [];
         foreach ($e->errors() as $key => $messages) {
-            $target = match ($key) {
-                'amount' => $amountField,
-                'as_of_date' => 'opening_date',
-                'amanat' => 'opening_advance',
+            $target = match (true) {
+                $key === 'amount' => $amountField,
+                $key === 'as_of_date' => 'opening_date',
+                $sectionKey !== null && $key === $sectionKey => 'opening_advance',
                 default => 'opening_owed',
             };
             $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);

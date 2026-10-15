@@ -349,7 +349,6 @@ class VendorController extends Controller
             $target = match ($key) {
                 'amount' => $amountField,
                 'as_of_date' => 'opening_date',
-                'amanat' => 'opening_advance',
                 default => 'opening_owed',
             };
             $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);

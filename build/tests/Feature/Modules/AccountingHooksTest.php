@@ -36,6 +36,9 @@ function hooksFixture(): array
 }
 
 test('re-registering a hook under the same key replaces it', function () {
+    // Only the test's own hook: the fuel guard would query without a company context.
+    // Providers re-register theirs on the next test's boot.
+    InvoiceMutationGuard::flushHooks();
     $calls = 0;
     InvoiceMutationGuard::extend('t', function () use (&$calls) {
         $calls++;

@@ -1,16 +1,14 @@
 <?php
 
 use App\Models\Company;
-use App\Models\User;
 use App\Support\Modules\ModuleRegistry;
 
+// Unsaved: hasModule() never queries, and auth.companies' industry check constraint
+// would refuse industry = 'fuel_station' (stored rows say 'energy'). The legacy
+// spelling is still what the old three-way checks tested for, so it is covered here.
 function moduleCompany(array $attrs): Company
 {
-    $user = User::factory()->create();
-
-    return Company::create(array_merge([
-        'name' => 'Mod Co', 'slug' => 'mod-co-'.str()->random(8), 'owner_id' => $user->id, 'base_currency' => 'PKR',
-    ], $attrs));
+    return (new Company)->forceFill(array_merge(['name' => 'Mod Co', 'base_currency' => 'PKR'], $attrs));
 }
 
 test('fuel and umrah register manifests', function () {

@@ -12,7 +12,7 @@ use App\Modules\Inventory\Models\StockReceiptLine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ReceiveSupplierClaimAction implements PaletteAction
+class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -122,5 +122,18 @@ class ReceiveSupplierClaimAction implements PaletteAction
                 ],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Record money back from a supplier claim',
+            'fields' => [
+                'bill_id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'received_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Received into account'],
+                'received_date' => ['hint' => 'Date'],
+                'received_amount' => ['hint' => 'Amount'],
+            ],
+        ];
     }
 }

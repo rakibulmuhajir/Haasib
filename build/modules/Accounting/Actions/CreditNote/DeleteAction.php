@@ -10,7 +10,7 @@ use App\Modules\Accounting\Models\CreditNoteItem;
 use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -78,5 +78,10 @@ class DeleteAction implements PaletteAction
                 'redirect' => "/{$company->slug}/credit-notes",
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Delete a credit note'];
     }
 }

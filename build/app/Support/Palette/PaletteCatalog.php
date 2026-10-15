@@ -57,7 +57,7 @@ final class PaletteCatalog
                     continue;
                 }
 
-                $entries[] = $this->entry($key, $handler, $palette);
+                $entries[] = $this->entry($key, $handler, $palette, $company);
             } catch (\Throwable $e) {
                 Log::warning('palette_catalog_skip', ['key' => $key, 'error' => $e->getMessage()]);
             }
@@ -91,7 +91,7 @@ final class PaletteCatalog
         return $permission === null || $user->hasCompanyPermission($permission);
     }
 
-    private function entry(string $key, object $handler, array $palette): array
+    private function entry(string $key, object $handler, array $palette, ?Company $company): array
     {
         $pos = strrpos($key, '.');
         $entity = substr($key, 0, $pos);
@@ -123,7 +123,9 @@ final class PaletteCatalog
             'description' => $palette['description'] ?? Str::headline($verb).' '.Str::headline(Str::afterLast($entity, '.')),
             'query' => in_array($verb, ['list', 'view'], true) || str_starts_with($key, 'report.'),
             'form' => $described['complex'],
-            'form_url' => $palette['form_url'] ?? null,
+            'form_url' => isset($palette['form_url']) && $company
+                ? str_replace('{company}', $company->slug, $palette['form_url'])
+                : null,
             'args' => $args,
             'flags' => $flags,
         ];

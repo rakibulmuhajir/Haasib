@@ -8,7 +8,7 @@ use App\Modules\FuelStation\Services\ShiftCloseService;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Validation\Rule;
 
-class PostAction implements PaletteAction
+class PostAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -48,5 +48,9 @@ class PostAction implements PaletteAction
             ],
         ];
     }
-}
 
+    public function palette(): array
+    {
+        return ['hidden' => true];
+    }
+}

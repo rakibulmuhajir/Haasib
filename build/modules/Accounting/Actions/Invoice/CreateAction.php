@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -280,5 +280,16 @@ class CreateAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create an invoice',
+            'form_url' => '/{company}/invoices/create',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

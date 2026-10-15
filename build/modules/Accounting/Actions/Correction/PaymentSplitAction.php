@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\CorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Splits a payment between the customers who paid it together. See CorrectionService. */
-class PaymentSplitAction implements PaletteAction
+class PaymentSplitAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -41,5 +41,10 @@ class PaymentSplitAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

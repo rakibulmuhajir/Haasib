@@ -10,7 +10,7 @@ use App\Facades\CompanyContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -65,5 +65,15 @@ class DeleteAction implements PaletteAction
                 'data' => ['user' => $user->email],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Remove a user',
+            'fields' => [
+                'email' => ['hint' => 'User email'],
+            ],
+        ];
     }
 }

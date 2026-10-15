@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class SwitchAction implements PaletteAction
+class SwitchAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -60,6 +60,16 @@ class SwitchAction implements PaletteAction
                 ],
             ],
             'redirect' => "/{$company->slug}/dashboard",
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Switch to another company',
+            'fields' => [
+                'slug' => ['hint' => 'Company slug'],
+            ],
         ];
     }
 }

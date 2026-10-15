@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -330,5 +330,18 @@ class CreateAction implements PaletteAction
 
             return 'BILL-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a bill',
+            'form_url' => '/{company}/bills/create',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'bill_date' => ['hint' => 'Bill date'],
+                'due_date' => ['hint' => 'Due date'],
+            ],
+        ];
     }
 }

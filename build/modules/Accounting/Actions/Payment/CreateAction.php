@@ -38,7 +38,7 @@ use Carbon\Carbon;
  * way, because CustomerStatementService's running balance is driven by Payment.amount, not
  * by how much of it happened to land on an invoice yet.
  */
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -402,5 +402,19 @@ class CreateAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Receive a customer payment',
+            'fields' => [
+                'customer_id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+                'deposit_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Deposited into account'],
+                'amount' => ['hint' => 'Amount'],
+                'date' => ['hint' => 'Date'],
+            ],
+        ];
     }
 }

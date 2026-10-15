@@ -7,7 +7,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\VendorCredit;
 use App\Support\PaletteFormatter;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -55,6 +55,16 @@ class IndexAction implements PaletteAction
                 footer: $credits->count() . ' credits',
                 rowIds: $credits->pluck('id')->toArray()
             ),
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'List vendor credits',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+            ],
         ];
     }
 }

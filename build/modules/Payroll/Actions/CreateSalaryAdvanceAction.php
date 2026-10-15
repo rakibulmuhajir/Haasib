@@ -11,7 +11,7 @@ use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
 
-class CreateSalaryAdvanceAction implements PaletteAction
+class CreateSalaryAdvanceAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function __construct(private readonly PayrollPostingService $postingService) {}
 
@@ -66,5 +66,10 @@ class CreateSalaryAdvanceAction implements PaletteAction
             'data' => ['id' => $advance->id],
             'redirect' => "/{$company->slug}/salary-advances",
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Give a salary advance'];
     }
 }

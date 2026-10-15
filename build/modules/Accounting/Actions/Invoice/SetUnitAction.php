@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
  * so it can be set or corrected on any invoice, a posted daily close's included (the close's
  * invoice guard allows unit_id for that reason).
  */
-class SetUnitAction implements PaletteAction
+class SetUnitAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -42,5 +42,10 @@ class SetUnitAction implements PaletteAction
         $invoice->forceFill(['unit_id' => $unitId])->save();
 
         return ['message' => 'Vehicle saved', 'data' => ['id' => $invoice->id, 'unit_id' => $unitId]];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

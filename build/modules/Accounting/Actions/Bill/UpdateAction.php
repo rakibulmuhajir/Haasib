@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -471,5 +471,17 @@ class UpdateAction implements PaletteAction
                 ]);
             }
         }
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'bill_date' => ['hint' => 'Bill date'],
+                'due_date' => ['hint' => 'Due date'],
+            ],
+        ];
     }
 }

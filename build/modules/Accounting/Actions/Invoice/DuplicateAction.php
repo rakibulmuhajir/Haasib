@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class DuplicateAction implements PaletteAction
+class DuplicateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -168,5 +168,16 @@ class DuplicateAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Copy an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'New customer'],
+            ],
+        ];
     }
 }

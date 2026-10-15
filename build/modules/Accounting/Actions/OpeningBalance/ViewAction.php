@@ -21,7 +21,7 @@ use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function __construct(private readonly OpeningBalanceAccounts $accounts) {}
 
@@ -196,5 +196,10 @@ class ViewAction implements PaletteAction
                 'accounts' => $otherAccounts->map(fn ($a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->name, 'normal_balance' => $a->normal_balance])->values()->all(),
             ],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

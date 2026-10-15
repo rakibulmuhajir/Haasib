@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     private array $typeMap = [
         'asset' => ['bank', 'cash', 'accounts_receivable', 'other_current_asset', 'inventory', 'fixed_asset', 'other_asset'],
@@ -108,6 +108,19 @@ class CreateAction implements PaletteAction
         return [
             'message' => "Account {$account->code} created",
             'data' => ['id' => $account->id],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create an account',
+            'fields' => [
+                'code' => ['hint' => 'Account code'],
+                'type' => ['hint' => 'Account type'],
+                'subtype' => ['hint' => 'Account subtype'],
+                'parent_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Parent account'],
+            ],
         ];
     }
 }

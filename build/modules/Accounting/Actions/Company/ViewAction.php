@@ -8,7 +8,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -69,6 +69,16 @@ class ViewAction implements PaletteAction
                 ],
                 footer: 'Company details'
             ),
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View a company',
+            'fields' => [
+                'slug' => ['hint' => 'Company slug'],
+            ],
         ];
     }
 }

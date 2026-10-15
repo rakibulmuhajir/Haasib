@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -121,5 +121,19 @@ class CreateAction implements PaletteAction
 
             return 'VCRED-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a vendor credit',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'bill_id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'credit_date' => ['hint' => 'Date'],
+                'amount' => ['hint' => 'Amount'],
+                'reason' => ['hint' => 'Why'],
+            ],
+        ];
     }
 }

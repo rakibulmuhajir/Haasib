@@ -8,7 +8,7 @@ use App\Services\CurrentCompany;
 use App\Support\Modules\ModuleRegistry;
 use Illuminate\Validation\ValidationException;
 
-class UpdateModulesAction implements PaletteAction
+class UpdateModulesAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -65,5 +65,10 @@ class UpdateModulesAction implements PaletteAction
             ],
             'redirect' => "/{$company->slug}/settings",
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

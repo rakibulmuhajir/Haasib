@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\CorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Splits an invoice between customers, or by vehicle for the same customer. See CorrectionService. */
-class InvoiceSplitAction implements PaletteAction
+class InvoiceSplitAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -45,5 +45,10 @@ class InvoiceSplitAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

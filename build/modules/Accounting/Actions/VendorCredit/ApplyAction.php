@@ -11,7 +11,7 @@ use App\Modules\Accounting\Models\VendorCreditApplication;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ApplyAction implements PaletteAction
+class ApplyAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -86,5 +86,10 @@ class ApplyAction implements PaletteAction
 
             return ['message' => "Vendor credit {$credit->credit_number} applied"];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Apply a vendor credit to bills', 'form_url' => '/{company}/vendor-credits'];
     }
 }

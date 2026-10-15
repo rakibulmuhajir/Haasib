@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     /*
      * CommandBus::dispatch() replaces the incoming params with the result of
@@ -126,5 +126,17 @@ class CreateAction implements PaletteAction
 
             return 'VEND-'.str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a vendor',
+            'fields' => [
+                'name' => ['hint' => 'Vendor name'],
+                'payment_terms' => ['hint' => 'Days to pay'],
+                'ap_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Payables account'],
+            ],
+        ];
     }
 }

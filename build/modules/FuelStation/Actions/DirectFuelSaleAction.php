@@ -7,7 +7,7 @@ use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\FuelStation\Services\DailyCloseEntryService;
 
-class DirectFuelSaleAction implements PaletteAction
+class DirectFuelSaleAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
     {
@@ -28,5 +28,20 @@ class DirectFuelSaleAction implements PaletteAction
 
         return \App\Services\AccountingWriteTransaction::run(fn () => app(DailyCloseEntryService::class)->directSale(
             $company->id, $params['sale_date'], [...$params, 'litres' => $params['quantity'], 'rate' => $params['unit_price']], auth()->user()));
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Sell fuel straight from storage',
+            'fields' => [
+                'item_id' => ['inputType' => 'search', 'searchEntity' => 'item', 'hint' => 'Fuel'],
+                'customer_id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'sale_date' => ['hint' => 'Date'],
+                'quantity' => ['hint' => 'Liters'],
+                'unit_price' => ['hint' => 'Rate per liter'],
+                'paid_in_cash' => ['hint' => 'Paid in cash?'],
+            ],
+        ];
     }
 }

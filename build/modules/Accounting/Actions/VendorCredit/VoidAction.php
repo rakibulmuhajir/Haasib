@@ -13,7 +13,7 @@ use App\Modules\Accounting\Services\PostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class VoidAction implements PaletteAction
+class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -97,5 +97,10 @@ class VoidAction implements PaletteAction
 
             return ['message' => "Vendor credit {$credit->credit_number} voided"];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Void a vendor credit'];
     }
 }

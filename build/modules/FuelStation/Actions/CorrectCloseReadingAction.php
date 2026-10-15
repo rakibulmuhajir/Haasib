@@ -16,7 +16,7 @@ use App\Modules\FuelStation\Http\Requests\StoreCloseReadingCorrectionRequest;
  * of the CURRENT/RECONCILED section only; the POSTED SNAPSHOT section stays
  * byte-identical.
  */
-class CorrectCloseReadingAction implements PaletteAction
+class CorrectCloseReadingAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
     {
@@ -33,5 +33,16 @@ class CorrectCloseReadingAction implements PaletteAction
         return app(\App\Modules\FuelStation\Services\CloseReadingCorrectionService::class)->correct(
             CompanyContext::requireCompany()->id, $params, auth()->id()
         );
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Correct a close reading',
+            'fields' => [
+                'close_id' => ['hint' => 'Daily close'],
+                'corrected_value' => ['hint' => 'Right value'],
+            ],
+        ];
     }
 }

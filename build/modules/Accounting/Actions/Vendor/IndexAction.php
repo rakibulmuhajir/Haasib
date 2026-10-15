@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -78,5 +78,10 @@ class IndexAction implements PaletteAction
         }
 
         return '{warning}'.PaletteFormatter::money($amount, $currency).'{/}';
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List vendors'];
     }
 }

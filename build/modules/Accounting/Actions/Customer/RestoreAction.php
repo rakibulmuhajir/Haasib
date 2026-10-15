@@ -7,7 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Customer;
 
-class RestoreAction implements PaletteAction
+class RestoreAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -43,6 +43,16 @@ class RestoreAction implements PaletteAction
             'data' => [
                 'id' => $customer->id,
                 'name' => $customer->name,
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Restore a deleted customer',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
             ],
         ];
     }

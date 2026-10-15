@@ -10,7 +10,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -130,5 +130,15 @@ class IndexAction implements PaletteAction
             'cancelled' => '{secondary}✗ Cancelled{/}',
             default => $invoice->status,
         };
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'List invoices',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

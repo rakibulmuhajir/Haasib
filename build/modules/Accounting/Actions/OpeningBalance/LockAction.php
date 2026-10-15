@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class LockAction implements PaletteAction
+class LockAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -59,5 +59,10 @@ class LockAction implements PaletteAction
 
             return ['message' => 'Opening balances locked as of '.$opening['as_of_date']];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

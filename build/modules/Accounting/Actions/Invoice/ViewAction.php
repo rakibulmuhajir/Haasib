@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Payment;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -144,5 +144,15 @@ class ViewAction implements PaletteAction
             'cancelled' => '{secondary}Cancelled{/}',
             default => $invoice->status,
         };
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

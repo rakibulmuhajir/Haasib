@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -44,5 +44,10 @@ class IndexAction implements PaletteAction
                 footer: $users->count() . ' users'
             ),
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List users'];
     }
 }

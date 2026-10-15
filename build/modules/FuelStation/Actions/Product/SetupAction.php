@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-class SetupAction implements PaletteAction
+class SetupAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -737,5 +737,10 @@ class SetupAction implements PaletteAction
             $userId,
             'Opening fuel balance from product setup'
         );
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

@@ -28,7 +28,7 @@ use Illuminate\Validation\ValidationException;
  * a customer), suppliers (the company owes a vendor). Employees and partners have no Quick Add
  * entry point and are not reachable through this action.
  */
-class SetPartyAction implements PaletteAction
+class SetPartyAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     private const SECTIONS = [
         'credit_customers' => ['model' => Customer::class, 'key' => 'customer_id'],
@@ -137,5 +137,10 @@ class SetPartyAction implements PaletteAction
             'message' => 'Opening balance set for '.$party->name,
             'data' => $result['data'] ?? [],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * - Multiple receipts: receive remaining quantities later
  * - Variance tracking: expected vs received with GL posting
  */
-class ReceiveGoodsAction implements PaletteAction
+class ReceiveGoodsAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -416,5 +416,16 @@ class ReceiveGoodsAction implements PaletteAction
         }
 
         return $entries;
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Receive goods on a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'warehouse_id' => ['inputType' => 'search', 'searchEntity' => 'warehouse', 'hint' => 'Into warehouse'],
+            ],
+        ];
     }
 }

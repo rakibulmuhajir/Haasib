@@ -23,7 +23,7 @@ use Illuminate\Validation\ValidationException;
  * unaffected (it already reflected this money as paid); only which invoice it is matched
  * against changes, exactly like CustomerStatementService already expects.
  */
-class ApplyCreditAction implements PaletteAction
+class ApplyCreditAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -135,6 +135,17 @@ class ApplyCreditAction implements PaletteAction
                 'applied' => $toApply,
                 'status' => $result['status'],
                 'balance' => $result['balance'],
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Apply customer credit to an invoice',
+            'fields' => [
+                'customer_id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'invoice_id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
             ],
         ];
     }

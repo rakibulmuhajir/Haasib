@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     /** Statuses in which the invoice has been withdrawn from the ledger. */
     private const WITHDRAWN = ['void', 'cancelled', 'reversed'];
@@ -356,5 +356,10 @@ class UpdateAction implements PaletteAction
         }
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

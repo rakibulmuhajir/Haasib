@@ -8,7 +8,7 @@ use App\Modules\Accounting\Services\CustomerPeriodDiscountService;
 use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\Auth;
 
-class PeriodDiscountAction implements PaletteAction
+class PeriodDiscountAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
     {
@@ -33,5 +33,10 @@ class PeriodDiscountAction implements PaletteAction
         $credit = app(CustomerPeriodDiscountService::class)->post(app(CurrentCompany::class)->get(), $params['customer_id'], $params, Auth::id());
 
         return ['message' => "Period discount {$credit->credit_note_number} posted.", 'data' => ['id' => $credit->id]];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

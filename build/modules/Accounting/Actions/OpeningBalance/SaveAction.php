@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-class SaveAction implements PaletteAction
+class SaveAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public const JOURNAL_TYPE = 'opening_balance';
     public const REFERENCE_TYPE = 'acct.opening_balances';
@@ -942,5 +942,10 @@ class SaveAction implements PaletteAction
         }
 
         return $ids;
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\BillCorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Splits a supplier payment between the suppliers it paid. See BillCorrectionService. */
-class BillPaymentSplitAction implements PaletteAction
+class BillPaymentSplitAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -41,5 +41,10 @@ class BillPaymentSplitAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

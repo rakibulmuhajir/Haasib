@@ -12,7 +12,7 @@ use App\Modules\Accounting\Models\Invoice;
  * slip was logged on another day). Labels only, like the vehicle (SetUnitAction), so they can be
  * written or corrected on any invoice, a posted daily close's included. Only the fields sent change.
  */
-class SetReferenceAction implements PaletteAction
+class SetReferenceAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -48,5 +48,10 @@ class SetReferenceAction implements PaletteAction
         }
 
         return ['message' => 'Slip saved', 'data' => ['id' => $invoice->id, 'reference' => $invoice->reference, 'slip_date' => $invoice->slip_date?->toDateString()]];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

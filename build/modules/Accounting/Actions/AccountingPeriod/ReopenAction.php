@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use Illuminate\Support\Facades\Auth;
 
-class ReopenAction implements PaletteAction
+class ReopenAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -40,5 +40,14 @@ class ReopenAction implements PaletteAction
 
         return ['message' => 'Period reopened successfully.'];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Reopen an accounting period',
+            'fields' => [
+                'id' => ['hint' => 'Period'],
+            ],
+        ];
+    }
+}

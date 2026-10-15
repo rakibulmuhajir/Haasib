@@ -7,7 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\FiscalYear;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -60,5 +60,14 @@ class UpdateAction implements PaletteAction
             ],
         ];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update a fiscal year',
+            'fields' => [
+                'id' => ['hint' => 'Fiscal year'],
+            ],
+        ];
+    }
+}

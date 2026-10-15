@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Transaction;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -54,5 +54,15 @@ class DeleteAction implements PaletteAction
         $bill->delete();
 
         return ['message' => "Bill {$bill->bill_number} deleted"];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+            ],
+        ];
     }
 }

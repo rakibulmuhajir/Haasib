@@ -13,7 +13,7 @@ use App\Support\PaletteFormatter;
  * credit notes answered with a 500 wherever it was reached. The other four
  * credit-note commands exist; this was the gap.
  */
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -70,5 +70,10 @@ class IndexAction implements PaletteAction
                 rowIds: $creditNotes->pluck('id')->toArray()
             ),
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List credit notes'];
     }
 }

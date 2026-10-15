@@ -11,7 +11,7 @@ use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 
 /** Draft -> received: puts the credit on the books (Dr AP, Cr each line's account). */
-class PostAction implements PaletteAction
+class PostAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -53,5 +53,10 @@ class PostAction implements PaletteAction
         $credit->received_at = now();
         $credit->updated_by_user_id = Auth::id();
         $credit->save();
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Post a vendor credit'];
     }
 }

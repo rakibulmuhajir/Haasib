@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -250,5 +250,15 @@ class UpdateAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Change a customer payment',
+            'fields' => [
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

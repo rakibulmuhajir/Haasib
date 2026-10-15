@@ -8,7 +8,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Facades\CompanyContext;
 
-class RevokePermissionAction implements PaletteAction
+class RevokePermissionAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -43,5 +43,10 @@ class RevokePermissionAction implements PaletteAction
                 'permission' => $permission->name,
             ],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Take a permission from a role'];
     }
 }

@@ -10,7 +10,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\PostingService;
 use Illuminate\Support\Facades\Auth;
 
-class VoidAction implements PaletteAction
+class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -103,5 +103,15 @@ class VoidAction implements PaletteAction
         }
 
         app($serviceClass)->reverseFromBill($bill);
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Void a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+            ],
+        ];
     }
 }

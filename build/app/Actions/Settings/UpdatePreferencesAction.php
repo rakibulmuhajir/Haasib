@@ -8,7 +8,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class UpdatePreferencesAction implements PaletteAction
+class UpdatePreferencesAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -37,5 +37,10 @@ class UpdatePreferencesAction implements PaletteAction
         });
 
         return ['message' => 'Preferences saved.'];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

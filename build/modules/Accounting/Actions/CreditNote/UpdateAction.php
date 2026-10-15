@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -254,5 +254,10 @@ class UpdateAction implements PaletteAction
         }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

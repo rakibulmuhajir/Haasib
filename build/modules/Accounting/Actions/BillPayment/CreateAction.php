@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -390,5 +390,18 @@ class CreateAction implements PaletteAction
 
             return 'PMT-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Pay a vendor',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'payment_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
+                'payment_date' => ['hint' => 'Date'],
+                'amount' => ['hint' => 'Amount'],
+            ],
+        ];
     }
 }

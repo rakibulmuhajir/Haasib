@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -103,5 +103,15 @@ class DeleteAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Customer not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete a customer',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

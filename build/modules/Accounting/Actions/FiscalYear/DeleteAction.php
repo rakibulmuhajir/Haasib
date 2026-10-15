@@ -7,7 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\FiscalYear;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -36,5 +36,14 @@ class DeleteAction implements PaletteAction
 
         return ['message' => 'Fiscal year deleted successfully.'];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete a fiscal year',
+            'fields' => [
+                'id' => ['hint' => 'Fiscal year'],
+            ],
+        ];
+    }
+}

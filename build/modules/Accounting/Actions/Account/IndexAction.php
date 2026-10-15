@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -74,5 +74,10 @@ class IndexAction implements PaletteAction
                 rowIds: $accounts->pluck('id')->toArray()
             ),
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List accounts'];
     }
 }

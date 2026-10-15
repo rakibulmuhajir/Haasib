@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Auth;
  * itself makes. A reference/notes/method-only edit never touches the
  * journal.
  */
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -214,5 +214,16 @@ class UpdateAction implements PaletteAction
             ->whereNull('deleted_at')
             ->orderByDesc('created_at')
             ->first();
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Change a bill payment',
+            'fields' => [
+                'payment_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
+                'ap_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Payables account'],
+            ],
+        ];
     }
 }

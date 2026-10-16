@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Inventory\Extensions\ItemPriceHistory;
 use App\Modules\Inventory\Models\Item;
@@ -82,7 +83,7 @@ class ItemPriceService
     /** Point items.selling_price (and cost_price when the entry gives one) at the entry in force today. */
     public function syncItem(Item $item, ?Carbon $today = null): void
     {
-        $inForce = $this->inForce($item->company_id, $item->id, ($today ?? now())->toDateString());
+        $inForce = $this->inForce($item->company_id, $item->id, ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->toDateString());
         if (! $inForce) {
             return;
         }
@@ -110,7 +111,7 @@ class ItemPriceService
     public function timeline(Item $item, string $companySlug, ?Carbon $today = null): array
     {
         $companyId = $item->company_id;
-        $today = ($today ?? now())->toDateString();
+        $today = ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->toDateString();
         $lockedMonths = array_flip($this->history->lockedMonths($companyId));
         $rows = [];
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 
@@ -41,7 +42,7 @@ class GeneratePeriodPayslipsRequest extends BaseFormRequest
                 return;
             }
 
-            $month = $this->input('month') ?: now()->format('Y-m');
+            $month = $this->input('month') ?: app(CompanyClock::class)->now()->format('Y-m');
             if (! preg_match('/^\d{4}-\d{2}$/', (string) $month)) {
                 return; // the month rule reports this
             }

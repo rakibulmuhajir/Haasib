@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use NumberFormatter;
 
@@ -50,7 +51,7 @@ class PaletteFormatter
 
     public static function relativeDate(\DateTimeInterface $date): string
     {
-        $diff = now()->diffInDays($date, false);
+        $diff = (int) \Carbon\Carbon::parse(app(CompanyClock::class)->today())->diffInDays(\Carbon\Carbon::parse($date->format('Y-m-d')), false);
 
         return match (true) {
             $diff === 0 => 'Today',

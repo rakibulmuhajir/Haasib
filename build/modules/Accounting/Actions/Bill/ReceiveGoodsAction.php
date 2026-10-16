@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Bill;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -69,7 +70,7 @@ class ReceiveGoodsAction implements PaletteAction, \App\Contracts\DescribesPalet
         }
 
         $receivedCount = 0;
-        $receiptDate = $params['receipt_date'] ?? now()->toDateString();
+        $receiptDate = $params['receipt_date'] ?? app(CompanyClock::class)->today();
         $receiptNotes = $params['notes'] ?? null;
 
         DB::transaction(function () use ($bill, $linesToReceive, $receiptDate, $receiptNotes, &$receivedCount) {

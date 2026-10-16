@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
@@ -30,7 +31,7 @@ class PayrollDashboardController extends Controller
         $company = app(CurrentCompany::class)->get();
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
-        $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month')) ? $request->query('month') : now()->format('Y-m');
+        $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month')) ? $request->query('month') : app(CompanyClock::class)->now()->format('Y-m');
         $start = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
         $monthStart = $start->toDateString();
         $monthEnd = $start->copy()->endOfMonth()->toDateString();
@@ -136,7 +137,7 @@ class PayrollDashboardController extends Controller
         // fixed pay day - employees are paid whenever they ask, or whenever the company pays at
         // its convenience - so payment_date is only filled to satisfy the not-null column and is
         // never shown to the user as "the pay date". A caller may still send one; it is kept.
-        $month = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', ($request->input('month') ?: now()->format('Y-m')).'-01');
+        $month = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', ($request->input('month') ?: app(CompanyClock::class)->now()->format('Y-m')).'-01');
         $monthStart = $month->copy()->startOfMonth()->toDateString();
         $monthEnd = $month->copy()->endOfMonth()->toDateString();
         $paymentDate = $request->input('payment_date') ?: $monthEnd;

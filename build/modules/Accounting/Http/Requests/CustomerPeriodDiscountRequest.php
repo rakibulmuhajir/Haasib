@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 
@@ -17,10 +18,10 @@ class CustomerPeriodDiscountRequest extends BaseFormRequest
     {
         if ($this->isMethod('get')) {
             $this->merge([
-                'from' => $this->input('from', now()->startOfMonth()->toDateString()),
-                'to' => $this->input('to', now()->toDateString()),
+                'from' => $this->input('from', app(CompanyClock::class)->now()->startOfMonth()->toDateString()),
+                'to' => $this->input('to', app(CompanyClock::class)->today()),
                 'method' => $this->input('method', 'fixed'), 'value' => $this->input('value', 0),
-                'credit_date' => $this->input('credit_date', max(now()->toDateString(), (string) $this->input('to', now()->toDateString()))),
+                'credit_date' => $this->input('credit_date', max(app(CompanyClock::class)->today(), (string) $this->input('to', app(CompanyClock::class)->today()))),
             ]);
         }
     }

@@ -4,7 +4,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Bill;
-use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,7 +24,7 @@ class GeneralHomeFigures
     /**
      * @return array{cash_and_bank: float, ap_outstanding: float, ap_overdue: float, revenue_mtd: float, expenses_mtd: float, profit_mtd: float}
      */
-    public function for(Company $company, Carbon $today): array
+    public function for(Company $company, CarbonInterface $today): array
     {
         $totals = $this->profitLoss->run(
             $company->id,
@@ -47,7 +47,7 @@ class GeneralHomeFigures
     }
 
     /** Debit minus credit on active bank and cash accounts, as the balance sheet sums assets. */
-    private function cashAndBank(string $companyId, Carbon $asOf): float
+    private function cashAndBank(string $companyId, CarbonInterface $asOf): float
     {
         $row = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')

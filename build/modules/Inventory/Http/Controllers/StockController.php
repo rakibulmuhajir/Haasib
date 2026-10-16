@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Bill;
@@ -498,7 +499,7 @@ class StockController extends Controller
                 'company_id' => $company->id,
                 'warehouse_id' => $data['source_warehouse_id'],
                 'item_id' => $data['item_id'],
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                'movement_date' => $data['movement_date'] ?? app(CompanyClock::class)->today(),
                 'movement_type' => 'transfer_out',
                 'quantity' => -abs($data['quantity']),
                 'notes' => $data['notes'] ?? null,
@@ -510,7 +511,7 @@ class StockController extends Controller
                 'company_id' => $company->id,
                 'warehouse_id' => $data['destination_warehouse_id'],
                 'item_id' => $data['item_id'],
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                'movement_date' => $data['movement_date'] ?? app(CompanyClock::class)->today(),
                 'movement_type' => 'transfer_in',
                 'quantity' => abs($data['quantity']),
                 'related_movement_id' => $outMovement->id,

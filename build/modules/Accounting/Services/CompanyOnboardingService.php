@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Models\CompanyOnboarding;
 use App\Modules\Accounting\Models\Account;
@@ -117,10 +118,11 @@ class CompanyOnboardingService
 
             // Determine fiscal year dates
             $startMonth = $data['fiscal_year_start_month'];
-            $currentYear = now()->year;
+            $localNow = app(CompanyClock::class)->now($company);
+            $currentYear = $localNow->year;
 
             // If we're past the fiscal start month, use current year; otherwise previous year
-            $fiscalStartYear = now()->month >= $startMonth ? $currentYear : $currentYear - 1;
+            $fiscalStartYear = $localNow->month >= $startMonth ? $currentYear : $currentYear - 1;
 
             $startDate = \Carbon\Carbon::create($fiscalStartYear, $startMonth, 1);
             $endDate = $startDate->copy()->addYear()->subDay();

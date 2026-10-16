@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
@@ -55,8 +56,8 @@ class ConsolidatedInvoiceController extends Controller
         $isDate = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
         $oldestUnpaid = $customer ? DB::table('acct.invoices')->where('company_id', $company->id)->where('customer_id', $customer->id)
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])->where('balance', '>', 0.005)->min('invoice_date') : null;
-        $from = $isDate($request->query('from')) ? $request->query('from') : ($oldestUnpaid ? substr((string) $oldestUnpaid, 0, 10) : now()->startOfMonth()->toDateString());
-        $to = $isDate($request->query('to')) ? $request->query('to') : now()->toDateString();
+        $from = $isDate($request->query('from')) ? $request->query('from') : ($oldestUnpaid ? substr((string) $oldestUnpaid, 0, 10) : app(CompanyClock::class)->now()->startOfMonth()->toDateString());
+        $to = $isDate($request->query('to')) ? $request->query('to') : app(CompanyClock::class)->today();
 
         return Inertia::render('accounting/consolidated-invoices/Create', [
             'company' => ['id' => $company->id, 'name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
@@ -68,7 +69,7 @@ class ConsolidatedInvoiceController extends Controller
             'labels' => ConsolidatedInvoiceService::labels($company),
             // For the preview: the letterhead and stamp a document saved today would carry.
             'issuer' => app(\App\Services\CompanyLetterhead::class)->forCompany($company),
-            'stamp' => app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice', true, now()->toDateString()),
+            'stamp' => app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'consolidated_invoice', true, app(CompanyClock::class)->today()),
         ]);
     }
 

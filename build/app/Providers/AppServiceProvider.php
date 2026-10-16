@@ -30,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(CompanyContextService::class);
         // CurrentCompany should share request scope too
         $this->app->scoped(CurrentCompany::class);
+        $this->app->scoped(\App\Support\CompanyClock::class);
         // Shared across every module's service provider boot(), so widget
         // registration in one module lands in the same registry every module reads.
         $this->app->singleton(WidgetRegistry::class);

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Payment;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -55,7 +56,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'method' => 'required|string|in:cash,check,card,bank_transfer,other',
             'currency' => 'nullable|string|size:3|uppercase', // must match invoice currency or base
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
-            'date' => 'nullable|date|before_or_equal:today',
+            'date' => 'nullable|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
             'deposit_account_id' => 'required|uuid',

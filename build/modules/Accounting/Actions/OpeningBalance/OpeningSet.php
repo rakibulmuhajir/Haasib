@@ -2,6 +2,8 @@
 
 namespace App\Modules\Accounting\Actions\OpeningBalance;
 
+use App\Support\CompanyClock;
+
 /**
  * Turns opening_balance.view's response back into an opening_balance.save payload.
  *
@@ -23,7 +25,7 @@ final class OpeningSet
         $rows = $view['rows'];
 
         $payload = [
-            'as_of_date' => $view['as_of_date'] ?? now()->toDateString(),
+            'as_of_date' => $view['as_of_date'] ?? app(CompanyClock::class)->today(),
             'cash' => ['amount' => (float) ($rows['cash']['amount'] ?? 0)],
             'banks' => collect($rows['banks'] ?? [])
                 ->map(fn ($b) => ['account_id' => $b['account_id'], 'amount' => (float) $b['amount']])

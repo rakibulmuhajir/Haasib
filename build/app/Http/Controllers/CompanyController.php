@@ -341,24 +341,30 @@ class CompanyController extends Controller
         $arOutstanding = (clone $openInvoices)->sum('balance');
         $arOutstandingCount = (clone $openInvoices)->count();
 
-        $arOverdueQuery = (clone $openInvoices)->where('due_date', '<', now()->toDateString());
+        // Calendar dates are the company's own, not UTC's: after midnight in Karachi, UTC is still yesterday.
+        $clock = app(\App\Support\CompanyClock::class);
+        $today = $clock->today($company);
+        $monthStart = $clock->now($company)->startOfMonth();
+        $monthEnd = $clock->now($company)->endOfMonth();
+
+        $arOverdueQuery = (clone $openInvoices)->where('due_date', '<', $today);
         $arOverdue = (clone $arOverdueQuery)->sum('balance');
         $arOverdueCount = (clone $arOverdueQuery)->count();
 
         $paymentsMTD = DB::table('acct.payments')
             ->where('company_id', $company->id)
-            ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+            ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum(DB::raw('COALESCE(base_amount, amount)'));
 
         // Aging buckets
         $agingBuckets = DB::table('acct.invoices')
             ->selectRaw("
-                SUM(CASE WHEN due_date >= current_date THEN balance ELSE 0 END) as current_bucket,
-                SUM(CASE WHEN due_date < current_date AND due_date >= current_date - interval '30 days' THEN balance ELSE 0 END) as bucket_1_30,
-                SUM(CASE WHEN due_date < current_date - interval '30 days' AND due_date >= current_date - interval '60 days' THEN balance ELSE 0 END) as bucket_31_60,
-                SUM(CASE WHEN due_date < current_date - interval '60 days' AND due_date >= current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_61_90,
-                SUM(CASE WHEN due_date < current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_90_plus
-            ")
+                SUM(CASE WHEN due_date >= CAST(? AS date) THEN balance ELSE 0 END) as current_bucket,
+                SUM(CASE WHEN due_date < CAST(? AS date) AND due_date >= CAST(? AS date) - interval '30 days' THEN balance ELSE 0 END) as bucket_1_30,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '30 days' AND due_date >= CAST(? AS date) - interval '60 days' THEN balance ELSE 0 END) as bucket_31_60,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '60 days' AND due_date >= CAST(? AS date) - interval '90 days' THEN balance ELSE 0 END) as bucket_61_90,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '90 days' THEN balance ELSE 0 END) as bucket_90_plus
+            ", array_fill(0, 8, $today))
             ->where('company_id', $company->id)
             ->where('balance', '>', 0)
             ->whereNull('deleted_at')
@@ -368,15 +374,15 @@ class CompanyController extends Controller
         $quickStats = [
             'invoices_sent_this_month' => DB::table('acct.invoices')
                 ->where('company_id', $company->id)
-                ->whereBetween('sent_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('sent_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
             'payments_received_this_month' => DB::table('acct.payments')
                 ->where('company_id', $company->id)
-                ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                 ->count(),
             'new_customers_this_month' => DB::table('acct.customers')
                 ->where('company_id', $company->id)
-                ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('created_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
         ];
 
@@ -522,7 +528,7 @@ class CompanyController extends Controller
                 'ar_overdue' => (float) $arOverdue,
                 'ar_overdue_count' => $arOverdueCount,
                 'payments_mtd' => (float) $paymentsMTD,
-                ...app(GeneralHomeFigures::class)->for($company, now()),
+                ...app(GeneralHomeFigures::class)->for($company, $clock->now($company)),
                 'aging' => [
                     'current' => (float) ($agingBuckets->current_bucket ?? 0),
                     'bucket_1_30' => (float) ($agingBuckets->bucket_1_30 ?? 0),
@@ -591,7 +597,7 @@ class CompanyController extends Controller
         if (filled($validated['stamp_from'] ?? null)) {
             $directUpdates['stamp_from'] = $validated['stamp_from'];
         } elseif ($request->hasFile('stamp') && ! $company->stamp_from) {
-            $directUpdates['stamp_from'] = now()->toDateString();
+            $directUpdates['stamp_from'] = app(\App\Support\CompanyClock::class)->today($company);
         } elseif (array_key_exists('stamp_from', $validated)) {
             $directUpdates['stamp_from'] = null;
         }

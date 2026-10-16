@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
@@ -61,7 +62,7 @@ class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
             $query->where('status', '!=', 'paid')
                   ->where('status', '!=', 'cancelled')
                   ->where('status', '!=', 'draft')
-                  ->where('due_date', '<', now()->startOfDay());
+                  ->where('due_date', '<', app(CompanyClock::class)->today());
         }
 
         // Customer filter
@@ -112,7 +113,7 @@ class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
             'cancelled',
             'void',
             'draft',
-        ]) && $invoice->due_date->isPast();
+        ]) && $invoice->due_date->toDateString() < app(CompanyClock::class)->today();
 
         if ($isOverdue) {
             return '{error}⚠ Overdue{/}';

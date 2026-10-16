@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Inventory\Events\OpeningStockChanged;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
@@ -42,7 +43,7 @@ class OpeningStockService
             $companyId,
             $warehouseId,
             $item->id,
-            $date ?: now()->toDateString(),
+            $date ?: app(CompanyClock::class)->today(),
             $quantity,
             $unitCost ?? (float) $item->cost_price,
             $userId,

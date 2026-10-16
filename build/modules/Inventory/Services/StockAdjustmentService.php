@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
@@ -94,7 +95,7 @@ class StockAdjustmentService
                 'company_id' => $company->id,
                 'warehouse_id' => $data['warehouse_id'],
                 'item_id' => $item->id,
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                'movement_date' => $data['movement_date'] ?? app(CompanyClock::class)->today(),
                 'movement_type' => $movementType,
                 'quantity' => $quantity,
                 'unit_cost' => $unitCost,
@@ -128,7 +129,7 @@ class StockAdjustmentService
             $item->forceFill(['asset_account_id' => $this->resolveInventoryAccount($company, $item)])->save();
         }
 
-        $date = $data['movement_date'] ?? now()->toDateString();
+        $date = $data['movement_date'] ?? app(CompanyClock::class)->today();
         // unique note: OpeningStockService merges same item/warehouse/date/note movements
         $note = trim('Already had, counted '.now()->format('H:i:s').' '.($data['notes'] ?? ''));
         $movement = $opening->record(

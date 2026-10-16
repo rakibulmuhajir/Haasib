@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services;
 
+use App\Support\CompanyClock;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -159,7 +160,7 @@ class DashboardService
 
     public function getMoneyInOut(string $companyId): array
     {
-        $now = Carbon::now();
+        $now = app(CompanyClock::class)->now();
         $startOfMonth = $now->copy()->startOfMonth()->toDateString();
         $endOfMonth = $now->copy()->endOfMonth()->toDateString();
         $startOfLastMonth = $now->copy()->subMonth()->startOfMonth()->toDateString();
@@ -198,7 +199,7 @@ class DashboardService
         $overdueInvoices = DB::table('acct.invoices')
             ->where('company_id', $companyId)
             ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
-            ->where('due_date', '<', now()->toDateString())
+            ->where('due_date', '<', app(CompanyClock::class)->today())
             ->where('balance', '>', 0)
             ->count();
 
@@ -206,7 +207,7 @@ class DashboardService
         $billsDueSoonQuery = DB::table('acct.bills')
             ->where('company_id', $companyId)
             ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
-            ->whereBetween('due_date', [now()->toDateString(), now()->addDays(7)->toDateString()])
+            ->whereBetween('due_date', [app(CompanyClock::class)->today(), app(CompanyClock::class)->now()->addDays(7)->toDateString()])
             ->where('balance', '>', 0);
 
         $billsDueSoonCount = (int) $billsDueSoonQuery->count();
@@ -231,7 +232,7 @@ class DashboardService
      */
     public function getProfitLossSummary(string $companyId): array
     {
-        $now = Carbon::now();
+        $now = app(CompanyClock::class)->now();
         $startOfMonth = $now->copy()->startOfMonth()->toDateString();
         $endOfMonth = $now->copy()->endOfMonth()->toDateString();
         $startOfLastMonth = $now->copy()->subMonth()->startOfMonth()->toDateString();

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -54,8 +55,8 @@ class DuplicateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'invoice_number' => $newNumber,
-                'invoice_date' => now(),
-                'due_date' => now()->addDays(30), // Default 30 days
+                'invoice_date' => app(CompanyClock::class)->today(),
+                'due_date' => app(CompanyClock::class)->now()->addDays(30)->toDateString(), // Default 30 days
                 'subtotal' => $source->subtotal,
                 'tax_amount' => $source->tax_amount,
                 'discount_amount' => $source->discount_amount,

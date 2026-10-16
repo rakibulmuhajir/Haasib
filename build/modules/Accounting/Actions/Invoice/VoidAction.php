@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
@@ -90,7 +91,7 @@ class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         // Update invoice status
-        \App\Modules\Accounting\Events\InvoiceVoided::dispatch($invoice, $params['reversal_date'] ?? now()->toDateString(), auth()->id());
+        \App\Modules\Accounting\Events\InvoiceVoided::dispatch($invoice, $params['reversal_date'] ?? app(CompanyClock::class)->today(), auth()->id());
 
         $invoice->update([
             'status' => 'void',

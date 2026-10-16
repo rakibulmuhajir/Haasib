@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Partner;
@@ -169,7 +170,7 @@ class StatementReportController extends Controller
             'columns' => $columns,
             'statement' => $statement,
             // Customer statements only; a statement is a document the company issues, the rest are internal.
-            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement', true, $to ?: now()->toDateString()) : null,
+            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement', true, $to ?: app(CompanyClock::class)->today()) : null,
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\AccountingPeriod;
@@ -124,7 +125,7 @@ class FiscalYearService
 
     public function ensureCurrentFiscalYearExists(string $companyId, Carbon|string|null $date = null): FiscalYear
     {
-        $dateObj = $date instanceof Carbon ? $date : ($date ? Carbon::parse($date) : now());
+        $dateObj = $date instanceof Carbon ? $date : ($date ? Carbon::parse($date) : Carbon::parse(app(CompanyClock::class)->today()));
 
         $currentYear = FiscalYear::where('company_id', $companyId)
             ->where('start_date', '<=', $dateObj->toDateString())

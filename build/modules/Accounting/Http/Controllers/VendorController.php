@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
@@ -120,12 +121,12 @@ class VendorController extends Controller
         $overdue = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
-            ->where('due_date', '<', now()->toDateString())
+            ->where('due_date', '<', app(CompanyClock::class)->today())
             ->sum('balance');
 
         $paidYtd = \App\Modules\Accounting\Models\BillPayment::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
-            ->whereYear('payment_date', now()->year)
+            ->whereYear('payment_date', app(CompanyClock::class)->now()->year)
             ->sum('amount');
 
         $advanceOnAccount = app(\App\Modules\Accounting\Services\VendorAdvanceService::class)

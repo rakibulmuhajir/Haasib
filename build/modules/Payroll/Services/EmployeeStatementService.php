@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Payroll\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
@@ -158,13 +159,13 @@ class EmployeeStatementService
         $salary = (float) $employee->base_salary;
         if ($salary > 0) {
             $onPayslip = $payslips->map(fn ($p) => substr((string) ($p->period_start ?? $p->period_end), 0, 7))->filter()->all();
-            $months = collect($advances)->map(fn ($a) => substr((string) $a->advance_date, 0, 7))->push(now()->format('Y-m'))->unique();
+            $months = collect($advances)->map(fn ($a) => substr((string) $a->advance_date, 0, 7))->push(app(CompanyClock::class)->now()->format('Y-m'))->unique();
             foreach ($months as $month) {
                 if (in_array($month, $onPayslip, true)) {
                     continue;
                 }
                 $monthEnd = date('Y-m-t', strtotime($month.'-01'));
-                $movements[] = ['date' => min($monthEnd, now()->toDateString()), 'type' => 'salary_earned', 'reference' => null,
+                $movements[] = ['date' => min($monthEnd, app(CompanyClock::class)->today()), 'type' => 'salary_earned', 'reference' => null,
                     'description' => 'Salary '.date('M Y', strtotime($month.'-01')).' · expected, not on a payslip yet',
                     'in' => $salary, 'out' => 0.0, 'link' => null, 'estimated' => true];
             }

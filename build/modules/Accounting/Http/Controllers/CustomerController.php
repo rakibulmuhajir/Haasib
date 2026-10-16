@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
@@ -27,7 +28,7 @@ class CustomerController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $now = now()->toDateString();
+        $now = app(CompanyClock::class)->today();
 
         $query = Customer::where('company_id', $company->id)
             ->select('*')
@@ -83,7 +84,7 @@ class CustomerController extends Controller
                     ->where('inv.company_id', $company->id)
                     ->where('inv.balance', '>', 0)
                     ->whereNotIn('inv.status', ['paid', 'void', 'cancelled'])
-                    ->where('inv.due_date', '<', now()->toDateString());
+                    ->where('inv.due_date', '<', app(CompanyClock::class)->today());
             });
         }
 
@@ -253,19 +254,19 @@ class CustomerController extends Controller
         $overdue = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->where('balance', '>', 0)
-            ->where('due_date', '<', now()->toDateString())
+            ->where('due_date', '<', app(CompanyClock::class)->today())
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->sum('balance');
 
         $paidYtd = Payment::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
-            ->whereYear('payment_date', now()->year)
+            ->whereYear('payment_date', app(CompanyClock::class)->now()->year)
             ->sum(DB::raw('COALESCE(base_amount, amount)'));
 
         $invoicedYtd = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->withoutCorrectionArtifacts()
-            ->whereYear('invoice_date', now()->year)
+            ->whereYear('invoice_date', app(CompanyClock::class)->now()->year)
             ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         $avgDaysToPay = Invoice::where('company_id', $company->id)
@@ -276,16 +277,16 @@ class CustomerController extends Controller
             ->value('avg_days');
 
         // AR Aging for this specific customer
-        $now = now()->toDateString();
+        $now = app(CompanyClock::class)->today();
         $aging = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->where('balance', '>', 0)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->selectRaw('COALESCE(SUM(CASE WHEN due_date >= ? THEN balance ELSE 0 END), 0) AS current', [$now])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30', [$now, now()->subDays(30)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60', [now()->subDays(30)->toDateString(), now()->subDays(60)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90', [now()->subDays(60)->toDateString(), now()->subDays(90)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus', [now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30', [$now, app(CompanyClock::class)->now()->subDays(30)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60', [app(CompanyClock::class)->now()->subDays(30)->toDateString(), app(CompanyClock::class)->now()->subDays(60)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90', [app(CompanyClock::class)->now()->subDays(60)->toDateString(), app(CompanyClock::class)->now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus', [app(CompanyClock::class)->now()->subDays(90)->toDateString()])
             ->first();
 
         $invoices = Invoice::where('company_id', $company->id)

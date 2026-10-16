@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Models;
 
+use App\Support\CompanyClock;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\User;
@@ -136,7 +137,7 @@ class TaxRate extends Model
             'tax_type' => 'both',
             'is_compound' => false,
             'compound_priority' => 0,
-            'effective_from' => now(),
+            'effective_from' => app(CompanyClock::class)->today($company),
             'is_default' => true,
             'is_active' => true,
             'description' => 'Saudi Arabia Value Added Tax',

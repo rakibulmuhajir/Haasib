@@ -748,6 +748,28 @@ function inferFromSubject(result: ParsedCommand) {
 
 ---
 
+### 4.5 Typing transactions
+
+The day's ordinary entries are typed as one line. The palette shows the journal lines and the
+balances before and after, and Enter posts it. Nothing is stored until Enter: the preview runs
+the real command inside a transaction that is always rolled back (`POST /api/palette/preview`).
+
+| Type | Books |
+|---|---|
+| `deposit 50000 meezan` | Cash to bank |
+| `withdraw 20000 meezan` | Bank to cash |
+| `transfer 100000 meezan to hbl` | Bank to bank |
+| `bank charge 500 meezan [for note]` | Bank charges expense, out of the bank |
+| `received 15000 from al noor [into meezan]` | Customer payment, settles oldest invoices first |
+| `paid 8000 to karachi office [from meezan]` | Supplier payment, settles oldest bills first |
+| `expense 2500 tea [from meezan]` | Expense; account matched by name, else you choose |
+| `sale 12000 [note]` | Cash sale (invoice and payment) |
+
+Amounts: `50000`, `50,000`, `1,50,000`, `50k`, `1.5 lakh`, `2 lac`. Anything else is refused.
+Left out: the date is the company date; the bank is the company default; cash and payments
+use the cash account (the bank when there is no cash account). A name matching several records
+is listed to choose from, never guessed. `help` lists these verbs.
+
 ## 5. Autocomplete
 
 ### 5.1 Trigger Conditions

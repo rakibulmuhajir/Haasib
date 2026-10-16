@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -70,5 +70,15 @@ class ViewAction implements PaletteAction
         return $query
             ->where(DB::raw('name'), 'ilike', "%{$input}%")
             ->firstOrFail();
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View an account',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Account'],
+            ],
+        ];
     }
 }

@@ -2,14 +2,6 @@
 
 return [
     'user.preferences.update' => \App\Actions\Settings\UpdatePreferencesAction::class,
-    'fuel.settings.update' => \App\Modules\FuelStation\Actions\UpdateStationSettingsAction::class,
-    'fuel.daily_close.save' => \App\Modules\FuelStation\Actions\SaveDailyCloseAction::class,
-    'fuel.daily_close.expense' => \App\Modules\FuelStation\Actions\PostCloseExpenseAction::class,
-    'fuel.daily_close.correct_reading' => \App\Modules\FuelStation\Actions\CorrectCloseReadingAction::class,
-    'fuel.amanat.movement' => \App\Modules\FuelStation\Actions\AmanatMovementAction::class,
-    'fuel.direct_sale' => \App\Modules\FuelStation\Actions\DirectFuelSaleAction::class,
-    'calculator.save' => \App\Modules\FuelStation\Actions\Calculator\SaveCalculatorFormulaAction::class,
-    'calculator.delete' => \App\Modules\FuelStation\Actions\Calculator\DeleteCalculatorFormulaAction::class,
     'company.create' => \App\Modules\Accounting\Actions\Company\CreateAction::class,
     'company.list' => \App\Modules\Accounting\Actions\Company\IndexAction::class,
     'company.switch' => \App\Modules\Accounting\Actions\Company\SwitchAction::class,
@@ -142,12 +134,9 @@ return [
     'accounting_period.close' => \App\Modules\Accounting\Actions\AccountingPeriod\CloseAction::class,
     'accounting_period.reopen' => \App\Modules\Accounting\Actions\AccountingPeriod\ReopenAction::class,
 
-    // Fuel Station
-    'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
-    'fuel.products.setup' => \App\Modules\FuelStation\Actions\Product\SetupAction::class,
-
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,
+    'journal.post' => \App\Modules\Accounting\Actions\Journal\PostAction::class,
 
     // General Ledger - Opening Balances
     'opening_balance.view' => \App\Modules\Accounting\Actions\OpeningBalance\ViewAction::class,

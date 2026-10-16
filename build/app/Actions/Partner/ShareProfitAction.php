@@ -9,7 +9,7 @@ use App\Http\Requests\ShareProfitRequest;
 use App\Services\PartnerProfitShareService;
 
 /** partner.share_profit: share a month's profit between the partners (dry_run only previews). */
-class ShareProfitAction implements PaletteAction
+class ShareProfitAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -28,5 +28,16 @@ class ShareProfitAction implements PaletteAction
         $result = ! empty($params['dry_run']) ? $service->preview($company->id, $params['month']) : $service->share($company->id, $params['month']);
 
         return ['message' => $result['message'] ?? 'Profit shared', 'data' => $result];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Share a month\'s profit with partners',
+            'fields' => [
+                'month' => ['hint' => 'Month, YYYY-MM'],
+                'dry_run' => ['hint' => 'Preview only'],
+            ],
+        ];
     }
 }

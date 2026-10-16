@@ -1,51 +1,17 @@
 /**
  * The dashboard widget registry — key → component.
  *
- * A dashboard shows only the widgets in its active tab's layout, so loading
- * every widget component up front would ship code that may never render.
- * `defineAsyncComponent` means a dashboard only pulls in the chunks for the
- * widgets it actually places.
+ * Starts empty: each module registers its own widgets from its extensions file
+ * (see resources/js/extensions). DashboardGrid reads `widgetMap` at render time,
+ * so registration only has to happen before the first render.
  *
  * An unknown key is a DashboardGrid concern, not this file's — this map
  * simply may not have an entry for it, and the grid skips it silently.
  */
-import { defineAsyncComponent, type Component } from 'vue';
+import type { Component } from 'vue';
 
-export const widgetMap: Record<string, Component> = {
-    'umrah.departures': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/DeparturesWidget.vue'),
-    ),
-    'umrah.cash_book': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/CashBookWidget.vue'),
-    ),
-    'umrah.cash_position': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/CashPositionWidget.vue'),
-    ),
-    'umrah.agent_balances': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/AgentBalancesWidget.vue'),
-    ),
-    'umrah.vendor_balances': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/VendorBalancesWidget.vue'),
-    ),
-    'umrah.needs_attention': defineAsyncComponent(
-        () => import('@/components/dashboard/widgets/NeedsAttentionWidget.vue'),
-    ),
-    'umrah.transport_readiness': defineAsyncComponent(
-        () =>
-            import(
-                '@/components/dashboard/widgets/TransportReadinessWidget.vue'
-            ),
-    ),
-    'umrah.refunds_awaiting_decision': defineAsyncComponent(
-        () =>
-            import(
-                '@/components/dashboard/widgets/RefundsAwaitingDecisionWidget.vue'
-            ),
-    ),
-    'umrah.operations_summary': defineAsyncComponent(
-        () =>
-            import(
-                '@/components/dashboard/widgets/OperationsSummaryWidget.vue'
-            ),
-    ),
-};
+export const widgetMap: Record<string, Component> = {};
+
+export function registerWidget(key: string, component: Component): void {
+    widgetMap[key] = component;
+}

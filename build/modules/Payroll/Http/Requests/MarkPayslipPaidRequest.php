@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
@@ -23,7 +24,7 @@ class MarkPayslipPaidRequest extends BaseFormRequest
         $company = app(CurrentCompany::class)->get();
 
         return [
-            'paid_on' => ['required', 'date', 'before_or_equal:today'],
+            'paid_on' => ['required', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'payment_method' => ['nullable', 'string', Rule::in(['bank_transfer', 'check', 'cheque', 'cash'])],
             'payment_reference' => ['nullable', 'string', 'max:100'],
             'payment_account_id' => [

@@ -11,7 +11,7 @@ use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class SendAction implements PaletteAction
+class SendAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -111,5 +111,15 @@ class SendAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Email an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

@@ -60,7 +60,7 @@ class PartnerController extends Controller
         // it would do; worked out only when asked for (partial reload with ?month=).
         $month = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string) $request->query('month'))
             ? (string) $request->query('month')
-            : now()->subMonthNoOverflow()->format('Y-m');
+            : app(\App\Support\CompanyClock::class)->now($company)->subMonthNoOverflow()->format('Y-m');
 
         return Inertia::render('partners/Index', [
             'partners' => $partners,
@@ -111,7 +111,7 @@ class PartnerController extends Controller
 
             if (! empty($validated['initial_investment']) && $validated['initial_investment'] > 0) {
                 $ledger->invest(
-                    $partner, (float) $validated['initial_investment'], now()->toDateString(), $validated['account_id'],
+                    $partner, (float) $validated['initial_investment'], app(\App\Support\CompanyClock::class)->today($company), $validated['account_id'],
                     'Initial capital investment', 'page', null, $request->user()->id,
                 );
             }

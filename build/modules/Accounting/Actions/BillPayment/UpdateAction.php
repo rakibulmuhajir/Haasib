@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\BillPayment;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -22,13 +23,13 @@ use Illuminate\Support\Facades\Auth;
  * itself makes. A reference/notes/method-only edit never touches the
  * journal.
  */
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
         return [
             'id' => 'required|string|uuid',
-            'payment_date' => 'nullable|date|before_or_equal:today',
+            'payment_date' => 'nullable|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'amount' => 'nullable|numeric|min:0.01',
             'payment_method' => 'nullable|string|max:50',
             'payment_account_id' => 'nullable|uuid',
@@ -214,5 +215,16 @@ class UpdateAction implements PaletteAction
             ->whereNull('deleted_at')
             ->orderByDesc('created_at')
             ->first();
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Change a bill payment',
+            'fields' => [
+                'payment_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
+                'ap_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Payables account'],
+            ],
+        ];
     }
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import PageShell from '@/components/PageShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
@@ -101,6 +102,8 @@ interface PriceChange {
 }
 
 const changesOpen = ref(false)
+const taxEnabled = useTaxEnabled()
+
 const formatWhen = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
 
@@ -363,7 +366,7 @@ const getTypeBadgeVariant = (type: string) => {
                 <p class="text-muted-foreground">Barcode</p>
                 <p class="font-medium">{{ item.barcode || '-' }}</p>
               </div>
-              <div>
+              <div v-if="taxEnabled || item.tax_rate">
                 <p class="text-muted-foreground">Tax Rate</p>
                 <p class="font-medium">{{ item.tax_rate ? `${item.tax_rate.name} (${item.tax_rate.rate}%)` : '-' }}</p>
               </div>

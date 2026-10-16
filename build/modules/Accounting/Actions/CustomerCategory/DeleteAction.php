@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\CustomerCategory;
 use Illuminate\Validation\ValidationException;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -40,5 +40,10 @@ class DeleteAction implements PaletteAction
             'message' => "Category deleted: {$category->name}",
             'data' => ['id' => $category->id],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Delete a customer category'];
     }
 }

@@ -10,7 +10,7 @@ use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
 
 /** item_price.delete -- remove a price entry; the one before it carries on. */
-class DeleteItemPriceAction implements PaletteAction
+class DeleteItemPriceAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function __construct(private readonly ItemPriceService $prices) {}
 
@@ -35,5 +35,10 @@ class DeleteItemPriceAction implements PaletteAction
         $this->prices->delete($company->id, $params['price_id'], $params['user_id'] ?? null);
 
         return ['message' => 'Price removed.', 'data' => ['id' => $params['price_id']]];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Remove an item price'];
     }
 }

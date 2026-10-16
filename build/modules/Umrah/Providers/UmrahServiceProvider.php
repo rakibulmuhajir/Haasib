@@ -19,6 +19,8 @@ class UmrahServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->app->make(\App\Support\Modules\ModuleRegistry::class)->register(new \App\Modules\Umrah\UmrahModule);
+
         $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
         $this->loadViewsFrom(__DIR__.'/../Resources/views', 'umrah');
 

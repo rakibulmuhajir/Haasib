@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -96,7 +96,7 @@ class UpdateAction implements PaletteAction
 
         $status = $params['status'] ?? $creditNote->status;
 
-        $lineItems = $params['line_items'];
+        $lineItems = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $creditNote->items()->sum('tax_amount')));
         $subtotal = 0.0;
         $taxAmount = 0.0;
         $discountAmount = 0.0;
@@ -254,5 +254,10 @@ class UpdateAction implements PaletteAction
         }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

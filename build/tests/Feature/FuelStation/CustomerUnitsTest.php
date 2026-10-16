@@ -202,6 +202,8 @@ test('reopening a close keeps a vehicle named on its invoice after posting', fun
 });
 
 test('a posted close invoice splits by vehicle into invoices of their own, the day stays as posted and cannot be reopened', function () {
+    // The correction is dated today; the fixture's only open period is September 2026.
+    \Illuminate\Support\Carbon::setTestNow('2026-09-20 10:00:00');
     $f = creditCloseFixture();
     app(\App\Services\CurrentCompany::class)->set($f['company']);
     creditClosePost($f);
@@ -293,6 +295,8 @@ test('a slip date on a posted close invoice is what the customer copy and consol
 });
 
 test('a split invoice and its credit notes stay out of the statement and the lists unless asked for', function () {
+    // The correction is dated today; the fixture's only open period is September 2026.
+    \Illuminate\Support\Carbon::setTestNow('2026-09-20 10:00:00');
     $f = creditCloseFixture();
     app(\App\Services\CurrentCompany::class)->set($f['company']);
     creditClosePost($f);
@@ -323,7 +327,8 @@ test('a saved consolidated invoice can be deleted but not changed, and its invoi
     $id = $service->create($f['company'], ['customer_id' => $f['customer']->id, 'from' => '2026-09-01', 'to' => '2026-09-30', 'keys' => array_column($rows, 'key')], $f['user']->id);
     $owed = round((float) Invoice::where('company_id', $f['company']->id)->sum('balance'), 2);
 
-    expect(fn () => DB::table('acct.consolidated_invoices')->where('id', $id)->update(['title' => 'Changed']))
+    // The refused update aborts the open pgsql transaction unless it runs in a savepoint.
+    expect(fn () => DB::transaction(fn () => DB::table('acct.consolidated_invoices')->where('id', $id)->update(['title' => 'Changed'])))
         ->toThrow(\Illuminate\Database\QueryException::class);
 
     $service->delete($f['company'], $id);

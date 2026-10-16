@@ -30,7 +30,7 @@ use Illuminate\Validation\ValidationException;
  * balances work and is what the Opening Balances page already does on every save — it seeds
  * its form from ViewAction and posts the lot back.
  */
-class SetAccountAction implements PaletteAction
+class SetAccountAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -99,5 +99,10 @@ class SetAccountAction implements PaletteAction
             'message' => 'Opening balance set for '.$account->name,
             'data' => $result['data'] ?? [],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

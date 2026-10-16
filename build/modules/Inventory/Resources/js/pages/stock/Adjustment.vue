@@ -137,7 +137,7 @@ const submit = () => {
       <Card variant="form">
         <CardHeader>
           <CardTitle>Adjustment Details</CardTitle>
-          <CardDescription>Use this for corrections. Use bills and receiving for normal fuel purchases.</CardDescription>
+          <CardDescription>Use this for corrections. Use bills to record purchases.</CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
           <!-- Warehouse -->

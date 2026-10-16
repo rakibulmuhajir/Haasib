@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Dashboard\Widgets;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Dashboard\DashboardWidget;
 use App\Models\Company;
@@ -77,7 +78,7 @@ class DeparturesWidget implements DashboardWidget
     public function resolve(Company $company, User $user, array $options): array
     {
         $limit = (int) ($options['limit'] ?? 10);
-        $today = Carbon::today();
+        $today = Carbon::parse(app(CompanyClock::class)->today($company));
         $access = app(TravelAccessService::class);
 
         $groups = $access->scopeAgentRecords(

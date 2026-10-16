@@ -12,7 +12,7 @@ use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ReceiveAction implements PaletteAction
+class ReceiveAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -97,5 +97,15 @@ class ReceiveAction implements PaletteAction
             'id' => $bill->id,
             'lines' => $lines,
         ], Auth::user());
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Mark a bill as received',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+            ],
+        ];
     }
 }

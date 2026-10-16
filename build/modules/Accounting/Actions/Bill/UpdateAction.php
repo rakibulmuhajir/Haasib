@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -60,6 +60,11 @@ class UpdateAction implements PaletteAction
 
         $bill = Bill::where('company_id', $company->id)->findOrFail($params['id']);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'bill', $bill->id);
+
+        // Tax off for the company: lines save without tax, unless this bill already carries tax.
+        if (! empty($params['line_items'])) {
+            $params['line_items'] = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $bill->tax_amount));
+        }
 
         if (in_array($bill->status, ['void', 'cancelled'], true)) {
             throw new \InvalidArgumentException('Bill cannot be updated in current status');
@@ -133,6 +138,7 @@ class UpdateAction implements PaletteAction
 
                 $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
                 $totals = collect($computed['lines']);
+                BillLineTotals::assertTotalPositive((float) $computed['subtotal']);
 
                 $overallChanged = $overallType !== $bill->overall_discount_type
                     || abs($overallValue - (float) $bill->overall_discount_value) > 0.0000001;
@@ -471,5 +477,17 @@ class UpdateAction implements PaletteAction
                 ]);
             }
         }
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'bill_date' => ['hint' => 'Bill date'],
+                'due_date' => ['hint' => 'Due date'],
+            ],
+        ];
     }
 }

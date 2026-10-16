@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
  * resolution flow already uses — these are ordinary journals seen from a second entry
  * point, never a parallel posting mechanism.
  */
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -118,5 +118,10 @@ class CreateAction implements PaletteAction
             'message' => 'Bank transaction recorded: '.$transaction->transaction_number,
             'data' => ['id' => $transaction->id, 'transaction_number' => $transaction->transaction_number],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Record a bank or cash movement'];
     }
 }

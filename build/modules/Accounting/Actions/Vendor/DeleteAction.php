@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     use ResolvesVendors;
 
@@ -67,6 +67,16 @@ class DeleteAction implements PaletteAction
             'data' => [
                 'id' => $vendor->id,
                 'name' => $vendor->name,
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete a vendor',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
             ],
         ];
     }

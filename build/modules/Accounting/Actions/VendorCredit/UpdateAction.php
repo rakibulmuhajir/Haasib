@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
  * A draft is edited freely. A posted (received, not yet applied) credit is edited by
  * reversing its journal on its own date and posting the new one, the way a bill is.
  */
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -93,7 +93,7 @@ class UpdateAction implements PaletteAction
             ]);
             $credit->save();
 
-            VendorCreditLines::replace($credit, $params['line_items'] ?? []);
+            VendorCreditLines::replace($credit, app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'] ?? [], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $credit->items()->sum('tax_amount'))));
 
             if ($posted) {
                 $old = $credit->transaction_id
@@ -112,5 +112,10 @@ class UpdateAction implements PaletteAction
                 'data' => ['id' => $credit->id],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

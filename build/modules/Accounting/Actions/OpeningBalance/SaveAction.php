@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Models\Partner;
 use App\Models\PartnerTransaction;
 use App\Models\Company;
+use App\Modules\Accounting\Extensions\OpeningBalanceSections;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
@@ -19,9 +20,8 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\OpeningBalanceAccounts;
+use App\Modules\Accounting\Services\OpeningOtherAccounts;
 use App\Modules\Accounting\Services\PostingService;
-use App\Modules\FuelStation\Models\AmanatTransaction;
-use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\Payslip;
@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-class SaveAction implements PaletteAction
+class SaveAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public const JOURNAL_TYPE = 'opening_balance';
     public const REFERENCE_TYPE = 'acct.opening_balances';
@@ -49,7 +49,7 @@ class SaveAction implements PaletteAction
 
     public function rules(): array
     {
-        return [
+        $rules = [
             'as_of_date' => 'required|date',
             // Add these people's opening balances on their own, leaving everyone else's as they
             // are (see appendOnly). Set by SetPartyAction for someone with no opening balance yet.
@@ -71,16 +71,32 @@ class SaveAction implements PaletteAction
             'salaries_owed' => 'nullable|array',
             'salaries_owed.*.employee_id' => ['required', 'uuid', Rule::exists(Employee::class, 'id')],
             'salaries_owed.*.amount' => 'required|numeric|gt:0',
-            'amanat' => 'nullable|array',
-            'amanat.*.customer_id' => ['required', 'uuid', Rule::exists(Customer::class, 'id')],
-            'amanat.*.amount' => 'required|numeric|gt:0',
             'suppliers' => 'nullable|array',
             'suppliers.*.vendor_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')],
             'suppliers.*.amount' => 'required|numeric|gt:0',
             'partners' => 'nullable|array',
             'partners.*.partner_id' => ['required', 'uuid', Rule::exists(Partner::class, 'id')],
             'partners.*.amount' => 'required|numeric|gt:0',
+            'accounts' => 'nullable|array',
+            'accounts.*.account_id' => ['required', 'uuid', Rule::exists(Account::class, 'id')],
+            'accounts.*.amount' => 'required|numeric|gt:0',
         ];
+
+        // Module sections (amanat, ...): only the ones this company has are validated, so a
+        // payload key for any other is dropped before the action sees it.
+        foreach ($this->availableSections() as $section) {
+            $rules = array_merge($rules, $section->rules());
+        }
+
+        return $rules;
+    }
+
+    /** @return array<string, \App\Modules\Accounting\Extensions\OpeningBalanceSection> */
+    private function availableSections(?Company $company = null): array
+    {
+        $company ??= CompanyContext::getCompany();
+
+        return $company ? app(OpeningBalanceSections::class)->availableFor($company) : [];
     }
 
     public function permission(): ?string
@@ -129,10 +145,11 @@ class SaveAction implements PaletteAction
 
             $this->addCashAndBankLines($company->id, $params, $accounts, $lines);
             $pending = [];   // closures run after the journal exists, receiving its per-line entry ids
-            $this->addAmanatLines($company->id, $params, $accounts, $lines, $pending);
+            $this->addSectionLines($company, $params, $lines, $pending);
             $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
             $this->addSalariesOwedLines($company->id, $params, $currency, $asOf, $lines, $pending);
             $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
+            $this->addOtherBalanceLines($company, $params, $lines);
 
             [$journalId, $entryIdsByLine] = $this->postJournal($company->id, $currency, $asOf, $accounts['equity'], $lines);
             foreach ($pending as $create) {
@@ -207,7 +224,7 @@ class SaveAction implements PaletteAction
 
             $lines = [];
             $pending = [];
-            $this->addAmanatLines($company->id, $params, $accounts, $lines, $pending);
+            $this->addSectionLines($company, $params, $lines, $pending);
             $this->addEmployeeAdvanceLines($company->id, $params, $accounts, $asOf, $lines, $pending);
             $this->addSalariesOwedLines($company->id, $params, $currency, $asOf, $lines, $pending);
             $this->addPartnerLines($company->id, $params, $accounts, $asOf, $lines, $pending);
@@ -310,10 +327,21 @@ class SaveAction implements PaletteAction
         'credit_customers' => 'customer_id',
         'employees' => 'employee_id',
         'salaries_owed' => 'employee_id',
-        'amanat' => 'customer_id',
         'suppliers' => 'vendor_id',
         'partners' => 'partner_id',
+        'accounts' => 'account_id',
     ];
+
+    /** PARTY_KEYS plus the id field of each module section this company has. */
+    private function partyKeys(Company $company): array
+    {
+        $keys = self::PARTY_KEYS;
+        foreach ($this->availableSections($company) as $key => $section) {
+            $keys[$key] = $section->party().'_id';
+        }
+
+        return $keys;
+    }
 
     private int $keptFromElsewhere = 0;
 
@@ -351,7 +379,7 @@ class SaveAction implements PaletteAction
             $this->keptFromElsewhere++;
         }
 
-        foreach (self::PARTY_KEYS as $section => $key) {
+        foreach ($this->partyKeys($company) as $section => $key) {
             $index = fn (array $rows) => collect($rows)
                 ->filter(fn ($row) => ! empty($row[$key]))
                 ->mapWithKeys(fn ($row) => [$row[$key] => $money($row['amount'] ?? 0)])
@@ -484,7 +512,10 @@ class SaveAction implements PaletteAction
             }
         }
 
-        $amanatByJournal = [];
+        // Every registered section, not just this company's: re-entering must undo whatever
+        // was posted, even if the company has since lost the module.
+        $sections = app(OpeningBalanceSections::class)->all();
+        $sectionState = [];
         $advancesByJournal = [];
         $salariesOwedByJournal = [];
 
@@ -503,15 +534,9 @@ class SaveAction implements PaletteAction
             // Sub-records link to their own journal LINE (journal_entry_id is an FK to acct.journal_entries).
             $entryIds = $journal->journalEntries->pluck('id')->all();
 
-            $amanats = AmanatTransaction::whereIn('journal_entry_id', $entryIds)->get();
-            foreach ($amanats as $amanat) {
-                $profile = CustomerProfile::where('company_id', $companyId)->where('customer_id', $amanat->customer_id)->first();
-                $balance = $profile ? (float) $profile->amanat_balance : 0.0;
-                if ($balance < (float) $amanat->amount) {
-                    throw ValidationException::withMessages(['amanat' => 'An opening amanat balance has already been drawn down; cannot re-enter opening balances.']);
-                }
+            foreach ($sections as $key => $section) {
+                $sectionState[$key][$journal->id] = $section->prepareReentry($companyId, $entryIds);
             }
-            $amanatByJournal[$journal->id] = $amanats;
 
             $advances = SalaryAdvance::whereIn('journal_entry_id', $entryIds)->get();
             foreach ($advances as $advance) {
@@ -541,10 +566,8 @@ class SaveAction implements PaletteAction
             $this->deleteOpeningBill($companyId, $bill);
         }
         foreach ($journals as $journal) {
-            foreach ($amanatByJournal[$journal->id] as $amanat) {
-                $profile = CustomerProfile::getOrCreateForCustomer($companyId, $amanat->customer_id);
-                $profile->adjustAmanatBalance(-(float) $amanat->amount);
-                $amanat->delete();
+            foreach ($sections as $key => $section) {
+                $section->undo($companyId, $sectionState[$key][$journal->id]);
             }
 
             foreach ($advancesByJournal[$journal->id] as $advance) {
@@ -688,37 +711,11 @@ class SaveAction implements PaletteAction
         return [$transaction->id, $entryIdsByLine];
     }
 
-    private function addAmanatLines(string $companyId, array $params, array $accounts, array &$lines, array &$pending): void
+    /** Lines and side effects for each module section this company has, in registration order. */
+    private function addSectionLines(Company $company, array $params, array &$lines, array &$pending): void
     {
-        $rows = array_filter($params['amanat'] ?? [], fn ($r) => (float) $r['amount'] > 0);
-        if (empty($rows)) {
-            return;
-        }
-        if (! $accounts['amanat']) {
-            throw ValidationException::withMessages(['amanat' => 'Set up account 2200 (Customer Amanat Deposits) first.']);
-        }
-        foreach ($rows as $row) {
-            $customer = Customer::where('company_id', $companyId)->findOrFail($row['customer_id']);
-            $amount = round((float) $row['amount'], 2);
-            $lineIndex = count($lines);
-            $lines[] = ['account_id' => $accounts['amanat'], 'type' => 'credit', 'amount' => $amount, 'description' => "Opening amanat — {$customer->name}"];
-            $pending[] = function (array $entryIdsByLine) use ($companyId, $customer, $amount, $lineIndex) {
-                $profile = CustomerProfile::getOrCreateForCustomer($companyId, $customer->id);
-                if (! $profile->is_amanat_holder) {
-                    $profile->update(['is_amanat_holder' => true]);
-                }
-                AmanatTransaction::create([
-                    'company_id' => $companyId,
-                    'customer_id' => $customer->id,
-                    'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
-                    'amount' => $amount,
-                    'reference' => self::MARK,
-                    'notes' => 'Opening balance',
-                    'recorded_by_user_id' => Auth::id(),
-                    'journal_entry_id' => $entryIdsByLine[$lineIndex],
-                ]);
-                $profile->adjustAmanatBalance($amount);
-            };
+        foreach ($this->availableSections($company) as $section) {
+            $section->addLines($company->id, $params, $lines, $pending);
         }
     }
 
@@ -851,6 +848,32 @@ class SaveAction implements PaletteAction
         }
     }
 
+    /**
+     * Any other balance-sheet account (fixed assets, loans, prepaid, capital), posted on its
+     * normal side against the 3080 line postJournal adds. Nothing else is stored: ViewAction reads
+     * these back from the journal's lines on the same accounts (see OpeningOtherAccounts).
+     */
+    private function addOtherBalanceLines(Company $company, array $params, array &$lines): void
+    {
+        $rows = array_filter($params['accounts'] ?? [], fn ($r) => (float) $r['amount'] > 0);
+        if (empty($rows)) {
+            return;
+        }
+        $allowed = app(OpeningOtherAccounts::class)->eligible($company)->keyBy('id');
+        foreach ($rows as $i => $row) {
+            $account = $allowed->get($row['account_id']);
+            if (! $account) {
+                throw ValidationException::withMessages(["accounts.{$i}.account_id" => 'Pick another account.']);
+            }
+            $lines[] = [
+                'account_id' => $account->id,
+                'type' => $account->normal_balance === 'credit' ? 'credit' : 'debit',
+                'amount' => round((float) $row['amount'], 2),
+                'description' => "Opening balance — {$account->name}",
+            ];
+        }
+    }
+
     private function createOpeningInvoices($company, array $params, array $accounts, string $asOf, string $currency): array
     {
         $rows = array_filter($params['credit_customers'] ?? [], fn ($r) => (float) $r['amount'] > 0);
@@ -919,5 +942,10 @@ class SaveAction implements PaletteAction
         }
 
         return $ids;
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

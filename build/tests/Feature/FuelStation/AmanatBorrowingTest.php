@@ -20,6 +20,8 @@ test('a holder can draw only their balance unless borrowing is allowed', functio
 
 test('the Allow borrowing tick saves on the holder', function () {
     $f = pendingDeliveryFixture();
+    // The route sits behind the module gate, and the fixture company has no modules on.
+    $f['company']->enableModule('fuel_station');
     CustomerProfile::getOrCreateForCustomer($f['company']->id, $f['customer']->id)->update(['is_amanat_holder' => true]);
 
     test()->actingAs($f['user'])

@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\AttendantHandover;
 use App\Modules\FuelStation\Models\CustomerProfile;
@@ -32,7 +33,7 @@ class FuelDashboardService
      */
     public function getHomeCards(string $companyId, ?Carbon $asOfDate = null): array
     {
-        $asOfDate ??= Carbon::today();
+        $asOfDate ??= Carbon::parse(app(CompanyClock::class)->today());
         $summary = $this->getSummary($companyId, $asOfDate);
 
         $pending = $this->getPendingHandovers($companyId);
@@ -84,8 +85,8 @@ class FuelDashboardService
      */
     public function getDashboardData(string $companyId): array
     {
-        $today = Carbon::today();
-        $startOfMonth = Carbon::now()->startOfMonth();
+        $today = Carbon::parse(app(CompanyClock::class)->today());
+        $startOfMonth = Carbon::parse(app(CompanyClock::class)->today())->startOfMonth();
 
         return [
             'summary' => $this->getSummary($companyId, $today),

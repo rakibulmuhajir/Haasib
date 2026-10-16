@@ -78,7 +78,7 @@ class PaletteFlagController extends Controller
         return match ($entityType) {
             'customer' => $this->searchCustomers($company->id, $query),
             'invoice' => $this->searchInvoices($company->id, $query),
-            default => [],
+            default => \App\Support\Palette\PaletteSearchSources::search($entityType, $company->id, $query),
         };
     }
 

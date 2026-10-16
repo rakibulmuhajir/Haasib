@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\FuelStation\Services\DailyCloseReconciliationService;
 
-class SaveDailyCloseAction implements PaletteAction
+class SaveDailyCloseAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string { return Permissions::DAILY_CLOSE_CREATE; }
     public function rules(): array { return \App\Modules\FuelStation\Http\Requests\StoreDailyCloseRequest::ruleSet(); }
@@ -21,5 +21,10 @@ class SaveDailyCloseAction implements PaletteAction
             return ['parked' => true];
         }
         return app(DailyCloseService::class)->processDailyClose($company->id, $params, $user);
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Save the daily close', 'form_url' => '/{company}/fuel/daily-close'];
     }
 }

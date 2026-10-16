@@ -2,9 +2,11 @@
 
 namespace App\Modules\Inventory\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Inventory\Extensions\StockReferenceLinks;
 use App\Modules\Inventory\Http\Requests\StoreStockAdjustmentRequest;
 use App\Modules\Inventory\Http\Requests\StoreStockTransferRequest;
 use App\Modules\Inventory\Models\Item;
@@ -225,8 +227,8 @@ class StockController extends Controller
             return $postedBillIds->has($movement->reference_id) ? 'Bill posted' : 'Receipt only';
         }
 
-        if ($movement->reference_type === 'fuel.daily_close') {
-            return 'Daily Close';
+        if (($label = StockReferenceLinks::status($movement)) !== null) {
+            return $label;
         }
 
         if (in_array($movement->movement_type, ['adjustment_in', 'adjustment_out'], true)) {
@@ -306,19 +308,14 @@ class StockController extends Controller
         $ref = $m->reference_type;
         $base = "/{$slug}";
 
-        if ($ref === 'fuel.daily_close' || $txnType === 'fuel_daily_close') {
-            $id = $ref === 'fuel.daily_close' ? ($m->reference_id ?: $m->gl_transaction_id) : $m->gl_transaction_id;
-
-            return ['label' => 'Daily close', 'href' => $id ? "{$base}/fuel/daily-close/{$id}" : null];
+        if ($link = StockReferenceLinks::early($ref, $txnType, $m, $base)) {
+            return $link;
         }
         if ($ref === 'acct.bills' && $m->reference_id) {
             return ['label' => 'Bill', 'href' => "{$base}/bills/{$m->reference_id}"];
         }
-        if ($ref === 'fuel.stock_writedown') {
-            return ['label' => 'Month-end value', 'href' => null];
-        }
-        if ($ref === 'fuel.lubricant_cost' || $txnType === 'fuel_lubricant_cost') {
-            return ['label' => 'Lubricant cost', 'href' => null];
+        if ($link = StockReferenceLinks::for($ref, $txnType, $m, $base)) {
+            return $link;
         }
         if ($ref === 'inv.stock_adjustments') {
             return ['label' => 'Adjustment', 'href' => null];
@@ -502,7 +499,7 @@ class StockController extends Controller
                 'company_id' => $company->id,
                 'warehouse_id' => $data['source_warehouse_id'],
                 'item_id' => $data['item_id'],
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                'movement_date' => $data['movement_date'] ?? app(CompanyClock::class)->today(),
                 'movement_type' => 'transfer_out',
                 'quantity' => -abs($data['quantity']),
                 'notes' => $data['notes'] ?? null,
@@ -514,7 +511,7 @@ class StockController extends Controller
                 'company_id' => $company->id,
                 'warehouse_id' => $data['destination_warehouse_id'],
                 'item_id' => $data['item_id'],
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                'movement_date' => $data['movement_date'] ?? app(CompanyClock::class)->today(),
                 'movement_type' => 'transfer_in',
                 'quantity' => abs($data['quantity']),
                 'related_movement_id' => $outMovement->id,

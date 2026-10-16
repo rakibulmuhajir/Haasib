@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
@@ -57,7 +58,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
         return [
             'vendor_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')],
             'payment_number' => ['nullable', 'string', 'max:50', $paymentNumberRule],
-            'payment_date' => ['required', 'date', 'before_or_equal:today'],
+            'payment_date' => ['required', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],

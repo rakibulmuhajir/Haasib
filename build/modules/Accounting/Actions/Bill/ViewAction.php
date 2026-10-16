@@ -7,7 +7,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Support\PaletteFormatter;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -30,6 +30,16 @@ class ViewAction implements PaletteAction
             'data' => [
                 'bill' => $bill,
                 'line_items' => $bill->lineItems,
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
             ],
         ];
     }

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -123,7 +123,8 @@ class CreateAction implements PaletteAction
                 throw new \InvalidArgumentException('exchange_rate is required when currency differs from base_currency.');
             }
             $exchangeRate = $exchangeRate ? (float) $exchangeRate : null;
-            $lineItems = $params['line_items'];
+            // Tax off for the company: lines post without tax whatever the form sent.
+            $lineItems = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company));
 
             // Compute totals
             $subtotal = 0.0;
@@ -153,6 +154,11 @@ class CreateAction implements PaletteAction
             }
 
             $total = $subtotal + $taxAmount - $discountAmount;
+            if (round($subtotal, 2) <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'line_items' => 'Enter an amount above zero.',
+                ]);
+            }
             $baseAmount = round($total * ($exchangeRate ?? 1), 2);
 
             // Create invoice
@@ -280,5 +286,16 @@ class CreateAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create an invoice',
+            'form_url' => '/{company}/invoices/create',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

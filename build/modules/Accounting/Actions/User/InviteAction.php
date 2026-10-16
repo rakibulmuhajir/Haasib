@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-class InviteAction implements PaletteAction
+class InviteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -78,5 +78,15 @@ class InviteAction implements PaletteAction
                 ],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Invite a user',
+            'fields' => [
+                'email' => ['hint' => 'Their email'],
+            ],
+        ];
     }
 }

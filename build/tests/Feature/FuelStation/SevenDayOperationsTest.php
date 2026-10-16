@@ -180,9 +180,9 @@ function weekDeposits(): array
 function weekAmanat(): array
 {
     return [
-        1 => [[3, 25000.0]],
-        4 => [[3, 15000.0]],
-        6 => [[3, -10000.0]],
+        1 => [[6, 25000.0]],
+        4 => [[6, 15000.0]],
+        6 => [[6, -10000.0]],
     ];
 }
 
@@ -333,10 +333,11 @@ function sevenDayFixture(): array
         ['account_id' => $account('3000')->id, 'type' => 'credit', 'amount' => OPENING_CASH + 2000000.0 + $openingStock],
     ]);
 
-    // Six credit buyers and three suppliers.
+    // Six credit buyers, one amanat depositor and three suppliers.
     $customers = collect([
         'Al-Habib Transport', 'Sindh Goods Carriers', 'Mehran Logistics',
         'Karachi Cement Haulage', 'Indus Travel', 'Pak Freight Lines',
+        'Zahid Trust Depositor',
     ])->values()->map(fn ($name, $i) => Customer::create([
         'company_id' => $company->id,
         'customer_number' => sprintf('CUST-%04d', $i + 1),
@@ -348,11 +349,12 @@ function sevenDayFixture(): array
         'is_active' => true,
     ]));
 
-    // An amanat depositor is a customer carrying a fuel CustomerProfile flagged as an
-    // amanat holder; a plain acct.customers row is refused by the close.
+    // The depositor is a seventh customer, not one of the six credit buyers: the close refuses
+    // a credit sale to an amanat holder. A depositor is a customer carrying a fuel
+    // CustomerProfile flagged as an amanat holder; a plain acct.customers row is refused.
     CustomerProfile::create([
         'company_id' => $company->id,
-        'customer_id' => $customers[3]->id,
+        'customer_id' => $customers[6]->id,
         'is_amanat_holder' => true,
     ]);
 

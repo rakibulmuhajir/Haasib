@@ -294,6 +294,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
         Route::post('/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
         Route::get('/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+        Route::post('/{company}/journals/{journal}/post', [JournalController::class, 'post'])->name('journals.post');
 
         // Opening balances
         Route::get('/{company}/accounting/opening-balances', [OpeningBalanceController::class, 'show'])->name('accounting.opening-balances.show');
@@ -553,8 +554,5 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/partners/{partner}/withdraw', [PartnerController::class, 'addWithdrawal'])->whereUuid('partner')->name('partners.withdraw');
     });
 });
-
-// Module routes
-require base_path('modules/FuelStation/Routes/fuel.php');
 
 require __DIR__.'/settings.php';

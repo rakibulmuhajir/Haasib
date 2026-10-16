@@ -98,15 +98,13 @@ class CompaniesPageController extends Controller
         session(['last_company_slug' => $data['slug']]);
 
         $company = Company::where('slug', $data['slug'])->firstOrFail();
-        $target = match (true) {
-            $company->isModuleEnabled('umrah')
-                || in_array($company->industry_code, ['umrah', 'travel'], true)
-                => route('umrah.dashboard', ['company' => $company->slug]),
-            $company->isModuleEnabled('fuel_station')
-                || $company->industry_code === 'fuel_station'
-                => route('fuel.dashboard', ['company' => $company->slug]),
-            default => "/{$company->slug}",
-        };
+        $target = "/{$company->slug}";
+        foreach (app(\App\Support\Modules\ModuleRegistry::class)->enabledFor($company) as $manifest) {
+            if (($url = $manifest->homeUrl($company)) !== null) {
+                $target = $url;
+                break;
+            }
+        }
 
         return redirect($target)->with('success', $result['message'] ?? 'Switched company.');
     }

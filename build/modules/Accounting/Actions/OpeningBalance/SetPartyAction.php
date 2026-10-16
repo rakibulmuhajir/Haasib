@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Actions\OpeningBalance;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
+use App\Modules\Accounting\Extensions\OpeningBalanceSections;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CommandBus;
@@ -27,18 +28,32 @@ use Illuminate\Validation\ValidationException;
  * a customer), suppliers (the company owes a vendor). Employees and partners have no Quick Add
  * entry point and are not reachable through this action.
  */
-class SetPartyAction implements PaletteAction
+class SetPartyAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     private const SECTIONS = [
         'credit_customers' => ['model' => Customer::class, 'key' => 'customer_id'],
-        'amanat' => ['model' => Customer::class, 'key' => 'customer_id'],
         'suppliers' => ['model' => Vendor::class, 'key' => 'vendor_id'],
     ];
+
+    /** The core sections plus the module sections (amanat, ...) this company has. */
+    private function sections(): array
+    {
+        $sections = self::SECTIONS;
+        $company = CompanyContext::getCompany();
+        foreach ($company ? app(OpeningBalanceSections::class)->availableFor($company) : [] as $key => $section) {
+            $sections[$key] = [
+                'model' => $section->party() === 'vendor' ? Vendor::class : Customer::class,
+                'key' => $section->party().'_id',
+            ];
+        }
+
+        return $sections;
+    }
 
     public function rules(): array
     {
         return [
-            'section' => ['required', Rule::in(array_keys(self::SECTIONS))],
+            'section' => ['required', Rule::in(array_keys($this->sections()))],
             'party_id' => ['required', 'uuid'],
             'amount' => ['required', 'numeric', 'min:0'],
             'as_of_date' => ['nullable', 'date'],
@@ -56,7 +71,7 @@ class SetPartyAction implements PaletteAction
         $user = Auth::user();
 
         $section = $params['section'];
-        $config = self::SECTIONS[$section];
+        $config = $this->sections()[$section];
         $modelClass = $config['model'];
         $key = $config['key'];
 
@@ -122,5 +137,10 @@ class SetPartyAction implements PaletteAction
             'message' => 'Opening balance set for '.$party->name,
             'data' => $result['data'] ?? [],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

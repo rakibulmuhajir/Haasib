@@ -15,6 +15,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import RelatedActions from '@/components/RelatedActions.vue'
 import LedgerDocument from '@/components/LedgerDocument.vue'
@@ -119,6 +120,7 @@ const props = defineProps<{
 }>()
 
 // The slip number off the paper receipt, saved on Enter or leaving the box.
+const { has: hasModule } = useModules()
 const slipNo = ref(props.invoice.reference ?? '')
 watch(() => props.invoice.reference, (value) => { slipNo.value = value ?? '' })
 const saveSlip = () => {
@@ -325,8 +327,8 @@ const voidInvoice = () => {
           <SelectItem v-for="u in customerUnits" :key="u.id" :value="u.id">{{ u.name }}</SelectItem>
         </SelectContent>
       </Select>
-      <Input v-if="invoice.status !== 'void'" v-model="slipNo" class="h-9 w-28" maxlength="100" placeholder="Slip no." aria-label="Slip number" @keydown.enter="saveSlip" @blur="saveSlip" />
-      <Input v-if="invoice.status !== 'void'" v-model="slipDate" type="date" class="h-9 w-40" aria-label="Slip date" title="Slip date" @change="saveSlipDate" />
+      <Input v-if="hasModule('fuel_station') && invoice.status !== 'void'" v-model="slipNo" class="h-9 w-28" maxlength="100" placeholder="Slip no." aria-label="Slip number" @keydown.enter="saveSlip" @blur="saveSlip" />
+      <Input v-if="hasModule('fuel_station') && invoice.status !== 'void'" v-model="slipDate" type="date" class="h-9 w-40" aria-label="Slip date" title="Slip date" @change="saveSlipDate" />
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back
@@ -361,7 +363,7 @@ const voidInvoice = () => {
       </DropdownMenu>
 
       <Button variant="outline" @click="previewing = true"><Eye class="mr-2 h-4 w-4" />Preview</Button>
-      <Button :disabled="isSettled" @click="sendInvoice">
+      <Button v-if="['draft', 'approved'].includes(invoice.status)" :disabled="isSettled" @click="sendInvoice">
         <Send class="mr-2 h-4 w-4" />
         Mark as sent
       </Button>

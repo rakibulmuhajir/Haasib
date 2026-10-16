@@ -1,6 +1,7 @@
 import type { ParsedCommand } from '@/types/palette'
 import { GRAMMAR, resolveEntityShortcut, resolveVerbAlias, getVerbDefinition } from './grammar'
 import { expandPresetShortcut } from './shortcuts'
+import { getSchema, isCatalogSchema } from './schemas'
 
 /**
  * Parse a command string into a structured ParsedCommand
@@ -76,15 +77,15 @@ function parseEntityVerb(
 ): { entity: string; verb: string; consumed: number } | null {
   
   // Handle "entity.verb" format
+  // Entities may contain dots ("fuel.amanat"), so the verb is after the LAST dot.
   if (token.includes('.')) {
-    const [entityPart, verbPart] = token.split('.')
-    const entity = resolveEntityShortcut(entityPart)
-    if (!entity) return null
-    
-    const verb = resolveVerbAlias(entity, verbPart)
-    if (!verb) return null
-    
-    return { entity, verb, consumed: 1 }
+    const dot = token.lastIndexOf('.')
+    const entity = resolveEntityShortcut(token.slice(0, dot))
+    const verb = entity ? resolveVerbAlias(entity, token.slice(dot + 1)) : null
+    if (entity && verb) {
+      return { entity, verb, consumed: 1 }
+    }
+    // Otherwise the whole token may be a dotted entity ("fuel.amanat movement")
   }
 
   // Handle "entity verb" format (space separated)
@@ -264,6 +265,15 @@ function inferFromSubject(result: ParsedCommand): void {
   if (!result.subject) return
 
   const words = result.subject.split(/\s+/)
+
+  // Server-described commands: the free text fills the first argument.
+  if (isCatalogSchema(result.entity, result.verb)) {
+    const first = getSchema(result.entity, result.verb)?.args[0]
+    if (first && !(first.name in result.flags)) {
+      result.flags[first.name] = result.subject
+    }
+    return
+  }
 
   // Customer create: accept positional name [email] [currency]
   if (result.entity === 'customer' && result.verb === 'create') {

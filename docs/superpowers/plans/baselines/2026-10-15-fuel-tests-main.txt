@@ -1,0 +1,17 @@
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\AmanatBorrowingTest[22m [90m>[39m the Allow borrowing tick saves on the holder                 
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\CustomerUnitsTest[22m [90m>[39m a posted close invoice splits by vehicle…  [41;1m RuntimeException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\CustomerUnitsTest[22m [90m>[39m a split invoice and its credit notes stay… [41;1m RuntimeException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\CustomerUnitsTest[22m [90m>[39m a saved consolidated invoice can be deleted… [41;1m QueryException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\DailyCloseCreditSalesTest[22m [90m>[39m invalid credit allocations roll back the entire clo…   
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\DailyCloseWorkflowTest[22m [90m>[39m ordinary posted invoice and bill amendments preserve o…   
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m seven consecutive days close, one… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m every day reconciles, and only th… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the rate change on day four is wh… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the tanks end the week where the…  [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the six buyers owe exactly what t… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the depot is owed for both tanker… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the trust deposits net out to wha… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the week of tea, meals and electr… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the books balance at the end of t… [41;1m ValidationException [49;22m  
+  [41;1m FAILED [49;22m [1mTests\Feature\FuelStation\SevenDayOperationsTest[22m [90m>[39m the drawer, the banks and the bal… [41;1m ValidationException [49;22m  
+  [90mTests:[39m    [31;1m16 failed[39;22m[90m,[39m[39m [39m[32;1m323 passed[39;22m[90m (2128 assertions)[39m

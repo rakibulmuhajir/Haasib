@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -77,6 +77,18 @@ class IndexAction implements PaletteAction
                 footer: $bills->count() . ' bills',
                 rowIds: $bills->pluck('id')->toArray()
             ),
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'List bills',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'from_date' => ['hint' => 'From date'],
+                'to_date' => ['hint' => 'To date'],
+            ],
         ];
     }
 }

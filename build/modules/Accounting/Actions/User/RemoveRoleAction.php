@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Constants\Tables;
 use Illuminate\Support\Facades\DB;
 
-class RemoveRoleAction implements PaletteAction
+class RemoveRoleAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -47,6 +47,16 @@ class RemoveRoleAction implements PaletteAction
             'data' => [
                 'user' => $user->email,
                 'role' => $params['role'],
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Take a role from a user',
+            'fields' => [
+                'email' => ['hint' => 'User email'],
             ],
         ];
     }

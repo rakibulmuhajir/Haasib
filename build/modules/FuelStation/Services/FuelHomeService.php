@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
@@ -34,7 +35,7 @@ class FuelHomeService
     {
         $id = $company->id;
         $slug = $company->slug;
-        $today = Carbon::today();
+        $today = Carbon::parse(app(CompanyClock::class)->today($company));
         $monthStart = $today->copy()->startOfMonth()->toDateString();
         $todayDate = $today->toDateString();
 
@@ -88,7 +89,7 @@ class FuelHomeService
     {
         $id = $company->id;
         $slug = $company->slug;
-        $today = Carbon::today();
+        $today = Carbon::parse(app(CompanyClock::class)->today($company));
 
         $stock = $this->stockRuns($id, $from, $to);
         $fig = $this->figures($id, $from, $to, $stock, $slug);
@@ -155,7 +156,7 @@ class FuelHomeService
     private function close(Company $company, array $summary): array
     {
         $id = $company->id;
-        $today = Carbon::today();
+        $today = Carbon::parse(app(CompanyClock::class)->today($company));
 
         $last = $this->liveCloses($id)->orderByDesc('transaction_date')->orderByDesc('created_at')
             ->first(['id', 'transaction_date', 'metadata', 'posted_at', 'posted_by_user_id']);
@@ -356,7 +357,7 @@ class FuelHomeService
             }
         }
         $closeCount = count($recent);
-        $today = Carbon::today()->toDateString();
+        $today = Carbon::parse(app(CompanyClock::class)->today())->toDateString();
         $dailyService = app(DailyCloseService::class);
 
         return $tanks->map(function ($tank) use ($levels, $sold, $closeCount, $itemNames, $lastCloseDate, $lastCloseId, $today, $id, $slug, $from, $to, $dailyService) {

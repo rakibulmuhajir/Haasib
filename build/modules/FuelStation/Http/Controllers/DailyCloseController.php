@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
@@ -80,7 +81,7 @@ class DailyCloseController extends Controller
     private function formatEmployeeForDailyClose(string $companyId, object $employee, ?string $date = null): array
     {
         // Advances taken this month up to the close's date, shown beside the salary on the close.
-        $day = \Illuminate\Support\Carbon::parse($date ?? now()->toDateString());
+        $day = \Illuminate\Support\Carbon::parse($date ?? app(CompanyClock::class)->today());
         $monthAdvances = SalaryAdvance::where('company_id', $companyId)
             ->where('employee_id', $employee->id)
             ->whereBetween('advance_date', [$day->copy()->startOfMonth()->toDateString(), $day->toDateString()])
@@ -555,7 +556,9 @@ class DailyCloseController extends Controller
         $companyId = $company->id;
 
         // The close is a morning ritual: today's dip closes yesterday. Before noon, default to yesterday.
-        $defaultDate = now()->hour < 12 ? now()->subDay()->toDateString() : now()->toDateString();
+        // Before noon on the company's own clock, not UTC's: 02:00 in Karachi is still the morning ritual for yesterday.
+        $localNow = app(CompanyClock::class)->now($company);
+        $defaultDate = $localNow->hour < 12 ? $localNow->subDay()->toDateString() : $localNow->toDateString();
         // Catching up on older days: open the next day still to close, not yesterday. Once the
         // closes are current, that day is the morning-rule date itself.
         $lastPosted = Transaction::where('company_id', $companyId)
@@ -1229,7 +1232,7 @@ class DailyCloseController extends Controller
 
         $month = (string) $request->query('month', '');
         if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) !== 1) {
-            $month = now()->startOfMonth()->subMonth()->format('Y-m');
+            $month = app(CompanyClock::class)->now($company)->startOfMonth()->subMonth()->format('Y-m');
         }
 
         return Inertia::render('FuelStation/DailyClose/Month', [
@@ -1259,7 +1262,7 @@ class DailyCloseController extends Controller
         // back-dated (catch-up) closes are not hidden behind "last 30 days".
         $latest = Transaction::where('company_id', $company->id)->where('transaction_type', 'fuel_daily_close')
             ->whereNull('deleted_at')->max('transaction_date');
-        $daysSinceLatest = $latest ? \Illuminate\Support\Carbon::parse($latest)->startOfDay()->diffInDays(now()->startOfDay()) : 0;
+        $daysSinceLatest = $latest ? \Illuminate\Support\Carbon::parse($latest)->startOfDay()->diffInDays(\Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today())) : 0;
         $defaultRange = collect(['30', '90', '365'])->first(fn ($days) => $daysSinceLatest <= (int) $days) ?? 'all';
         $range = (string) $request->query('range', $defaultRange);
         if (! in_array($range, ['30', '90', '365', 'all'], true)) {

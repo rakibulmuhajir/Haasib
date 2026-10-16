@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
@@ -110,7 +111,7 @@ class FuelSaleService
                 'unit_id' => $unit?->id,
                 // The slip number; the vehicle has its own field (unit_id).
                 'reference' => $data['reference'] ?? null,
-                'invoice_date' => $data['sale_date'] ?? now()->toDateString(),
+                'invoice_date' => $data['sale_date'] ?? app(CompanyClock::class)->today(),
                 'due_date' => $this->calculateDueDate($saleType, $data),
                 'subtotal' => $lineTotal,
                 'discount_amount' => $discount,
@@ -156,7 +157,7 @@ class FuelSaleService
             // below that rate therefore has to give the difference back somewhere, or the
             // drawer comes up short by exactly the discount.
             if ($discount > 0) {
-                $this->postDiscount($company, $invoice, $discount, $data['sale_date'] ?? now()->toDateString());
+                $this->postDiscount($company, $invoice, $discount, $data['sale_date'] ?? app(CompanyClock::class)->today());
             }
 
             // Every litre already went through a nozzle the Daily Close reads: a credit
@@ -165,7 +166,7 @@ class FuelSaleService
             // DailyCloseCreditSaleService::pendingFuelInvoiceDetails). If it already has,
             // reclassify immediately: Dr AR / Cr the close's cash account.
             if ($saleType === SaleMetadata::TYPE_CREDIT) {
-                $this->reclassifyIfCloseAlreadyPosted($company->id, $invoice, $data['sale_date'] ?? now()->toDateString());
+                $this->reclassifyIfCloseAlreadyPosted($company->id, $invoice, $data['sale_date'] ?? app(CompanyClock::class)->today());
             }
 
             return $invoice->load(['lineItems', 'customer']);
@@ -365,7 +366,7 @@ class FuelSaleService
             'company_id' => $companyId,
             'warehouse_id' => $warehouseId,
             'item_id' => $itemId,
-            'movement_date' => now()->toDateString(),
+            'movement_date' => app(CompanyClock::class)->today(),
             'movement_type' => 'sale',
             'quantity' => -abs($quantity), // Negative for outflow
             'unit_cost' => $unitCost,
@@ -405,11 +406,11 @@ class FuelSaleService
         if ($saleType === SaleMetadata::TYPE_CREDIT) {
             $days = $data['payment_terms_days'] ?? 30;
 
-            return now()->addDays($days)->toDateString();
+            return app(CompanyClock::class)->now()->addDays($days)->toDateString();
         }
 
         // Cash sales due immediately
-        return $data['sale_date'] ?? now()->toDateString();
+        return $data['sale_date'] ?? app(CompanyClock::class)->today();
     }
 
     /**
@@ -536,7 +537,7 @@ class FuelSaleService
     private function generateInvoiceNumber(string $companyId): string
     {
         $prefix = 'FS-';
-        $date = now()->format('Ymd');
+        $date = str_replace('-', '', app(CompanyClock::class)->today());
         $random = strtoupper(Str::random(4));
 
         return "{$prefix}{$date}-{$random}";

@@ -84,14 +84,6 @@ class Warehouse extends Model
     }
 
     /**
-     * For tank warehouses, the dip stick used for measurements.
-     */
-    public function dipStick(): BelongsTo
-    {
-        return $this->belongsTo(\App\Modules\FuelStation\Models\DipStick::class);
-    }
-
-    /**
      * Check if this warehouse is a tank.
      */
     public function isTank(): bool

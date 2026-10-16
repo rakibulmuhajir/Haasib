@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
@@ -21,7 +22,7 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
     {
         $this->merge([
             'payment_number' => $this->input('payment_number'),
-            'payment_date' => $this->input('payment_date', now()->toDateString()),
+            'payment_date' => $this->input('payment_date', app(CompanyClock::class)->today()),
             'method' => $this->input('method', GroupPayment::METHOD_CASH),
             'account_id' => $this->input('account_id'),
             'reference' => $this->input('reference'),

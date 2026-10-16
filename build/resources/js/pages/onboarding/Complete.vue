@@ -157,7 +157,7 @@ const navigateToStep = (url: string) => {
               </div>
               <div>
                 <p class="font-semibold text-text-primary">
-                  {{ summary.bank_accounts_created }} Bank Accounts
+                  {{ summary.bank_accounts_created }} {{ summary.bank_accounts_created === 1 ? 'account' : 'accounts' }}
                 </p>
                 <p class="text-sm text-text-secondary">
                   Ready for payments and reconciliation

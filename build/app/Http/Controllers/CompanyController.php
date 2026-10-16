@@ -10,14 +10,15 @@ use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\User;
 use App\Modules\Accounting\Services\DashboardService;
+use App\Modules\Accounting\Services\GeneralHomeFigures;
 use App\Services\CommandBus;
 use App\Services\CompanyBootstrapService;
 use App\Services\CompanyRbacBootstrapper;
 use App\Services\UserPermissionPresenter;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -132,9 +133,15 @@ class CompanyController extends Controller
             ]);
         }
 
-        $target = in_array($data['industry_code'], ['umrah', 'travel'], true)
-            ? route('umrah.dashboard', ['company' => $company->slug])
-            : "/{$company->slug}";
+        // Companies with no module-specific landing page start in the setup wizard.
+        $company->refresh();
+        $target = $company->onboarding_completed ? "/{$company->slug}" : "/{$company->slug}/onboarding";
+        foreach (app(ModuleRegistry::class)->forIndustry($data['industry_code']) as $manifest) {
+            if (($url = $manifest->afterCreateUrl($company)) !== null) {
+                $target = $url;
+                break;
+            }
+        }
 
         $redirect = redirect($target)
             ->with('success', 'Company created! You can start working right away.');
@@ -266,98 +273,7 @@ class CompanyController extends Controller
 
     public function show(Request $request): Response|RedirectResponse
     {
-        $company = CompanyContext::getCompany();
-
-        // A fuel station lands on its own home; the product / tank setup page it used to open
-        // on lives at /fuel/products.
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station';
-        $isUmrahCompany = $company->isModuleEnabled('umrah')
-            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
-            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
-
-        if ($isFuelStation && ! $isUmrahCompany) {
-            $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
-            $isMember = DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', Auth::id())
-                ->where('is_active', true)
-                ->exists();
-            if (! $isGodMode && ! $isMember) {
-                abort(403, 'You are not a member of this company.');
-            }
-
-            $tab = $request->query('tab') === 'history' ? 'history' : 'today';
-            $service = app(\App\Modules\FuelStation\Services\FuelHomeService::class);
-            $available = $request->user()->showsValueTrails()
-                && ($isGodMode || $request->user()->hasCompanyPermission(Permissions::REPORT_VIEW));
-            $includeTrail = $available
-                && $request->header('X-Inertia-Partial-Component') === 'FuelStation/Home/Index'
-                && in_array('valueTrail', explode(',', (string) $request->header('X-Inertia-Partial-Data')), true);
-            try {
-                $props = [
-                    'company' => [
-                        'id' => $company->id,
-                        'name' => $company->name,
-                        'slug' => $company->slug,
-                        'base_currency' => $company->base_currency ?? 'PKR',
-                    ],
-                    'tab' => $tab,
-                    'valueTrailsAvailable' => $available,
-                    'today' => $service->today($company, $includeTrail && $tab === 'today'),
-                ];
-                $trail = $props['today']['month']['statement']['valueTrail'] ?? null;
-                unset($props['today']['month']['statement']['valueTrail']);
-                if ($tab === 'history') {
-                    [$from, $to] = $this->historyRange($request->query('from'), $request->query('to'));
-                    $props['history'] = $service->period($company, $from, $to, $includeTrail);
-                    $props['range'] = ['from' => $from, 'to' => $to];
-                    $trail = $props['history']['statement']['valueTrail'] ?? null;
-                    unset($props['history']['statement']['valueTrail']);
-                }
-                if ($trail) {
-                    $trail = app(\App\Modules\FuelStation\Services\ProfitValueTrailPresenter::class)->present($trail, $company, $request->user());
-                }
-                $props['valueTrail'] = Inertia::optional(fn () => $trail);
-            } catch (\Throwable $exception) {
-                if (! $includeTrail) {
-                    throw $exception;
-                }
-                Log::error('Could not load the home profit statement trail.', ['company_id' => $company->id, 'exception' => $exception]);
-
-                return Inertia::render('FuelStation/Home/Index', [
-                    'valueTrail' => Inertia::optional(fn () => ['error' => 'Could not load this calculation. Please try again.']),
-                ]);
-            }
-
-            return Inertia::render('FuelStation/Home/Index', $props);
-        }
-
         return $this->renderShow($request);
-    }
-
-    /** The History tab's range: ?from & ?to as dates, last month when absent or unreadable. */
-    private function historyRange(mixed $from, mixed $to): array
-    {
-        $parse = function (mixed $v): ?Carbon {
-            try {
-                return $v ? Carbon::parse((string) $v)->startOfDay() : null;
-            } catch (\Throwable) {
-                return null;
-            }
-        };
-        $start = $parse($from);
-        $end = $parse($to);
-        if (! $start || ! $end) {
-            $start = Carbon::today()->subMonthNoOverflow()->startOfMonth();
-            $end = $start->copy()->endOfMonth();
-        }
-        if ($start->gt($end)) {
-            [$start, $end] = [$end, $start];
-        }
-
-        return [$start->toDateString(), $end->toDateString()];
     }
 
     protected function renderShow(Request $request): Response|RedirectResponse
@@ -376,12 +292,11 @@ class CompanyController extends Controller
             abort(403, 'You are not a member of this company.');
         }
 
-        $isUmrah = $company->isModuleEnabled('umrah')
-            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
-            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
-
-        if ($isUmrah) {
-            return redirect()->route('umrah.dashboard', ['company' => $company->slug]);
+        // A module with its own company home (fuel station, umrah) answers here.
+        foreach (app(ModuleRegistry::class)->enabledFor($company) as $manifest) {
+            if (($response = $manifest->homeResponse($request, $company)) !== null) {
+                return $response;
+            }
         }
 
         // Get user statistics
@@ -415,50 +330,59 @@ class CompanyController extends Controller
             ->where('user_id', Auth::id())
             ->value('role');
 
-        // Financial snapshot (AR only; AP/expenses placeholder)
+        // Financial snapshot (AR here; cash, AP and profit come from GeneralHomeFigures)
         $openInvoices = DB::table('acct.invoices')
             ->where('company_id', $company->id)
             ->where('balance', '>', 0)
-            ->whereNotIn('status', ['paid', 'void', 'cancelled']);
+            // Same set the receivables aging report counts, which the card links to.
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled']);
 
         $arOutstanding = (clone $openInvoices)->sum('balance');
         $arOutstandingCount = (clone $openInvoices)->count();
 
-        $arOverdueQuery = (clone $openInvoices)->where('due_date', '<', now()->toDateString());
+        // Calendar dates are the company's own, not UTC's: after midnight in Karachi, UTC is still yesterday.
+        $clock = app(\App\Support\CompanyClock::class);
+        $today = $clock->today($company);
+        $monthStart = $clock->now($company)->startOfMonth();
+        $monthEnd = $clock->now($company)->endOfMonth();
+
+        $arOverdueQuery = (clone $openInvoices)->where('due_date', '<', $today);
         $arOverdue = (clone $arOverdueQuery)->sum('balance');
         $arOverdueCount = (clone $arOverdueQuery)->count();
 
         $paymentsMTD = DB::table('acct.payments')
             ->where('company_id', $company->id)
-            ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+            ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum(DB::raw('COALESCE(base_amount, amount)'));
 
         // Aging buckets
         $agingBuckets = DB::table('acct.invoices')
             ->selectRaw("
-                SUM(CASE WHEN due_date >= current_date THEN balance ELSE 0 END) as current_bucket,
-                SUM(CASE WHEN due_date < current_date AND due_date >= current_date - interval '30 days' THEN balance ELSE 0 END) as bucket_1_30,
-                SUM(CASE WHEN due_date < current_date - interval '30 days' AND due_date >= current_date - interval '60 days' THEN balance ELSE 0 END) as bucket_31_60,
-                SUM(CASE WHEN due_date < current_date - interval '60 days' AND due_date >= current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_61_90,
-                SUM(CASE WHEN due_date < current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_90_plus
-            ")
+                SUM(CASE WHEN due_date >= CAST(? AS date) THEN balance ELSE 0 END) as current_bucket,
+                SUM(CASE WHEN due_date < CAST(? AS date) AND due_date >= CAST(? AS date) - interval '30 days' THEN balance ELSE 0 END) as bucket_1_30,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '30 days' AND due_date >= CAST(? AS date) - interval '60 days' THEN balance ELSE 0 END) as bucket_31_60,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '60 days' AND due_date >= CAST(? AS date) - interval '90 days' THEN balance ELSE 0 END) as bucket_61_90,
+                SUM(CASE WHEN due_date < CAST(? AS date) - interval '90 days' THEN balance ELSE 0 END) as bucket_90_plus
+            ", array_fill(0, 8, $today))
             ->where('company_id', $company->id)
             ->where('balance', '>', 0)
-            ->whereNotIn('status', ['paid', 'void', 'cancelled'])
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
             ->first();
 
         $quickStats = [
             'invoices_sent_this_month' => DB::table('acct.invoices')
                 ->where('company_id', $company->id)
-                ->whereBetween('sent_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('sent_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
             'payments_received_this_month' => DB::table('acct.payments')
                 ->where('company_id', $company->id)
-                ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                 ->count(),
             'new_customers_this_month' => DB::table('acct.customers')
                 ->where('company_id', $company->id)
-                ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('created_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
         ];
 
@@ -575,10 +499,6 @@ class CompanyController extends Controller
         $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
         $profitLoss = $this->dashboardService->getProfitLossSummary($company->id);
 
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station';
-
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -608,7 +528,7 @@ class CompanyController extends Controller
                 'ar_overdue' => (float) $arOverdue,
                 'ar_overdue_count' => $arOverdueCount,
                 'payments_mtd' => (float) $paymentsMTD,
-                'expenses_mtd_placeholder' => 'Not implemented yet',
+                ...app(GeneralHomeFigures::class)->for($company, $clock->now($company)),
                 'aging' => [
                     'current' => (float) ($agingBuckets->current_bucket ?? 0),
                     'bucket_1_30' => (float) ($agingBuckets->bucket_1_30 ?? 0),
@@ -629,8 +549,6 @@ class CompanyController extends Controller
                 'needs_attention' => $needsAttention,
                 'profit_loss' => $profitLoss,
             ],
-            'isFuelStation' => $isFuelStation,
-            'isUmrah' => $isUmrah,
         ]);
     }
 
@@ -679,7 +597,7 @@ class CompanyController extends Controller
         if (filled($validated['stamp_from'] ?? null)) {
             $directUpdates['stamp_from'] = $validated['stamp_from'];
         } elseif ($request->hasFile('stamp') && ! $company->stamp_from) {
-            $directUpdates['stamp_from'] = now()->toDateString();
+            $directUpdates['stamp_from'] = app(\App\Support\CompanyClock::class)->today($company);
         } elseif (array_key_exists('stamp_from', $validated)) {
             $directUpdates['stamp_from'] = null;
         }

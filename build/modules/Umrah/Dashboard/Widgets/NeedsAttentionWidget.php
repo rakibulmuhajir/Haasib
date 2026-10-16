@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Dashboard\Widgets;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Dashboard\DashboardWidget;
 use App\Models\Company;
@@ -55,7 +56,7 @@ class NeedsAttentionWidget implements DashboardWidget
     public function resolve(Company $company, User $user, array $options): array
     {
         $days = (int) ($options['days'] ?? 14);
-        $today = Carbon::today();
+        $today = Carbon::parse(app(CompanyClock::class)->today($company));
         $horizon = $today->copy()->addDays($days);
         $access = app(TravelAccessService::class);
         $agentId = $access->isAgentMember($company->id, $user)

@@ -1,4 +1,5 @@
 import { useLexicon } from '@/composables/useLexicon'
+import { useModules } from '@/composables/useModules'
 import { getSidebarGroups } from '@/navigation/registry'
 import type { NavGroup } from '@/types'
 import { usePage } from '@inertiajs/vue3'
@@ -17,6 +18,7 @@ import { computed } from 'vue'
 export function useNavGroups() {
     const page = usePage()
     const { t } = useLexicon()
+    const { has } = useModules()
 
     const authProps = computed(() => (page.props.auth as any) || {})
     const userCompanies = computed(() => authProps.value.companies || [])
@@ -42,22 +44,10 @@ export function useNavGroups() {
 
     const modules = computed(() => currentCompany.value?.settings?.modules ?? {})
 
-    // Industry arrives under three spellings depending on how old the row is.
-    const industry = computed(
-        () =>
-            currentCompany.value?.industry_code ??
-            currentCompany.value?.industryCode ??
-            currentCompany.value?.industry ??
-            null,
-    )
+    // The server's enabledModules already applies the industry fallback.
+    const isFuelStationCompany = computed(() => has('fuel_station'))
 
-    const isFuelStationCompany = computed(
-        () => modules.value?.fuel_station === true || industry.value === 'fuel_station',
-    )
-
-    const isUmrahCompany = computed(
-        () => modules.value?.umrah === true || ['umrah', 'travel'].includes(industry.value),
-    )
+    const isUmrahCompany = computed(() => has('umrah'))
 
     // Absent means on: inventory and payroll are only off when a company has
     // explicitly turned them off.

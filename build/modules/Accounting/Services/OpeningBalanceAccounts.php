@@ -23,7 +23,6 @@ class OpeningBalanceAccounts
             'cash' => $byCode('1050') ?? $bySubtype('cash'),
             'ar' => $byCode('1100') ?? $bySubtype('accounts_receivable'),
             'ap' => $byCode('2100') ?? $bySubtype('accounts_payable'),
-            'amanat' => $byCode('2200'),
             'partner_deposits' => $byCode('2210'),
             'employee_advances' => $byCode('1150'),
             'equity' => $createEquity ? $this->ensureEquity($companyId) : $byCode(self::EQUITY_CODE),

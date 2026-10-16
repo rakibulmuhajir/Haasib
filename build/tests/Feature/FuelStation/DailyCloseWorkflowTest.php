@@ -484,6 +484,8 @@ test('ordinary posted invoice and bill amendments preserve old journals and reco
     expect($close->fresh()->metadata)->toBe($snapshot);
     if (!$receivable) {
         $document->fresh()->lineItems()->firstOrFail()->update(['quantity_received' => 1]);
+        // Price alone may still change on a received line (revaluation); the quantity may not.
+        $params['line_items'][0]['quantity'] = 2;
         expect(fn () => app(\App\Services\CompanyContextService::class)->withContext($f['company'], fn () => app($action)->handle($params)))
             ->toThrow(\InvalidArgumentException::class);
     }

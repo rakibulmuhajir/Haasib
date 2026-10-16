@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -102,6 +103,8 @@ interface PaginatedStockLevels {
   per_page: number
   total: number
 }
+
+const { has } = useModules()
 
 const props = defineProps<{
   company: CompanyRef
@@ -215,7 +218,7 @@ const openBill = (billId: string) => {
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
-      <Button variant="outline" @click="router.get(`/${company.slug}/fuel/tank-readings`)">
+      <Button v-if="has('fuel_station')" variant="outline" @click="router.get(`/${company.slug}/fuel/tank-readings`)">
         <Droplets class="mr-2 h-4 w-4" />
         Tank Dip
       </Button>

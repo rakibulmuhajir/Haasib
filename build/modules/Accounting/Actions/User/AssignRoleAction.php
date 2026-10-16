@@ -9,7 +9,7 @@ use App\Facades\CompanyContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
-class AssignRoleAction implements PaletteAction
+class AssignRoleAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -49,6 +49,16 @@ class AssignRoleAction implements PaletteAction
             'data' => [
                 'user' => $user->email,
                 'role' => $params['role'],
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Give a user a role',
+            'fields' => [
+                'email' => ['hint' => 'User email'],
             ],
         ];
     }

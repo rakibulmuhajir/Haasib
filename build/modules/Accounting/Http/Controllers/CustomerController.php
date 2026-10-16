@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
@@ -27,7 +28,7 @@ class CustomerController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $now = now()->toDateString();
+        $now = app(CompanyClock::class)->today();
 
         $query = Customer::where('company_id', $company->id)
             ->select('*')
@@ -83,7 +84,7 @@ class CustomerController extends Controller
                     ->where('inv.company_id', $company->id)
                     ->where('inv.balance', '>', 0)
                     ->whereNotIn('inv.status', ['paid', 'void', 'cancelled'])
-                    ->where('inv.due_date', '<', now()->toDateString());
+                    ->where('inv.due_date', '<', app(CompanyClock::class)->today());
             });
         }
 
@@ -253,19 +254,19 @@ class CustomerController extends Controller
         $overdue = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->where('balance', '>', 0)
-            ->where('due_date', '<', now()->toDateString())
+            ->where('due_date', '<', app(CompanyClock::class)->today())
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->sum('balance');
 
         $paidYtd = Payment::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
-            ->whereYear('payment_date', now()->year)
+            ->whereYear('payment_date', app(CompanyClock::class)->now()->year)
             ->sum(DB::raw('COALESCE(base_amount, amount)'));
 
         $invoicedYtd = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->withoutCorrectionArtifacts()
-            ->whereYear('invoice_date', now()->year)
+            ->whereYear('invoice_date', app(CompanyClock::class)->now()->year)
             ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         $avgDaysToPay = Invoice::where('company_id', $company->id)
@@ -276,16 +277,16 @@ class CustomerController extends Controller
             ->value('avg_days');
 
         // AR Aging for this specific customer
-        $now = now()->toDateString();
+        $now = app(CompanyClock::class)->today();
         $aging = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->where('balance', '>', 0)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->selectRaw('COALESCE(SUM(CASE WHEN due_date >= ? THEN balance ELSE 0 END), 0) AS current', [$now])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30', [$now, now()->subDays(30)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60', [now()->subDays(30)->toDateString(), now()->subDays(60)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90', [now()->subDays(60)->toDateString(), now()->subDays(90)->toDateString()])
-            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus', [now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30', [$now, app(CompanyClock::class)->now()->subDays(30)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60', [app(CompanyClock::class)->now()->subDays(30)->toDateString(), app(CompanyClock::class)->now()->subDays(60)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90', [app(CompanyClock::class)->now()->subDays(60)->toDateString(), app(CompanyClock::class)->now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus', [app(CompanyClock::class)->now()->subDays(90)->toDateString()])
             ->first();
 
         $invoices = Invoice::where('company_id', $company->id)
@@ -416,12 +417,9 @@ class CustomerController extends Controller
         $params = array_merge($request->validated(), ['id' => $customer->id]);
         $result = $commandBus->dispatch('customer.update', $params, $request->user());
 
-        // A fuel station keeps one customer page (the fuel one); saving details returns there.
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || $company->industry_code === 'fuel_station' || $company->industry === 'fuel_station';
-        if ($isFuelStation) {
-            return redirect()->route('fuel.credit-customers.show', ['company' => $company->slug, 'customer' => $customer->id])
-                ->with('success', 'Customer updated');
+        // A module that keeps its own customer page (fuel station) gets saving details returned to it.
+        if ($url = app(\App\Modules\Accounting\Extensions\CustomerPages::class)->afterSaveUrl($company, $customer)) {
+            return redirect($url)->with('success', 'Customer updated');
         }
 
         return redirect()
@@ -571,6 +569,8 @@ class CustomerController extends Controller
 
             $customer = Customer::find($result['data']['id']);
 
+            $advanceSection = app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->customerAdvanceFor($company);
+
             if ($owed > 0) {
                 try {
                     $commandBus->dispatch('opening_balance.set_party', [
@@ -580,20 +580,23 @@ class CustomerController extends Controller
                         'as_of_date' => $openingDate,
                     ], $user);
                 } catch (ValidationException $e) {
-                    throw $this->remapOpeningError($e, 'opening_owed');
+                    throw $this->remapOpeningError($e, 'opening_owed', $advanceSection?->key());
                 }
             }
 
             if ($advance > 0) {
+                if (! $advanceSection) {
+                    throw ValidationException::withMessages(['opening_advance' => 'Advances are not available for this company.']);
+                }
                 try {
                     $commandBus->dispatch('opening_balance.set_party', [
-                        'section' => 'amanat',
+                        'section' => $advanceSection->key(),
                         'party_id' => $customer->id,
                         'amount' => $advance,
                         'as_of_date' => $openingDate,
                     ], $user);
                 } catch (ValidationException $e) {
-                    throw $this->remapOpeningError($e, 'opening_advance');
+                    throw $this->remapOpeningError($e, 'opening_advance', $advanceSection->key());
                 }
             }
 
@@ -614,19 +617,19 @@ class CustomerController extends Controller
 
     /**
      * opening_balance.set_party's errors are keyed for its own params (amount, as_of_date,
-     * party_id, or whatever SaveAction itself threw against, e.g. 'amanat' when account 2200
-     * is missing). Quick Add's form has none of those fields — it has opening_owed,
+     * party_id, or whatever SaveAction itself threw against under the section's own key, e.g.
+     * a module section whose account is missing). Quick Add's form has none of those fields — it has opening_owed,
      * opening_advance and opening_date — so a validation failure has to be re-keyed onto the
      * field the user actually sees, or the message lands nowhere on screen.
      */
-    private function remapOpeningError(ValidationException $e, string $amountField): ValidationException
+    private function remapOpeningError(ValidationException $e, string $amountField, ?string $sectionKey = null): ValidationException
     {
         $remapped = [];
         foreach ($e->errors() as $key => $messages) {
-            $target = match ($key) {
-                'amount' => $amountField,
-                'as_of_date' => 'opening_date',
-                'amanat' => 'opening_advance',
+            $target = match (true) {
+                $key === 'amount' => $amountField,
+                $key === 'as_of_date' => 'opening_date',
+                $sectionKey !== null && $key === $sectionKey => 'opening_advance',
                 default => 'opening_owed',
             };
             $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);

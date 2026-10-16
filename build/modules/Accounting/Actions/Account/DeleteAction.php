@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -140,6 +140,16 @@ class DeleteAction implements PaletteAction
 
         return [
             'message' => "Account {$account->code} deleted",
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete an account',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Account'],
+            ],
         ];
     }
 }

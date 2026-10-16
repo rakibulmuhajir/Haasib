@@ -8,7 +8,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Facades\CompanyContext;
 
-class AssignPermissionAction implements PaletteAction
+class AssignPermissionAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -43,5 +43,10 @@ class AssignPermissionAction implements PaletteAction
                 'permission' => $permission->name,
             ],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Give a role a permission'];
     }
 }

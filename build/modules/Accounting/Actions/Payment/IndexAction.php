@@ -12,7 +12,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -119,5 +119,16 @@ class IndexAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'List customer payments',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

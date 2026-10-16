@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -102,6 +102,17 @@ class UpdateAction implements PaletteAction
         return [
             'message' => "Account {$account->code} updated",
             'data' => ['id' => $account->id],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update an account',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Account'],
+                'parent_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Parent account'],
+            ],
         ];
     }
 }

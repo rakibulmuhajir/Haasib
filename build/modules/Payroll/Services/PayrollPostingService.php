@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
@@ -388,7 +389,7 @@ class PayrollPostingService
         if ($netPay <= 0) {
             $payslip->update([
                 'status' => 'paid',
-                'paid_at' => now()->toDateString(),
+                'paid_at' => app(CompanyClock::class)->today(),
                 'payment_method' => $payslip->payment_method ?? 'cash',
             ]);
 
@@ -404,7 +405,7 @@ class PayrollPostingService
         $subtype = Account::where('company_id', $payslip->company_id)->whereKey($accountId)->value('subtype');
 
         $this->markPaid($payslip, [
-            'paid_on' => now()->toDateString(),
+            'paid_on' => app(CompanyClock::class)->today(),
             'payment_account_id' => $accountId,
             'payment_method' => $subtype === 'cash' ? 'cash' : 'bank_transfer',
         ], $userId);
@@ -576,7 +577,7 @@ class PayrollPostingService
                     ->find($payslip->payment_gl_transaction_id);
             }
 
-            $paidOn = $data['paid_on'] ?? now()->toDateString();
+            $paidOn = $data['paid_on'] ?? app(CompanyClock::class)->today();
 
             app(DocumentDateLock::class)
                 ->assertOpen($payslip->company_id, $paidOn, 'This payment');
@@ -658,7 +659,7 @@ class PayrollPostingService
 
             $paymentDate = optional($payslip->paid_at)->toDateString()
                 ?? $transaction->date?->toDateString()
-                ?? now()->toDateString();
+                ?? app(CompanyClock::class)->today();
 
             app(DocumentDateLock::class)
                 ->assertOpen($payslip->company_id, $paymentDate, 'This payment');
@@ -717,7 +718,7 @@ class PayrollPostingService
                 if ($transaction && ! $transaction->reversed_by_id) {
                     $accrualDate = optional($transaction->transaction_date)->toDateString()
                         ?? optional($payslip->payrollPeriod?->period_end)->toDateString()
-                        ?? now()->toDateString();
+                        ?? app(CompanyClock::class)->today();
 
                     app(DocumentDateLock::class)->assertOpen($payslip->company_id, $accrualDate, 'This payslip');
 

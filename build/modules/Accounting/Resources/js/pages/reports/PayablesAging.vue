@@ -72,7 +72,7 @@ const openVendor = (row: Row) => {
 }
 
 const columns: RegisterColumn<Row>[] = [
-  { key: 'vendor_name', label: 'Supplier', kind: 'text' },
+  { key: 'vendor_name', label: 'Vendor', kind: 'text' },
   { key: 'current', label: 'Not yet due', kind: 'amount' },
   { key: 'd1_30', label: '1–30 days', kind: 'amount' },
   { key: 'd31_60', label: '31–60 days', kind: 'amount' },
@@ -101,7 +101,7 @@ const overdueTotal = computed(() =>
 
   <PageShell
     title="What We Owe"
-    description="Unpaid supplier bills, and how long they have been due."
+    description="Unpaid vendor bills, and how long they have been due."
     :breadcrumbs="breadcrumbs"
   >
     <div class="mx-auto w-full max-w-6xl space-y-6">
@@ -132,7 +132,7 @@ const overdueTotal = computed(() =>
           </CardContent>
         </Card>
         <Card variant="figure">
-          <CardHeader><CardTitle>Suppliers unpaid</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Vendors unpaid</CardTitle></CardHeader>
           <CardContent>
             <CardFigure>{{ report.vendor_count }}</CardFigure>
           </CardContent>
@@ -145,12 +145,12 @@ const overdueTotal = computed(() =>
         key-field="vendor_id"
         clickable
         title="Balances by age"
-        description="Aged from the due date, worst first. Click a supplier for their statement."
+        description="Aged from the due date, worst first. Click a vendor for their statement."
         :totals="totals"
         totals-label="Total"
         @row-click="openVendor"
       >
-        <template #empty>Nothing owed to suppliers at this date.</template>
+        <template #empty>Nothing owed to vendors at this date.</template>
 
         <template #cell-vendor_name="{ row }">
           <span>{{ row.vendor_name }}</span>

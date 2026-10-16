@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Models\CompanyOnboarding;
 use App\Modules\Accounting\Models\Account;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Accounting\Services\PostingTemplateInstaller;
 use Illuminate\Support\Facades\Schema;
+use App\Support\Modules\ModuleRegistry;
 
 /**
  * Company Onboarding Service
@@ -69,7 +71,7 @@ class CompanyOnboardingService
                 'timezone' => $data['timezone'] ?? 'UTC',
             ]);
 
-            $this->enableModulesForIndustry($company, $industryCode);
+            app(ModuleRegistry::class)->applyIndustry($company, $industryCode);
 
             // Create industry-specific chart of accounts (idempotent)
             $this->createIndustryChartOfAccounts($company, $industryCode);
@@ -81,19 +83,6 @@ class CompanyOnboardingService
 
             return $company->fresh();
         });
-    }
-
-    private function enableModulesForIndustry(Company $company, string $industryCode): void
-    {
-        if ($industryCode === 'fuel_station') {
-            $company->enableModule('fuel_station');
-        }
-
-        if (in_array($industryCode, ['umrah', 'travel'], true)) {
-            $company->enableModule('umrah');
-            $company->disableModule('fuel_station');
-            $company->disableModule('inventory');
-        }
     }
 
     /**
@@ -129,10 +118,11 @@ class CompanyOnboardingService
 
             // Determine fiscal year dates
             $startMonth = $data['fiscal_year_start_month'];
-            $currentYear = now()->year;
+            $localNow = app(CompanyClock::class)->now($company);
+            $currentYear = $localNow->year;
 
             // If we're past the fiscal start month, use current year; otherwise previous year
-            $fiscalStartYear = now()->month >= $startMonth ? $currentYear : $currentYear - 1;
+            $fiscalStartYear = $localNow->month >= $startMonth ? $currentYear : $currentYear - 1;
 
             $startDate = \Carbon\Carbon::create($fiscalStartYear, $startMonth, 1);
             $endDate = $startDate->copy()->addYear()->subDay();
@@ -145,7 +135,7 @@ class CompanyOnboardingService
             // Create the first fiscal year
             $fiscalYear = FiscalYear::create([
                 'company_id' => $company->id,
-                'name' => "FY {$startDate->format('Y')}-{$endDate->format('Y')}",
+                'name' => FiscalYear::labelFor($startDate, $endDate),
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'is_current' => true,
@@ -243,11 +233,11 @@ class CompanyOnboardingService
             $onboarding->completeStep('bank-accounts');
             $onboarding->advanceToStep('default-accounts', 4);
 
-            if ($company->industry_code === 'fuel_station') {
-                app(\App\Modules\FuelStation\Services\FuelStationOnboardingService::class)
-                    ->configureAutomaticAccounts($company->fresh(), $syncIds);
-                $onboarding->completeStep('default-accounts');
-                $onboarding->advanceToStep('tax-settings', 5);
+            foreach (app(ModuleRegistry::class)->forIndustry($company->industry_code) as $module) {
+                if ($module->afterBankAccounts($company, $syncIds)) {
+                    $onboarding->completeStep('default-accounts');
+                    $onboarding->advanceToStep('tax-settings', 5);
+                }
             }
 
             return $createdAccounts;

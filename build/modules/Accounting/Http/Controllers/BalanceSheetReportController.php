@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Services\BalanceSheetReportService;
@@ -14,7 +15,7 @@ class BalanceSheetReportController extends Controller
     public function index(Request $request): Response
     {
         $company = CompanyContext::getCompany();
-        $asOf = $request->query('as_of') ?? now()->toDateString();
+        $asOf = $request->query('as_of') ?? app(CompanyClock::class)->today();
 
         $evidence = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
         $includeTrail = $evidence->available($request->user()) && $request->header('X-Inertia-Partial-Component') === 'accounting/reports/BalanceSheet' && in_array('valueTrail', explode(',', $request->header('X-Inertia-Partial-Data', '')), true);

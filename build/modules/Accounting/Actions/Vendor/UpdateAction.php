@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Support\Facades\Auth;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     use ResolvesVendors;
 
@@ -130,6 +130,18 @@ class UpdateAction implements PaletteAction
             'data' => [
                 'id' => $vendor->id,
                 'changes' => $changes,
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update a vendor',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'payment_terms' => ['hint' => 'Days to pay'],
+                'ap_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Payables account'],
             ],
         ];
     }

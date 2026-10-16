@@ -1,0 +1,129 @@
+<?php
+
+namespace App\Modules\FuelStation\Console;
+
+use App\Models\Company;
+use App\Modules\Accounting\Models\Transaction;
+use App\Services\CompanyContextService;
+use App\Support\CompanyClock;
+use Carbon\Carbon;
+use Illuminate\Console\Command;
+
+class LockMonthlyDailyCloses extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'fuel:lock-month-closes
+        {--month= : The month to lock (1-12). Defaults to previous month}
+        {--year= : The year. Defaults to current year or previous year if locking December in January}
+        {--company= : Lock for a specific company ID only}
+        {--dry-run : Show what would be locked without actually locking}';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Lock all daily close entries for a given month to prevent amendments';
+
+    /**
+     * Execute the console command.
+     */
+    public function handle(CompanyContextService $context): int
+    {
+        // "Previous month" is the company's own calendar month: at 00:30 on the 1st in Karachi it is
+        // still the last day of the month in UTC. Explicit --month/--year win for every company.
+        $monthOption = $this->option('month') ? (int) $this->option('month') : null;
+        $yearOption = $this->option('year') ? (int) $this->option('year') : null;
+
+        $rangeFor = function (?Company $company) use ($monthOption, $yearOption): array {
+            $now = app(CompanyClock::class)->now($company);
+            $month = $monthOption ?? $now->subMonthNoOverflow()->month;
+            $year = $yearOption;
+
+            if ($year === null) {
+                // If we're in January and locking "previous month", that means December of last year
+                $year = ($now->month === 1 && $monthOption === null) ? $now->year - 1 : $now->year;
+            }
+
+            $start = Carbon::create($year, $month, 1)->startOfMonth();
+
+            return [$start, $start->copy()->endOfMonth()];
+        };
+
+        [$startDate] = $rangeFor(null);
+        $monthName = $monthOption === null ? 'the previous month' : $startDate->format('F Y');
+
+        $isDryRun = $this->option('dry-run');
+        $companyId = $this->option('company');
+
+        $this->info("Processing daily closes for {$monthName}");
+        if ($isDryRun) {
+            $this->warn('DRY RUN - No changes will be made');
+        }
+        $this->newLine();
+
+        // Get companies to process
+        $companiesQuery = Company::query();
+        if ($companyId) {
+            $companiesQuery->where('id', $companyId);
+        }
+
+        // Only process companies with fuel_station industry
+        $companiesQuery->where('industry', 'fuel_station');
+
+        // auth.companies is tenant-scoped under row level security; enumerating
+        // every company is exactly the cross-company work the escape hatch is for.
+        $companies = $context->crossCompany(fn () => $companiesQuery->get());
+
+        if ($companies->isEmpty()) {
+            $this->warn('No fuel station companies found to process.');
+            return 0;
+        }
+
+        $totalLocked = 0;
+        $this->withProgressBar($companies, function ($company) use ($context, $rangeFor, $isDryRun, &$totalLocked) {
+            // Without company context the UPDATE below matches nothing and
+            // reports success, which reads exactly like "there was nothing to lock".
+            $context->withContext($company, function () use ($company, $rangeFor, $isDryRun, &$totalLocked) {
+                [$startDate, $endDate] = $rangeFor($company);
+
+                $query = Transaction::where('company_id', $company->id)
+                    ->where('transaction_type', 'fuel_daily_close')
+                    ->whereBetween('transaction_date', [$startDate, $endDate])
+                    ->where('is_locked', false)
+                    ->whereNull('reversed_by_id')
+                    ->whereNull('deleted_at');
+
+                $count = $query->count();
+
+                if ($count === 0) {
+                    return;
+                }
+
+                if (! $isDryRun) {
+                    $query->update([
+                        'is_locked' => true,
+                        'locked_at' => now(),
+                        'lock_reason' => 'month_end',
+                    ]);
+                }
+
+                $totalLocked += $count;
+            });
+        });
+
+        $this->newLine(2);
+
+        if ($isDryRun) {
+            $this->info("Would lock {$totalLocked} daily close entries for {$monthName}");
+        } else {
+            $this->info("Locked {$totalLocked} daily close entries for {$monthName}");
+        }
+
+        return 0;
+    }
+}

@@ -9,7 +9,7 @@ use App\Services\CurrentCompany;
 use Illuminate\Auth\Access\AuthorizationException;
 
 /** calculator.delete -- remove a formula; only the person who made it can. */
-class DeleteCalculatorFormulaAction implements PaletteAction
+class DeleteCalculatorFormulaAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
     {
@@ -33,5 +33,10 @@ class DeleteCalculatorFormulaAction implements PaletteAction
         $formula->delete();
 
         return ['message' => 'Formula deleted.'];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

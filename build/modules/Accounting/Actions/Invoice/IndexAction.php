@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
@@ -10,7 +11,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -61,7 +62,7 @@ class IndexAction implements PaletteAction
             $query->where('status', '!=', 'paid')
                   ->where('status', '!=', 'cancelled')
                   ->where('status', '!=', 'draft')
-                  ->where('due_date', '<', now()->startOfDay());
+                  ->where('due_date', '<', app(CompanyClock::class)->today());
         }
 
         // Customer filter
@@ -112,7 +113,7 @@ class IndexAction implements PaletteAction
             'cancelled',
             'void',
             'draft',
-        ]) && $invoice->due_date->isPast();
+        ]) && $invoice->due_date->toDateString() < app(CompanyClock::class)->today();
 
         if ($isOverdue) {
             return '{error}⚠ Overdue{/}';
@@ -130,5 +131,15 @@ class IndexAction implements PaletteAction
             'cancelled' => '{secondary}✗ Cancelled{/}',
             default => $invoice->status,
         };
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'List invoices',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

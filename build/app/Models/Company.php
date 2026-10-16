@@ -215,6 +215,27 @@ class Company extends Model
         return (bool) ($modules[$moduleKey] ?? ($defaults[$moduleKey] ?? false));
     }
 
+    /**
+     * Whether an industry module is on for this company: its settings flag, or an
+     * industry that implies it. Use this, never industry_code comparisons.
+     */
+    public function hasModule(string $moduleKey): bool
+    {
+        return app(\App\Support\Modules\ModuleRegistry::class)->get($moduleKey)?->isEnabledFor($this) ?? $this->isModuleEnabled($moduleKey);
+    }
+
+    /** Whether any enabled module declares $capability, e.g. 'daily_close'. */
+    public function capable(string $capability): bool
+    {
+        foreach (app(\App\Support\Modules\ModuleRegistry::class)->enabledFor($this) as $manifest) {
+            if (in_array($capability, $manifest->capabilities(), true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function enableModule(string $moduleKey): void
     {
         $settings = (array) ($this->settings ?? []);

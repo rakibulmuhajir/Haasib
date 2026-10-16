@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import Hint from '@/components/Hint.vue'
 import ValueTrailPanel from '@/components/ValueTrailPanel.vue'
 import { useValueTrail } from '@/composables/useValueTrail'
+import { useModules } from '@/composables/useModules'
 import type { ValueTrail } from '@/types/valueTrail'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
@@ -92,6 +93,7 @@ const equityLines = computed<Line[]>(() => [
     amount: props.report.retained_earnings,
   },
 ])
+const { has: hasModule } = useModules()
 </script>
 
 <template>
@@ -165,7 +167,7 @@ const equityLines = computed<Line[]>(() => [
         key-field="id"
         clickable
         title="Assets"
-        description="What the business owns — cash, stock in the tanks, money owed to it."
+        :description="hasModule('fuel_station') ? 'What the business owns — cash, stock in the tanks, money owed to it.' : 'What the business owns — cash, stock, money owed to it.'"
         :totals="{ amount: report.totals.assets }"
         totals-label="Total assets"
         @row-click="openAccount"
@@ -185,7 +187,7 @@ const equityLines = computed<Line[]>(() => [
         key-field="id"
         clickable
         title="Liabilities"
-        description="What the business owes — the supplier, the bank, wages not yet paid."
+        description="What the business owes — the vendor, the bank, wages not yet paid."
         :totals="{ amount: report.totals.liabilities }"
         totals-label="Total liabilities"
         @row-click="openAccount"

@@ -1,4 +1,5 @@
 import '../css/app.css'
+import './extensions'
 
 import { createInertiaApp } from '@inertiajs/vue3'
 import type { DefineComponent } from 'vue'

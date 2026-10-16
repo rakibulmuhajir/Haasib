@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
  * is posted -- a supplier payment always debits payables, whichever bill it is applied to; an
  * advance is simply the part of a payment no bill holds (see BillCorrectionService).
  */
-class UnapplyPaymentAction implements PaletteAction
+class UnapplyPaymentAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -63,5 +63,15 @@ class UnapplyPaymentAction implements PaletteAction
                 'data' => ['id' => $bill->id, 'amount' => round($amount, 2)],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Unlink a payment from a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+            ],
+        ];
     }
 }

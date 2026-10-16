@@ -37,7 +37,9 @@ export function getHelp(topic?: string): string {
 
   // Help for entity.verb
   if (topicLower.includes('.')) {
-    const [entity, verb] = topicLower.split('.')
+    const dot = topicLower.lastIndexOf('.')
+    const entity = topicLower.slice(0, dot)
+    const verb = topicLower.slice(dot + 1)
     if (GRAMMAR[entity]) {
       return getVerbHelp(entity, verb)
     }

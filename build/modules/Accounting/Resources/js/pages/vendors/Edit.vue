@@ -110,10 +110,10 @@ const handleSubmit = () => {
           <InputError :message="form.errors.phone" />
         </div>
         <div>
-          <Label for="vendor_type">Supplier Type</Label>
+          <Label for="vendor_type">Vendor Type</Label>
           <Select v-model="form.vendor_type">
             <SelectTrigger id="vendor_type">
-              <SelectValue placeholder="Select supplier type" />
+              <SelectValue placeholder="Select vendor type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem v-for="(label, value) in vendorTypes" :key="value" :value="value">

@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Models;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Transaction;
@@ -92,7 +93,7 @@ class RateChange extends Model
      */
     public static function getCurrentRate(string $companyId, string $itemId): ?self
     {
-        return static::getRateForDate($companyId, $itemId, now()->toDateString());
+        return static::getRateForDate($companyId, $itemId, app(CompanyClock::class)->today());
     }
 
     /**

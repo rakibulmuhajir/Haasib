@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Payroll\Models\TimeEntry;
@@ -19,7 +20,7 @@ class StoreTimeEntryRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'work_date' => 'required|date|before_or_equal:today',
+            'work_date' => 'required|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'hours' => 'required|numeric|gt:0|max:24',
             'notes' => 'nullable|string|max:255',
         ];

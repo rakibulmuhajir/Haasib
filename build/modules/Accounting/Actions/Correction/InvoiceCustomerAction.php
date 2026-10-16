@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\CorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Moves an invoice to the customer it really belongs to. See CorrectionService. */
-class InvoiceCustomerAction implements PaletteAction
+class InvoiceCustomerAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -39,5 +39,10 @@ class InvoiceCustomerAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

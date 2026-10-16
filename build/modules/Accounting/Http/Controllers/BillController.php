@@ -218,21 +218,7 @@ class BillController extends Controller
         // grid to do, so the short form is the whole job.
         $hasInventoryItems = $inventoryEnabled && count($items) > 0;
         if (! $hasInventoryItems) {
-            $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
-                || ($company->industry ?? null) === 'fuel_station'
-                || $company->isModuleEnabled('fuel_station');
-
-            $defaultExpenseAccountId = $isFuelStation
-                ? (Account::where('company_id', $company->id)
-                    ->where('code', '1200')
-                    ->where('is_active', true)
-                    ->value('id')
-                    ?? Account::where('company_id', $company->id)
-                        ->where('subtype', 'inventory')
-                        ->where('is_active', true)
-                        ->orderBy('code')
-                        ->value('id'))
-                : null;
+            $defaultExpenseAccountId = app(\App\Modules\Accounting\Extensions\BillDefaults::class)->lineAccountId($company);
 
             return Inertia::render('accounting/bills/QuickCreate', [
                 'company' => [
@@ -252,21 +238,7 @@ class BillController extends Controller
             ]);
         }
 
-        $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
-            || ($company->industry ?? null) === 'fuel_station'
-            || $company->isModuleEnabled('fuel_station');
-
-        $defaultExpenseAccountId = $isFuelStation
-            ? (Account::where('company_id', $company->id)
-                ->where('code', '1200')
-                ->where('is_active', true)
-                ->value('id')
-                ?? Account::where('company_id', $company->id)
-                    ->where('subtype', 'inventory')
-                    ->where('is_active', true)
-                    ->orderBy('code')
-                    ->value('id'))
-            : null;
+        $defaultExpenseAccountId = app(\App\Modules\Accounting\Extensions\BillDefaults::class)->lineAccountId($company);
 
         return Inertia::render('accounting/bills/Create', [
             'company' => [
@@ -737,7 +709,7 @@ class BillController extends Controller
                 ...$validated,
             ], $request->user());
 
-            return back()->with('success', $result['message'] ?? 'Supplier claim received');
+            return back()->with('success', $result['message'] ?? 'Vendor claim received');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()
                 ->back()

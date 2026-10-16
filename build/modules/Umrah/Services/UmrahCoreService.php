@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
@@ -1167,7 +1168,7 @@ class UmrahCoreService
         if ((float) $voucher->hotel_sale_amount > 0) {
             $transaction = $this->glPostingService->postBalancedTransaction([
                 'company_id' => $group->company_id, 'transaction_number' => $this->transactionNumber('UHS', $voucher->id),
-                'transaction_type' => 'umrah_hotel_sale', 'date' => Carbon::today(), 'currency' => $company->base_currency, 'base_currency' => $company->base_currency,
+                'transaction_type' => 'umrah_hotel_sale', 'date' => Carbon::parse(app(CompanyClock::class)->today()), 'currency' => $company->base_currency, 'base_currency' => $company->base_currency,
                 'description' => "Hotel sale: {$voucher->voucher_number}", 'reference_type' => 'umrah.vouchers', 'reference_id' => $voucher->id,
                 'metadata' => ['agent_id' => $group->agent_id, 'visa_group_id' => $group->id, 'voucher_number' => $voucher->voucher_number],
             ], [
@@ -1179,7 +1180,7 @@ class UmrahCoreService
         if ((float) $voucher->hotel_cost_amount > 0) {
             $transaction = $this->glPostingService->postBalancedTransaction([
                 'company_id' => $group->company_id, 'transaction_number' => $this->transactionNumber('UHC', $voucher->id),
-                'transaction_type' => 'umrah_hotel_cost', 'date' => Carbon::today(), 'currency' => $company->base_currency, 'base_currency' => $company->base_currency,
+                'transaction_type' => 'umrah_hotel_cost', 'date' => Carbon::parse(app(CompanyClock::class)->today()), 'currency' => $company->base_currency, 'base_currency' => $company->base_currency,
                 'description' => "Hotel cost: {$voucher->voucher_number}", 'reference_type' => 'umrah.vouchers', 'reference_id' => $voucher->id,
                 'metadata' => ['agent_id' => $group->agent_id, 'visa_group_id' => $group->id, 'voucher_number' => $voucher->voucher_number],
             ], [
@@ -1200,7 +1201,7 @@ class UmrahCoreService
         foreach ([$voucher->hotel_sale_transaction_id, $voucher->hotel_cost_transaction_id] as $transactionId) {
             $transaction = $transactionId ? Transaction::where('company_id', $voucher->company_id)->find($transactionId) : null;
             if ($transaction) {
-                $this->postingService->reverseTransaction($transaction, $reason, Carbon::today());
+                $this->postingService->reverseTransaction($transaction, $reason, Carbon::parse(app(CompanyClock::class)->today()));
             }
         }
         $group->update([
@@ -1226,7 +1227,7 @@ class UmrahCoreService
                 $groupIds[] = $allocation->visa_group_id;
             }
             $transaction = $payment->transaction_id ? Transaction::find($payment->transaction_id) : null;
-            $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
+            $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::parse(app(CompanyClock::class)->today())) : null;
             $payment->update(['status' => GroupPayment::STATUS_REVERSED, 'reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
             VisaGroup::where('company_id', $payment->company_id)->whereIn('id', array_unique($groupIds))->get()
                 ->each(fn (VisaGroup $group) => $this->recalculateGroup($group));
@@ -1256,7 +1257,7 @@ class UmrahCoreService
     private function reverseAllocationEntry(PaymentAllocation $allocation, string $reason, ?string $userId): void
     {
         $transaction = $allocation->transaction_id ? Transaction::find($allocation->transaction_id) : null;
-        $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
+        $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::parse(app(CompanyClock::class)->today())) : null;
         $allocation->update(['reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
     }
 
@@ -1661,7 +1662,7 @@ class UmrahCoreService
         }
 
         $birthDate = Carbon::parse($dateOfBirth)->startOfDay();
-        $referenceDate = empty($travelDate) ? now()->startOfDay() : Carbon::parse($travelDate)->startOfDay();
+        $referenceDate = empty($travelDate) ? Carbon::parse(app(CompanyClock::class)->today()) : Carbon::parse($travelDate)->startOfDay();
         $age = $birthDate->diffInYears($referenceDate);
 
         if ($age < 12) {
@@ -1744,7 +1745,7 @@ class UmrahCoreService
             'company_id' => $group->company_id,
             'transaction_number' => $this->transactionNumber('UVS', $group->id),
             'transaction_type' => 'umrah_group_sale',
-            'date' => Carbon::today(),
+            'date' => Carbon::parse(app(CompanyClock::class)->today()),
             'currency' => $company->base_currency,
             'base_currency' => $company->base_currency,
             'description' => "Umrah group sale: {$group->group_number} - {$group->name}",
@@ -1808,7 +1809,7 @@ class UmrahCoreService
             'company_id' => $group->company_id,
             'transaction_number' => $this->transactionNumber('UVC', $group->id),
             'transaction_type' => 'umrah_visa_cost',
-            'date' => Carbon::today(),
+            'date' => Carbon::parse(app(CompanyClock::class)->today()),
             'currency' => $company->base_currency,
             'base_currency' => $company->base_currency,
             'description' => "Umrah visa cost: {$group->group_number} - {$group->name}",
@@ -2016,7 +2017,7 @@ class UmrahCoreService
             'company_id' => $group->company_id,
             'transaction_number' => $this->transactionNumber($prefix, (string) Str::uuid()),
             'transaction_type' => $type,
-            'date' => Carbon::today(),
+            'date' => Carbon::parse(app(CompanyClock::class)->today()),
             'currency' => $company->base_currency,
             'base_currency' => $company->base_currency,
             'description' => "{$reason}: {$group->group_number}",
@@ -2288,7 +2289,7 @@ class UmrahCoreService
             'agent_id' => $refund->party_id,
             'direction' => GroupPayment::DIRECTION_RECEIVED,
             'payment_number' => $this->nextPaymentNumber($refund->company_id),
-            'payment_date' => now()->toDateString(),
+            'payment_date' => app(CompanyClock::class)->today(),
             'amount' => $refund->amount,
             'currency' => $refund->currency,
             'exchange_rate' => $refund->exchange_rate,

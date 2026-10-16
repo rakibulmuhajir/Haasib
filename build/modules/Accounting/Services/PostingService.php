@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
@@ -35,7 +36,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $template = $this->resolveTemplate($company->id, 'AR_INVOICE', $invoice->invoice_date ?? now());
+        $template = $this->resolveTemplate($company->id, 'AR_INVOICE', $invoice->invoice_date ?? app(CompanyClock::class)->today($company));
 
         $transactionDate = $invoice->invoice_date ?? now();
         $period = $this->resolveOpenPeriod($company->id, $transactionDate);
@@ -85,7 +86,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $this->resolveTemplate($company->id, 'AR_PAYMENT', $payment->payment_date ?? now());
+        $this->resolveTemplate($company->id, 'AR_PAYMENT', $payment->payment_date ?? app(CompanyClock::class)->today($company));
 
         $transactionDate = $payment->payment_date ?? now();
         $period = $this->resolveOpenPeriod($company->id, $transactionDate);
@@ -151,7 +152,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $template = $this->resolveTemplate($company->id, 'AP_BILL', $bill->bill_date ?? now());
+        $template = $this->resolveTemplate($company->id, 'AP_BILL', $bill->bill_date ?? app(CompanyClock::class)->today($company));
 
         $transactionDate = $bill->bill_date ?? now();
         $period = $this->resolveOpenPeriod($company->id, $transactionDate);
@@ -201,7 +202,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $this->resolveTemplate($company->id, 'AP_PAYMENT', $payment->payment_date ?? now());
+        $this->resolveTemplate($company->id, 'AP_PAYMENT', $payment->payment_date ?? app(CompanyClock::class)->today($company));
 
         $transactionDate = $payment->payment_date ?? now();
         $period = $this->resolveOpenPeriod($company->id, $transactionDate);
@@ -270,7 +271,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $template = $this->resolveTemplate($company->id, 'AR_CREDIT_NOTE', $creditNote->credit_date ?? now());
+        $template = $this->resolveTemplate($company->id, 'AR_CREDIT_NOTE', $creditNote->credit_date ?? app(CompanyClock::class)->today($company));
         $roleAccounts = $this->roleAccounts($template);
 
         $arAccountId = $creditNote->customer?->ar_account_id ?? $roleAccounts['AR'] ?? null;
@@ -345,7 +346,7 @@ class PostingService
         }
 
         $this->templateInstaller->ensureDefaults($company);
-        $template = $this->resolveTemplate($company->id, 'AP_VENDOR_CREDIT', $credit->credit_date ?? now());
+        $template = $this->resolveTemplate($company->id, 'AP_VENDOR_CREDIT', $credit->credit_date ?? app(CompanyClock::class)->today($company));
         $roleAccounts = $this->roleAccounts($template);
 
         $apAccountId = $credit->vendor?->ap_account_id ?? $roleAccounts['AP'] ?? null;

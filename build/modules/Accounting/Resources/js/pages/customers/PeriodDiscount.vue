@@ -15,8 +15,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useFormFeedback } from '@/composables/useFormFeedback';
 import { useLexicon } from '@/composables/useLexicon';
+import { useModules } from '@/composables/useModules';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+
+const { has } = useModules();
 
 const props = defineProps<{
     company: { slug: string; name: string; base_currency: string };
@@ -158,7 +161,7 @@ const breadcrumbs = computed(() => [
                             <SelectItem value="fixed">Manual amount</SelectItem
                             ><SelectItem value="percent"
                                 >Percentage of eligible sales</SelectItem
-                            ><SelectItem value="per_litre"
+                            ><SelectItem v-if="has('fuel_station')" value="per_litre"
                                 >Amount per litre of fuel</SelectItem
                             >
                         </SelectContent></Select
@@ -246,7 +249,7 @@ const breadcrumbs = computed(() => [
             <p class="text-sm text-muted-foreground">
                 Sales already discounted, credited, taxed, or recorded in
                 another currency are excluded. Posting creates one separate
-                credit; original invoices and fuel quantities stay unchanged.
+                credit; original invoices and quantities stay unchanged.
             </p>
             <p v-if="!ready" class="text-sm text-muted-foreground">
                 Preview again to confirm the current figures.

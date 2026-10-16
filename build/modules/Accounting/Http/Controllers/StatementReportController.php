@@ -2,9 +2,11 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Partner;
+use App\Modules\Accounting\Extensions\StatementKinds;
 use App\Modules\Accounting\Http\Requests\StatementReportRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
@@ -14,7 +16,6 @@ use App\Modules\Accounting\Services\AccountStatementService;
 use App\Modules\Accounting\Services\CustomerStatementService;
 use App\Modules\Accounting\Services\PartnerStatementService;
 use App\Modules\Accounting\Services\VendorStatementService;
-use App\Modules\FuelStation\Services\AmanatStatementService;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,7 +44,8 @@ class StatementReportController extends Controller
         $ids = array_values(array_filter(explode(',', (string) $request->validated('ids'))));
         $this->showReversed = (bool) $request->validated('reversed');
         $evidence = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
-        $available = in_array($kind, ['bank', 'customer', 'supplier', 'partner', 'expense', 'employee', 'amanat'], true) && $evidence->available($request->user());
+        $kinds = app(StatementKinds::class)->availableFor($company);
+        $available = in_array($kind, ['bank', 'customer', 'supplier', 'partner', 'expense', 'employee', ...array_keys($kinds)], true) && $evidence->available($request->user());
         $this->includeTrail = $available && $request->header('X-Inertia-Partial-Component') === 'accounting/reports/Statement' && in_array('valueTrail', explode(',', $request->header('X-Inertia-Partial-Data', '')), true);
         $categoryId = $kind === 'customer' ? $request->validated('category_id') : null;
 
@@ -53,12 +55,9 @@ class StatementReportController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
-        // Amanat holders get their own list: their movements are deposits held for them, not
-        // invoices and payments. A holder who also buys on credit stays under Customer too.
-        $holderIds = DB::table('fuel.customer_profiles')
-            ->where('company_id', $company->id)
-            ->where('is_amanat_holder', true)
-            ->pluck('is_credit_customer', 'customer_id');
+        // Modules can add statement kinds (and hide their parties from Customer): see StatementKinds.
+        $extraOptions = collect($kinds)->map(fn ($k) => $k->options($company));
+        $hidden = collect($kinds)->flatMap(fn ($k) => $k->hiddenCustomerIds($company))->all();
 
         $allCustomers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
@@ -66,9 +65,8 @@ class StatementReportController extends Controller
             ->get(['id', 'name', 'customer_number', 'category_id']);
 
         $customers = $allCustomers
-            ->reject(fn ($c) => $holderIds->has($c->id) && ! $holderIds[$c->id])
+            ->reject(fn ($c) => in_array($c->id, $hidden, true))
             ->values();
-        $holders = $allCustomers->filter(fn ($c) => $holderIds->has($c->id))->values();
 
         // Employees, when payroll is on: salary earned against advances and salary paid.
         $employees = $company->isModuleEnabled('payroll')
@@ -108,10 +106,11 @@ class StatementReportController extends Controller
             $statement['category_summary'] = $categorySummary;
         } elseif ($kind !== 'bank' && ($id === null || $id === 'all' || $ids)) {
             $pick = fn ($list) => $ids ? collect($list)->filter(fn ($p) => in_array(is_array($p) ? $p['id'] : $p->id, $ids, true))->values() : $list;
-            [$statement, $columns, $resolvedId] = match ($kind) {
+            [$statement, $columns, $resolvedId] = isset($kinds[$kind])
+                ? $this->allParties($pick($extraOptions[$kind]), fn ($pid) => $kinds[$kind]->statement($extraOptions[$kind], $pid, $from, $to, $this->includeTrail), $from, $to)
+                : match ($kind) {
                 'customer' => $this->allParties($pick($customers), fn ($pid) => $this->customerStatement($customers, $pid, $from, $to), $from, $to),
                 'supplier' => $this->allParties($pick($vendors), fn ($pid) => $this->supplierStatement($vendors, $pid, $from, $to), $from, $to),
-                'amanat' => $this->allParties($pick($holders), fn ($pid) => $this->amanatStatement($holders, $pid, $from, $to), $from, $to),
                 'employee' => $this->allParties($pick($employees), fn ($pid) => $this->employeeStatement($employees, $pid, $from, $to), $from, $to),
                 'expense' => $this->allParties($pick($expenseAccounts), fn ($pid) => $this->expenseStatement($expenseAccounts, $pid, $from, $to), $from, $to),
                 'partner' => $this->allParties($pick($partners), fn ($pid) => $this->partnerStatement($partners, $pid, $from, $to), $from, $to),
@@ -120,10 +119,11 @@ class StatementReportController extends Controller
                 $resolvedId = 'some';
             }
         } else {
-            [$statement, $columns, $resolvedId] = match ($kind) {
+            [$statement, $columns, $resolvedId] = isset($kinds[$kind])
+                ? $kinds[$kind]->statement($extraOptions[$kind], $id, $from, $to, $this->includeTrail)
+                : match ($kind) {
                 'customer' => $this->customerStatement($customers, $id, $from, $to),
                 'supplier' => $this->supplierStatement($vendors, $id, $from, $to),
-                'amanat' => $this->amanatStatement($holders, $id, $from, $to),
                 'employee' => $this->employeeStatement($employees, $id, $from, $to),
                 'expense' => $this->expenseStatement($expenseAccounts, $id, $from, $to),
                 'partner' => $this->partnerStatement($partners, $id, $from, $to),
@@ -149,10 +149,10 @@ class StatementReportController extends Controller
                 'bank' => $bankAccounts,
                 'customer' => $customers,
                 'supplier' => $vendors,
-                'amanat' => $holders,
                 'employee' => $employees->values(),
                 'expense' => $expenseAccounts,
                 'partner' => $partners->values(),
+                ...$extraOptions->all(),
                 'categories' => CustomerCategory::where('company_id', $company->id)->orderBy('name')->get(['id', 'name'])
                     ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
                 // Customer groups: the group and its members, to pick in one go.
@@ -165,10 +165,12 @@ class StatementReportController extends Controller
                         'member_ids' => [$parentId, ...$members->pluck('id')->all()],
                     ])->values(),
             ],
+            'extraKinds' => collect($kinds)->map(fn ($k) => ['key' => $k->key(), 'label' => $k->label(), 'party' => $k->partyLabel(), 'all' => $k->allLabel()])->values(),
+            'kindLinks' => app(StatementKinds::class)->links($company, $from, $to),
             'columns' => $columns,
             'statement' => $statement,
             // Customer statements only; a statement is a document the company issues, the rest are internal.
-            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement', true, $to ?: now()->toDateString()) : null,
+            'stamp' => $kind === 'customer' ? app(\App\Services\CompanyLetterhead::class)->stampFor($company, 'statement', true, $to ?: app(CompanyClock::class)->today()) : null,
         ]);
     }
 
@@ -396,24 +398,6 @@ class StatementReportController extends Controller
         }
 
         return [app(\App\Modules\Payroll\Services\EmployeeStatementService::class)->statement($employee, $from, $to, $this->includeTrail), $columns, $employee->id];
-    }
-
-    private function amanatStatement($holders, ?string $id, string $from, string $to): array
-    {
-        $holder = $id ? $holders->firstWhere('id', $id) : null;
-        $holder ??= $holders->first();
-        $holder = $holder ? Customer::find($holder->id) : null;
-        $columns = ['money_in' => 'Deposited', 'money_out' => 'Paid out', 'balance' => 'We hold'];
-
-        if (! $holder) {
-            return [
-                ['rows' => [], 'opening_balance' => 0.0, 'closing_balance' => 0.0, 'from' => $from, 'to' => $to, 'party' => null],
-                $columns,
-                null,
-            ];
-        }
-
-        return [app(AmanatStatementService::class)->statement($holder, $from, $to, $this->includeTrail), $columns, $holder->id];
     }
 
     private function supplierStatement($vendors, ?string $id, string $from, string $to): array

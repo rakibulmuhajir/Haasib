@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class DuplicateAction implements PaletteAction
+class DuplicateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -49,23 +50,29 @@ class DuplicateAction implements PaletteAction
                 ? 'draft'
                 : 'sent';
 
+            // Tax off for the company: the copy drops the source's tax (the source stays as it was).
+            $dropTax = ! app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company);
+            $taxAmount = $dropTax ? 0 : $source->tax_amount;
+            $totalAmount = $dropTax ? $source->total_amount - $source->tax_amount : $source->total_amount;
+            $baseAmount = $dropTax ? round($totalAmount * ($source->exchange_rate ?? 1), 2) : $source->base_amount;
+
             // Create new invoice
             $invoice = Invoice::create([
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'invoice_number' => $newNumber,
-                'invoice_date' => now(),
-                'due_date' => now()->addDays(30), // Default 30 days
+                'invoice_date' => app(CompanyClock::class)->today(),
+                'due_date' => app(CompanyClock::class)->now()->addDays(30)->toDateString(), // Default 30 days
                 'subtotal' => $source->subtotal,
-                'tax_amount' => $source->tax_amount,
+                'tax_amount' => $taxAmount,
                 'discount_amount' => $source->discount_amount,
-                'total_amount' => $source->total_amount,
+                'total_amount' => $totalAmount,
                 'paid_amount' => 0,
-                'balance' => $source->total_amount,
+                'balance' => $totalAmount,
                 'currency' => $source->currency,
                 'base_currency' => $source->base_currency,
                 'exchange_rate' => $source->exchange_rate,
-                'base_amount' => $source->base_amount,
+                'base_amount' => $baseAmount,
                 'status' => $status,
                 'notes' => $source->notes,
                 'created_by_user_id' => Auth::id(),
@@ -80,11 +87,11 @@ class DuplicateAction implements PaletteAction
                     'description' => $line->description,
                     'quantity' => $line->quantity,
                     'unit_price' => $line->unit_price,
-                    'tax_rate' => $line->tax_rate ?? 0,
+                    'tax_rate' => $dropTax ? 0 : ($line->tax_rate ?? 0),
                     'discount_rate' => $line->discount_rate ?? 0,
                     'line_total' => $line->line_total ?? $line->total,
-                    'tax_amount' => $line->tax_amount ?? 0,
-                    'total' => $line->total,
+                    'tax_amount' => $dropTax ? 0 : ($line->tax_amount ?? 0),
+                    'total' => $dropTax ? $line->total - ($line->tax_amount ?? 0) : $line->total,
                 ]);
             }
 
@@ -168,5 +175,16 @@ class DuplicateAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Exception("Customer not found: {$identifier}. Create with: customer create \"{$identifier}\"");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Copy an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'New customer'],
+            ],
+        ];
     }
 }

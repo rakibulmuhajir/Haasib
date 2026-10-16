@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
@@ -72,7 +73,7 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'apAccounts' => $apAccounts,
-            'vendorTypes' => Vendor::TYPES,
+            'vendorTypes' => $this->offeredVendorTypes($company),
         ]);
     }
 
@@ -120,12 +121,12 @@ class VendorController extends Controller
         $overdue = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
-            ->where('due_date', '<', now()->toDateString())
+            ->where('due_date', '<', app(CompanyClock::class)->today())
             ->sum('balance');
 
         $paidYtd = \App\Modules\Accounting\Models\BillPayment::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
-            ->whereYear('payment_date', now()->year)
+            ->whereYear('payment_date', app(CompanyClock::class)->now()->year)
             ->sum('amount');
 
         $advanceOnAccount = app(\App\Modules\Accounting\Services\VendorAdvanceService::class)
@@ -195,7 +196,7 @@ class VendorController extends Controller
             ],
             'vendor' => $record,
             'apAccounts' => $apAccounts,
-            'vendorTypes' => Vendor::TYPES,
+            'vendorTypes' => $this->offeredVendorTypes($company, $record->vendor_type ?? null),
         ]);
     }
 
@@ -349,7 +350,6 @@ class VendorController extends Controller
             $target = match ($key) {
                 'amount' => $amountField,
                 'as_of_date' => 'opening_date',
-                'amanat' => 'opening_advance',
                 default => 'opening_owed',
             };
             $remapped[$target] = array_merge($remapped[$target] ?? [], $messages);
@@ -384,5 +384,29 @@ class VendorController extends Controller
                 'rate' => (float) $defaultTaxRate->rate,
             ] : null,
         ]);
+    }
+
+    /**
+     * Vendor types this company may pick. Types that belong to a module the company
+     * does not use are left out, except the type the vendor already has.
+     *
+     * @return array<string, string>
+     */
+    private function offeredVendorTypes($company, ?string $current = null): array
+    {
+        $registry = app(\App\Support\Modules\ModuleRegistry::class);
+        $enabled = $registry->enabledFor($company);
+        $hidden = [];
+        foreach ($registry->all() as $key => $manifest) {
+            if (! isset($enabled[$key])) {
+                array_push($hidden, ...$manifest->vendorTypes());
+            }
+        }
+
+        return array_filter(
+            Vendor::TYPES,
+            fn (string $label, string $type) => $type === $current || ! in_array($type, $hidden, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 }

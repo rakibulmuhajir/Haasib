@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\FuelStation\Services\StationProductsService;
@@ -35,7 +36,7 @@ class StationProductsController extends Controller
             'company' => ['id' => $company->id, 'name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'rows' => $result['rows'],
             'summary' => ['total' => count($result['rows']), 'low' => $result['low_count']],
-            'period' => ['from' => Carbon::today()->startOfMonth()->toDateString(), 'to' => Carbon::today()->toDateString()],
+            'period' => ['from' => Carbon::parse(app(CompanyClock::class)->today())->startOfMonth()->toDateString(), 'to' => Carbon::parse(app(CompanyClock::class)->today())->toDateString()],
             'fuelTanks' => Warehouse::where('company_id', $company->id)
                 ->where('warehouse_type', 'tank')->where('is_active', true)
                 ->orderBy('name')

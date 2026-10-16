@@ -29,7 +29,7 @@ class FuelNavigationSharingTest extends TestCase
     #[DataProvider('companyContexts')]
     public function test_navigation_uses_resolved_route_context_instead_of_display_row(?string $industry, array $modules, bool $expectsFuel): void
     {
-        CompanyContext::shouldReceive('getCompany')->once()->andReturn(null);
+        CompanyContext::shouldReceive('getCompany')->andReturn(null);
         $context = app(CurrentCompany::class);
         $context->clear();
 
@@ -51,7 +51,8 @@ class FuelNavigationSharingTest extends TestCase
         $query->shouldReceive('get')->once()->andReturn(collect([$row]));
 
         $shared = app(HandleInertiaRequests::class)->share($request);
-        $this->assertSame('remembered-station', $shared['auth']['currentCompany']['slug']);
+        // currentCompany is lazy now: resolved at render time, after the tenant middleware.
+        $this->assertSame('remembered-station', ($shared['auth']['currentCompany'])()['slug']);
 
         $company = null;
         if ($industry !== null) {

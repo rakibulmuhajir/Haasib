@@ -41,7 +41,7 @@ class BillCorrectionService
     {
         $to = $this->vendor($bill->company_id, $vendorId);
         if ($to->id === $bill->vendor_id) {
-            throw ValidationException::withMessages(['vendor_id' => 'That is already this bill\'s supplier.']);
+            throw ValidationException::withMessages(['vendor_id' => 'That is already this bill\'s vendor.']);
         }
 
         return $this->run($bill->company_id, function () use ($bill, $to, $reason) {
@@ -76,7 +76,7 @@ class BillCorrectionService
     {
         $shares = array_values(array_filter(array_map(fn ($s) => ['vendor_id' => (string) $s['vendor_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {
-            throw ValidationException::withMessages(['shares' => 'Split between at least two suppliers.']);
+            throw ValidationException::withMessages(['shares' => 'Split between at least two vendors.']);
         }
         $credited = (float) DB::table('acct.vendor_credit_applications')->where('bill_id', $bill->id)->sum('amount_applied');
         $open = round((float) $bill->total_amount - $credited, 2);
@@ -106,7 +106,7 @@ class BillCorrectionService
                 $created[] = ['vendor' => $vendor->name, 'amount' => $share['amount'], 'bill' => $new->bill_number, 'bill_id' => $new->id, 'vendor_credit' => $credit->credit_number, 'vendor_credit_id' => $credit->id];
             }
 
-            $journal = $this->journal($bill->company_id, $bill->currency, "Correction: {$bill->bill_number} split between suppliers", $lines);
+            $journal = $this->journal($bill->company_id, $bill->currency, "Correction: {$bill->bill_number} split between vendors", $lines);
             foreach ($created as $c) {
                 DB::table('acct.bills')->where('id', $c['bill_id'])->update(['transaction_id' => $journal]);
                 DB::table('acct.vendor_credits')->where('id', $c['vendor_credit_id'])->update(['transaction_id' => $journal]);
@@ -130,7 +130,7 @@ class BillCorrectionService
     {
         $to = $this->vendor($payment->company_id, $vendorId);
         if ($to->id === $payment->vendor_id) {
-            throw ValidationException::withMessages(['vendor_id' => 'That is already this payment\'s supplier.']);
+            throw ValidationException::withMessages(['vendor_id' => 'That is already this payment\'s vendor.']);
         }
 
         $result = $this->run($payment->company_id, function () use ($payment, $to, $reason) {
@@ -174,7 +174,7 @@ class BillCorrectionService
         $total = round((float) $payment->amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['vendor_id' => (string) $s['vendor_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {
-            throw ValidationException::withMessages(['shares' => 'Split between at least two suppliers.']);
+            throw ValidationException::withMessages(['shares' => 'Split between at least two vendors.']);
         }
         if (abs(array_sum(array_column($shares, 'amount')) - $total) > 0.005) {
             throw ValidationException::withMessages(['shares' => 'The shares must add up to '.number_format($total, 2).'.']);
@@ -227,7 +227,7 @@ class BillCorrectionService
                 $lines[] = ['account_id' => $ap, 'type' => 'debit', 'amount' => $shares[0]['amount'], 'description' => "{$payment->payment_number} to {$keeper->name}"];
             }
 
-            $journal = $this->journal($payment->company_id, $payment->currency ?? 'PKR', "Correction: {$payment->payment_number} split between suppliers", $lines);
+            $journal = $this->journal($payment->company_id, $payment->currency ?? 'PKR', "Correction: {$payment->payment_number} split between vendors", $lines);
             DB::table('acct.bill_payments')->whereIn('id', array_column($created, 'payment_id'))->update(['transaction_id' => $journal]);
 
             return $this->record($payment->company_id, 'bill_payment', $payment->id, 'split', $reason, [
@@ -255,7 +255,7 @@ class BillCorrectionService
     {
         $vendor = Vendor::where('company_id', $companyId)->find($id);
         if (! $vendor) {
-            throw ValidationException::withMessages(['vendor_id' => 'Not a supplier of this company.']);
+            throw ValidationException::withMessages(['vendor_id' => 'Not a vendor of this company.']);
         }
 
         return $vendor;
@@ -469,14 +469,7 @@ class BillCorrectionService
     /** Mirrors Bill\CreateAction::nextNumber(); this runs inside the correction's own lock. */
     private function nextBillNumber(string $companyId): string
     {
-        // Highest by number, not by text: an odd number (a hand-typed one) must not reset the count.
-        $last = Bill::withTrashed()->where('company_id', $companyId)
-            ->where('bill_number', '~', '^BILL-[0-9]+$')
-            ->orderByRaw("CAST(substring(bill_number from '[0-9]+$') AS bigint) DESC")
-            ->value('bill_number');
-        $seq = ($last && preg_match('/(\d+)$/', $last, $m)) ? ((int) $m[1]) + 1 : 1;
-
-        return 'BILL-'.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+        return app(BillNumberService::class)->next($companyId);
     }
 
     /** Mirrors VendorCredit\CreateAction::nextNumber(). */

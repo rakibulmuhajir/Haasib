@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\FiscalYearService;
 
-class CreatePeriodsAction implements PaletteAction
+class CreatePeriodsAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -42,5 +42,14 @@ class CreatePeriodsAction implements PaletteAction
             ],
         ];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create the periods of a fiscal year',
+            'fields' => [
+                'id' => ['hint' => 'Fiscal year'],
+            ],
+        ];
+    }
+}

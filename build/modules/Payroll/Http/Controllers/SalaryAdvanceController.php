@@ -75,9 +75,7 @@ class SalaryAdvanceController extends Controller
                 'currency' => $employee->currency,
             ]);
 
-        $usesDailyClose = $company->isModuleEnabled('fuel_station')
-            || $company->industry_code === 'fuel_station'
-            || $company->industry === 'fuel_station';
+        $usesDailyClose = $company->capable('daily_close');
 
         $paymentAccounts = Account::where('company_id', $company->id)
                 ->whereIn('subtype', ['bank', 'cash'])

@@ -42,7 +42,7 @@ test('a line billed by its total instead of a rate derives the exact rate and po
 
     $response->assertSessionHasNoErrors()->assertRedirect();
 
-    $bill = Bill::where('company_id', $f['company']->id)->where('bill_number', 'BILL-00001')->firstOrFail();
+    $bill = Bill::where('company_id', $f['company']->id)->where('bill_number', 'BILL-01001')->firstOrFail();
     $line = $bill->lineItems->first();
 
     expect((float) $line->unit_price)->toEqualWithDelta(338.271605, 0.0000001)

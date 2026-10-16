@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Models\CompanyCurrency;
 use App\Modules\Umrah\Models\GroupPayment;
@@ -17,7 +18,7 @@ class SubmitGroupPaymentRequest extends UmrahFormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'payment_date' => $this->input('payment_date', now()->toDateString()),
+            'payment_date' => $this->input('payment_date', app(CompanyClock::class)->today()),
             'method' => $this->input('method', GroupPayment::METHOD_CASH),
             'reference' => $this->input('reference'),
             'notes' => $this->input('notes'),
@@ -41,7 +42,7 @@ class SubmitGroupPaymentRequest extends UmrahFormRequest
                 'uuid',
                 Rule::exists(VisaGroup::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('agent_id', $agentId)->whereNull('deleted_at')),
             ],
-            'payment_date' => ['required', 'date', 'before_or_equal:today'],
+            'payment_date' => ['required', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'currency' => [
                 'required',

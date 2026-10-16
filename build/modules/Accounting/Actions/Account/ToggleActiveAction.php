@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Facades\DB;
 
-class ToggleActiveAction implements PaletteAction
+class ToggleActiveAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -71,6 +71,16 @@ class ToggleActiveAction implements PaletteAction
 
         return [
             'message' => "Account {$account->code} is now " . ($account->is_active ? 'active' : 'inactive'),
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Turn an account on or off',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Account'],
+            ],
         ];
     }
 }

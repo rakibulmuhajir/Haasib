@@ -36,11 +36,11 @@ class PartnerMovementRequest extends BaseFormRequest
         $companyId = app(CurrentCompany::class)->get()?->id;
 
         return [
-            'partner_id' => ['required', 'uuid', Rule::exists('auth.partners', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
+            'partner_id' => ['required', 'uuid', Rule::exists(\App\Models\Partner::class, 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_date' => ['required', 'date_format:Y-m-d'],
             // The cash or bank account the money goes into / comes out of.
-            'account_id' => ['required', 'uuid', Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')],
+            'account_id' => ['required', 'uuid', Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')->where('company_id', $companyId)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at')],
             'description' => ['nullable', 'string', 'max:500'],
             'reference' => ['nullable', 'string', 'max:100'],
         ];

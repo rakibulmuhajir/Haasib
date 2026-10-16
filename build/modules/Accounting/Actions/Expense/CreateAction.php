@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
  * GlPostingService::postBalancedTransaction every other canonical transaction uses, so the
  * Daily Close picks it up automatically for its date — no parallel mechanism, no new table.
  */
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -70,6 +70,20 @@ class CreateAction implements PaletteAction
         return [
             'message' => 'Expense recorded: '.$transaction->transaction_number,
             'data' => ['id' => $transaction->id, 'transaction_number' => $transaction->transaction_number],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Record an expense',
+            'fields' => [
+                'date' => ['hint' => 'Date'],
+                'account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Expense account'],
+                'paid_from_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
+                'amount' => ['hint' => 'Amount'],
+                'description' => ['hint' => 'What for'],
+            ],
         ];
     }
 }

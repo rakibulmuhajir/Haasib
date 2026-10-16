@@ -99,7 +99,7 @@ const sectionConfig: Record<string, { label: string; subtypes: string[]; help?: 
   payables: {
     label: 'Expected Payments to Vendors',
     subtypes: ['accounts_payable'],
-    help: 'Bills you have received but not yet paid. Tracks money you owe to suppliers.'
+    help: 'Bills you have received but not yet paid. Tracks money you owe to vendors.'
   },
   credit_cards: {
     label: 'Credit Cards',
@@ -108,18 +108,23 @@ const sectionConfig: Record<string, { label: string; subtypes: string[]; help?: 
   },
   loans: {
     label: 'Loans and Line of Credit',
-    subtypes: ['loan_payable', 'other_current_liability', 'other_liability'],
+    subtypes: ['loan_payable', 'other_liability'],
     help: 'Money borrowed that must be repaid, including bank loans and lines of credit.'
   },
   sales_tax: {
     label: 'Sales Taxes',
-    subtypes: ['sales_tax_payable'], // Assuming explicit subtype, or mapped via other_current_liability + specific code logic in real app
+    subtypes: ['sales_tax_payable'], // plus tax-named other_current_liability accounts, see sectionOf()
     help: 'Taxes collected from customers that need to be remitted to the government.'
   },
   payroll_liabilities: {
     label: 'Payroll Liabilities',
-    subtypes: ['payroll_liabilities'], // Placeholder for logic
+    subtypes: ['payroll_liabilities'], // plus payroll-named other_current_liability accounts, see sectionOf()
     help: 'Wages withheld and taxes owed related to payroll.'
+  },
+  other_current_liabilities: {
+    label: 'Other Current Liabilities',
+    subtypes: ['other_current_liability'],
+    help: 'Short-term amounts owed that are not bills, loans, taxes or payroll, like accrued expenses or deposits held.'
   },
 
   // Income
@@ -139,7 +144,7 @@ const sectionConfig: Record<string, { label: string; subtypes: string[]; help?: 
 // Defines which sections appear in which tab and in what order
 const tabSections: Record<string, string[]> = {
   assets: ['cash_bank', 'money_in_transit', 'receivables', 'inventory', 'ppe', 'depreciation', 'other_assets'],
-  liabilities: ['credit_cards', 'loans', 'payables', 'sales_tax', 'payroll_liabilities'],
+  liabilities: ['credit_cards', 'loans', 'payables', 'sales_tax', 'payroll_liabilities', 'other_current_liabilities'],
   income: ['revenue', 'other_income'],
   expenses: ['expense', 'cogs', 'other_expense'],
   equity: ['equity', 'retained_earnings']
@@ -155,6 +160,16 @@ const tabCounts = computed(() => {
   return counts
 })
 
+// A generic "other current liability" is filed under taxes or payroll when its name says so.
+const TAX_NAME = /(tax|vat|gst|withholding)/i
+const PAYROLL_NAME = /(salar|payroll|wage|eobi|provident)/i
+
+function sectionOf(a: AccountRow, sectionKey: string): boolean {
+  if (a.subtype !== 'other_current_liability') return sectionConfig[sectionKey].subtypes.includes(a.subtype)
+  const own = PAYROLL_NAME.test(a.name) ? 'payroll_liabilities' : TAX_NAME.test(a.name) ? 'sales_tax' : 'other_current_liabilities'
+  return sectionKey === own
+}
+
 const groupedAccounts = computed(() => {
   const currentTab = tabs.find(t => t.key === activeTab.value)
   if (!currentTab) return []
@@ -165,9 +180,8 @@ const groupedAccounts = computed(() => {
     const config = sectionConfig[sectionKey]
     
     // Find accounts matching the subtypes for this section
-    const accounts = props.accounts.filter(a => 
-      currentTab.types.includes(a.type) && 
-      config.subtypes.includes(a.subtype)
+    const accounts = props.accounts.filter(a =>
+      currentTab.types.includes(a.type) && sectionOf(a, sectionKey)
     ).sort((a, b) => a.code.localeCompare(b.code))
 
     return {
@@ -176,7 +190,7 @@ const groupedAccounts = computed(() => {
       help: config.help,
       accounts: accounts
     }
-  })
+  }).filter(g => g.accounts.length > 0)
 })
 
 const handleEdit = (id: string) => {
@@ -262,6 +276,9 @@ const handleRestoreMissing = () => {
 
       <!-- 3. Sections Group -->
       <div class="space-y-8 max-w-5xl">
+        <p v-if="groupedAccounts.length === 0" class="text-sm text-text-secondary italic">
+          No accounts here yet.
+        </p>
         <div 
           v-for="group in groupedAccounts" 
           :key="group.key"
@@ -282,13 +299,6 @@ const handleRestoreMissing = () => {
 
           <!-- 4. Accounts List -->
           <div class="divide-y divide-rule-subtle">
-            <!-- Empty State -->
-            <div v-if="group.accounts.length === 0" class="px-6 py-8 text-center bg-surface-raised">
-              <p class="text-sm text-text-secondary italic mb-4">
-                You haven't added any {{ group.label }} accounts yet.
-              </p>
-            </div>
-
             <!-- Account Rows -->
             <div 
               v-for="account in group.accounts" 
@@ -297,6 +307,7 @@ const handleRestoreMissing = () => {
             >
               <div class="flex-1 pr-8">
                 <div class="flex items-center gap-3">
+                  <span class="font-mono text-sm text-text-secondary">{{ account.code }}</span>
                   <span class="font-bold text-text-primary">{{ account.name }}</span>
                 </div>
                 

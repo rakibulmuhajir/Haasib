@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Partner;
@@ -337,7 +338,7 @@ class FuelStationOnboardingController extends Controller
             $openingSummary = [
                 'as_of_date' => $view['as_of_date'],
                 'locked_at' => $view['locked_at'],
-                'row_count' => ($rows['cash']['amount'] > 0 ? 1 : 0) + count($rows['banks']) + count($rows['credit_customers']) + count($rows['employees']) + count($rows['amanat']) + count($rows['suppliers']) + count($rows['partners']),
+                'row_count' => ($rows['cash']['amount'] > 0 ? 1 : 0) + count($rows['banks']) + count($rows['credit_customers']) + count($rows['employees']) + count($rows['amanat'] ?? []) + count($rows['suppliers']) + count($rows['partners']),
                 'assets' => $view['totals']['assets'],
                 'liabilities' => $view['totals']['liabilities'],
                 'url' => route('accounting.opening-balances.show', ['company' => $company->slug]),
@@ -818,7 +819,7 @@ class FuelStationOnboardingController extends Controller
                 Employee::create($payload + [
                     'company_id' => $company->id,
                     'employee_number' => $employeeNumber,
-                    'hire_date' => now()->toDateString(),
+                    'hire_date' => app(CompanyClock::class)->today(),
                     'employment_type' => 'full_time',
                     'employment_status' => 'active',
                     'pay_frequency' => 'monthly',
@@ -1366,7 +1367,7 @@ class FuelStationOnboardingController extends Controller
                     'quantity' => $openingQty,
                     'unit_cost' => $lubricantData['cost_price'],
                     'total_cost' => $openingQty * $lubricantData['cost_price'],
-                    'movement_date' => now()->toDateString(),
+                    'movement_date' => app(CompanyClock::class)->today(),
                 ];
 
                 if ($movement) {

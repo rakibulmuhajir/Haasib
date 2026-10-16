@@ -18,6 +18,16 @@ import { ChevronDown, Landmark, Lock, Plus, Trash2 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 
 interface Opt { id: string; name: string; code?: string }
+interface SectionMeta {
+  key: string
+  label: string
+  description: string
+  party: 'customer' | 'vendor'
+  party_label: string
+  amount_label: string
+  side: 'liability' | 'asset'
+}
+type SectionRow = { amount: number } & Record<string, string | number | null | undefined>
 interface Opening {
   as_of_date: string | null
   locked_at: string | null
@@ -29,12 +39,14 @@ interface Opening {
     credit_customers: { customer_id: string; customer_name: string; amount: number }[]
     employees: { employee_id: string; employee_name: string; amount: number }[]
     salaries_owed: { employee_id: string; employee_name: string; amount: number; payslip_id?: string; paid?: boolean }[]
-    amanat: { customer_id: string; customer_name: string; amount: number }[]
     suppliers: { vendor_id: string; vendor_name: string; amount: number }[]
     partners: { partner_id: string; partner_name: string; amount: number }[]
+    accounts: { account_id: string; code: string; name: string; amount: number; normal_balance: 'debit' | 'credit' }[]
   }
+  /** Module sections (amanat, ...) this company has; their rows sit in `rows[key]`. */
+  sections: SectionMeta[]
   totals: { assets: number; liabilities: number; equity: number }
-  options: { bank_accounts: Opt[]; customers: Opt[]; vendors: Opt[]; employees: Opt[]; partners: Opt[] }
+  options: { bank_accounts: Opt[]; customers: Opt[]; vendors: Opt[]; employees: Opt[]; partners: Opt[]; accounts: (Opt & { normal_balance: 'debit' | 'credit' })[] }
 }
 
 const props = defineProps<{
@@ -60,15 +72,32 @@ const currency = computed(() => baseCurrency.value ?? 'PKR')
  * name, so a saved row shows blank until the user searches again. This map lets every
  * picker resolve its saved id to a name up front, from data already in `opening`.
  */
+const sectionRowsOf = (o: Opening, key: string): SectionRow[] =>
+  ((o.rows as unknown as Record<string, SectionRow[]>)[key] ?? [])
+
 const entityNames = computed<Record<string, string>>(() => {
   const names: Record<string, string> = {}
   for (const c of props.opening.options.customers) names[c.id] = c.name
   for (const v of props.opening.options.vendors) names[v.id] = v.name
   for (const row of props.opening.rows.credit_customers) if (row.customer_id) names[row.customer_id] = row.customer_name
-  for (const row of props.opening.rows.amanat) if (row.customer_id) names[row.customer_id] = row.customer_name
+  for (const section of props.opening.sections) {
+    for (const row of sectionRowsOf(props.opening, section.key)) {
+      const id = row[`${section.party}_id`] as string | undefined
+      if (id) names[id] = row[`${section.party}_name`] as string
+    }
+  }
   for (const row of props.opening.rows.suppliers) if (row.vendor_id) names[row.vendor_id] = row.vendor_name
   return names
 })
+
+function sectionFields(o: Opening): Record<string, SectionRow[]> {
+  const fields: Record<string, SectionRow[]> = {}
+  for (const section of o.sections) {
+    const idKey = `${section.party}_id`
+    fields[section.key] = sectionRowsOf(o, section.key).map(r => ({ [idKey]: r[idKey], amount: r.amount }))
+  }
+  return fields
+}
 
 function fieldsFromOpening(o: Opening) {
   return {
@@ -78,9 +107,10 @@ function fieldsFromOpening(o: Opening) {
     credit_customers: o.rows.credit_customers.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
     employees: o.rows.employees.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
     salaries_owed: o.rows.salaries_owed.map(r => ({ employee_id: r.employee_id, amount: r.amount })),
-    amanat: o.rows.amanat.map(r => ({ customer_id: r.customer_id, amount: r.amount })),
     suppliers: o.rows.suppliers.map(r => ({ vendor_id: r.vendor_id, amount: r.amount })),
     partners: o.rows.partners.map(r => ({ partner_id: r.partner_id, amount: r.amount })),
+    accounts: (o.rows.accounts ?? []).map(r => ({ account_id: r.account_id, amount: r.amount })),
+    ...sectionFields(o),
   }
 }
 
@@ -105,9 +135,10 @@ function seedFromOpening(o: Opening) {
   form.credit_customers = fields.credit_customers
   form.employees = fields.employees
   form.salaries_owed = fields.salaries_owed
-  form.amanat = fields.amanat
   form.suppliers = fields.suppliers
   form.partners = fields.partners
+  form.accounts = fields.accounts
+  for (const section of o.sections) form[section.key] = fields[section.key]
 }
 
 /** Only the parts of `opening` that feed the form — options (dropdown lists)
@@ -125,10 +156,19 @@ watch(
 )
 
 const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + Number(r.amount || 0), 0)
-const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees))
-const liabilities = computed(() => sum(form.amanat) + sum(form.suppliers) + sum(form.partners) + sum(form.salaries_owed))
+/** The form's rows for a module section; always an array. */
+const sectionForm = (key: string): SectionRow[] => ((form as unknown as Record<string, SectionRow[]>)[key] ??= [])
+const sectionSum = (side: SectionMeta['side']) =>
+  props.opening.sections.filter(s => s.side === side).reduce((total, s) => total + sum(sectionForm(s.key)), 0)
+// Other balances count as assets or liabilities by the account's normal side.
+const otherSide = (side: 'debit' | 'credit') =>
+  form.accounts
+    .filter(r => (props.opening.options.accounts.find(a => a.id === r.account_id)?.normal_balance ?? 'debit') === side)
+    .reduce((total, r) => total + Number(r.amount || 0), 0)
+const assets = computed(() => Number(form.cash.amount || 0) + sum(form.banks) + sum(form.credit_customers) + sum(form.employees) + sectionSum('asset') + otherSide('debit'))
+const liabilities = computed(() => otherSide('credit') + sectionSum('liability') + sum(form.suppliers) + sum(form.partners) + sum(form.salaries_owed))
 const equity = computed(() => assets.value - liabilities.value)
-const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.salaries_owed.length + form.amanat.length + form.suppliers.length + form.partners.length)
+const rowCount = computed(() => (Number(form.cash.amount) > 0 ? 1 : 0) + form.banks.length + form.credit_customers.length + form.employees.length + form.salaries_owed.length + props.opening.sections.reduce((n, s) => n + sectionForm(s.key).length, 0) + form.suppliers.length + form.partners.length + form.accounts.length)
 
 const dateGuardMessage = computed(() => {
   const earliest = props.opening.earliest_transaction_date
@@ -138,14 +178,16 @@ const dateGuardMessage = computed(() => {
 const canSave = computed(() => editable.value && rowCount.value > 0 && !!form.as_of_date && !dateGuardMessage.value && !form.processing)
 const canLock = computed(() => props.canManage && !locked.value && !!props.opening.as_of_date)
 
-const open = reactive({ cash: true, credit: true, employees: true, salariesOwed: true, amanat: true, suppliers: true, partners: false })
+const open = reactive({ cash: true, credit: true, employees: true, salariesOwed: true, suppliers: true, partners: false, accounts: true })
+// One card per module section, open by default.
+const sectionOpen = reactive<Record<string, boolean>>(Object.fromEntries(props.opening.sections.map(s => [s.key, true])))
 
 const err = (key: string) => (form.errors as Record<string, string>)[key]
 
 function submit() {
   form.post(`/${props.company.slug}/accounting/opening-balances`, {
     preserveScroll: true,
-    onSuccess: () => toast.success('Opening balances saved'),
+    // The server's flash message is the success toast; a second one here doubled it.
     onError: (errors) => {
       const first = Object.values(errors)[0]
       if (first && !Object.keys(errors).some(k => k.includes('.'))) toast.error(first as string)
@@ -162,7 +204,6 @@ function lock() {
     preserveScroll: true,
     onSuccess: () => {
       showLockDialog.value = false
-      toast.success('Opening balances locked')
     },
     onError: (errors) => toast.error((Object.values(errors)[0] as string) || 'Could not lock'),
     onFinish: () => {
@@ -253,7 +294,7 @@ function lock() {
               <div>
                 <CardTitle>Credit customers</CardTitle>
                 <CardDescription>What each customer owes the business (udhaar). Becomes an opening invoice.</CardDescription>
-                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
+                <p class="text-xs text-muted-foreground">Create missing customers/vendors on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.credit_customers)" :currency="currency" :fraction-digits="0" />
@@ -372,45 +413,46 @@ function lock() {
         </Collapsible>
       </Card>
 
-      <!-- Amanat depositors -->
-      <Card>
-        <Collapsible v-model:open="open.amanat">
+      <!-- Module sections (e.g. amanat depositors) -->
+      <Card v-for="section in opening.sections" :key="section.key">
+        <Collapsible :open="sectionOpen[section.key] ?? true" @update:open="sectionOpen[section.key] = $event">
           <CardHeader>
             <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
               <div>
-                <CardTitle>Amanat depositors</CardTitle>
-                <CardDescription>Money customers have left with the station</CardDescription>
+                <CardTitle>{{ section.label }}</CardTitle>
+                <CardDescription>{{ section.description }}</CardDescription>
               </div>
               <span class="flex items-center gap-3 text-sm">
-                <MoneyText :amount="sum(form.amanat)" :currency="currency" :fraction-digits="0" />
+                <MoneyText :amount="sum(sectionForm(section.key))" :currency="currency" :fraction-digits="0" />
                 <ChevronDown class="h-4 w-4" />
               </span>
             </CollapsibleTrigger>
           </CardHeader>
           <CollapsibleContent>
             <CardContent class="space-y-3">
-              <InputError :message="err('amanat')" />
-              <div v-for="(row, i) in form.amanat" :key="'am-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
+              <InputError :message="err(section.key)" />
+              <div v-for="(row, i) in sectionForm(section.key)" :key="section.key + '-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label :id="`amanat-${i}-customer_id-label`" :class="i === 0 ? undefined : 'sr-only'">Depositor</Label>
+                  <Label :id="`${section.key}-${i}-${section.party}_id-label`" :class="i === 0 ? undefined : 'sr-only'">{{ section.party_label }}</Label>
                   <EntitySearch
-                    v-model="row.customer_id"
-                    entity-type="customer"
+                    :model-value="(row[`${section.party}_id`] as string) ?? ''"
+                    @update:model-value="row[`${section.party}_id`] = $event"
+                    :entity-type="section.party"
                     :disabled="!editable"
                     :allow-quick-add="false"
-                    :initial-entity="row.customer_id ? { id: row.customer_id, name: entityNames[row.customer_id] ?? '' } : null"
-                    :aria-labelledby="`amanat-${i}-customer_id-label`"
+                    :initial-entity="row[`${section.party}_id`] ? { id: row[`${section.party}_id`] as string, name: entityNames[row[`${section.party}_id`] as string] ?? '' } : null"
+                    :aria-labelledby="`${section.key}-${i}-${section.party}_id-label`"
                   />
-                  <InputError :message="err(`amanat.${i}.customer_id`)" />
+                  <InputError :message="err(`${section.key}.${i}.${section.party}_id`)" />
                 </div>
                 <div class="grid gap-1">
-                  <Label :for="`amanat-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Held</Label>
-                  <Input :id="`amanat-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
-                  <InputError :message="err(`amanat.${i}.amount`)" />
+                  <Label :for="`${section.key}-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">{{ section.amount_label }}</Label>
+                  <Input :id="`${section.key}-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <InputError :message="err(`${section.key}.${i}.amount`)" />
                 </div>
-                <Button v-if="editable" variant="ghost" size="icon" @click="form.amanat.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
+                <Button v-if="editable" variant="ghost" size="icon" @click="sectionForm(section.key).splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
-              <Button v-if="editable" variant="outline" size="sm" @click="form.amanat.push({ customer_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add depositor</Button>
+              <Button v-if="editable" variant="outline" size="sm" @click="sectionForm(section.key).push({ [`${section.party}_id`]: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add {{ section.party_label.toLowerCase() }}</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
@@ -422,9 +464,9 @@ function lock() {
           <CardHeader>
             <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
               <div>
-                <CardTitle>Suppliers</CardTitle>
-                <CardDescription>Unpaid supplier balances. Becomes an opening bill.</CardDescription>
-                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
+                <CardTitle>Vendors</CardTitle>
+                <CardDescription>Unpaid vendor balances. Becomes an opening bill.</CardDescription>
+                <p class="text-xs text-muted-foreground">Create missing customers/vendors on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.suppliers)" :currency="currency" :fraction-digits="0" />
@@ -437,7 +479,7 @@ function lock() {
               <InputError :message="err('suppliers')" />
               <div v-for="(row, i) in form.suppliers" :key="'sup-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Supplier</Label>
+                  <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Vendor</Label>
                   <EntitySearch
                     v-model="row.vendor_id"
                     entity-type="vendor"
@@ -455,7 +497,7 @@ function lock() {
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.suppliers.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
-              <Button v-if="editable" variant="outline" size="sm" @click="form.suppliers.push({ vendor_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add supplier</Button>
+              <Button v-if="editable" variant="outline" size="sm" @click="form.suppliers.push({ vendor_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add vendor</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
@@ -496,6 +538,48 @@ function lock() {
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.partners.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
               <Button v-if="editable" variant="outline" size="sm" @click="form.partners.push({ partner_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add partner</Button>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      <!-- Other balances: assets, loans, capital -->
+      <Card>
+        <Collapsible v-model:open="open.accounts">
+          <CardHeader>
+            <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
+              <div>
+                <CardTitle>Other balances</CardTitle>
+                <CardDescription>Assets, loans, capital</CardDescription>
+              </div>
+              <span class="flex items-center gap-3 text-sm">
+                <MoneyText :amount="sum(form.accounts)" :currency="currency" :fraction-digits="0" />
+                <ChevronDown class="h-4 w-4" />
+              </span>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-3">
+              <InputError :message="err('accounts')" />
+              <div v-for="(row, i) in form.accounts" :key="'acc-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
+                <div class="grid gap-1">
+                  <Label :for="`accounts-${i}-account_id`" :class="i === 0 ? undefined : 'sr-only'">Account</Label>
+                  <Select v-model="row.account_id" :disabled="!editable">
+                    <SelectTrigger :id="`accounts-${i}-account_id`"><SelectValue placeholder="Choose account" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="a in opening.options.accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <InputError :message="err(`accounts.${i}.account_id`)" />
+                </div>
+                <div class="grid gap-1">
+                  <Label :for="`accounts-${i}-amount`" :class="i === 0 ? undefined : 'sr-only'">Balance</Label>
+                  <Input :id="`accounts-${i}-amount`" v-model.number="row.amount" type="number" min="0" step="1" :disabled="!editable" />
+                  <InputError :message="err(`accounts.${i}.amount`)" />
+                </div>
+                <Button v-if="editable" variant="ghost" size="icon" @click="form.accounts.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
+              </div>
+              <Button v-if="editable" variant="outline" size="sm" @click="form.accounts.push({ account_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add account</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>

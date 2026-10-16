@@ -8,7 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\CustomerCategory;
 use Illuminate\Validation\ValidationException;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -45,5 +45,10 @@ class UpdateAction implements PaletteAction
             'message' => "Category renamed: {$category->name}",
             'data' => ['id' => $category->id, 'name' => $category->name],
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Rename a customer category'];
     }
 }

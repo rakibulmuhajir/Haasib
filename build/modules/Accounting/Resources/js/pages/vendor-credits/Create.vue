@@ -18,6 +18,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { ReceiptText, Save, Plus, Trash2 } from 'lucide-vue-next'
 import { useFormFeedback } from '@/composables/useFormFeedback'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 
 interface CompanyRef {
   id: string
@@ -83,6 +84,9 @@ const form = useForm({
   status: 'received',
   line_items: [lineItemTemplate()],
 })
+
+// One company-wide switch (Settings > Tax); off hides every tax input and total.
+const showTax = useTaxEnabled()
 
 const totals = computed(() => {
   const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
@@ -312,7 +316,7 @@ const handleSubmit = () => {
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
-            <div>
+            <div v-if="showTax">
               <Label>Tax %</Label>
               <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
               <InputError :message="(form.errors as Record<string, string>)[`line_items.${idx}.tax_rate`]" />
@@ -332,7 +336,7 @@ const handleSubmit = () => {
           <span>Subtotal</span>
           <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
-        <div class="flex justify-between text-sm">
+        <div v-if="showTax" class="flex justify-between text-sm">
           <span>Tax</span>
           <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>

@@ -17,6 +17,7 @@ use App\Modules\Accounting\Models\Jurisdiction;
 use App\Modules\Accounting\Models\TaxExemption;
 use App\Modules\Accounting\Models\TaxGroup;
 use App\Modules\Accounting\Models\TaxRate;
+use App\Modules\Accounting\Services\CompanyTax;
 use App\Services\CurrentCompany;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -28,7 +29,10 @@ class TaxSettingsController extends Controller
     {
         $company = app(CurrentCompany::class)->getOrFail();
 
-        $taxSettings = CompanyTaxSettings::forCompany($company);
+        // Opening the page must not create the row -- a fresh row would read as "never chosen".
+        $taxSettings = CompanyTaxSettings::where('company_id', $company->id)->first()
+            ?? new CompanyTaxSettings(['company_id' => $company->id]);
+        $taxSettings->setAttribute('tax_enabled', app(CompanyTax::class)->enabled($company));
 
         $jurisdictions = Jurisdiction::active()->orderBy('name')->get();
         $taxRates = TaxRate::forCompany($company->id)->active()->with('jurisdiction')->orderBy('code')->get();
@@ -56,7 +60,9 @@ class TaxSettingsController extends Controller
         $company = app(CurrentCompany::class)->getOrFail();
         $taxSettings = CompanyTaxSettings::forCompany($company);
 
-        $taxSettings->update($request->validated());
+        $values = $request->validated();
+        $values['tax_enabled'] ??= app(CompanyTax::class)->enabled($company);
+        $taxSettings->saveDeliberately($values);
 
         return redirect()->back()->with('success', 'Tax settings updated successfully.');
     }
@@ -235,7 +241,7 @@ class TaxSettingsController extends Controller
             ]);
         }
 
-        $taxSettings->update([
+        $taxSettings->saveDeliberately([
             'tax_enabled' => true,
             'default_jurisdiction_id' => $saudiJurisdiction->id,
             'default_sales_tax_rate_id' => $saudiVATRate->id,
@@ -278,9 +284,11 @@ class TaxSettingsController extends Controller
         $company = app(CurrentCompany::class)->getOrFail();
         $taxSettings = CompanyTaxSettings::forCompany($company);
 
-        if (!$taxSettings || !$taxSettings->tax_enabled) {
+        if (! app(CompanyTax::class)->enabled($company)) {
             return response()->json(['tax_amount' => 0, 'total_amount' => $request->amount]);
         }
+        // Effective switch is on (the row itself may still read false for a company that already used tax).
+        $taxSettings->tax_enabled = true;
 
         $amount = $request->amount;
         $taxAmount = 0;

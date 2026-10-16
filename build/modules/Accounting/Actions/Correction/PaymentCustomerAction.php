@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\CorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Moves a payment to the customer who really paid it. See CorrectionService. */
-class PaymentCustomerAction implements PaletteAction
+class PaymentCustomerAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -40,5 +40,10 @@ class PaymentCustomerAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

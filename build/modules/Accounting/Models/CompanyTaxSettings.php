@@ -67,6 +67,26 @@ class CompanyTaxSettings extends Model
         return static::firstOrCreate(['company_id' => $company->id]);
     }
 
+    /**
+     * Was the switch saved on purpose? Rows can also appear untouched (the column defaults
+     * to false), so a row counts only once it was edited after it was created.
+     */
+    public function isDeliberate(): bool
+    {
+        return $this->created_at !== null
+            && $this->updated_at !== null
+            && $this->updated_at->gt($this->created_at);
+    }
+
+    /** Save settings from the Tax page and mark the row as deliberately set. */
+    public function saveDeliberately(array $values): void
+    {
+        $this->fill($values);
+        $this->created_at ??= now();
+        $this->updated_at = max(now(), $this->created_at->copy()->addSecond());
+        $this->save();
+    }
+
     public function roundAmount(float $amount): float
     {
         $precision = $this->rounding_precision;

@@ -7,7 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Services\FiscalYearService;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -44,5 +44,15 @@ class CreateAction implements PaletteAction
             ],
         ];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a fiscal year',
+            'fields' => [
+                'start_date' => ['hint' => 'Start date'],
+                'end_date' => ['hint' => 'End date'],
+            ],
+        ];
+    }
+}

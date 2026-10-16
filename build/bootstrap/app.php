@@ -49,9 +49,6 @@ return Application::configure(basePath: dirname(__DIR__))
         SyncPermissions::class,
         SyncRolePermissions::class,
         SyncCompanyUserRoles::class,
-        \App\Console\Commands\RecostFuelCloses::class,
-        \App\Console\Commands\FuelMonthEndValuation::class,
-        \App\Console\Commands\FuelLubricantCost::class,
         \App\Console\Commands\SharePartnerProfit::class,
     ])
     ->withExceptions(function (Exceptions $exceptions): void {

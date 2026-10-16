@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useModules } from '@/composables/useModules'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,6 +57,9 @@ const submit = () => {
 const goBack = () => {
   router.visit(`/${props.company.slug}/onboarding/bank-accounts`)
 }
+const { has: hasModule } = useModules()
+const varianceLoss = hasModule('fuel_station') ? 'transit loss' : 'shortage'
+const varianceGain = hasModule('fuel_station') ? 'transit gain' : 'overage'
 </script>
 
 <template>
@@ -297,11 +301,11 @@ const goBack = () => {
 
               <div class="space-y-2">
                 <Label for="transit_loss" class="font-medium">
-                  Transit Loss <span class="text-status-critical">*</span>
+                  {{ varianceLoss.charAt(0).toUpperCase() + varianceLoss.slice(1) }} <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.transit_loss_account_id" required>
                   <SelectTrigger id="transit_loss">
-                    <SelectValue placeholder="Select transit loss account..." />
+                    <SelectValue :placeholder="`Select ${varianceLoss} account...`" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem
@@ -320,11 +324,11 @@ const goBack = () => {
 
               <div class="space-y-2">
                 <Label for="transit_gain" class="font-medium">
-                  Transit Gain <span class="text-status-critical">*</span>
+                  {{ varianceGain.charAt(0).toUpperCase() + varianceGain.slice(1) }} <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.transit_gain_account_id" required>
                   <SelectTrigger id="transit_gain">
-                    <SelectValue placeholder="Select transit gain account..." />
+                    <SelectValue :placeholder="`Select ${varianceGain} account...`" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem

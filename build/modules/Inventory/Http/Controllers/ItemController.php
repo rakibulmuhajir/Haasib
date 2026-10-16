@@ -6,7 +6,7 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\TaxRate;
-use App\Modules\FuelStation\Services\FuelProductAccountMapper;
+use App\Modules\Inventory\Extensions\ItemAccountDefaults;
 use App\Modules\Inventory\Http\Requests\SaveItemPriceRequest;
 use App\Modules\Inventory\Http\Requests\StoreItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemRequest;
@@ -193,21 +193,24 @@ class ItemController extends Controller
     }
 
     /**
-     * A stocked, sellable product at a fuel station gets the same stock, sales and cost accounts
-     * the fuel quick add gives a packaged product, so either screen makes the same item (and its
-     * opening stock can reach the books).
+     * A stocked, sellable product gets a module's default stock, sales and cost accounts when one
+     * has them (a fuel station gives the same accounts the fuel quick add gives a packaged product,
+     * so either screen makes the same item and its opening stock can reach the books).
      */
     private function defaultStockAccounts(array &$data, $company, string $userId): void
     {
         $stocked = ($data['track_inventory'] ?? false) && ($data['item_type'] ?? '') === 'product';
-        if (! $stocked || $company->industry_code !== 'fuel_station' || ! empty($data['asset_account_id'])) {
+        if (! $stocked || ! empty($data['asset_account_id'])) {
             return;
         }
 
-        $accounts = app(FuelProductAccountMapper::class)->resolveAccounts($company->id, 'lubricant_packaged', $userId);
-        $data['asset_account_id'] = $accounts['asset']->id;
-        $data['income_account_id'] ??= $accounts['income']->id;
-        $data['expense_account_id'] ??= $accounts['expense']->id;
+        $accounts = ItemAccountDefaults::for($company, $data, $userId);
+        if ($accounts === null) {
+            return;
+        }
+        $data['asset_account_id'] = $accounts['asset_account_id'];
+        $data['income_account_id'] ??= $accounts['income_account_id'];
+        $data['expense_account_id'] ??= $accounts['expense_account_id'];
     }
 
     public function show(Request $request): Response

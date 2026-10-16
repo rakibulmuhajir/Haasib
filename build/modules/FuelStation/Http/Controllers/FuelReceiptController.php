@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Http\Controllers\Controller;
 use App\Modules\FuelStation\Http\Requests\StoreFuelDeliveryRequest;
 use App\Modules\FuelStation\Services\DailyCloseEntryService;
@@ -27,8 +28,8 @@ class FuelReceiptController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $date = fn ($value, Carbon $fallback) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $value) ? (string) $value : $fallback->toDateString();
-        $from = $date($request->query('start_date'), now()->startOfMonth());
-        $to = $date($request->query('end_date'), now());
+        $from = $date($request->query('start_date'), Carbon::parse(app(CompanyClock::class)->today())->startOfMonth());
+        $to = $date($request->query('end_date'), Carbon::parse(app(CompanyClock::class)->today()));
         if ($from > $to) {
             [$from, $to] = [$to, $from];
         }
@@ -102,7 +103,7 @@ class FuelReceiptController extends Controller
                 'amount' => $rows->sum('amount'),
                 'owed' => $rows->unique('bill_id')->sum('bill_balance'),
             ],
-            'nextCloseDate' => $nextClose ? Carbon::parse($nextClose)->addDay()->toDateString() : now()->toDateString(),
+            'nextCloseDate' => $nextClose ? Carbon::parse($nextClose)->addDay()->toDateString() : app(CompanyClock::class)->today(),
             'temporaryStock' => \App\Modules\Inventory\Models\Item::where('company_id', $company->id)->whereNotNull('fuel_category')->get()->map(fn ($item) => [
                 'id' => $item->id, 'name' => $item->name, ...app(\App\Modules\FuelStation\Services\TemporaryFuelStockService::class)->balance($company->id, $item->id),
             ]),

@@ -5,8 +5,8 @@ namespace App\Http\Middleware;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\FuelStation\Services\FuelNavigationAccess;
 use App\Services\CurrentCompany;
+use App\Support\Modules\ModuleRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -158,22 +158,34 @@ class HandleInertiaRequests extends Middleware
                 ],
                 'currentCompany' => fn () => $serializeCompany($resolve()['company']),
                 'currentCompanyRole' => fn () => $resolve()['role'],
-                'fuelNavigation' => function () use ($request) {
-                    // Resolve after IdentifyCompany has run. The display fallback above
-                    // can be a stdClass from a different, previously visited company.
+                // Each module's own shared props. The key is always present and null when the
+                // module is off for the company, so the frontend types stay put.
+                ...$this->moduleProps($request),
+                // Whether the company charges tax; the one switch behind every tax field.
+                'taxEnabled' => function () {
                     $company = app(CurrentCompany::class)->get();
-                    $user = $request->user();
-                    if (! $company || ! $user) {
-                        return null;
+
+                    // Global pages (/, /companies) can hold a remembered company without its RLS
+                    // context set; read the setting inside that company's context.
+                    return $company
+                        ? app(\App\Services\CompanyContextService::class)->withContext($company, fn () => app(\App\Modules\Accounting\Services\CompanyTax::class)->enabled($company))
+                        : false;
+                },
+                'enabledModules' => function () {
+                    $company = app(CurrentCompany::class)->get();
+
+                    return $company ? array_keys(app(\App\Support\Modules\ModuleRegistry::class)->enabledFor($company)) : [];
+                },
+                // Permission-group label per module permission prefix, for the role editor.
+                'modulePermissionGroups' => function () {
+                    $groups = [];
+                    foreach (app(\App\Support\Modules\ModuleRegistry::class)->all() as $manifest) {
+                        foreach ($manifest->permissionPrefixes() as $prefix) {
+                            $groups[$prefix] = $manifest->permissionGroupLabel();
+                        }
                     }
 
-                    $isFuelStation = $company->isModuleEnabled('fuel_station')
-                        || $company->industry_code === 'fuel_station'
-                        || $company->industry === 'fuel_station';
-
-                    return $isFuelStation
-                        ? app(FuelNavigationAccess::class)->forUser($company, $user)
-                        : null;
+                    return $groups;
                 },
                 // The Settings menu: what this person may set up, grouped (App\Services\SettingsMenu).
                 'settingsMenu' => function () use ($request) {
@@ -207,11 +219,12 @@ class HandleInertiaRequests extends Middleware
                         'canManage' => $user->hasCompanyPermission(Permissions::OPENING_BALANCE_MANAGE),
                         'asOfDate' => $opening['as_of_date'] ?? null,
                         'locked' => ! empty($opening['locked_at']),
-                        'hasAmanat' => Account::where('company_id', $company->id)
-                            ->whereNull('deleted_at')
-                            ->where('is_active', true)
-                            ->where('code', '2200')
-                            ->exists(),
+                        // Module sections Quick Add can offer right now (e.g. amanat advance).
+                        'sections' => collect(app(\App\Modules\Accounting\Extensions\OpeningBalanceSections::class)->availableFor($company))
+                            ->filter(fn ($section) => $section->ready($company))
+                            ->map(fn ($section) => ['key' => $section->key(), 'label' => $section->label(), 'hint' => $section->hint()])
+                            ->values()
+                            ->all(),
                     ];
                 },
             ],
@@ -226,5 +239,33 @@ class HandleInertiaRequests extends Middleware
                 'umrahImportedMutamers' => fn () => $request->session()->get('umrah_imported_mutamers'),
             ],
         ];
+    }
+
+    /**
+     * Shared props contributed by the module manifests, under `auth`. Each is lazy, resolved after
+     * IdentifyCompany has run (the display fallback above can be a stdClass from a different,
+     * previously visited company), and null unless the module is on for the current company.
+     *
+     * @return array<string, \Closure>
+     */
+    private function moduleProps(Request $request): array
+    {
+        $registry = app(ModuleRegistry::class);
+        $props = [];
+
+        foreach ($registry->all() as $manifest) {
+            foreach ($manifest->sharedProps() as $name => $resolver) {
+                $props[$name] = function () use ($request, $manifest, $resolver) {
+                    $company = app(CurrentCompany::class)->get();
+                    $user = $request->user();
+
+                    return $company && $user && $manifest->isEnabledFor($company)
+                        ? $resolver($company, $user)
+                        : null;
+                };
+            }
+        }
+
+        return $props;
     }
 }

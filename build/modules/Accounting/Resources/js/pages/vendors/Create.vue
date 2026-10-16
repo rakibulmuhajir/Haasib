@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,8 @@ interface CompanyRef {
   slug: string
   base_currency: string
 }
+
+const { has } = useModules()
 
 const props = defineProps<{
   company: CompanyRef
@@ -122,11 +125,11 @@ const handleSubmit = () => {
             <div class="space-y-2">
               <Label for="vendor_type" class="flex items-center gap-2 text-text-primary">
                 <Building2 class="h-4 w-4 text-text-tertiary" />
-                Supplier Type
+                Vendor Type
               </Label>
               <Select v-model="form.vendor_type">
                 <SelectTrigger id="vendor_type" class="border-rule-default">
-                  <SelectValue placeholder="Select supplier type" />
+                  <SelectValue placeholder="Select vendor type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="(label, value) in vendorTypes" :key="value" :value="value">
@@ -134,7 +137,7 @@ const handleSubmit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel suppliers.</p>
+              <p v-if="has('fuel_station')" class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel vendors.</p>
               <InputError :message="form.errors.vendor_type" />
             </div>
 

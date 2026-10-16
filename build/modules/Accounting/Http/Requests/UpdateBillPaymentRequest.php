@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
@@ -18,7 +19,7 @@ class UpdateBillPaymentRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'payment_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'payment_date' => ['nullable', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'amount' => ['nullable', 'numeric', 'min:0.01'],
             'payment_method' => ['nullable', 'string', Rule::in(['cash', 'check', 'card', 'fuel_card', 'bank_transfer', 'ach', 'wire', 'other'])],
             'payment_account_id' => [

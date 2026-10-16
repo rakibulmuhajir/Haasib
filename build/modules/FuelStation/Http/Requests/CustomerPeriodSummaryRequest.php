@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Http\Requests\BaseFormRequest;
 use Illuminate\Support\Carbon;
 
@@ -23,7 +24,7 @@ class CustomerPeriodSummaryRequest extends BaseFormRequest
     /** The requested range, or the last full month when none was asked for. */
     public function range(): array
     {
-        $lastMonth = Carbon::now()->subMonthNoOverflow();
+        $lastMonth = Carbon::parse(app(CompanyClock::class)->today())->subMonthNoOverflow();
 
         return [
             $this->validated('from') ?? $lastMonth->copy()->startOfMonth()->toDateString(),

@@ -10,7 +10,6 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Payment;
-use App\Modules\FuelStation\Actions\AmanatMovementAction;
 use App\Services\CommandBus;
 use App\Services\CompanyCurrencyOptions;
 use App\Services\CompanyLetterhead;
@@ -23,31 +22,6 @@ use Inertia\Response;
 
 class PaymentController extends Controller
 {
-    /**
-     * Whether this company/user combination may hold customer payments as amanat instead
-     * of applying them to invoices. Mirrors HandleInertiaRequests' fuel-station check
-     * (module enabled OR industry_code/industry === 'fuel_station'), plus the permission
-     * AmanatMovementAction itself requires.
-     */
-    private function amanatAvailable($company, $user): bool
-    {
-        if (! $user) {
-            return false;
-        }
-
-        $isFuelStation = $company->isModuleEnabled('fuel_station')
-            || $company->industry_code === 'fuel_station'
-            || $company->industry === 'fuel_station';
-
-        if (! $isFuelStation) {
-            return false;
-        }
-
-        $permission = (new AmanatMovementAction())->permission();
-
-        return ! $permission || $user->hasCompanyPermission($permission);
-    }
-
     public function index(Request $request): Response
     {
         $company = CompanyContext::getCompany();
@@ -149,7 +123,7 @@ class PaymentController extends Controller
             'currencies' => $currencies,
             'depositAccounts' => $depositAccounts,
             'preselect' => $preselect,
-            'amanat' => $this->amanatAvailable($company, $request->user()) ? ['enabled' => true] : null,
+            'receiptModes' => app(\App\Modules\Accounting\Extensions\PaymentReceiptModes::class)->availableFor($company, $request->user()),
         ]);
     }
 
@@ -161,8 +135,14 @@ class PaymentController extends Controller
         // Transform validated data to match Action expected format
         $validated = $request->validated();
 
-        if (($validated['received_as'] ?? 'invoices') === 'amanat') {
-            return $this->storeAmanat($request, $company, $commandBus, $validated);
+        $mode = $validated['received_as'] ?? 'invoices';
+        if ($mode !== 'invoices') {
+            $handler = app(\App\Modules\Accounting\Extensions\PaymentReceiptModes::class)->handler($company, $request->user(), $mode);
+            if (! $handler) {
+                throw ValidationException::withMessages(['received_as' => 'This option is not available.']);
+            }
+
+            return $handler($request, $company, $validated);
         }
 
         // Map payment method from FormRequest format to Action format. When the form
@@ -206,62 +186,6 @@ class PaymentController extends Controller
                 ->route('payments.show', ['company' => $company->slug, 'payment' => $result['data']['id']])
                 ->with('success', $result['message']);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return redirect()
-                ->back()
-                ->withErrors($e->errors())
-                ->withInput();
-        } catch (\Exception $e) {
-            return redirect()
-                ->back()
-                ->with('error', $e->getMessage())
-                ->withInput();
-        }
-    }
-
-    /**
-     * Record money received from a customer as amanat (an advance held for them, used up
-     * against fuel later) instead of applying it to invoices. Reuses the FuelStation
-     * module's own command — no journal, payment row or amanat row is written here.
-     */
-    private function storeAmanat(StorePaymentRequest $request, $company, CommandBus $commandBus, array $validated): RedirectResponse
-    {
-        $user = $request->user();
-
-        if (! $this->amanatAvailable($company, $user)) {
-            throw ValidationException::withMessages([
-                'received_as' => 'Amanat is not available for this company.',
-            ]);
-        }
-
-        try {
-            $commandBus->dispatch('fuel.amanat.movement', [
-                'customer_id' => $validated['customer_id'],
-                'kind' => 'deposit',
-                'business_date' => $validated['payment_date'] ?? null,
-                'amount' => $validated['amount'],
-                'payment_account_id' => $validated['deposit_account_id'],
-                'reference' => $validated['reference_number'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-            ], $user);
-
-            $customer = Customer::where('company_id', $company->id)->findOrFail($validated['customer_id']);
-
-            return redirect()
-                ->route('fuel.amanat.show', ['company' => $company->slug, 'customer' => $customer->id])
-                ->with('success', "Amanat received from {$customer->name}");
-        } catch (ModelNotFoundException $e) {
-            $field = $e->getModel() === Customer::class ? 'customer_id' : 'deposit_account_id';
-
-            return redirect()
-                ->back()
-                ->withErrors([$field => $field === 'customer_id' ? 'The selected customer was not found.' : 'The selected deposit account was not found.'])
-                ->withInput();
-        } catch (\InvalidArgumentException $e) {
-            return redirect()
-                ->back()
-                ->withErrors(['customer_id' => $e->getMessage()])
-                ->withInput();
-        } catch (ValidationException $e) {
             return redirect()
                 ->back()
                 ->withErrors($e->errors())

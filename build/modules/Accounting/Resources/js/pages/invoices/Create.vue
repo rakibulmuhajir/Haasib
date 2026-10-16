@@ -4,6 +4,7 @@ import { EntitySearch, QuickAddModal } from '@/components/forms';
 import InputError from '@/components/InputError.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
+import ModuleSlot from '@/components/ModuleSlot.vue';
 import RelatedActions from '@/components/RelatedActions.vue';
 import TotalRow from '@/components/TotalRow.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -25,9 +26,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { useTaxEnabled } from '@/composables/useTaxEnabled';
 import { AlertTriangle, ArrowLeft, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -71,7 +72,6 @@ const props = defineProps<{
     currencies: CurrencyOption[];
     revenueAccounts?: AccountOption[];
     preselect?: Preselect;
-    isFuelStation?: boolean;
 }>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -135,6 +135,11 @@ const taxAmount = computed(() =>
 );
 
 const totalAmount = computed(() => subtotal.value + taxAmount.value);
+
+// Off hides tax, except on an invoice that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = taxAmount.value > 0
+const showTax = computed(() => taxEnabled.value || hadTax)
 
 const selectedCurrency = computed(() =>
     props.currencies.find(
@@ -446,6 +451,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`);
                             locale="en-PK"
                         />
                         <TotalRow
+ v-if="showTax"
                             level="line"
                             label="Sales tax"
                             :amount="taxAmount"
@@ -464,18 +470,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`);
                 </CardContent>
             </Card>
 
-            <Card v-if="props.isFuelStation" variant="form">
-                <CardContent class="space-y-2 pt-6">
-                    <div class="flex items-start gap-2">
-                        <Checkbox id="is_direct_delivery" v-model:checked="form.is_direct_delivery" />
-                        <div>
-                            <Label for="is_direct_delivery" class="font-normal">Direct delivery — not from the pumps</Label>
-                            <p class="text-xs text-muted-foreground">Fuel that went straight to the customer. The daily close leaves it alone.</p>
-                        </div>
-                    </div>
-                    <InputError :message="form.errors.is_direct_delivery" />
-                </CardContent>
-            </Card>
+            <ModuleSlot name="invoice.form.options" :form="form" />
 
             <Card variant="form">
                 <CardHeader>

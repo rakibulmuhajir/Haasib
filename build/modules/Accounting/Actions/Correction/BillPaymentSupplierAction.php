@@ -10,7 +10,7 @@ use App\Modules\Accounting\Services\BillCorrectionService;
 use Illuminate\Validation\ValidationException;
 
 /** Moves a bill payment to the supplier who was really paid. See BillCorrectionService. */
-class BillPaymentSupplierAction implements PaletteAction
+class BillPaymentSupplierAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -40,5 +40,10 @@ class BillPaymentSupplierAction implements PaletteAction
             'message' => "Corrected ({$result['number']})",
             'data' => $result,
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

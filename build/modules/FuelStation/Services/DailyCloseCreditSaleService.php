@@ -45,6 +45,33 @@ class DailyCloseCreditSaleService
         }
     }
 
+    /**
+     * One customer may have several rows a day (one per slip), but the same slip number twice
+     * for the same customer is a double entry. Compared ignoring case and whitespace; rows with
+     * no slip number are never compared. Returns ["credit_sales.{i}.reference" => message] for
+     * each repeat (the first occurrence is left alone). Shared with StoreDailyCloseRequest so a
+     * parked close hears it too.
+     */
+    public static function duplicateSlipErrors(array $rows): array
+    {
+        $seen = [];
+        $errors = [];
+        foreach ($rows as $index => $row) {
+            $customer = $row['customer_id'] ?? null;
+            $slip = mb_strtolower(preg_replace('/\s+/u', '', (string) ($row['reference'] ?? '')));
+            if (! $customer || $slip === '') {
+                continue;
+            }
+            $key = $customer.'|'.$slip;
+            if (isset($seen[$key])) {
+                $errors["credit_sales.{$index}.reference"] = 'Slip already entered for this customer.';
+            }
+            $seen[$key] = true;
+        }
+
+        return $errors;
+    }
+
     public function prepare(string $companyId, string $date, array $rows, float $nozzleRevenue, float $availableSales, User $user, array $fuelRevenueAccountIds = []): array
     {
         Validator::make(['credit_sales' => $rows], [
@@ -54,6 +81,11 @@ class DailyCloseCreditSaleService
             'credit_sales.*.reference' => 'nullable|string|max:100',
             'credit_sales.*.unit_id' => 'nullable|uuid',
         ])->validate();
+
+        $duplicates = self::duplicateSlipErrors($rows);
+        if ($duplicates) {
+            throw ValidationException::withMessages($duplicates);
+        }
 
         $company = Company::whereKey($companyId)->firstOrFail();
         $pending = array_merge(

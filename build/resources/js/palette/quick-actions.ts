@@ -306,7 +306,7 @@ export function getQuickActions(entity: string, verb: string): QuickAction[] {
           label: 'Create new bill',
           command: 'bill create {user_input}',
           needsRow: false,
-          prompt: 'Enter vendor name and amount (e.g., Supplier Inc 500)',
+          prompt: 'Enter vendor name and amount (e.g., Vendor Inc 500)',
         },
         {
           key: '0',

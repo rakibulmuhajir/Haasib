@@ -292,23 +292,23 @@ onBeforeUnmount(() => {
                 <h2 class="h2 mb14">What people type</h2>
                 <p class="body-md mb44">
                     Press Ctrl+K anywhere. You only see the commands your role
-                    may run.
+                    may run, and only the ones for your trade.
                 </p>
                 <div class="ref">
                 <dl class="ref-list">
                     <dt>customer create</dt><dd>Add a customer</dd>
+                    <dt>vendor create</dt><dd>Add a vendor</dd>
                     <dt>invoice create</dt><dd>Open a new invoice</dd>
-                    <dt>invoice send</dt><dd>Send an invoice</dd>
                     <dt>payment create</dt><dd>Record money received</dd>
-                    <dt>invoice void</dt><dd>Cancel an invoice</dd>
-                    <dt>invoice duplicate</dt><dd>Copy an invoice</dd>
+                    <dt>bill create</dt><dd>Open a new bill</dd>
+                    <dt>journal create</dt><dd>Open a manual journal</dd>
                 </dl>
                 <dl class="ref-list">
-                    <dt>customer list</dt><dd>See every customer</dd>
-                    <dt>invoice list</dt><dd>See every invoice</dd>
-                    <dt>payment list</dt><dd>See money received</dd>
-                    <dt>user create</dt><dd>Invite someone to the company</dd>
-                    <dt>company switch</dt><dd>Move to another company</dd>
+                    <dt>fuel.amanat movement</dt><dd>Amanat deposit or withdrawal</dd>
+                    <dt>fuel.direct_sale</dt><dd>Fuel sold straight to a customer</dd>
+                    <dt>fuel.daily_close save</dt><dd>Open the day's close</dd>
+                    <dt>fuel.daily_close expense</dt><dd>Add an expense to a close</dd>
+                    <dt>vendor list</dt><dd>See everyone you buy from</dd>
                     <dt>help</dt><dd>Every command you can run</dd>
                 </dl>
                 </div>
@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                     <h3>Setting up</h3>
-                    <p>A chart of accounts for your trade, opening balances, fiscal years and periods, tax rates.</p>
+                    <p>A chart of accounts for your trade, opening balances for every account, fiscal years and periods, tax rates.</p>
                 </div>
                 <div>
                     <h3>People and stock</h3>
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
                             place, and the day posts itself to the books.
                         </p>
                         <p class="brass trade-tail">
-                            Credit slips per vehicle.
+                            Credit slips per vehicle, with repeats caught.
                             Amanat held for customers. Fuel rates, investors,
                             shift handovers, stock and profit statements.
                         </p>
@@ -378,8 +378,9 @@ onBeforeUnmount(() => {
                         <article class="trade-card">
                             <h3>Every other business</h3>
                             <p>
-                                Invoices, bills, bank, payroll and the reports
-                                your accountant asks for, with guided set-up.
+                                A small-business chart of accounts, guided
+                                set-up, and a home page with cash, what you're
+                                owed, what you owe and this month's profit.
                             </p>
                         </article>
                     </div>
@@ -396,7 +397,7 @@ onBeforeUnmount(() => {
                     <li>Mistakes are corrected with a visible reversal, never by quietly editing the past.</li>
                     <li>Closed periods stay closed until someone with the right role reopens them.</li>
                     <li>Roles decide who can see and do what, down to single actions.</li>
-                    <li>Each company's records are kept apart in the database.</li>
+                    <li>Each company's records are kept apart in the database, and each works in its own local date.</li>
                     <li>Run several companies from one login, and switch between them in a click.</li>
                     </ul>
                 </div>

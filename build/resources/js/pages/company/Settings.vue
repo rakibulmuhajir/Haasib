@@ -208,23 +208,9 @@ const permissionGroup = (permission: string) => {
         ].includes(prefix)
     )
         return 'Payroll';
-    if (prefix === 'umrah') return 'Umrah operations';
-    if (
-        [
-            'fuel',
-            'fuel_rate',
-            'fuel_product',
-            'fuel_sale',
-            'pump',
-            'pump_reading',
-            'tank_reading',
-            'investor',
-            'handover',
-            'amanat',
-            'daily_close',
-        ].includes(prefix)
-    )
-        return 'Fuel station';
+    // Module-owned prefixes (fuel, umrah, ...) are labelled by the module manifests.
+    const moduleGroup = ((page.props.auth as any)?.modulePermissionGroups ?? {})[prefix];
+    if (moduleGroup) return moduleGroup;
 
     return 'Other';
 };

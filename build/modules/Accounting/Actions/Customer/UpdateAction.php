@@ -7,7 +7,7 @@ use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Customer;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -233,5 +233,15 @@ class UpdateAction implements PaletteAction
         }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Customer not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Update a customer',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

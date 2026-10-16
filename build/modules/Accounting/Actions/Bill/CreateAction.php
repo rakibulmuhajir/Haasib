@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -87,6 +87,8 @@ class CreateAction implements PaletteAction
             $normalizedLines = collect($params['line_items'])
                 ->map(fn ($item) => $this->withPurchaseDefaults($company->id, $item))
                 ->all();
+            // Tax off for the company: lines post without tax whatever the form sent.
+            $normalizedLines = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($normalizedLines, app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company));
 
             $this->assertLineAccountsValid($normalizedLines);
             $this->assertDirectQuantityValid($normalizedLines);
@@ -99,6 +101,7 @@ class CreateAction implements PaletteAction
 
             $computed = BillLineTotals::computeAll($normalizedLines, $overallType, $overallValue);
             $lineTotals = collect($computed['lines']);
+            BillLineTotals::assertTotalPositive((float) $computed['subtotal']);
 
             $subtotal = $computed['subtotal'];
             $taxAmount = $computed['tax_amount'];
@@ -315,20 +318,20 @@ class CreateAction implements PaletteAction
             // already used is never re-issued -- it would collide with that bill's own row
             // on the (company_id, bill_number) unique index, since a soft delete leaves the
             // row, and its number, in place. Mirrors Invoice::generateInvoiceNumber.
-            $last = Bill::withTrashed()
-                ->where('company_id', $companyId)
-                ->whereNotNull('bill_number')
-                ->lockForUpdate()
-                ->orderByDesc('bill_number')
-                ->value('bill_number');
-
-            if ($last && preg_match('/(\d+)$/', $last, $m)) {
-                $seq = ((int) $m[1]) + 1;
-            } else {
-                $seq = 1;
-            }
-
-            return 'BILL-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+            return app(\App\Modules\Accounting\Services\BillNumberService::class)->next($companyId);
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a bill',
+            'form_url' => '/{company}/bills/create',
+            'fields' => [
+                'vendor_id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+                'bill_date' => ['hint' => 'Bill date'],
+                'due_date' => ['hint' => 'Due date'],
+            ],
+        ];
     }
 }

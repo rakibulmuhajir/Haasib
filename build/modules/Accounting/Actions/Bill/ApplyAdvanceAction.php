@@ -16,7 +16,7 @@ use App\Support\PaletteFormatter;
  * automatically the moment a new bill becomes payable, so this is only needed for the
  * older-bill case.
  */
-class ApplyAdvanceAction implements PaletteAction
+class ApplyAdvanceAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -54,6 +54,16 @@ class ApplyAdvanceAction implements PaletteAction
         return [
             'message' => 'Applied ' . PaletteFormatter::money($result['applied'], $bill->currency) . " of advance to {$bill->bill_number}",
             'data' => ['id' => $bill->id, 'applied' => $result['applied']],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Apply a vendor advance to a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+            ],
         ];
     }
 }

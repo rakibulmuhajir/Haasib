@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Payment;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -38,7 +39,7 @@ use Carbon\Carbon;
  * way, because CustomerStatementService's running balance is driven by Payment.amount, not
  * by how much of it happened to land on an invoice yet.
  */
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -55,7 +56,7 @@ class CreateAction implements PaletteAction
             'method' => 'required|string|in:cash,check,card,bank_transfer,other',
             'currency' => 'nullable|string|size:3|uppercase', // must match invoice currency or base
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
-            'date' => 'nullable|date|before_or_equal:today',
+            'date' => 'nullable|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
             'deposit_account_id' => 'required|uuid',
@@ -245,14 +246,14 @@ class CreateAction implements PaletteAction
                     $customer = $invoice->customer;
                 } elseif ($invoice->customer_id !== $customer->id) {
                     throw ValidationException::withMessages([
-                        "allocations.{$i}.invoice_id" => "Invoice {$invoice->invoice_number} belongs to a different buyer.",
+                        "allocations.{$i}.invoice_id" => "Invoice {$invoice->invoice_number} belongs to a different customer.",
                     ]);
                 }
                 $rows[] = ['invoice' => $invoice, 'amount' => round((float) $alloc['amount'], 6)];
             }
             if (!empty($params['customer_id']) && $customer && $params['customer_id'] !== $customer->id) {
                 throw ValidationException::withMessages([
-                    'customer_id' => 'Allocations belong to a different buyer than customer_id.',
+                    'customer_id' => 'Allocations belong to a different customer than customer_id.',
                 ]);
             }
             $sum = round(array_sum(array_column($rows, 'amount')), 2);
@@ -273,7 +274,7 @@ class CreateAction implements PaletteAction
             $this->assertInvoiceIsSettleable($invoice);
             if (!empty($params['customer_id']) && $params['customer_id'] !== $invoice->customer_id) {
                 throw ValidationException::withMessages([
-                    'customer_id' => 'customer_id does not match the invoice\'s buyer.',
+                    'customer_id' => 'customer_id does not match the invoice\'s customer.',
                 ]);
             }
             $currency = strtoupper($params['currency'] ?? $invoice->currency);
@@ -283,13 +284,13 @@ class CreateAction implements PaletteAction
 
         if (empty($params['customer_id'])) {
             throw ValidationException::withMessages([
-                'customer_id' => 'A buyer, invoice, or allocation set is required to record a payment.',
+                'customer_id' => 'A customer, invoice, or allocation set is required to record a payment.',
             ]);
         }
 
         $customer = Customer::where('company_id', $companyId)->find($params['customer_id']);
         if (!$customer) {
-            throw ValidationException::withMessages(['customer_id' => 'Choose a buyer belonging to this company.']);
+            throw ValidationException::withMessages(['customer_id' => 'Choose a customer belonging to this company.']);
         }
 
         // `invoice_ids`: the buyer picked several invoices by hand but left it to us to work
@@ -302,7 +303,7 @@ class CreateAction implements PaletteAction
                 $this->assertInvoiceIsSettleable($invoice);
                 if ($invoice->customer_id !== $customer->id) {
                     throw ValidationException::withMessages([
-                        'invoice_ids' => "Invoice {$invoice->invoice_number} belongs to a different buyer.",
+                        'invoice_ids' => "Invoice {$invoice->invoice_number} belongs to a different customer.",
                     ]);
                 }
                 return $invoice;
@@ -402,5 +403,19 @@ class CreateAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Receive a customer payment',
+            'fields' => [
+                'customer_id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+                'deposit_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Deposited into account'],
+                'amount' => ['hint' => 'Amount'],
+                'date' => ['hint' => 'Date'],
+            ],
+        ];
     }
 }

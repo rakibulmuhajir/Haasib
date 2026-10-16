@@ -11,7 +11,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\PostingService;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -101,5 +101,10 @@ class DeleteAction implements PaletteAction
                 'redirect' => "/{$company->slug}/payments",
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Delete a customer payment'];
     }
 }

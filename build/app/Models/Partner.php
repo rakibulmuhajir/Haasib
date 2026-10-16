@@ -194,7 +194,7 @@ class Partner extends Model
             return true;
         }
 
-        $now = now();
+        $now = app(\App\Support\CompanyClock::class)->now($this->company);
         $resetDate = $this->period_reset_date;
 
         if ($this->drawing_limit_period === 'monthly') {
@@ -214,7 +214,7 @@ class Partner extends Model
     public function resetPeriod(): void
     {
         $this->current_period_withdrawn = 0;
-        $this->period_reset_date = now()->startOfDay();
+        $this->period_reset_date = app(\App\Support\CompanyClock::class)->now($this->company)->startOfDay();
         $this->save();
     }
 }

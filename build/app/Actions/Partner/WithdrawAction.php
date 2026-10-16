@@ -13,7 +13,7 @@ use App\Services\PartnerLedgerService;
  * partner.withdraw: a partner takes money out. Dr their Drawings account, Cr cash/bank.
  * Over the drawing limit it still posts and returns a warning.
  */
-class WithdrawAction implements PaletteAction
+class WithdrawAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -37,6 +37,19 @@ class WithdrawAction implements PaletteAction
         return [
             'message' => 'Withdrawal recorded',
             'data' => ['id' => $result['transaction']->id, 'gl_transaction_id' => $result['gl']->id, 'warning' => $result['warning']],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Record a partner withdrawal',
+            'fields' => [
+                'partner_id' => ['hint' => 'Partner'],
+                'account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
+                'transaction_date' => ['hint' => 'Date'],
+                'amount' => ['hint' => 'Amount'],
+            ],
         ];
     }
 }

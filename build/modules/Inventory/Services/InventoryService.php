@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Inventory\Models\Item;
@@ -43,7 +44,7 @@ class InventoryService
             'company_id' => $bill->company_id,
             'warehouse_id' => $warehouseId,
             'item_id' => $line->item_id,
-            'movement_date' => $movementDate ?? now()->toDateString(),
+            'movement_date' => $movementDate ?? app(CompanyClock::class)->today(),
             'movement_type' => 'purchase',
             'quantity' => abs($quantity),
             'unit_cost' => $unitCost,
@@ -117,7 +118,7 @@ class InventoryService
                 'company_id' => $original->company_id,
                 'warehouse_id' => $original->warehouse_id,
                 'item_id' => $original->item_id,
-                'movement_date' => now()->toDateString(),
+                'movement_date' => app(CompanyClock::class)->today(),
                 'movement_type' => 'adjustment_out',
                 'quantity' => -abs($original->quantity), // Negative to reverse
                 'unit_cost' => $original->unit_cost,

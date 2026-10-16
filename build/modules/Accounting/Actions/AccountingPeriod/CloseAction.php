@@ -9,7 +9,7 @@ use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Facades\Auth;
 
-class CloseAction implements PaletteAction
+class CloseAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -51,5 +51,14 @@ class CloseAction implements PaletteAction
 
         return ['message' => 'Period closed successfully.'];
     }
-}
 
+    public function palette(): array
+    {
+        return [
+            'description' => 'Close an accounting period',
+            'fields' => [
+                'id' => ['hint' => 'Period'],
+            ],
+        ];
+    }
+}

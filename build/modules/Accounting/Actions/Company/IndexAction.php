@@ -8,7 +8,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -43,5 +43,10 @@ class IndexAction implements PaletteAction
                 footer: $companies->count() . ' companies'
             ),
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List your companies'];
     }
 }

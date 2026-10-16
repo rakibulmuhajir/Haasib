@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -89,5 +89,10 @@ class CreateAction implements PaletteAction
         }
 
         return $slug;
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Create a company'];
     }
 }

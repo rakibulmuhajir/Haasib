@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -137,6 +137,17 @@ class CreateAction implements PaletteAction
                 'id' => $transaction->id,
                 'number' => $transaction->transaction_number,
                 'status' => $transaction->status,
+            ],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Post a manual journal',
+            'form_url' => '/{company}/journals/create',
+            'fields' => [
+                'transaction_date' => ['hint' => 'Date'],
             ],
         ];
     }

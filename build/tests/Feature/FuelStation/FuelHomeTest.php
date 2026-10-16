@@ -142,7 +142,7 @@ test('a company that is not a fuel station still opens company show', function (
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('company/Show')
-            ->where('isFuelStation', false));
+            ->where('auth.enabledModules', fn ($modules) => ! in_array('fuel_station', collect($modules)->all(), true)));
 });
 
 test('the history tab adds the chosen range', function () {

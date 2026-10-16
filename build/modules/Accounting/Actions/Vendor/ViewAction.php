@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
 use App\Support\PaletteFormatter;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     use ResolvesVendors;
 
@@ -108,5 +108,15 @@ class ViewAction implements PaletteAction
         ]);
 
         return $parts ? implode(', ', $parts) : '—';
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View a vendor',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'vendor', 'hint' => 'Vendor'],
+            ],
+        ];
     }
 }

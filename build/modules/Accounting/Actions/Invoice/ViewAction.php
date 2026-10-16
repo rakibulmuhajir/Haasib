@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Invoice;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
@@ -9,7 +10,7 @@ use App\Modules\Accounting\Models\Payment;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -45,7 +46,7 @@ class ViewAction implements PaletteAction
             ['Status', $this->formatStatusLong($invoice)],
             ['Invoice Date', $invoice->invoice_date->format('M j, Y')],
             ['Due Date', $invoice->due_date->format('M j, Y') .
-                ($invoice->due_date->isPast() && $invoice->balance > 0 ? ' {error}(OVERDUE){/}' : '')],
+                ($invoice->due_date->toDateString() < app(CompanyClock::class)->today() && $invoice->balance > 0 ? ' {error}(OVERDUE){/}' : '')],
             ['', ''],  // Spacer
             ['Financial Summary', ''],
             ['Subtotal', PaletteFormatter::money($invoice->subtotal, $invoice->currency)],
@@ -126,10 +127,10 @@ class ViewAction implements PaletteAction
             'cancelled',
             'void',
             'draft',
-        ]) && $invoice->due_date->isPast();
+        ]) && $invoice->due_date->toDateString() < app(CompanyClock::class)->today();
 
         if ($isOverdue) {
-            $days = $invoice->due_date->diffInDays(now());
+            $days = (int) $invoice->due_date->copy()->startOfDay()->diffInDays(\Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today()));
             return "{error}Overdue by {$days} days{/}";
         }
 
@@ -144,5 +145,15 @@ class ViewAction implements PaletteAction
             'cancelled' => '{secondary}Cancelled{/}',
             default => $invoice->status,
         };
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

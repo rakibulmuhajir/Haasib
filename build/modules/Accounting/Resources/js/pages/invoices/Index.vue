@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -74,6 +75,7 @@ const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
 const showVoided = ref(props.filters.show_voided ?? false)
 const showCorrections = ref(props.filters.show_corrections ?? false)
+const { has: hasModule } = useModules()
 const slipDiffers = ref(props.filters.slip_differs ?? false)
 const { t } = useLexicon()
 
@@ -190,7 +192,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
         <Switch id="show-corrections" v-model:checked="showCorrections" @update:checked="handleSearch" />
         <Label for="show-corrections" class="text-sm text-text-secondary">Show corrections</Label>
       </div>
-      <div class="flex items-center gap-2">
+      <div v-if="hasModule('fuel_station')" class="flex items-center gap-2">
         <Switch id="slip-differs" v-model:checked="slipDiffers" @update:checked="handleSearch" />
         <Label for="slip-differs" class="text-sm text-text-secondary">Slip on another day</Label>
       </div>

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Services\Concerns;
 
+use App\Support\CompanyClock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -31,7 +32,7 @@ trait RecordsCorrections
         return $this->posting->postBalancedTransaction([
             'company_id' => $companyId,
             'transaction_type' => 'correction',
-            'date' => now()->toDateString(),
+            'date' => app(CompanyClock::class)->today(),
             'currency' => $currency,
             'base_currency' => $currency,
             'description' => $description,

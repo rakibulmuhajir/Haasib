@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Bill;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  * - Multiple receipts: receive remaining quantities later
  * - Variance tracking: expected vs received with GL posting
  */
-class ReceiveGoodsAction implements PaletteAction
+class ReceiveGoodsAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -69,7 +70,7 @@ class ReceiveGoodsAction implements PaletteAction
         }
 
         $receivedCount = 0;
-        $receiptDate = $params['receipt_date'] ?? now()->toDateString();
+        $receiptDate = $params['receipt_date'] ?? app(CompanyClock::class)->today();
         $receiptNotes = $params['notes'] ?? null;
 
         DB::transaction(function () use ($bill, $linesToReceive, $receiptDate, $receiptNotes, &$receivedCount) {
@@ -306,7 +307,7 @@ class ReceiveGoodsAction implements PaletteAction
         }
 
         if ($varianceQty < -0.0001 && empty($lineData['variance_treatment'])) {
-            throw new \InvalidArgumentException('Choose whether the shortage is a final loss or a supplier claim.');
+            throw new \InvalidArgumentException('Choose whether the shortage is a final loss or a vendor claim.');
         }
 
         $varianceTreatment = $varianceQty < -0.0001
@@ -359,7 +360,7 @@ class ReceiveGoodsAction implements PaletteAction
                 ? $this->supplierClaimsReceivableAccountId($company)
                 : $company->transit_loss_account_id;
             if (! $lossAccountId) {
-                throw new \RuntimeException('A loss or supplier claim account is required to record receipt variance.');
+                throw new \RuntimeException('A loss or vendor claim account is required to record receipt variance.');
             }
 
             $amount = abs($varianceCost);
@@ -416,5 +417,16 @@ class ReceiveGoodsAction implements PaletteAction
         }
 
         return $entries;
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Receive goods on a bill',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
+                'warehouse_id' => ['inputType' => 'search', 'searchEntity' => 'warehouse', 'hint' => 'Into warehouse'],
+            ],
+        ];
     }
 }

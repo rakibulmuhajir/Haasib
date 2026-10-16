@@ -17,6 +17,7 @@ import {
   Scale,
   Clock,
   ScrollText,
+  CalendarDays,
 } from 'lucide-vue-next'
 
 export const accountingNav: ModuleNavConfig = {
@@ -39,6 +40,7 @@ export const accountingNav: ModuleNavConfig = {
           { title: 'Who Owes Us', href: `/${slug}/reports/receivables-aging`, icon: Clock },
           { title: 'What We Owe', href: `/${slug}/reports/payables-aging`, icon: Clock },
           { title: 'Statements', href: `/${slug}/reports/statements`, icon: ScrollText },
+          { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: CalendarDays },
           { title: 'Settings', href: `/${slug}/setup`, icon: Settings },
         ],
       },
@@ -58,6 +60,7 @@ export const accountingNav: ModuleNavConfig = {
         items: [
           { title: 'Bills', href: `/${slug}/bills`, icon: ReceiptText },
           { title: 'Bill Payments', href: `/${slug}/bill-payments`, icon: Banknote },
+          { title: 'Expenses', href: `/${slug}/expenses`, icon: Receipt },
           { title: t('vendors'), href: `/${slug}/vendors`, icon: Truck },
           { title: 'Vendor Credits', href: `/${slug}/vendor-credits`, icon: Receipt },
         ],

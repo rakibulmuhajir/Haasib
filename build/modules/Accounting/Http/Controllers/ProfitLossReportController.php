@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Services\ProfitLossReportService;
@@ -15,8 +16,8 @@ class ProfitLossReportController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $start = $request->query('start') ?? now()->startOfMonth()->toDateString();
-        $end = $request->query('end') ?? now()->toDateString();
+        $start = $request->query('start') ?? app(CompanyClock::class)->now()->startOfMonth()->toDateString();
+        $end = $request->query('end') ?? app(CompanyClock::class)->today();
 
         $evidence = app(\App\Modules\Accounting\Services\StatementValueTrail::class);
         $includeTrail = $evidence->available($request->user()) && $request->header('X-Inertia-Partial-Component') === 'accounting/reports/ProfitLoss' && in_array('valueTrail', explode(',', $request->header('X-Inertia-Partial-Data', '')), true);

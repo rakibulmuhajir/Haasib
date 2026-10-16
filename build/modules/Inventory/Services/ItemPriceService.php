@@ -2,10 +2,9 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
-use App\Modules\FuelStation\Models\RateChange;
-use App\Modules\FuelStation\Services\DailyCloseLockService;
-use App\Modules\FuelStation\Services\LubricantCostService;
+use App\Modules\Inventory\Extensions\ItemPriceHistory;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemPrice;
 use App\Modules\Inventory\Models\ItemPriceChange;
@@ -26,15 +25,13 @@ use Illuminate\Validation\ValidationException;
  */
 class ItemPriceService
 {
-    public function __construct(private readonly DailyCloseLockService $locks) {}
+    public function __construct(private readonly ItemPriceHistory $history) {}
 
     /** Create the entry for a date, or replace the one already there. */
     public function save(string $companyId, string $itemId, string $date, float $salePrice, ?float $purchasePrice, ?string $notes, ?string $userId): ItemPrice
     {
         $item = Item::where('company_id', $companyId)->findOrFail($itemId);
-        if ($item->fuel_category) {
-            throw ValidationException::withMessages(['item_id' => 'Fuel prices are set under Fuel prices.']);
-        }
+        $this->history->assertCanPrice($item, $companyId, $date);
         $date = Carbon::parse($date)->toDateString();
         $this->assertOpen($companyId, $date);
 
@@ -86,7 +83,7 @@ class ItemPriceService
     /** Point items.selling_price (and cost_price when the entry gives one) at the entry in force today. */
     public function syncItem(Item $item, ?Carbon $today = null): void
     {
-        $inForce = $this->inForce($item->company_id, $item->id, ($today ?? now())->toDateString());
+        $inForce = $this->inForce($item->company_id, $item->id, ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->toDateString());
         if (! $inForce) {
             return;
         }
@@ -114,24 +111,16 @@ class ItemPriceService
     public function timeline(Item $item, string $companySlug, ?Carbon $today = null): array
     {
         $companyId = $item->company_id;
-        $today = ($today ?? now())->toDateString();
-        $lockedMonths = array_flip($this->locks->lockedMonths($companyId));
+        $today = ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->toDateString();
+        $lockedMonths = array_flip($this->history->lockedMonths($companyId));
         $rows = [];
 
-        if ($item->fuel_category) {
-            $rates = RateChange::where('company_id', $companyId)->where('item_id', $item->id)->get();
-            $current = $rates->filter(fn ($r) => $r->effective_date->toDateString() <= $today)->sortByDesc('effective_date')->first();
-            foreach ($rates as $rate) {
-                $rows[] = [
-                    'id' => 'rate-'.$rate->id, 'date' => $rate->effective_date->toDateString(), 'kind' => 'fuel_rate',
-                    'label' => 'Fuel rate', 'price' => (float) $rate->sale_rate, 'quantity' => null,
-                    'detail' => 'Purchase '.number_format((float) $rate->purchase_rate, 2),
-                    'source_label' => 'Fuel prices', 'source_url' => "/{$companySlug}/fuel/rates",
-                    'in_force' => $current !== null && $current->id === $rate->id, 'editable' => false,
-                    'price_id' => null, 'purchase_price' => (float) $rate->purchase_rate, 'notes' => $rate->notes,
-                ];
-            }
-        } else {
+        $module = $this->history->timelineRows($item, $companyId, $companySlug, $today);
+        if ($module !== null) {
+            array_push($rows, ...$module['rows']);
+        }
+
+        if ($module === null || ! $module['replaces_sale_prices']) {
             $entries = ItemPrice::where('company_id', $companyId)->where('item_id', $item->id)->get();
             $current = $this->inForce($companyId, $item->id, $today);
             foreach ($entries as $entry) {
@@ -167,7 +156,7 @@ class ItemPriceService
         }
 
         $corrections = Transaction::where('company_id', $companyId)
-            ->where('transaction_type', LubricantCostService::TYPE)
+            ->whereIn('transaction_type', $this->history->correctionTypes())
             ->whereIn('status', ['posted', 'locked'])
             ->whereNull('deleted_at')->whereNull('reversed_by_id')->whereNull('reversal_of_id')
             ->get(['id', 'transaction_date', 'metadata']);
@@ -189,7 +178,7 @@ class ItemPriceService
         }
 
         $order = ['sale_price' => 0, 'fuel_rate' => 0, 'purchase_bill' => 1, 'month_correction' => 2];
-        usort($rows, fn ($a, $b) => [$b['date'], $order[$a['kind']]] <=> [$a['date'], $order[$b['kind']]]);
+        usort($rows, fn ($a, $b) => [$b['date'], $order[$a['kind']] ?? 0] <=> [$a['date'], $order[$b['kind']] ?? 0]);
 
         return $rows;
     }
@@ -241,7 +230,7 @@ class ItemPriceService
 
     private function assertOpen(string $companyId, string $date): void
     {
-        if ($this->locks->isDateInLockedMonth($companyId, $date)) {
+        if (in_array(Carbon::parse($date)->format('Y-m'), $this->history->lockedMonths($companyId), true)) {
             throw ValidationException::withMessages([
                 'effective_date' => Carbon::parse($date)->format('F Y').' is locked.',
             ]);

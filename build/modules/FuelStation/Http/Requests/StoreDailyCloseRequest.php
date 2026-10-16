@@ -144,7 +144,7 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
             'amanat_disbursements.*.amount' => 'required|numeric|min:0',
             'amanat_disbursements.*.kind' => 'nullable|in:withdrawal,fuel_purchase',
-            'amanat_disbursements.*.fuel_item_id' => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('inv.items', 'id')->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)->whereNotNull('fuel_category')],
+            'amanat_disbursements.*.fuel_item_id' => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists(\App\Modules\Inventory\Models\Item::class, 'id')->where('company_id', app(\App\Services\CurrentCompany::class)->get()->id)->whereNotNull('fuel_category')],
             'amanat_disbursements.*.fuel_quantity' => 'nullable|numeric|min:0|decimal:0,2',
             'amanat_disbursements.*.fuel_rate' => 'nullable|numeric|min:0',
             'amanat_disbursements.*.payment_account_id' => 'nullable|string',
@@ -273,6 +273,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
         $validator->after(function ($validator) {
+            foreach (\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::duplicateSlipErrors((array) $this->input('credit_sales', [])) as $key => $message) {
+                $validator->errors()->add($key, $message);
+            }
 
             foreach ((array) $this->input('nozzle_readings', []) as $i => $reading) {
                 $opening = $reading['opening_electronic'] ?? null;

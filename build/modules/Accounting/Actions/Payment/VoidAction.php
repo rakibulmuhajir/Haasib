@@ -12,7 +12,7 @@ use App\Modules\Accounting\Services\PostingService;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
-class VoidAction implements PaletteAction
+class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -112,5 +112,10 @@ class VoidAction implements PaletteAction
                 ],
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Void a customer payment'];
     }
 }

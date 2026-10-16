@@ -13,7 +13,7 @@ use Illuminate\Auth\Access\AuthorizationException;
  * calculator.save -- save a formula as the user's own (personal unless shared), or replace one
  * they made. Only the creator may change it; nobody can reach another person's personal formula.
  */
-class SaveCalculatorFormulaAction implements PaletteAction
+class SaveCalculatorFormulaAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
     {
@@ -53,5 +53,10 @@ class SaveCalculatorFormulaAction implements PaletteAction
         }
 
         return ['message' => 'Formula saved.', 'data' => ['id' => $formula->id]];
+    }
+
+    public function palette(): array
+    {
+        return ['hidden' => true];
     }
 }

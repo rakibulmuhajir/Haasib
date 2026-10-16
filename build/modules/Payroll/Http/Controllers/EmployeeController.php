@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Http\Requests\StoreEmployeeRequest;
 use App\Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
@@ -119,7 +120,7 @@ class EmployeeController extends Controller
             ->findOrFail($employeeId);
 
         // Their statement for a month: salary (expected until payroll runs), advances, payments.
-        $month = preg_match('/^\d{4}-\d{2}$/', (string) request()->query('month')) ? request()->query('month') : now()->format('Y-m');
+        $month = preg_match('/^\d{4}-\d{2}$/', (string) request()->query('month')) ? request()->query('month') : app(CompanyClock::class)->now()->format('Y-m');
         $monthStart = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $month.'-01');
         $statement = app(\App\Modules\Payroll\Services\EmployeeStatementService::class)
             ->statement($employee, $monthStart->toDateString(), $monthStart->copy()->endOfMonth()->toDateString());

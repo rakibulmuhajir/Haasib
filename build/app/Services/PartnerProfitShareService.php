@@ -10,8 +10,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Accounting\Services\ProfitLossReportService;
-use App\Modules\FuelStation\Services\DailyCloseLockService;
-use App\Modules\FuelStation\Services\ProfitStatementService;
+use App\Support\Modules\ModuleRegistry;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -162,8 +161,10 @@ class PartnerProfitShareService
     public function netProfit(string $companyId, string $from, string $to): float
     {
         $company = Company::findOrFail($companyId);
-        if ($company->industry === 'fuel_station' || $company->isModuleEnabled('fuel_station')) {
-            return round((float) app(ProfitStatementService::class)->run($companyId, $from, $to, (string) $company->slug)['net_profit'], 2);
+        foreach (app(ModuleRegistry::class)->enabledFor($company) as $manifest) {
+            if (($net = $manifest->netProfit($company, $from, $to)) !== null) {
+                return $net;
+            }
         }
 
         return round((float) app(ProfitLossReportService::class)->run($companyId, $from, $to)['totals']['profit'], 2);
@@ -226,6 +227,13 @@ class PartnerProfitShareService
 
     private function monthLocked(string $companyId, string $date): bool
     {
-        return app(DailyCloseLockService::class)->isDateInLockedMonth($companyId, $date);
+        $company = Company::findOrFail($companyId);
+        foreach (app(ModuleRegistry::class)->all() as $manifest) {
+            if ($manifest->periodLockReason($company, $date, $date) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

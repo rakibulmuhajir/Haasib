@@ -5,7 +5,7 @@
  * This file should be auto-generated from schemas.ts or kept in sync manually.
  */
 
-import { getEntities, getVerbsForEntity, getSchema, getAllSchemas } from './schemas'
+import { getEntities, getVerbsForEntity, getSchema, getAllSchemas, catalogMeta, onCatalogChange } from './schemas'
 
 // ============================================================================
 // Entity Icons
@@ -269,7 +269,7 @@ function buildGrammar(): Record<string, EntityDef> {
   return grammar
 }
 
-export const GRAMMAR = buildGrammar()
+export const GRAMMAR: Record<string, EntityDef> = buildGrammar()
 
 // ============================================================================
 // COMMAND_DESCRIPTIONS Export (for autocomplete.ts compatibility)
@@ -297,13 +297,24 @@ function buildCommandDescriptions(): Record<string, string> {
       desc += `Options: ${optionalFlags.join(', ')}${schema.flags.length > 2 ? '...' : ''}`
     }
 
-    descriptions[key] = desc || `${schema.verb} ${schema.entity}`
+    descriptions[key] = catalogMeta[key]?.description || desc || `${schema.verb} ${schema.entity}`
   })
 
   return descriptions
 }
 
-export const COMMAND_DESCRIPTIONS = buildCommandDescriptions()
+export const COMMAND_DESCRIPTIONS: Record<string, string> = buildCommandDescriptions()
+
+/**
+ * Refill GRAMMAR and COMMAND_DESCRIPTIONS in place after schemas change,
+ * so every module holding a reference sees the new entries.
+ */
+export function rebuildGrammar(): void {
+  Object.keys(GRAMMAR).forEach(k => delete GRAMMAR[k])
+  Object.assign(GRAMMAR, buildGrammar())
+  Object.keys(COMMAND_DESCRIPTIONS).forEach(k => delete COMMAND_DESCRIPTIONS[k])
+  Object.assign(COMMAND_DESCRIPTIONS, buildCommandDescriptions())
+}
 
 // ============================================================================
 // Verb Helper Functions
@@ -331,3 +342,5 @@ export function getVerbDefinition(entity: string, verb: string): { args: any[]; 
     flags: verbDef.flags || []
   }
 }
+
+onCatalogChange(rebuildGrammar)

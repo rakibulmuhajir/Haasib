@@ -63,6 +63,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'permission' => 0664,
         ],
 
         'daily' => [
@@ -71,6 +72,10 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            // Group-writable: PHP-FPM (www-data) and deploy.sh (ubuntu, in group www-data) both
+            // write today's file, and whichever creates it first must not lock the other out.
+            // A 0644 file made by www-data failed the 2026-10-16 deploy.
+            'permission' => 0664,
         ],
 
         'slack' => [

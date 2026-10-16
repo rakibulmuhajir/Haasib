@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -117,5 +117,10 @@ class CreateAction implements PaletteAction
 
             return 'CUST-' . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Create a customer'];
     }
 }

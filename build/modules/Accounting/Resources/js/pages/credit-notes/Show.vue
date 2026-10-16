@@ -547,7 +547,7 @@ const isEditable = computed(() => {
                 <template v-else
                     >{{ credit_note.period_discount.litres }} litres ×
                     {{ credit_note.period_discount.value }} per litre. Eligible
-                    fuel sales:
+                    sales:
                 </template>
 
                 <MoneyText

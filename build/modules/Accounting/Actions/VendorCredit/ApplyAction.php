@@ -11,7 +11,7 @@ use App\Modules\Accounting\Models\VendorCreditApplication;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ApplyAction implements PaletteAction
+class ApplyAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -51,7 +51,7 @@ class ApplyAction implements PaletteAction
             foreach ($params['applications'] as $app) {
                 $bill = Bill::where('company_id', $company->id)->lockForUpdate()->findOrFail($app['bill_id']);
                 if ($bill->vendor_id !== $credit->vendor_id) {
-                    throw new \InvalidArgumentException('The bill belongs to a different supplier');
+                    throw new \InvalidArgumentException('The bill belongs to a different vendor');
                 }
                 if ($app['amount_applied'] - (float) $bill->balance > 0.000001) {
                     throw new \InvalidArgumentException("Bill {$bill->bill_number} owes less than that");
@@ -86,5 +86,10 @@ class ApplyAction implements PaletteAction
 
             return ['message' => "Vendor credit {$credit->credit_number} applied"];
         });
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Apply a vendor credit to bills', 'form_url' => '/{company}/vendor-credits'];
     }
 }

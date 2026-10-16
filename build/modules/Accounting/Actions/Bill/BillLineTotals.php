@@ -123,6 +123,16 @@ class BillLineTotals
         ];
     }
 
+    /** A document that totals nothing can't be saved. */
+    public static function assertTotalPositive(float $total): void
+    {
+        if (round($total, 2) <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'line_items.0.unit_price' => 'Enter an amount above zero.',
+            ]);
+        }
+    }
+
     /**
      * Rules shared by Create/Update: percent 0-100, amount no more than the
      * subtotal left after line discounts.

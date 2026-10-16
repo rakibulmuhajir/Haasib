@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class CreateAction implements PaletteAction
+class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -75,7 +75,7 @@ class CreateAction implements PaletteAction
 
         $status = $params['status'] ?? 'draft';
 
-        $lineItems = $params['line_items'];
+        $lineItems = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company));
         $subtotal = 0.0;
         $taxAmount = 0.0;
         $discountAmount = 0.0;
@@ -220,5 +220,19 @@ class CreateAction implements PaletteAction
         }
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Create a credit note',
+            'form_url' => '/{company}/credit-notes/create',
+            'fields' => [
+                'customer' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+                'credit_date' => ['hint' => 'Date'],
+                'reason' => ['hint' => 'Why'],
+            ],
+        ];
     }
 }

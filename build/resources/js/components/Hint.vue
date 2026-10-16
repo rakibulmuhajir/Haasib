@@ -19,8 +19,12 @@ const { enabled } = useValueTrails()
 const { t } = useLexicon()
 const controller = inject(valueTrailKey, null)
 
-function activate() {
+function activate(event?: Event) {
     if (props.trail) {
+        // Trail figures sit inside clickable rows (e.g. a trial balance row opens its journals).
+        // `@click.stop` on <Hint> can't do this: the root is a renderless TooltipProvider, so
+        // the listener never reaches a DOM element. Stop the click here instead.
+        event?.stopPropagation()
         open.value = false
         if (typeof props.trail === 'string') controller?.explore(props.trail)
         emit('explore')

@@ -10,7 +10,7 @@ use App\Services\CurrentCompany;
 use Illuminate\Validation\Rule;
 
 /** item_price.save -- add a price from a date, or replace the one already on that date. */
-class SaveItemPriceAction implements PaletteAction
+class SaveItemPriceAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function __construct(private readonly ItemPriceService $prices) {}
 
@@ -51,5 +51,10 @@ class SaveItemPriceAction implements PaletteAction
             'data' => ['id' => $entry->id],
             'redirect' => "/{$company->slug}/items/{$params['item_id']}",
         ];
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'Set an item price'];
     }
 }

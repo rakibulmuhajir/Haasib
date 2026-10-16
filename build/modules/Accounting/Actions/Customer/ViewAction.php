@@ -10,7 +10,7 @@ use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class ViewAction implements PaletteAction
+class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -165,5 +165,15 @@ class ViewAction implements PaletteAction
         if ($customer) return $customer;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Customer not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'View a customer',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'customer', 'hint' => 'Customer'],
+            ],
+        ];
     }
 }

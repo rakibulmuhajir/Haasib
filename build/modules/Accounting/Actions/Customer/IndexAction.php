@@ -8,7 +8,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
-class IndexAction implements PaletteAction
+class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -84,5 +84,10 @@ class IndexAction implements PaletteAction
             return '{secondary}$0.00{/}';
         }
         return '{warning}' . PaletteFormatter::money($amount, $currency) . '{/}';
+    }
+
+    public function palette(): array
+    {
+        return ['description' => 'List customers'];
     }
 }

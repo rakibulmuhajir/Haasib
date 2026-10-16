@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -39,7 +40,7 @@ class InvestorService
             // Calculate units entitled at current purchase rate
             $unitsEntitled = $data['investment_amount'] / $currentRate->purchase_rate;
 
-            $depositDate = $data['deposit_date'] ?? now()->toDateString();
+            $depositDate = $data['deposit_date'] ?? app(CompanyClock::class)->today();
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
 
             // Resolve accounts
@@ -112,7 +113,7 @@ class InvestorService
                 );
             }
 
-            $paymentDate = $data['payment_date'] ?? now()->toDateString();
+            $paymentDate = $data['payment_date'] ?? app(CompanyClock::class)->today();
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
 
             // Get accounts
@@ -122,7 +123,7 @@ class InvestorService
             // Create GL transaction
             $transaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $company->id,
-                'transaction_number' => 'INV-COMM-' . strtoupper(substr($investor->id, 0, 8)) . '-' . now()->format('Ymd'),
+                'transaction_number' => 'INV-COMM-' . strtoupper(substr($investor->id, 0, 8)) . '-' . str_replace('-', '', app(CompanyClock::class)->today()),
                 'transaction_type' => 'investor_commission',
                 'date' => $paymentDate,
                 'currency' => $currency,

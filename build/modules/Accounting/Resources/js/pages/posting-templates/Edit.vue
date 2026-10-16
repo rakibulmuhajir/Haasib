@@ -206,7 +206,7 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
       <CardContent class="space-y-6">
         <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
           These mappings tell the system which accounts to debit or credit when a document is posted.
-          For bills, use inventory accounts on the bill lines for fuel purchases; EXPENSE is only a fallback.
+          For stock purchases, use inventory accounts on the bill lines; EXPENSE is only a fallback.
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">

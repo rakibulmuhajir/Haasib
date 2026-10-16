@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Customer;
@@ -33,7 +34,7 @@ class StoreDirectFuelSaleRequest extends BaseFormRequest
             'item_id' => ['required', 'uuid', Rule::exists(Item::class, 'id')->where('company_id', $companyId)],
             'quantity' => ['required', 'numeric', 'min:0.01'],
             'unit_price' => ['required', 'numeric', 'min:0.01'],
-            'sale_date' => ['required', 'date', 'before_or_equal:today'],
+            'sale_date' => ['required', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'paid_in_cash' => ['required', 'boolean'],
             'temporary_storage' => ['nullable', 'boolean'],
         ];

@@ -10,7 +10,7 @@ use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 
-class DeleteAction implements PaletteAction
+class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -85,5 +85,15 @@ class DeleteAction implements PaletteAction
                 'redirect' => "/{$company->slug}/invoices",
             ];
         });
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Delete an invoice',
+            'fields' => [
+                'id' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

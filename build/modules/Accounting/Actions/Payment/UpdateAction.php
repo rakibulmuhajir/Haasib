@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Actions\Payment;
 
+use App\Support\CompanyClock;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class UpdateAction implements PaletteAction
+class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -25,7 +26,7 @@ class UpdateAction implements PaletteAction
             'method' => 'required|string|in:cash,check,card,bank_transfer,other',
             'currency' => 'nullable|string|size:3|uppercase',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
-            'date' => 'nullable|date|before_or_equal:today',
+            'date' => 'nullable|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
         ];
@@ -250,5 +251,15 @@ class UpdateAction implements PaletteAction
         if ($invoice) return $invoice;
 
         throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Invoice not found: {$identifier}");
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Change a customer payment',
+            'fields' => [
+                'invoice' => ['inputType' => 'search', 'searchEntity' => 'invoice', 'hint' => 'Invoice'],
+            ],
+        ];
     }
 }

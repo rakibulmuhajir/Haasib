@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import { useModules } from '@/composables/useModules'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { billTotals, type OverallDiscountType } from './overallDiscount'
@@ -200,6 +202,11 @@ const isTrackedItem = (itemId: string | null | undefined) => {
 }
 
 const totals = computed(() => billTotals(form.line_items, form.overall_discount_type, form.overall_discount_value))
+// Off hides tax, except on a document that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = form.line_items.some((l: any) => Number(l.tax_rate) > 0)
+const showTax = computed(() => taxEnabled.value || hadTax)
+
 
 const addLine = () => form.line_items.push({
   item_id: null,
@@ -269,6 +276,7 @@ const handleSubmit = () => {
     preserveScroll: true,
   })
 }
+const { has: hasModule } = useModules()
 </script>
 
 <template>
@@ -366,7 +374,7 @@ const handleSubmit = () => {
           </Button>
         </div>
         <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-          Select the product. Haasib will choose its tank/warehouse and inventory account automatically.
+          Select the product. Haasib will choose its {{ hasModule('fuel_station') ? 'tank/warehouse' : 'warehouse' }} and inventory account automatically.
           Use the default account only for non-inventory bills.
         </div>
         <div class="space-y-4">
@@ -463,12 +471,12 @@ const handleSubmit = () => {
                 <Input
                   :model-value="line.line_total"
                   type="number" min="0" step="0.01"
-                  title="What the supplier actually billed for this line. Typing here derives the rate."
+                  title="What the vendor actually billed for this line. Typing here derives the rate."
                   @update:model-value="(v) => onAmountChange(idx, v)"
                 />
                 <InputError :message="form.errors[`line_items.${idx}.line_total`]" />
               </div>
-              <div>
+              <div v-if="showTax">
                 <Label>{{ t('taxPercent') }}</Label>
                 <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
                 <InputError :message="form.errors[`line_items.${idx}.tax_rate`]" />
@@ -546,7 +554,7 @@ const handleSubmit = () => {
           <span></span>
           <span>-<MoneyText :amount="totals.overall" :currency="form.currency" /></span>
         </div>
-        <div class="flex justify-between text-sm">
+        <div v-if="showTax" class="flex justify-between text-sm">
           <span>{{ t('tax') }}</span>
           <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>

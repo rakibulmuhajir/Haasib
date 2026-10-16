@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Http\Controllers\Controller;
 use App\Modules\FuelStation\Services\StockVarianceReportService;
 use App\Services\CurrentCompany;
@@ -21,8 +22,8 @@ class StockVarianceReportController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
 
-        $startDate = $this->date($request->query('start_date'), now()->startOfMonth());
-        $endDate = $this->date($request->query('end_date'), now());
+        $startDate = $this->date($request->query('start_date'), Carbon::parse(app(CompanyClock::class)->today())->startOfMonth());
+        $endDate = $this->date($request->query('end_date'), Carbon::parse(app(CompanyClock::class)->today()));
         if ($startDate->greaterThan($endDate)) {
             [$startDate, $endDate] = [$endDate, $startDate];
         }

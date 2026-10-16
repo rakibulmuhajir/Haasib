@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
@@ -32,7 +33,7 @@ class GroupAccountingService
         $passengers = Passenger::where('company_id', $group->company_id)
             ->where('visa_group_id', $group->id)
             ->get(['date_of_birth', 'imported_age', 'transport_charge_amount']);
-        $referenceDate = $group->travel_date?->copy()->startOfDay() ?? now()->startOfDay();
+        $referenceDate = $group->travel_date?->copy()->startOfDay() ?? \Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today());
         $ageCounts = $this->ageCounts($passengers, $referenceDate);
 
         /*
@@ -150,7 +151,7 @@ class GroupAccountingService
             ->get(['date_of_birth', 'imported_age', 'service_type']);
         $referenceDate = $voucher->group?->travel_date?->copy()->startOfDay()
             ?? $voucher->onward_departure_at?->copy()->startOfDay()
-            ?? now()->startOfDay();
+            ?? \Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today());
         $ageCounts = $this->ageCounts($passengers, $referenceDate);
         $companyStays = collect($voucher->hotel_stays)->where('source', 'company');
         $selfStays = collect($voucher->hotel_stays)->where('source', 'self');

@@ -10,7 +10,7 @@ use App\Facades\CompanyContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
-class DeactivateAction implements PaletteAction
+class DeactivateAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function rules(): array
     {
@@ -51,6 +51,16 @@ class DeactivateAction implements PaletteAction
         return [
             'message' => "User deactivated: {$user->email}",
             'data' => ['user' => $user->email],
+        ];
+    }
+
+    public function palette(): array
+    {
+        return [
+            'description' => 'Deactivate a user',
+            'fields' => [
+                'email' => ['hint' => 'User email'],
+            ],
         ];
     }
 }

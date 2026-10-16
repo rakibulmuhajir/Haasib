@@ -133,11 +133,12 @@ class ConsolidatedInvoiceService
      */
     public static function labels(Company $company): array
     {
-        $fuel = $company->isModuleEnabled('fuel_station');
+        $registry = app(\App\Support\Modules\ModuleRegistry::class);
 
         return [
             'date' => 'Date', 'reference' => 'Reference', 'physical' => 'Invoice no.',
-            'item' => $fuel ? 'Fuel' : 'Item', 'quantity' => $fuel ? 'Litres' : 'Qty',
+            'item' => $registry->label($company, 'consolidated.item', 'Item'),
+            'quantity' => $registry->label($company, 'consolidated.quantity', 'Qty'),
             'rate' => 'Rate', 'amount' => 'Amount',
         ];
     }

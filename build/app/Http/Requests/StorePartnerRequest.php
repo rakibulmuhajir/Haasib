@@ -30,7 +30,7 @@ class StorePartnerRequest extends BaseFormRequest
             // Where the first investment was paid into; needed only when there is one.
             'account_id' => [
                 'nullable', 'uuid',
-                Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at'),
+                Rule::exists(\App\Modules\Accounting\Models\Account::class, 'id')->where('company_id', $companyId)->whereIn('subtype', ['cash', 'bank'])->whereNull('deleted_at'),
             ],
             'is_active' => ['boolean'],
         ];

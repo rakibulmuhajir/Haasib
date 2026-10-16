@@ -452,7 +452,7 @@ const handleSubmit = () => {
                     />
                     <p class="mt-1 text-xs text-muted-foreground">
                         Anything not applied to a bill below is held as an
-                        advance and used for this supplier's next bills
+                        advance and used for this vendor's next bills
                         automatically.
                     </p>
                     <InputError :message="form.errors.amount" />
@@ -773,7 +773,7 @@ const handleSubmit = () => {
             >
                 {{ formatNumber(advanceAmount) }} {{ form.currency }} is not
                 applied to any bill and will be held on account for this
-                supplier, applied automatically to their next bills.
+                vendor, applied automatically to their next bills.
             </div>
 
             <div

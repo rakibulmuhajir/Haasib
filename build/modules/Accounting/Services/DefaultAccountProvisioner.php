@@ -164,7 +164,7 @@ class DefaultAccountProvisioner
         $claimAccount = Account::where('company_id', $company->id)
             ->where(function ($query) {
                 $query->where('code', '1160')
-                    ->orWhere('name', 'Supplier Claims Receivable');
+                    ->orWhereIn('name', ['Vendor Claims Receivable', 'Supplier Claims Receivable']);
             })
             ->first();
 
@@ -172,7 +172,7 @@ class DefaultAccountProvisioner
             $claimAccount = Account::create([
                 'company_id' => $company->id,
                 'code' => $this->nextAvailableCode($company->id, 1160, 1199),
-                'name' => 'Supplier Claims Receivable',
+                'name' => 'Vendor Claims Receivable',
                 'type' => 'asset',
                 'subtype' => 'other_current_asset',
                 'normal_balance' => 'debit',
@@ -180,7 +180,7 @@ class DefaultAccountProvisioner
                 'is_contra' => false,
                 'is_active' => true,
                 'is_system' => false,
-                'description' => 'Recoverable shortages claimed from suppliers.',
+                'description' => 'Recoverable shortages claimed from vendors.',
             ]);
         }
 

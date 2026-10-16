@@ -294,7 +294,7 @@ function lock() {
               <div>
                 <CardTitle>Credit customers</CardTitle>
                 <CardDescription>What each customer owes the business (udhaar). Becomes an opening invoice.</CardDescription>
-                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
+                <p class="text-xs text-muted-foreground">Create missing customers/vendors on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.credit_customers)" :currency="currency" :fraction-digits="0" />
@@ -464,9 +464,9 @@ function lock() {
           <CardHeader>
             <CollapsibleTrigger class="flex w-full items-center justify-between text-left">
               <div>
-                <CardTitle>Suppliers</CardTitle>
-                <CardDescription>Unpaid supplier balances. Becomes an opening bill.</CardDescription>
-                <p class="text-xs text-muted-foreground">Create missing customers/suppliers on their own pages first.</p>
+                <CardTitle>Vendors</CardTitle>
+                <CardDescription>Unpaid vendor balances. Becomes an opening bill.</CardDescription>
+                <p class="text-xs text-muted-foreground">Create missing customers/vendors on their own pages first.</p>
               </div>
               <span class="flex items-center gap-3 text-sm">
                 <MoneyText :amount="sum(form.suppliers)" :currency="currency" :fraction-digits="0" />
@@ -479,7 +479,7 @@ function lock() {
               <InputError :message="err('suppliers')" />
               <div v-for="(row, i) in form.suppliers" :key="'sup-' + i" class="grid grid-cols-[1fr_12rem_2.5rem] items-end gap-3">
                 <div class="grid gap-1">
-                  <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Supplier</Label>
+                  <Label :id="`suppliers-${i}-vendor_id-label`" :class="i === 0 ? undefined : 'sr-only'">Vendor</Label>
                   <EntitySearch
                     v-model="row.vendor_id"
                     entity-type="vendor"
@@ -497,7 +497,7 @@ function lock() {
                 </div>
                 <Button v-if="editable" variant="ghost" size="icon" @click="form.suppliers.splice(i, 1)"><Trash2 class="h-4 w-4" /></Button>
               </div>
-              <Button v-if="editable" variant="outline" size="sm" @click="form.suppliers.push({ vendor_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add supplier</Button>
+              <Button v-if="editable" variant="outline" size="sm" @click="form.suppliers.push({ vendor_id: '', amount: 0 })"><Plus class="mr-2 h-4 w-4" />Add vendor</Button>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>

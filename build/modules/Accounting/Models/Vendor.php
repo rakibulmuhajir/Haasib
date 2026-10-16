@@ -62,11 +62,11 @@ class Vendor extends Model
     public const TYPE_SERVICE_PROVIDER = 'service_provider';
 
     public const TYPES = [
-        self::TYPE_GENERAL => 'General supplier',
+        self::TYPE_GENERAL => 'General vendor',
         self::TYPE_FUEL_REFINERY => 'Fuel refinery',
         self::TYPE_FUEL_DISTRIBUTOR => 'Fuel distributor',
         self::TYPE_FUEL_STATION => 'Fuel station',
-        self::TYPE_LUBRICANT_SUPPLIER => 'Lubricant supplier',
+        self::TYPE_LUBRICANT_SUPPLIER => 'Lubricant vendor',
         self::TYPE_CONTRACTOR => 'Contractor',
         self::TYPE_UTILITY => 'Utility',
         self::TYPE_SERVICE_PROVIDER => 'Service provider',

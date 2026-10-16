@@ -65,7 +65,7 @@ class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\Descri
                 ->ensureTransitVarianceAccounts($company)['supplier_claims_receivable_account_id'] ?? null;
 
             if (! $claimAccountId) {
-                throw new \RuntimeException('Supplier Claims Receivable account is required.');
+                throw new \RuntimeException('Vendor Claims Receivable account is required.');
             }
 
             $bill = $line->receipt?->bill;
@@ -79,7 +79,7 @@ class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\Descri
                 'currency' => $currency,
                 'base_currency' => $baseCurrency,
                 'exchange_rate' => $bill?->exchange_rate,
-                'description' => 'Supplier claim received' . ($bill?->bill_number ? " for Bill {$bill->bill_number}" : ''),
+                'description' => 'Vendor claim received' . ($bill?->bill_number ? " for Bill {$bill->bill_number}" : ''),
                 'reference_type' => 'inv.stock_receipt_lines',
                 'reference_id' => $line->id,
                 'metadata' => [
@@ -95,13 +95,13 @@ class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\Descri
                     'account_id' => $receivedAccount->id,
                     'type' => 'debit',
                     'amount' => $receivedAmount,
-                    'description' => 'Supplier claim received',
+                    'description' => 'Vendor claim received',
                 ],
                 [
                     'account_id' => $claimAccountId,
                     'type' => 'credit',
                     'amount' => $receivedAmount,
-                    'description' => 'Supplier claim cleared',
+                    'description' => 'Vendor claim cleared',
                 ],
             ]);
 
@@ -115,7 +115,7 @@ class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\Descri
             $line->save();
 
             return [
-                'message' => 'Supplier claim received and posted.',
+                'message' => 'Vendor claim received and posted.',
                 'data' => [
                     'transaction_id' => $transaction->id,
                     'receipt_line_id' => $line->id,
@@ -127,7 +127,7 @@ class ReceiveSupplierClaimAction implements PaletteAction, \App\Contracts\Descri
     public function palette(): array
     {
         return [
-            'description' => 'Record money back from a supplier claim',
+            'description' => 'Record money back from a vendor claim',
             'fields' => [
                 'bill_id' => ['inputType' => 'search', 'searchEntity' => 'bill', 'hint' => 'Bill'],
                 'received_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Received into account'],

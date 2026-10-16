@@ -442,7 +442,7 @@ const cancelAddressEdit = () => {
               clickable
               @row-click="(row) => row.link && router.visit(`/${company.slug}/${row.link}`)"
             >
-              <template #empty>Nothing recorded against this supplier yet.</template>
+              <template #empty>Nothing recorded against this vendor yet.</template>
               <template #cell-debit="{ row }">
                 <MoneyText :amount="row.debit" :currency="vendor.base_currency || company.base_currency" locale="en-PK" :show-currency="false" dash-zero />
               </template>

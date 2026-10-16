@@ -187,7 +187,7 @@ const { has: hasModule } = useModules()
         key-field="id"
         clickable
         title="Liabilities"
-        description="What the business owes — the supplier, the bank, wages not yet paid."
+        description="What the business owes — the vendor, the bank, wages not yet paid."
         :totals="{ amount: report.totals.liabilities }"
         totals-label="Total liabilities"
         @row-click="openAccount"

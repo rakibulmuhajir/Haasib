@@ -244,7 +244,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
         foreach ($splits as $split) {
             $account = Account::where('company_id', $companyId)->find($split['payment_account_id']);
             if (! $account || ! $policy->allows($companyId, $account->id)) {
-                throw new \InvalidArgumentException('This account is not a clearing account that settles to a supplier.');
+                throw new \InvalidArgumentException('This account is not a clearing account that settles to a vendor.');
             }
         }
     }

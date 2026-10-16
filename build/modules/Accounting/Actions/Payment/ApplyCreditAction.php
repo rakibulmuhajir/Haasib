@@ -53,7 +53,7 @@ class ApplyCreditAction implements PaletteAction, \App\Contracts\DescribesPalett
             throw ValidationException::withMessages(['invoice_id' => 'Choose an invoice belonging to this company.']);
         }
         if (!empty($params['customer_id']) && $params['customer_id'] !== $invoice->customer_id) {
-            throw ValidationException::withMessages(['customer_id' => "customer_id does not match invoice {$invoice->invoice_number}'s buyer."]);
+            throw ValidationException::withMessages(['customer_id' => "customer_id does not match invoice {$invoice->invoice_number}'s customer."]);
         }
         if (in_array($invoice->status, ['cancelled', 'void'], true)) {
             throw ValidationException::withMessages(['invoice_id' => "Cannot apply credit to cancelled invoice {$invoice->invoice_number}."]);
@@ -75,7 +75,7 @@ class ApplyCreditAction implements PaletteAction, \App\Contracts\DescribesPalett
 
         $available = round((float) $onAccount->sum('amount_allocated'), 6);
         if ($available <= 0) {
-            throw ValidationException::withMessages(['invoice_id' => 'This buyer has no on-account credit to apply.']);
+            throw ValidationException::withMessages(['invoice_id' => 'This customer has no on-account credit to apply.']);
         }
 
         $requested = isset($params['amount']) ? round((float) $params['amount'], 6) : min($available, (float) $invoice->balance);

@@ -566,8 +566,8 @@ const navigateToVendor = () => {
 
         <Card v-if="supplierClaims.length > 0" variant="detail">
           <CardHeader>
-            <CardTitle>Supplier Claims</CardTitle>
-            <CardDescription>Short deliveries claimed from the supplier stay here until compensation is received.</CardDescription>
+            <CardTitle>Vendor Claims</CardTitle>
+            <CardDescription>Short deliveries claimed from the vendor stay here until compensation is received.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-3">
             <div
@@ -882,7 +882,7 @@ const navigateToVendor = () => {
                       <SelectValue placeholder="Choose treatment" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="supplier_claim">Claim from supplier</SelectItem>
+                      <SelectItem value="supplier_claim">Claim from vendor</SelectItem>
                       <SelectItem value="final_loss">Final loss</SelectItem>
                     </SelectContent>
                   </Select>
@@ -915,7 +915,7 @@ const navigateToVendor = () => {
     <Dialog v-model:open="showClaimReceiptDialog">
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Receive Supplier Claim</DialogTitle>
+          <DialogTitle>Receive Vendor Claim</DialogTitle>
           <DialogDescription>
             Record compensation for the short delivery claim.
           </DialogDescription>

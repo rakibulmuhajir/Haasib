@@ -227,7 +227,7 @@ const handleSubmit = () => {
                     >
                         <MoneyText :amount="unappliedAmount ?? 0" :currency="payment.currency" />
                         of this payment is on account as an advance for this
-                        supplier.
+                        vendor.
                     </p>
                     <InputError :message="form.errors.amount" />
                 </div>

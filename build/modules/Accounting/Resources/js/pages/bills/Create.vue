@@ -522,7 +522,7 @@ const { has: hasModule } = useModules()
                 <Input
                   :model-value="line.line_total"
                   type="number" min="0" step="0.01"
-                  title="What the supplier actually billed for this line. Typing here derives the rate."
+                  title="What the vendor actually billed for this line. Typing here derives the rate."
                   @update:model-value="(v) => onAmountChange(idx, v)"
                 />
                 <InputError :message="form.errors[`line_items.${idx}.line_total`]" />

@@ -72,7 +72,7 @@ const openCustomer = (row: Row) => {
 }
 
 const columns: RegisterColumn<Row>[] = [
-  { key: 'customer_name', label: 'Buyer', kind: 'text' },
+  { key: 'customer_name', label: 'Customer', kind: 'text' },
   { key: 'current', label: 'Not yet due', kind: 'amount' },
   { key: 'd1_30', label: '1–30 days', kind: 'amount' },
   { key: 'd31_60', label: '31–60 days', kind: 'amount' },
@@ -133,7 +133,7 @@ const overdueTotal = computed(() =>
           </CardContent>
         </Card>
         <Card variant="figure">
-          <CardHeader><CardTitle>Buyers with a balance</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Customers with a balance</CardTitle></CardHeader>
           <CardContent>
             <CardFigure>{{ report.customer_count }}</CardFigure>
           </CardContent>
@@ -146,7 +146,7 @@ const overdueTotal = computed(() =>
         key-field="customer_id"
         clickable
         title="Balances by age"
-        description="Aged from the due date, worst first. Click a buyer for their statement."
+        description="Aged from the due date, worst first. Click a customer for their statement."
         :totals="totals"
         totals-label="Total"
         @row-click="openCustomer"

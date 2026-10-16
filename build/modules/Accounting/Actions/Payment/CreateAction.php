@@ -245,14 +245,14 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                     $customer = $invoice->customer;
                 } elseif ($invoice->customer_id !== $customer->id) {
                     throw ValidationException::withMessages([
-                        "allocations.{$i}.invoice_id" => "Invoice {$invoice->invoice_number} belongs to a different buyer.",
+                        "allocations.{$i}.invoice_id" => "Invoice {$invoice->invoice_number} belongs to a different customer.",
                     ]);
                 }
                 $rows[] = ['invoice' => $invoice, 'amount' => round((float) $alloc['amount'], 6)];
             }
             if (!empty($params['customer_id']) && $customer && $params['customer_id'] !== $customer->id) {
                 throw ValidationException::withMessages([
-                    'customer_id' => 'Allocations belong to a different buyer than customer_id.',
+                    'customer_id' => 'Allocations belong to a different customer than customer_id.',
                 ]);
             }
             $sum = round(array_sum(array_column($rows, 'amount')), 2);
@@ -273,7 +273,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             $this->assertInvoiceIsSettleable($invoice);
             if (!empty($params['customer_id']) && $params['customer_id'] !== $invoice->customer_id) {
                 throw ValidationException::withMessages([
-                    'customer_id' => 'customer_id does not match the invoice\'s buyer.',
+                    'customer_id' => 'customer_id does not match the invoice\'s customer.',
                 ]);
             }
             $currency = strtoupper($params['currency'] ?? $invoice->currency);
@@ -283,13 +283,13 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 
         if (empty($params['customer_id'])) {
             throw ValidationException::withMessages([
-                'customer_id' => 'A buyer, invoice, or allocation set is required to record a payment.',
+                'customer_id' => 'A customer, invoice, or allocation set is required to record a payment.',
             ]);
         }
 
         $customer = Customer::where('company_id', $companyId)->find($params['customer_id']);
         if (!$customer) {
-            throw ValidationException::withMessages(['customer_id' => 'Choose a buyer belonging to this company.']);
+            throw ValidationException::withMessages(['customer_id' => 'Choose a customer belonging to this company.']);
         }
 
         // `invoice_ids`: the buyer picked several invoices by hand but left it to us to work
@@ -302,7 +302,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 $this->assertInvoiceIsSettleable($invoice);
                 if ($invoice->customer_id !== $customer->id) {
                     throw ValidationException::withMessages([
-                        'invoice_ids' => "Invoice {$invoice->invoice_number} belongs to a different buyer.",
+                        'invoice_ids' => "Invoice {$invoice->invoice_number} belongs to a different customer.",
                     ]);
                 }
                 return $invoice;

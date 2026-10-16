@@ -306,7 +306,7 @@ class ReceiveGoodsAction implements PaletteAction, \App\Contracts\DescribesPalet
         }
 
         if ($varianceQty < -0.0001 && empty($lineData['variance_treatment'])) {
-            throw new \InvalidArgumentException('Choose whether the shortage is a final loss or a supplier claim.');
+            throw new \InvalidArgumentException('Choose whether the shortage is a final loss or a vendor claim.');
         }
 
         $varianceTreatment = $varianceQty < -0.0001
@@ -359,7 +359,7 @@ class ReceiveGoodsAction implements PaletteAction, \App\Contracts\DescribesPalet
                 ? $this->supplierClaimsReceivableAccountId($company)
                 : $company->transit_loss_account_id;
             if (! $lossAccountId) {
-                throw new \RuntimeException('A loss or supplier claim account is required to record receipt variance.');
+                throw new \RuntimeException('A loss or vendor claim account is required to record receipt variance.');
             }
 
             $amount = abs($varianceCost);

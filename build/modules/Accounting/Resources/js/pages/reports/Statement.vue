@@ -225,7 +225,7 @@ const partyLabel = computed(() => {
   if (kind.value === 'employee') return 'Employee'
   if (kind.value === 'expense') return 'Account'
   if (kind.value === 'partner') return 'Partner'
-  return 'Supplier'
+  return 'Vendor'
 })
 
 const columns = computed<RegisterColumn<Row>[]>(() => [
@@ -248,7 +248,7 @@ const openRow = (row: Row) => {
 const printStatement = () => window.print()
 
 
-const allLabel = computed(() => extraKind.value?.all ?? ({ customer: 'All customers', supplier: 'All suppliers', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' } as Record<string, string>)[kind.value])
+const allLabel = computed(() => extraKind.value?.all ?? ({ customer: 'All customers', supplier: 'All vendors', employee: 'All employees', expense: 'All expense accounts', partner: 'All partners', bank: '' } as Record<string, string>)[kind.value])
 const categoryName = computed(() => (props.options.categories ?? []).find((c) => c.id === categoryId.value)?.name ?? 'Category')
 const pickedLabel = computed(() => {
   const group = (props.options.groups ?? []).find((g) => g.member_ids.length === picked.value.length && g.member_ids.every((id) => picked.value.includes(id)))
@@ -264,7 +264,7 @@ const statementTitle = computed(() => (props.statement.combined
 
   <PageShell
     title="Statements"
-    description="A running balance over a date range, like a bank statement — for a bank or cash account, a customer, or a supplier."
+    description="A running balance over a date range, like a bank statement — for a bank or cash account, a customer, or a vendor."
     :breadcrumbs="breadcrumbs"
   >
     <div class="mx-auto w-full max-w-6xl space-y-6 stmt-page">
@@ -275,7 +275,7 @@ const statementTitle = computed(() => (props.statement.combined
             <TabsList>
               <TabsTrigger value="bank">Bank &amp; Cash</TabsTrigger>
               <TabsTrigger value="customer">Customer</TabsTrigger>
-              <TabsTrigger value="supplier">Supplier</TabsTrigger>
+              <TabsTrigger value="supplier">Vendor</TabsTrigger>
               <template v-for="k in extraKinds ?? []" :key="k.key">
                 <TabsTrigger v-if="((options[k.key] as PartyOption[] | undefined) ?? []).length > 0" :value="k.key">{{ k.label }}</TabsTrigger>
               </template>

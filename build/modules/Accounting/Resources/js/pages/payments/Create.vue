@@ -510,7 +510,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                             </div>
                         </div>
                         <p v-else class="mt-2 text-sm text-muted-foreground">
-                            This buyer has no open invoices — the full payment
+                            This customer has no open invoices — the full payment
                             will be recorded on their account.
                         </p>
                         <p

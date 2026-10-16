@@ -709,7 +709,7 @@ class BillController extends Controller
                 ...$validated,
             ], $request->user());
 
-            return back()->with('success', $result['message'] ?? 'Supplier claim received');
+            return back()->with('success', $result['message'] ?? 'Vendor claim received');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()
                 ->back()

@@ -125,11 +125,11 @@ const handleSubmit = () => {
             <div class="space-y-2">
               <Label for="vendor_type" class="flex items-center gap-2 text-text-primary">
                 <Building2 class="h-4 w-4 text-text-tertiary" />
-                Supplier Type
+                Vendor Type
               </Label>
               <Select v-model="form.vendor_type">
                 <SelectTrigger id="vendor_type" class="border-rule-default">
-                  <SelectValue placeholder="Select supplier type" />
+                  <SelectValue placeholder="Select vendor type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="(label, value) in vendorTypes" :key="value" :value="value">
@@ -137,7 +137,7 @@ const handleSubmit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="has('fuel_station')" class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel suppliers.</p>
+              <p v-if="has('fuel_station')" class="text-xs text-text-secondary">Use fuel refinery/distributor/station for fuel vendors.</p>
               <InputError :message="form.errors.vendor_type" />
             </div>
 

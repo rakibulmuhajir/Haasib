@@ -99,7 +99,7 @@ const sectionConfig: Record<string, { label: string; subtypes: string[]; help?: 
   payables: {
     label: 'Expected Payments to Vendors',
     subtypes: ['accounts_payable'],
-    help: 'Bills you have received but not yet paid. Tracks money you owe to suppliers.'
+    help: 'Bills you have received but not yet paid. Tracks money you owe to vendors.'
   },
   credit_cards: {
     label: 'Credit Cards',

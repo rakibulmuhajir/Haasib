@@ -126,7 +126,8 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 throw new \InvalidArgumentException('exchange_rate is required when currency differs from base_currency.');
             }
             $exchangeRate = $exchangeRate ? (float) $exchangeRate : null;
-            $lineItems = $params['line_items'];
+            // Tax off for the company: lines post without tax, unless this invoice already carries tax.
+            $lineItems = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $invoice->tax_amount));
 
             // Compute totals
             $subtotal = 0.0;

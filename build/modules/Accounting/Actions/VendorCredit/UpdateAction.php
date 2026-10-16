@@ -93,7 +93,7 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             ]);
             $credit->save();
 
-            VendorCreditLines::replace($credit, $params['line_items'] ?? []);
+            VendorCreditLines::replace($credit, app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'] ?? [], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $credit->items()->sum('tax_amount'))));
 
             if ($posted) {
                 $old = $credit->transaction_id

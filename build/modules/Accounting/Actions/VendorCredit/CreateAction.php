@@ -88,7 +88,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 'created_by_user_id' => Auth::id(),
             ]);
 
-            VendorCreditLines::replace($credit, $params['line_items'] ?? []);
+            VendorCreditLines::replace($credit, app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'] ?? [], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company)));
 
             if (($params['status'] ?? 'draft') === 'received') {
                 $transaction = app(GlPostingService::class)->postVendorCredit($credit->fresh());

@@ -75,7 +75,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
 
         $status = $params['status'] ?? 'draft';
 
-        $lineItems = $params['line_items'];
+        $lineItems = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company));
         $subtotal = 0.0;
         $taxAmount = 0.0;
         $discountAmount = 0.0;

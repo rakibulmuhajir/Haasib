@@ -161,6 +161,12 @@ class HandleInertiaRequests extends Middleware
                 // Each module's own shared props. The key is always present and null when the
                 // module is off for the company, so the frontend types stay put.
                 ...$this->moduleProps($request),
+                // Whether the company charges tax; the one switch behind every tax field.
+                'taxEnabled' => function () {
+                    $company = app(CurrentCompany::class)->get();
+
+                    return $company ? app(\App\Modules\Accounting\Services\CompanyTax::class)->enabled($company) : false;
+                },
                 'enabledModules' => function () {
                     $company = app(CurrentCompany::class)->get();
 

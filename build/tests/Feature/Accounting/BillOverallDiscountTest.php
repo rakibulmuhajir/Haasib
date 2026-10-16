@@ -116,6 +116,7 @@ test('an overall percent discount is taken off the subtotal and spread the same 
 
 test('tax is charged after the overall discount and the last line takes the rounding', function () {
     $f = billLineTotalFixture();
+    (new \App\Modules\Accounting\Models\CompanyTaxSettings(['company_id' => $f['company']->id]))->saveDeliberately(['tax_enabled' => true]);
     $second = billOdSecondExpense($f);
 
     $this->actingAs($f['user'])->post("/{$f['company']->slug}/bills", billOdPayload($f, [

@@ -61,6 +61,11 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
         $bill = Bill::where('company_id', $company->id)->findOrFail($params['id']);
         app(\App\Modules\Accounting\Services\OpeningBalanceGuard::class)->assertMutable($company->id, 'bill', $bill->id);
 
+        // Tax off for the company: lines save without tax, unless this bill already carries tax.
+        if (! empty($params['line_items'])) {
+            $params['line_items'] = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($params['line_items'], app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company, $bill->tax_amount));
+        }
+
         if (in_array($bill->status, ['void', 'cancelled'], true)) {
             throw new \InvalidArgumentException('Bill cannot be updated in current status');
         }

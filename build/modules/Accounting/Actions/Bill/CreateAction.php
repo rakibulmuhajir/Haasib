@@ -87,6 +87,8 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             $normalizedLines = collect($params['line_items'])
                 ->map(fn ($item) => $this->withPurchaseDefaults($company->id, $item))
                 ->all();
+            // Tax off for the company: lines post without tax whatever the form sent.
+            $normalizedLines = app(\App\Modules\Accounting\Services\CompanyTax::class)->stripLines($normalizedLines, app(\App\Modules\Accounting\Services\CompanyTax::class)->allows($company));
 
             $this->assertLineAccountsValid($normalizedLines);
             $this->assertDirectQuantityValid($normalizedLines);

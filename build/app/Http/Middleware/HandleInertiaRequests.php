@@ -165,7 +165,11 @@ class HandleInertiaRequests extends Middleware
                 'taxEnabled' => function () {
                     $company = app(CurrentCompany::class)->get();
 
-                    return $company ? app(\App\Modules\Accounting\Services\CompanyTax::class)->enabled($company) : false;
+                    // Global pages (/, /companies) can hold a remembered company without its RLS
+                    // context set; read the setting inside that company's context.
+                    return $company
+                        ? app(\App\Services\CompanyContextService::class)->withContext($company, fn () => app(\App\Modules\Accounting\Services\CompanyTax::class)->enabled($company))
+                        : false;
                 },
                 'enabledModules' => function () {
                     $company = app(CurrentCompany::class)->get();

@@ -12,6 +12,7 @@
  */
 import { computed } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import PageShell from '@/components/PageShell.vue'
 import ModuleSlot from '@/components/ModuleSlot.vue'
 import { EntitySearch } from '@/components/forms'
@@ -137,6 +138,11 @@ const taxAmount = computed(() =>
 )
 
 const totalAmount = computed(() => subtotal.value + taxAmount.value)
+
+// Off hides tax, except on an invoice that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = taxAmount.value > 0
+const showTax = computed(() => taxEnabled.value || hadTax)
 
 const selectedCurrency = computed(() => props.currencies.find((currency) => currency.currency_code === form.currency))
 const baseAmount = computed(() => totalAmount.value * Number(selectedCurrency.value?.exchange_rate || form.exchange_rate || 1))
@@ -405,6 +411,7 @@ const submit = () => {
               locale="en-PK"
             />
             <TotalRow
+ v-if="showTax"
               level="line"
               label="Sales tax"
               :amount="taxAmount"

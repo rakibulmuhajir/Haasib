@@ -17,6 +17,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { ReceiptText, Save, ArrowLeft, Plus, Trash2 } from 'lucide-vue-next'
 import { useFormFeedback } from '@/composables/useFormFeedback'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import InputError from '@/components/InputError.vue'
 
 interface CompanyRef {
@@ -103,6 +104,11 @@ const form = useForm({
   status: props.credit.status,
   line_items: props.credit.line_items && props.credit.line_items.length > 0 ? props.credit.line_items : [lineItemTemplate()],
 })
+
+// Off hides tax, except on a document that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = form.line_items.some((l: any) => Number(l.tax_rate) > 0)
+const showTax = computed(() => taxEnabled.value || hadTax)
 
 const totals = computed(() => {
   const subtotal = form.line_items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
@@ -362,7 +368,7 @@ const isEditable = computed(() => {
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
-            <div>
+            <div v-if="showTax">
               <Label>Tax %</Label>
               <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" :disabled="!isEditable" />
               <InputError :message="lineError(idx, 'tax_rate')" />
@@ -382,7 +388,7 @@ const isEditable = computed(() => {
           <span>Subtotal</span>
           <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
-        <div class="flex justify-between text-sm">
+        <div v-if="showTax" class="flex justify-between text-sm">
           <span>Tax</span>
           <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>

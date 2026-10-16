@@ -28,6 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { useTaxEnabled } from '@/composables/useTaxEnabled';
 import { AlertTriangle, ArrowLeft, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -134,6 +135,11 @@ const taxAmount = computed(() =>
 );
 
 const totalAmount = computed(() => subtotal.value + taxAmount.value);
+
+// Off hides tax, except on an invoice that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = taxAmount.value > 0
+const showTax = computed(() => taxEnabled.value || hadTax)
 
 const selectedCurrency = computed(() =>
     props.currencies.find(
@@ -445,6 +451,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`);
                             locale="en-PK"
                         />
                         <TotalRow
+ v-if="showTax"
                             level="line"
                             label="Sales tax"
                             :amount="taxAmount"

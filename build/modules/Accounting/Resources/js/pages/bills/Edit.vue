@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import { useModules } from '@/composables/useModules'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { billTotals, type OverallDiscountType } from './overallDiscount'
@@ -201,6 +202,11 @@ const isTrackedItem = (itemId: string | null | undefined) => {
 }
 
 const totals = computed(() => billTotals(form.line_items, form.overall_discount_type, form.overall_discount_value))
+// Off hides tax, except on a document that already carries it.
+const taxEnabled = useTaxEnabled()
+const hadTax = form.line_items.some((l: any) => Number(l.tax_rate) > 0)
+const showTax = computed(() => taxEnabled.value || hadTax)
+
 
 const addLine = () => form.line_items.push({
   item_id: null,
@@ -470,7 +476,7 @@ const { has: hasModule } = useModules()
                 />
                 <InputError :message="form.errors[`line_items.${idx}.line_total`]" />
               </div>
-              <div>
+              <div v-if="showTax">
                 <Label>{{ t('taxPercent') }}</Label>
                 <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
                 <InputError :message="form.errors[`line_items.${idx}.tax_rate`]" />
@@ -548,7 +554,7 @@ const { has: hasModule } = useModules()
           <span></span>
           <span>-<MoneyText :amount="totals.overall" :currency="form.currency" /></span>
         </div>
-        <div class="flex justify-between text-sm">
+        <div v-if="showTax" class="flex justify-between text-sm">
           <span>{{ t('tax') }}</span>
           <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>

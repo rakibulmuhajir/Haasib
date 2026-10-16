@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import { watch } from 'vue'
 import InputError from '@/components/InputError.vue'
 import PageShell from '@/components/PageShell.vue'
@@ -85,6 +86,8 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: props.item.name, href: `/${props.company.slug}/items/${props.item.id}` },
   { title: 'Edit', href: `/${props.company.slug}/items/${props.item.id}/edit` },
 ]
+
+const taxEnabled = useTaxEnabled()
 
 const form = useForm({
   sku: props.item.sku,
@@ -286,7 +289,7 @@ const submit = () => {
             </div>
           </div>
 
-          <div class="space-y-2">
+          <div v-if="taxEnabled || form.tax_rate_id" class="space-y-2">
             <Label for="tax_rate">Tax Rate</Label>
             <Select v-model="form.tax_rate_id">
               <SelectTrigger class="w-full md:w-1/3">

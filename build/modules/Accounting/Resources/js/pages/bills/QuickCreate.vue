@@ -14,6 +14,7 @@
 import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
 import { useLexicon } from '@/composables/useLexicon'
 import { useFormFeedback } from '@/composables/useFormFeedback'
 import PageShell from '@/components/PageShell.vue'
@@ -138,6 +139,8 @@ const lineItemTemplate = (): LineItem => ({
 })
 
 // Form
+const taxEnabled = useTaxEnabled()
+
 const form = useForm({
   vendor_id: (props.selectedVendorId ?? null) as string | null,
   account_id: (props.defaultExpenseAccountId ?? null) as string | null,  // Expense category - required
@@ -230,7 +233,7 @@ const saveDraft = () => {
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unit_price ?? 0,
-      tax_rate: data.apply_tax && resolvedTaxCode.value ? resolvedTaxCode.value.rate : null,
+      tax_rate: taxEnabled.value && data.apply_tax && resolvedTaxCode.value ? resolvedTaxCode.value.rate : null,
       discount_rate: null,
       expense_account_id: data.account_id,
     })),
@@ -253,7 +256,7 @@ const saveAndPay = () => {
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unit_price ?? 0,
-      tax_rate: data.apply_tax && resolvedTaxCode.value ? resolvedTaxCode.value.rate : null,
+      tax_rate: taxEnabled.value && data.apply_tax && resolvedTaxCode.value ? resolvedTaxCode.value.rate : null,
       discount_rate: null,
       expense_account_id: data.account_id,
     })),
@@ -359,7 +362,7 @@ const saveAndPay = () => {
                     <InputError :message="form.errors[`line_items.${idx}.quantity`]" />
                   </div>
 
-                  <div v-if="idx === 0" class="flex items-center justify-between gap-3 sm:justify-end">
+                  <div v-if="idx === 0 && taxEnabled" class="flex items-center justify-between gap-3 sm:justify-end">
                     <TaxToggle
                       v-model="form.apply_tax"
                       entity-type="vendor"

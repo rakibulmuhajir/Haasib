@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -88,7 +89,7 @@ class TravelExpenseService
                 throw ValidationException::withMessages(['expense' => 'The accounting entry for this expense was not found.']);
             }
 
-            $reversal = $this->postingService->reverseTransaction($transaction, $reason, Carbon::today());
+            $reversal = $this->postingService->reverseTransaction($transaction, $reason, Carbon::parse(app(CompanyClock::class)->today()));
             $expense->update([
                 'status' => Expense::STATUS_REVERSED,
                 'reversed_at' => now(),

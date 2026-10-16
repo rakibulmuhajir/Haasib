@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\CommercialRate;
@@ -93,7 +94,7 @@ class CommercialRateResolver
     ): array {
         $date = $serviceDate instanceof Carbon
             ? $serviceDate->toDateString()
-            : (filled($serviceDate) ? Carbon::parse($serviceDate)->toDateString() : now()->toDateString());
+            : (filled($serviceDate) ? Carbon::parse($serviceDate)->toDateString() : app(CompanyClock::class)->today());
         $currency = (string) Company::whereKey($companyId)->value('base_currency');
 
         $baseQuery = fn (): Builder => CommercialRate::query()

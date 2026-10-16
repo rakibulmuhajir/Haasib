@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Umrah\Models\Agent;
@@ -78,8 +79,9 @@ class TravelReportRequest extends BaseFormRequest
     {
         $forward = in_array((string) $this->route('report'), self::FORWARD_REPORTS, true);
 
-        $start = $forward ? now()->startOfDay() : now()->startOfMonth();
-        $end = $forward ? now()->addDays(90)->endOfDay() : now()->endOfMonth();
+        $now = app(CompanyClock::class)->now();
+        $start = $forward ? $now->startOfDay() : $now->startOfMonth();
+        $end = $forward ? $now->addDays(90)->endOfDay() : $now->endOfMonth();
 
         $this->merge([
             'start' => $this->input('start', $start->toDateString()),

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
@@ -241,7 +242,7 @@ class RefundService
             $creditPayment = null;
 
             if ($method === Refund::SETTLEMENT_CASH) {
-                $this->coreService->postRefundSettleCash($refund, $data['account_id'], $data['date'] ?? now()->toDateString());
+                $this->coreService->postRefundSettleCash($refund, $data['account_id'], $data['date'] ?? app(CompanyClock::class)->today());
                 $status = Refund::STATUS_REFUNDED;
             } else {
                 $creditPayment = $this->coreService->postRefundSettleCredit($refund);

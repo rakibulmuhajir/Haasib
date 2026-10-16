@@ -2,6 +2,7 @@
 
 namespace App\Modules\Umrah\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Umrah\Commands\CreateQuickBooking;
@@ -59,7 +60,7 @@ class QuickBookingController extends Controller
                 ? $requestedAgentId
                 : ($agents->count() === 1 ? $agents->first()?->id : null));
         $selectedServiceDate = $request->date('travel_date')?->toDateString();
-        $pricingDate = $selectedServiceDate ?: now()->toDateString();
+        $pricingDate = $selectedServiceDate ?: app(CompanyClock::class)->today();
 
         $visaVendor = VisaVendor::where('company_id', $company->id)
             ->where('is_active', true)

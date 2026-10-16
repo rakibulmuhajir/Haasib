@@ -61,6 +61,7 @@ export function useNavGroups() {
             isUmrahCompany: isUmrahCompany.value,
             isInventoryEnabled: isInventoryEnabled.value,
             isPayrollEnabled: isPayrollEnabled.value,
+            isTaxEnabled: Boolean(authProps.value.taxEnabled),
             currentCompanyRole: authProps.value.currentCompanyRole || null,
             fuelNavigation: authProps.value.fuelNavigation ?? null,
             settingsMenu: authProps.value.settingsMenu ?? null,

@@ -116,6 +116,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
         Route::get('/{company}/reports/payables-aging', [PayablesAgingReportController::class, 'index'])->name('reports.payables-aging');
         Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
+        Route::get('/{company}/reports/withholding-tax', [\App\Modules\Accounting\Http\Controllers\WithholdingRegisterController::class, 'index'])->name('reports.withholding-tax');
         Route::get('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'index'])->name('consolidated-invoices.index');
         Route::get('/{company}/consolidated-invoices/create', [ConsolidatedInvoiceController::class, 'create'])->name('consolidated-invoices.create');
         Route::post('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'store'])->name('consolidated-invoices.store');

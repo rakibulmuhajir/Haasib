@@ -6,6 +6,8 @@ export interface NavContext {
     isUmrahCompany: boolean;
     isInventoryEnabled: boolean;
     isPayrollEnabled: boolean;
+    // The company charges tax (Settings > Tax); gates the withholding register.
+    isTaxEnabled?: boolean;
     currentCompanyRole: string | null;
     fuelNavigation?: { allowed: string[]; hasInvestors: boolean } | null;
     // What this person may set up, grouped -- the Settings menu (App\Services\SettingsMenu).

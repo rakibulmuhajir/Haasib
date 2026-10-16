@@ -77,6 +77,23 @@ describe('account-wide value trail visibility', () => {
         expect(wrapper.text()).toBe('20,000')
     })
 
+    it('keeps a trail click from reaching a clickable row, but lets a plain hint click through', async () => {
+        // A trial balance row opens its journals; clicking the figure inside must open the trail instead.
+        const rowClicks = vi.fn()
+        const Row = defineComponent({
+            props: { trail: { type: Boolean, default: false } },
+            setup: (p) => () => h('div', { onClick: rowClicks }, [h(Hint, { trail: p.trail }, () => '267,020')]),
+        })
+        const traced = mount(Row, { props: { trail: true }, global: { stubs }, attachTo: document.body })
+        await traced.get('button').trigger('click')
+        expect(rowClicks).not.toHaveBeenCalled()
+        traced.unmount()
+        const plain = mount(Row, { props: { trail: false }, global: { stubs }, attachTo: document.body })
+        await plain.get('button').trigger('click')
+        expect(rowClicks).toHaveBeenCalledOnce()
+        plain.unmount()
+    })
+
     it('removes existing hints and their hidden detail when the preference is off', () => {
         const page = state.page as { props: { auth: { preferences: { show_value_trails: boolean } } } }
         page.props.auth.preferences.show_value_trails = false

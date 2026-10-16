@@ -23,6 +23,7 @@ return [
 
     // Manual bank transactions and standalone expenses (ordinary journals, second entry point).
     'bank_transaction.create' => \App\Modules\Accounting\Actions\BankTransaction\CreateAction::class,
+    'sale.create' => \App\Modules\Accounting\Actions\Sale\CreateAction::class,
     'expense.create' => \App\Modules\Accounting\Actions\Expense\CreateAction::class,
 
     'user.invite' => \App\Modules\Accounting\Actions\User\InviteAction::class,

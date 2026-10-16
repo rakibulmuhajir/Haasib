@@ -11,6 +11,9 @@ import { Textarea } from '@/components/ui/textarea'
 import InputError from '@/components/InputError.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import type { BreadcrumbItem } from '@/types'
+import WhtPartyFields from '../../components/WhtPartyFields.vue'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
+import type { WhtRateOption } from '@/composables/useWithholding'
 import { Users, Save } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -43,6 +46,8 @@ interface CustomerRef {
   base_currency: string | null
   payment_terms: number | null
   tax_id: string | null
+  filer_status?: string | null
+  default_wht_rate_id?: string | null
   credit_limit: number | null
   notes: string | null
   logo_url: string | null
@@ -72,7 +77,10 @@ const props = defineProps<{
   categories?: { id: string; name: string }[]
   groupOptions?: { id: string; name: string }[]
   hasMembers?: boolean
+  whtRates?: WhtRateOption[]
 }>()
+
+const taxEnabled = useTaxEnabled()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -100,6 +108,8 @@ const form = useForm({
   base_currency: props.customer.base_currency ?? props.company.base_currency,
   payment_terms: props.customer.payment_terms ?? '',
   tax_id: props.customer.tax_id ?? '',
+  filer_status: props.customer.filer_status ?? 'unknown',
+  default_wht_rate_id: props.customer.default_wht_rate_id ?? '',
   credit_limit: props.customer.credit_limit ?? '',
   notes: props.customer.notes ?? '',
   logo_url: props.customer.logo_url ?? '',
@@ -148,6 +158,8 @@ const handleSubmit = () => {
         base_currency: data.base_currency || props.company.base_currency,
         payment_terms: data.payment_terms ? Number(data.payment_terms) : null,
         tax_id: data.tax_id || null,
+        filer_status: data.filer_status || 'unknown',
+        default_wht_rate_id: data.default_wht_rate_id || null,
         credit_limit: data.credit_limit === '' ? null : Number(data.credit_limit),
         notes: data.notes || null,
         logo_url: data.logo_url || null,
@@ -247,6 +259,13 @@ const typeOptions = computed(() => Object.entries(props.customerTypes).filter(([
           <Input id="tax_id" v-model="form.tax_id" />
           <InputError :message="form.errors.tax_id" />
         </div>
+        <WhtPartyFields
+          v-if="taxEnabled"
+          v-model:filer-status="form.filer_status"
+          v-model:rate-id="form.default_wht_rate_id"
+          :rates="whtRates ?? []"
+          :errors="form.errors"
+        />
         <div>
           <Label for="ar_account_id">AR Account</Label>
           <Select v-model="form.ar_account_id">

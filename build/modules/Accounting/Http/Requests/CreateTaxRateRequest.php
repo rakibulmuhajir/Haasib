@@ -23,9 +23,12 @@ class CreateTaxRateRequest extends BaseFormRequest
         $companyId = app(CurrentCompany::class)->get()?->id;
 
         return [
-            'jurisdiction_id' => ['required', 'uuid', Rule::exists(Jurisdiction::class, 'id')],
+            // A withholding rate may leave these two out: the jurisdiction falls back to the company's
+            // and the code is made from the section (see TaxSettingsController::createTaxRate).
+            'jurisdiction_id' => [Rule::requiredIf(fn () => $this->input('tax_type') !== 'withholding'), 'nullable', 'uuid', Rule::exists(Jurisdiction::class, 'id')],
             'code' => [
-                'required',
+                Rule::requiredIf(fn () => $this->input('tax_type') !== 'withholding'),
+                'nullable',
                 'string',
                 'max:50',
                 Rule::unique(TaxRate::class)
@@ -34,6 +37,10 @@ class CreateTaxRateRequest extends BaseFormRequest
             'name' => ['required', 'string', 'max:255'],
             'rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'tax_type' => ['required', Rule::in(['sales', 'purchase', 'withholding', 'both'])],
+            // Withholding only: the section, the non-filer rate and which payments it is for.
+            'section' => ['nullable', 'string', 'max:50'],
+            'rate_non_filer' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'applies_to' => ['nullable', Rule::in(['payments_made', 'payments_received', 'both'])],
             'is_compound' => ['boolean'],
             'compound_priority' => ['integer', 'min:0'],
             'gl_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')],

@@ -215,6 +215,7 @@ const allocationPreview = computed(() => {
 
 // Tax the customer deducted. `amount` stays the total the invoices are settled by; the
 // bank receives that less the tax (and any bank charge).
+const serverError = (key: string) => (form.errors as Record<string, string | undefined>)[key];
 const showWht = ref(false);
 const whtRateId = ref('');
 const whtAmount = ref<number | ''>('');
@@ -628,7 +629,7 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <InputError :message="form.errors.wht_rate_id" />
+                                    <InputError :message="serverError('wht_rate_id')" />
                                 </div>
                                 <div>
                                     <Label for="wht_amount">Tax deducted</Label>
@@ -641,12 +642,12 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                                         placeholder="0.00"
                                         @input="whtOverridden = true"
                                     />
-                                    <InputError :message="form.errors.wht_amount" />
+                                    <InputError :message="serverError('wht_amount')" />
                                 </div>
                                 <div>
                                     <Label for="wht_certificate_number">Their certificate no.</Label>
                                     <Input id="wht_certificate_number" v-model="whtCertificate" />
-                                    <InputError :message="form.errors.wht_certificate_number" />
+                                    <InputError :message="serverError('wht_certificate_number')" />
                                 </div>
                             </div>
                             <p v-if="whtPreview.missingNonFiler" class="text-sm text-destructive">

@@ -390,6 +390,7 @@ class CustomerController extends Controller
             'currencies' => $currencies,
             'arAccounts' => $arAccounts,
             'customerTypes' => Customer::TYPES,
+            'whtRates' => app(\App\Modules\Accounting\Services\WithholdingTax::class)->ratesFor($company, \App\Modules\Accounting\Services\WithholdingTax::SIDE_RECEIVED),
             'categories' => $this->categoryOptions($company->id),
             // Groups it can join: customers not part of a group themselves. None when it has members.
             'groupOptions' => Customer::where('company_id', $company->id)->where('parent_customer_id', null)

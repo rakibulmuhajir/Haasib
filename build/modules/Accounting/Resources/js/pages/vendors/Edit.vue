@@ -7,6 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
+import WhtPartyFields from '../../components/WhtPartyFields.vue'
+import { useTaxEnabled } from '@/composables/useTaxEnabled'
+import type { WhtRateOption } from '@/composables/useWithholding'
 import { Building2, Save } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -37,6 +40,8 @@ interface VendorRef {
   notes: string | null
   is_active: boolean
   address?: Record<string, string | null>
+  filer_status?: string | null
+  default_wht_rate_id?: string | null
 }
 
 const props = defineProps<{
@@ -44,7 +49,10 @@ const props = defineProps<{
   vendor: VendorRef
   apAccounts?: AccountOption[]
   vendorTypes: Record<string, string>
+  whtRates?: WhtRateOption[]
 }>()
+
+const taxEnabled = useTaxEnabled()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -66,6 +74,8 @@ const form = useForm({
     country: props.vendor.address?.country ?? '',
   },
   tax_id: props.vendor.tax_id ?? '',
+  filer_status: props.vendor.filer_status ?? 'unknown',
+  default_wht_rate_id: props.vendor.default_wht_rate_id ?? '',
   payment_terms: props.vendor.payment_terms,
   account_number: props.vendor.account_number ?? '',
   notes: props.vendor.notes ?? '',
@@ -75,9 +85,12 @@ const form = useForm({
 })
 
 const handleSubmit = () => {
-  form.put(`/${props.company.slug}/vendors/${props.vendor.id}`, {
-    preserveScroll: true,
-  })
+  form
+    .transform((data) => ({ ...data, default_wht_rate_id: data.default_wht_rate_id || null }))
+    .put(`/${props.company.slug}/vendors/${props.vendor.id}`, {
+      preserveScroll: true,
+      onFinish: () => form.transform((data) => data),
+    })
 }
 </script>
 
@@ -128,6 +141,13 @@ const handleSubmit = () => {
           <Input id="tax_id" v-model="form.tax_id" />
           <InputError :message="form.errors.tax_id" />
         </div>
+        <WhtPartyFields
+          v-if="taxEnabled"
+          v-model:filer-status="form.filer_status"
+          v-model:rate-id="form.default_wht_rate_id"
+          :rates="whtRates ?? []"
+          :errors="form.errors"
+        />
         <div>
           <Label for="payment_terms">Payment Terms</Label>
           <Input id="payment_terms" v-model.number="form.payment_terms" type="number" min="0" max="365" />

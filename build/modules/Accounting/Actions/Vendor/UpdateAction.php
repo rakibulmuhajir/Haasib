@@ -36,6 +36,8 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'logo_url' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
             'ap_account_id' => 'nullable|uuid',
+            'filer_status' => 'nullable|string|in:filer,non_filer,unknown',
+            'default_wht_rate_id' => 'nullable|uuid',
         ];
     }
 
@@ -81,6 +83,13 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 $updates[$field] = $params[$field] ?: null;
                 $changes[] = "{$field} → ".($params[$field] ?: 'removed');
             }
+        }
+
+        // Withholding: filer status and the usual rate (only while tax is on).
+        $withholding = app(\App\Modules\Accounting\Services\WithholdingTax::class)->partyUpdates($company, $params, \App\Modules\Accounting\Services\WithholdingTax::SIDE_MADE);
+        if ($withholding) {
+            $updates = array_merge($updates, $withholding);
+            $changes[] = 'withholding tax settings updated';
         }
 
         if (array_key_exists('vendor_number', $params) && $params['vendor_number']) {

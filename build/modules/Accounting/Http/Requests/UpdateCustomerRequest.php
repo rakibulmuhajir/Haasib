@@ -29,6 +29,8 @@ class UpdateCustomerRequest extends BaseFormRequest
             'base_currency' => ['nullable', 'string', 'size:3', 'uppercase'],
             'payment_terms' => ['nullable', 'integer', 'min:0', 'max:365'],
             'tax_id' => ['nullable', 'string', 'max:100'],
+            'filer_status' => ['sometimes', 'nullable', Rule::in(['filer', 'non_filer', 'unknown'])],
+            'default_wht_rate_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(\App\Modules\Accounting\Models\TaxRate::class, 'id')->where('tax_type', 'withholding')],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'ar_account_id' => [

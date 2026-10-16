@@ -47,6 +47,8 @@ class UpdateVendorRequest extends BaseFormRequest
             'address.zip' => ['nullable', 'string', 'max:20'],
             'address.country' => ['nullable', 'string', 'max:2'],
             'tax_id' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'filer_status' => ['sometimes', 'nullable', Rule::in(['filer', 'non_filer', 'unknown'])],
+            'default_wht_rate_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(\App\Modules\Accounting\Models\TaxRate::class, 'id')->where('tax_type', 'withholding')],
             'base_currency' => ['sometimes', 'string', 'size:3', 'uppercase'],
             'payment_terms' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'account_number' => ['sometimes', 'nullable', 'string', 'max:100'],

@@ -93,6 +93,33 @@ class WithholdingTax
             ->toArray();
     }
 
+    /**
+     * Filer status and default rate from a vendor or customer save. Read only while the Charge
+     * tax switch is on; with it off the stored values are left alone.
+     *
+     * @return array<string, mixed>
+     */
+    public function partyUpdates(Company $company, array $params, string $side): array
+    {
+        if (! $this->enabled($company)) {
+            return [];
+        }
+
+        $updates = [];
+        if (array_key_exists('filer_status', $params) && in_array($params['filer_status'], ['filer', 'non_filer', 'unknown'], true)) {
+            $updates['filer_status'] = $params['filer_status'];
+        }
+        if (array_key_exists('default_wht_rate_id', $params)) {
+            $id = $params['default_wht_rate_id'] ?: null;
+            if ($id && ! TaxRate::where('company_id', $company->id)->active()->where('tax_type', 'withholding')->whereIn('applies_to', [$side, 'both'])->whereKey($id)->exists()) {
+                throw ValidationException::withMessages(['default_wht_rate_id' => 'Choose a withholding rate from the Tax page.']);
+            }
+            $updates['default_wht_rate_id'] = $id;
+        }
+
+        return $updates;
+    }
+
     /** WHT on a base-currency amount, rounded the way the company's tax settings round. */
     public function amount(Company $company, float $baseAmount, float $ratePct): float
     {

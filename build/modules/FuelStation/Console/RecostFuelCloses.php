@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Console;
 
+use App\Support\CompanyClock;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Services\DailyCloseCostCorrectionService;
@@ -55,7 +56,7 @@ class RecostFuelCloses extends Command
         // Keep the item's stored cost at today's figure: stock valuation and the rate screens read it.
         $items = DB::table('inv.items')->where('company_id', $company->id)->whereNotNull('fuel_category')->whereNull('deleted_at')->get(['id', 'name', 'avg_cost']);
         foreach ($items as $item) {
-            $now = $costs->costForDay($company->id, $item->id, now()->toDateString());
+            $now = $costs->costForDay($company->id, $item->id, app(CompanyClock::class)->today($company));
             if ($now <= 0) {
                 continue;
             }

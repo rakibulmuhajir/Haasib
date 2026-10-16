@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Transaction;
@@ -59,7 +60,7 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $paymentAccount = $this->getPaymentAccount($company->id, $data['payment_account_id'] ?? null);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
-            $date = $data['business_date'] ?? now()->toDateString();
+            $date = $data['business_date'] ?? app(CompanyClock::class)->today();
 
             // Create GL transaction
             $glTransaction = $this->postingService->postBalancedTransaction([
@@ -135,7 +136,7 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $paymentAccount = $this->getPaymentAccount($company->id, $data['payment_account_id'] ?? null);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
-            $date = $data['business_date'] ?? now()->toDateString();
+            $date = $data['business_date'] ?? app(CompanyClock::class)->today();
 
             // Create GL transaction (reversed from deposit)
             $glTransaction = $this->postingService->postBalancedTransaction([
@@ -213,7 +214,7 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
             $fuelSalesAccount = $this->getFuelSalesAccount($company->id);
-            $date = now()->toDateString();
+            $date = app(CompanyClock::class)->today();
 
             // Create GL transaction: Dr Amanat Liability, Cr Fuel Sales
             $glTransaction = $this->postingService->postBalancedTransaction([

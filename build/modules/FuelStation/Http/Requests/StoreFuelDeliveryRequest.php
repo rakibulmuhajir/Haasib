@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
@@ -31,7 +32,7 @@ class StoreFuelDeliveryRequest extends BaseFormRequest
         $companyId = app(CurrentCompany::class)->get()->id;
 
         return [
-            'date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'temporary_storage' => ['nullable', 'boolean'],
             'supplier_id' => ['required', 'uuid', Rule::exists(Vendor::class, 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'supplier_invoice_number' => ['nullable', 'string', 'max:100'],

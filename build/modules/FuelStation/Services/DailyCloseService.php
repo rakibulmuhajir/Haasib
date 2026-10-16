@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Models\Partner;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
@@ -2245,7 +2246,7 @@ class DailyCloseService
         $closes = Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')
             ->whereNull('deleted_at')
-            ->when($days !== null, fn ($q) => $q->where('transaction_date', '>=', now()->subDays($days)->toDateString()))
+            ->when($days !== null, fn ($q) => $q->where('transaction_date', '>=', app(CompanyClock::class)->now()->subDays($days)->toDateString()))
             ->orderByDesc('transaction_date')
             ->get(['id', 'company_id', 'transaction_number', 'transaction_date', 'metadata', 'is_locked', 'reversed_by_id', 'reversal_of_id', 'corrects_transaction_id']);
 

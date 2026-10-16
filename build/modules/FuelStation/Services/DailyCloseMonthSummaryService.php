@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,7 @@ class DailyCloseMonthSummaryService
     {
         $start = Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
         $end = $start->copy()->endOfMonth();
-        $today = now()->startOfDay();
+        $today = \Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today());
 
         $closes = Transaction::where('company_id', $companyId)
             ->where('transaction_type', 'fuel_daily_close')

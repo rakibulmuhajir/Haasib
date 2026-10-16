@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Requests;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 
@@ -16,6 +17,6 @@ class ReceiveDirectDeliveryCashRequest extends BaseFormRequest
 
     public function rules(): array
     {
-        return ['date' => 'required|date|before_or_equal:today'];
+        return ['date' => 'required|date|before_or_equal:'.app(CompanyClock::class)->today()];
     }
 }

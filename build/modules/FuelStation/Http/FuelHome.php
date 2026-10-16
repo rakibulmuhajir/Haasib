@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Models\Company;
 use Illuminate\Http\Request;
@@ -86,7 +87,7 @@ class FuelHome
         $start = $parse($from);
         $end = $parse($to);
         if (! $start || ! $end) {
-            $start = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+            $start = Carbon::parse(app(CompanyClock::class)->today())->subMonthNoOverflow()->startOfMonth();
             $end = $start->copy()->endOfMonth();
         }
         if ($start->gt($end)) {

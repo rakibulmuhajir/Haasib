@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Partner;
@@ -818,7 +819,7 @@ class FuelStationOnboardingController extends Controller
                 Employee::create($payload + [
                     'company_id' => $company->id,
                     'employee_number' => $employeeNumber,
-                    'hire_date' => now()->toDateString(),
+                    'hire_date' => app(CompanyClock::class)->today(),
                     'employment_type' => 'full_time',
                     'employment_status' => 'active',
                     'pay_frequency' => 'monthly',
@@ -1366,7 +1367,7 @@ class FuelStationOnboardingController extends Controller
                     'quantity' => $openingQty,
                     'unit_cost' => $lubricantData['cost_price'],
                     'total_cost' => $openingQty * $lubricantData['cost_price'],
-                    'movement_date' => now()->toDateString(),
+                    'movement_date' => app(CompanyClock::class)->today(),
                 ];
 
                 if ($movement) {

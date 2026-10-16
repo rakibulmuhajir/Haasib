@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Http\Controllers;
 
+use App\Support\CompanyClock;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Payment;
@@ -45,8 +46,8 @@ class CollectionController extends Controller
         $company = app(CurrentCompany::class)->get();
 
         // Date filters
-        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
-        $endDate = $request->input('end_date', now()->toDateString());
+        $startDate = $request->input('start_date', app(CompanyClock::class)->now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', app(CompanyClock::class)->today());
         $customerId = $request->input('customer_id', 'all');
 
         $query = Payment::where('company_id', $company->id)

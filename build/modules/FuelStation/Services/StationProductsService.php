@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
@@ -27,7 +28,7 @@ class StationProductsService
     /** @return array{rows: array<int, array<string,mixed>>, low_count: int} */
     public function run(string $companyId, ?Carbon $today = null): array
     {
-        $today ??= Carbon::today();
+        $today ??= Carbon::parse(app(CompanyClock::class)->today());
 
         $items = Item::where('company_id', $companyId)
             ->where('is_sellable', true)

@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -130,7 +131,7 @@ class VendorCardSettlementService
             $company = \App\Models\Company::findOrFail($companyId);
             $invoiceIds = $data['invoice_ids'];
             $amountReceived = $data['amount_received'];
-            $settlementDate = $data['settlement_date'] ?? now()->toDateString();
+            $settlementDate = $data['settlement_date'] ?? app(CompanyClock::class)->today();
             $reference = $data['reference'] ?? null;
 
             // Get invoices to settle
@@ -184,7 +185,7 @@ class VendorCardSettlementService
             // Create GL transaction
             $transaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $companyId,
-                'transaction_number' => $reference ?? 'VENDOR-CARD-SETTLE-' . now()->format('Ymd'),
+                'transaction_number' => $reference ?? 'VENDOR-CARD-SETTLE-' . str_replace('-', '', app(CompanyClock::class)->today()),
                 'transaction_type' => 'vendor_card_settlement',
                 'date' => $settlementDate,
                 'currency' => $currency,
@@ -210,7 +211,7 @@ class VendorCardSettlementService
     {
         return DB::transaction(function () use ($companyId, $data) {
             $company = \App\Models\Company::findOrFail($companyId);
-            $settlementDate = $data['settlement_date'] ?? now()->toDateString();
+            $settlementDate = $data['settlement_date'] ?? app(CompanyClock::class)->today();
             $reference = $data['reference'] ?? null;
             $amountReceived = (float) $data['amount_received'];
             $fees = (float) ($data['fees'] ?? 0);

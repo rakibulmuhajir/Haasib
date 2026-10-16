@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services\Calculator;
 
+use App\Support\CompanyClock;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 
@@ -48,7 +49,7 @@ final class WhenResolver
     /** @return array{0:string,1:string,2:string} from, to, label */
     public static function range(array $when, ?CarbonInterface $today = null): array
     {
-        $today = ($today ?? Carbon::today())->copy()->startOfDay();
+        $today = ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->copy()->startOfDay();
 
         switch ($when['preset'] ?? null) {
             case 'today':
@@ -89,7 +90,7 @@ final class WhenResolver
     /** @return array{0:string,1:string} the day, label */
     public static function day(array $when, ?CarbonInterface $today = null): array
     {
-        $today = ($today ?? Carbon::today())->copy()->startOfDay();
+        $today = ($today ?? Carbon::parse(app(CompanyClock::class)->today()))->copy()->startOfDay();
 
         switch ($when['preset'] ?? null) {
             case 'month_end_last':

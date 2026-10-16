@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Actions;
 
+use App\Support\CompanyClock;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
@@ -18,7 +19,7 @@ class DirectFuelSaleAction implements PaletteAction, \App\Contracts\DescribesPal
     {
         return ['item_id' => 'required|uuid', 'customer_id' => 'nullable|uuid', 'unit_id' => 'nullable|uuid',
             'reference' => 'nullable|string|max:100', 'quantity' => 'required|numeric|min:0.01',
-            'unit_price' => 'required|numeric|min:0.01', 'sale_date' => 'required|date|before_or_equal:today',
+            'unit_price' => 'required|numeric|min:0.01', 'sale_date' => 'required|date|before_or_equal:'.app(CompanyClock::class)->today(),
             'paid_in_cash' => 'required|boolean', 'temporary_storage' => 'nullable|boolean'];
     }
 

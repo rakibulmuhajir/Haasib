@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -113,7 +114,7 @@ class StockStatementService
         $bought = $this->purchases($companyId, $itemId, $startDate, $endDate);
         $directSales = $this->directSales($companyId, $itemId, $startDate, $endDate, $bought);
 
-        $today = now()->startOfDay();
+        $today = \Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today());
         $rows = [];
         $prevDip = null;
         $first = true;

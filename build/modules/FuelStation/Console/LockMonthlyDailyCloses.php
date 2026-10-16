@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Console;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Transaction;
 use App\Services\CompanyContextService;
+use App\Support\CompanyClock;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -33,24 +34,28 @@ class LockMonthlyDailyCloses extends Command
      */
     public function handle(CompanyContextService $context): int
     {
-        $now = Carbon::now();
+        // "Previous month" is the company's own calendar month: at 00:30 on the 1st in Karachi it is
+        // still the last day of the month in UTC. Explicit --month/--year win for every company.
+        $monthOption = $this->option('month') ? (int) $this->option('month') : null;
+        $yearOption = $this->option('year') ? (int) $this->option('year') : null;
 
-        // Determine month and year
-        $month = $this->option('month') ? (int) $this->option('month') : $now->subMonth()->month;
-        $year = $this->option('year') ? (int) $this->option('year') : null;
+        $rangeFor = function (?Company $company) use ($monthOption, $yearOption): array {
+            $now = app(CompanyClock::class)->now($company);
+            $month = $monthOption ?? $now->subMonthNoOverflow()->month;
+            $year = $yearOption;
 
-        if ($year === null) {
-            // If we're in January and locking "previous month", that means December of last year
-            if ($now->month === 1 && !$this->option('month')) {
-                $year = $now->year - 1;
-            } else {
-                $year = $now->year;
+            if ($year === null) {
+                // If we're in January and locking "previous month", that means December of last year
+                $year = ($now->month === 1 && $monthOption === null) ? $now->year - 1 : $now->year;
             }
-        }
 
-        $startDate = Carbon::create($year, $month, 1)->startOfMonth();
-        $endDate = $startDate->copy()->endOfMonth();
-        $monthName = $startDate->format('F Y');
+            $start = Carbon::create($year, $month, 1)->startOfMonth();
+
+            return [$start, $start->copy()->endOfMonth()];
+        };
+
+        [$startDate] = $rangeFor(null);
+        $monthName = $monthOption === null ? 'the previous month' : $startDate->format('F Y');
 
         $isDryRun = $this->option('dry-run');
         $companyId = $this->option('company');
@@ -80,10 +85,12 @@ class LockMonthlyDailyCloses extends Command
         }
 
         $totalLocked = 0;
-        $this->withProgressBar($companies, function ($company) use ($context, $startDate, $endDate, $isDryRun, &$totalLocked) {
+        $this->withProgressBar($companies, function ($company) use ($context, $rangeFor, $isDryRun, &$totalLocked) {
             // Without company context the UPDATE below matches nothing and
             // reports success, which reads exactly like "there was nothing to lock".
-            $context->withContext($company, function () use ($company, $startDate, $endDate, $isDryRun, &$totalLocked) {
+            $context->withContext($company, function () use ($company, $rangeFor, $isDryRun, &$totalLocked) {
+                [$startDate, $endDate] = $rangeFor($company);
+
                 $query = Transaction::where('company_id', $company->id)
                     ->where('transaction_type', 'fuel_daily_close')
                     ->whereBetween('transaction_date', [$startDate, $endDate])

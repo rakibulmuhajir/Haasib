@@ -116,6 +116,8 @@ class ScenarioFuelStationSeeder extends Seeder
             'name' => 'Mehran Filling Station',
             'slug' => self::SLUG,
             'base_currency' => 'PKR',
+            // A Pakistani station: its "today" is Karachi's, not UTC's.
+            'timezone' => 'Asia/Karachi',
         ]);
 
         DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);

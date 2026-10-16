@@ -2,6 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
+use App\Support\CompanyClock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -124,7 +125,7 @@ class MonthlyFuelProfitService
             return;
         }
         $payload = $this->run($companyId, $month);
-        if (! $payload['complete'] || Carbon::parse($month.'-01')->endOfMonth()->gte(now()->startOfDay())) {
+        if (! $payload['complete'] || Carbon::parse($month.'-01')->endOfMonth()->gte(\Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today()))) {
             throw ValidationException::withMessages(['month' => 'Complete the month, daily closes, opening stock and boundary purchase rates before locking its profit.']);
         }
         DB::table('fuel.month_profit_snapshots')->insert([

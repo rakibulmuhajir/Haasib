@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\PostingTemplate;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\VendorCredit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -104,6 +105,9 @@ class PostingService
             throw new \RuntimeException('Payment allocations must equal payment amount to post to GL.');
         }
 
+        // Tax the customer withheld: settles the invoice but never reaches the bank.
+        $wht = $this->withheldInPaymentCurrency($payment, $amount);
+
         return $this->createTransaction([
             'company_id' => $company->id,
             // A re-post after an amendment takes its own number: the original journal keeps
@@ -124,9 +128,15 @@ class PostingService
             [
                 'account_id' => $depositAccountId,
                 'type' => 'debit',
-                'amount' => round($amount - $charge, 2),
-                'description' => 'Deposit (net of transaction charge)',
+                'amount' => $wht > 0 ? round($amount - $charge - $wht, 6) : round($amount - $charge, 2),
+                'description' => $wht > 0 ? 'Deposit (net of withholding tax)' : 'Deposit (net of transaction charge)',
             ],
+            ...($wht > 0 ? [[
+                'account_id' => app(WithholdingTax::class)->advanceTaxAccount($company),
+                'type' => 'debit',
+                'amount' => $wht,
+                'description' => 'Advance tax (withheld by customer)',
+            ]] : []),
             ...($charge > 0 ? [[
                 'account_id' => $payment->company?->expense_account_id,
                 'type' => 'debit',
@@ -140,6 +150,25 @@ class PostingService
                 'description' => 'Accounts Receivable',
             ],
         ]);
+    }
+
+    /**
+     * Tax withheld on a payment, converted from its stored base-currency figure to the payment's
+     * own currency (the journal lines are written in it and converted back at the same rate).
+     */
+    private function withheldInPaymentCurrency(Model $payment, float $amount): float
+    {
+        $base = round((float) ($payment->wht_amount ?? 0), 2);
+        if ($base <= 0) {
+            return 0.0;
+        }
+        $rate = (float) ($payment->exchange_rate ?: 1);
+        $wht = $rate === 1.0 ? $base : round($base / $rate, 6);
+        if ($wht > $amount) {
+            throw new \RuntimeException('Withholding tax cannot exceed the payment amount.');
+        }
+
+        return $wht;
     }
 
     public function postBill(Bill $bill, ?string $transactionNumber = null): Transaction
@@ -225,6 +254,9 @@ class PostingService
             throw new \RuntimeException('Bill payment allocations cannot exceed the payment amount.');
         }
 
+        // Tax withheld, held in base currency; the journal lines are in the payment's currency.
+        $wht = $this->withheldInPaymentCurrency($payment, $amount);
+
         return $this->createTransaction([
             'company_id' => $company->id,
             'transaction_number' => $transactionNumber ?? $payment->payment_number,
@@ -249,9 +281,16 @@ class PostingService
             [
                 'account_id' => $paymentAccountId,
                 'type' => 'credit',
-                'amount' => round($amount + $charge, 2),
-                'description' => 'Cash/Bank (including transaction charge)',
+                // With tax withheld the vendor is paid the net; the rest is owed to the tax authority.
+                'amount' => $wht > 0 ? round($amount + $charge - $wht, 6) : round($amount + $charge, 2),
+                'description' => $wht > 0 ? 'Cash/Bank (net of withholding tax)' : 'Cash/Bank (including transaction charge)',
             ],
+            ...($wht > 0 ? [[
+                'account_id' => app(WithholdingTax::class)->payableAccount($company),
+                'type' => 'credit',
+                'amount' => $wht,
+                'description' => 'Withholding tax payable',
+            ]] : []),
             ...($charge > 0 ? [[
                 'account_id' => $payment->company?->expense_account_id,
                 'type' => 'debit',

@@ -18,6 +18,8 @@ import { useFormFeedback } from '@/composables/useFormFeedback';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { useModules } from '@/composables/useModules';
+import { useTaxEnabled } from '@/composables/useTaxEnabled';
+import { pctText, withholdingFor, type WhtRateOption } from '@/composables/useWithholding';
 import { CreditCard, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -31,6 +33,8 @@ interface CompanyRef {
 interface VendorRef {
     id: string;
     name: string;
+    filer_status?: 'filer' | 'non_filer' | 'unknown';
+    default_wht_rate_id?: string | null;
 }
 
 interface BillRef {
@@ -83,7 +87,10 @@ const props = defineProps<{
     };
     bankAccounts?: AccountOption[];
     apAccounts?: AccountOption[];
+    whtRates?: WhtRateOption[];
 }>();
+
+const taxEnabled = useTaxEnabled();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -112,6 +119,7 @@ const form = useForm({
         : '',
     payment_account_id: '',
     ap_account_id: props.defaults?.ap_account_id ?? '',
+    wht_rate_id: '',
     payment_splits: [
         {
             payment_account_id: '',
@@ -157,6 +165,8 @@ watch(
 
 const fetchUnpaidBills = (vendorId: string) => {
     form.vendor_id = vendorId;
+    // The vendor's usual withholding rate, when they have one.
+    form.wht_rate_id = props.vendors.find((v) => v.id === vendorId)?.default_wht_rate_id ?? '';
     if (!vendorId) {
         unpaidBills.value = [];
         form.allocations = [];
@@ -203,8 +213,16 @@ const totalTransactionCharge = computed(() =>
     moneyNumber(form.transaction_charge),
 );
 
+const vendor = computed(() => props.vendors.find((v) => v.id === form.vendor_id));
+const whtRate = computed(() =>
+    taxEnabled.value ? (props.whtRates ?? []).find((r) => r.id === form.wht_rate_id) : undefined,
+);
+const wht = computed(() =>
+    withholdingFor(whtRate.value, vendor.value?.filer_status, moneyNumber(form.amount)),
+);
+
 const totalCashMovement = computed(() =>
-    moneyNumber(form.amount + totalTransactionCharge.value),
+    moneyNumber(form.amount + totalTransactionCharge.value - wht.value.wht),
 );
 
 const allocatedBillBalance = computed(() =>
@@ -344,6 +362,10 @@ const removeSplit = (index: number) => {
 };
 
 const handleSubmit = () => {
+    if (wht.value.missingNonFiler) {
+        showError('This rate has no non-filer value. Add it on the Tax page.');
+        return;
+    }
     if (Math.abs(totalSplit.value - moneyNumber(form.amount)) > 0.000001) {
         showError('Payment sources must equal the payment amount');
         return;
@@ -379,6 +401,7 @@ const handleSubmit = () => {
             form.ap_account_id === '__none' || !form.ap_account_id
                 ? null
                 : form.ap_account_id,
+        wht_rate_id: whtRate.value ? whtRate.value.id : null,
         allocations: form.allocations.filter((a) => a.amount_allocated > 0),
     };
 
@@ -479,6 +502,31 @@ const handleSubmit = () => {
                     <InputError :message="form.errors.transaction_charge" />
                     <p class="mt-1 text-xs text-muted-foreground">
                         Bank or transfer fee added to the cash/bank payment.
+                    </p>
+                </div>
+                <div v-if="taxEnabled && (whtRates?.length ?? 0) > 0" class="md:col-span-2">
+                    <Label for="wht_rate_id">Withhold tax (WHT)</Label>
+                    <Select
+                        :model-value="form.wht_rate_id || '__none'"
+                        @update:modelValue="(v) => (form.wht_rate_id = v === '__none' ? '' : String(v))"
+                    >
+                        <SelectTrigger id="wht_rate_id">
+                            <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none">None</SelectItem>
+                            <SelectItem v-for="r in whtRates" :key="r.id" :value="r.id">
+                                {{ r.name }}{{ r.section ? ` (${r.section})` : '' }} — {{ pctText(r.rate) }}<template v-if="r.rate_non_filer !== null"> / {{ pctText(r.rate_non_filer) }} non-filer</template>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError :message="form.errors.wht_rate_id" />
+                    <p v-if="wht.missingNonFiler" class="mt-1 text-sm text-destructive">
+                        {{ vendor?.name }} is a non-filer and this rate has no non-filer value. Add it on the Tax page.
+                    </p>
+                    <p v-else-if="whtRate" class="mt-1 text-sm">
+                        WHT {{ formatNumber(wht.wht) }} at {{ pctText(wht.pct) }}<template v-if="wht.nonFiler"> (non-filer rate)</template>;
+                        vendor receives {{ formatNumber(moneyNumber(form.amount) - wht.wht) }}
                     </p>
                 </div>
                 <div>
@@ -692,6 +740,13 @@ const handleSubmit = () => {
                     <span>Transaction charges</span>
                     <MoneyText
                         :amount="totalTransactionCharge"
+                        :currency="form.currency"
+                    />
+                </div>
+                <div v-if="wht.wht > 0" class="flex justify-between text-sm">
+                    <span>Tax withheld (WHT)</span>
+                    <MoneyText
+                        :amount="-wht.wht"
                         :currency="form.currency"
                     />
                 </div>

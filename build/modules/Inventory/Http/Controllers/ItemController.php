@@ -118,6 +118,7 @@ class ItemController extends Controller
 
         $taxRates = TaxRate::where('company_id', $company->id)
             ->where('is_active', true)
+            ->where('tax_type', '!=', 'withholding')
             ->orderBy('name')
             ->get(['id', 'name', 'code', 'rate']);
 
@@ -320,6 +321,7 @@ class ItemController extends Controller
 
         $taxRates = TaxRate::where('company_id', $company->id)
             ->where('is_active', true)
+            ->where('tax_type', '!=', 'withholding')
             ->orderBy('name')
             ->get(['id', 'name', 'code', 'rate']);
 

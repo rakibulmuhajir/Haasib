@@ -15,6 +15,7 @@ final class CoreSearchSources
         PaletteSearchSources::register('item', fn ($c, $q) => self::items($c, $q));
         PaletteSearchSources::register('employee', fn ($c, $q) => self::employees($c, $q));
         PaletteSearchSources::register('warehouse', fn ($c, $q) => self::warehouses($c, $q));
+        PaletteSearchSources::register('wht_rate', fn ($c, $q) => self::whtRates($c, $q));
     }
 
     /** @param list<string> $columns */
@@ -72,6 +73,21 @@ final class CoreSearchSources
         return self::base('pay.employees', $companyId, $query, ['first_name', 'last_name', 'employee_number'])
             ->select('id', 'first_name', 'last_name', 'employee_number')->orderBy('first_name')->get()
             ->map(fn ($r) => ['value' => $r->id, 'label' => trim($r->first_name.' '.$r->last_name), 'meta' => $r->employee_number, 'icon' => '🧑'])->all();
+    }
+
+    /** Withholding rates only: the sales and purchase rates are not offered for tax withheld. */
+    private static function whtRates(string $companyId, string $query): array
+    {
+        return self::base('acct.tax_rates', $companyId, $query, ['name', 'code', 'section'])
+            ->where('tax_type', 'withholding')->where('is_active', true)
+            ->select('id', 'name', 'section', 'rate', 'rate_non_filer')->orderBy('name')->get()
+            ->map(fn ($r) => [
+                'value' => $r->id,
+                'label' => $r->name,
+                'meta' => trim(($r->section ? $r->section.' · ' : '').rtrim(rtrim(number_format((float) $r->rate, 4), '0'), '.').'%'
+                    .($r->rate_non_filer !== null ? ' / '.rtrim(rtrim(number_format((float) $r->rate_non_filer, 4), '0'), '.').'%' : '')),
+                'icon' => '%',
+            ])->all();
     }
 
     private static function warehouses(string $companyId, string $query): array

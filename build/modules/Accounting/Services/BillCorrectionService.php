@@ -128,6 +128,7 @@ class BillCorrectionService
      */
     public function billPaymentChangeSupplier(BillPayment $payment, string $vendorId, string $reason, bool $applyOldestFirst = true): array
     {
+        WithholdingTax::refuseCorrection($payment);
         $to = $this->vendor($payment->company_id, $vendorId);
         if ($to->id === $payment->vendor_id) {
             throw ValidationException::withMessages(['vendor_id' => 'That is already this payment\'s vendor.']);
@@ -171,6 +172,7 @@ class BillCorrectionService
      */
     public function billPaymentSplit(BillPayment $payment, array $shares, string $reason): array
     {
+        WithholdingTax::refuseCorrection($payment);
         $total = round((float) $payment->amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['vendor_id' => (string) $s['vendor_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {

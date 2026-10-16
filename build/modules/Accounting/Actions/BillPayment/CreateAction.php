@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\BillPaymentAllocation;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Modules\Accounting\Services\WithholdingTax;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,8 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'payment_date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
             'transaction_charge' => 'nullable|numeric|min:0',
+            // Withholding tax to deduct; read only while the company charges tax.
+            'wht_rate_id' => 'nullable|uuid',
             'currency' => 'required|string|size:3|uppercase',
             'base_currency' => 'required|string|size:3|uppercase',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|decimal:8',
@@ -88,7 +91,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             }
         }
 
-        return \App\Services\AccountingWriteTransaction::run(function () use ($company, $params, $paymentNumbers, $exchangeRate, $splits, $transactionCharge) {
+        return \App\Services\AccountingWriteTransaction::run(function () use ($company, $params, $paymentNumbers, $exchangeRate, $splits, $transactionCharge, $paymentAmount) {
             $allocationPool = $this->validateAndBuildAllocationPool($company->id, $params);
             $createdPayments = [];
             $paymentGroupId = (string) Str::uuid();
@@ -98,6 +101,17 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             $apAccountId = $params['ap_account_id'] ?? $vendor?->ap_account_id ?? $company->ap_account_id;
             if (! $apAccountId) {
                 throw new \RuntimeException('AP account is required to post the bill payment.');
+            }
+
+            // Tax withheld from the vendor, on the whole payment in base currency, spread over
+            // its split rows. Nothing at all when tax is off or no rate was chosen.
+            $withholding = app(WithholdingTax::class);
+            $wht = $withholding->resolve($company, $params['wht_rate_id'] ?? null, WithholdingTax::SIDE_MADE, $vendor?->filer_status);
+            $whtShares = array_fill(0, count($splits), 0.0);
+            if ($wht) {
+                $baseTotal = round($paymentAmount * ($exchangeRate ?? 1), 2);
+                $whtTotal = $withholding->amount($company, $baseTotal, $wht['rate']);
+                $whtShares = $withholding->spread($whtTotal, array_column($splits, 'amount'));
             }
 
             foreach ($splits as $index => $split) {
@@ -123,6 +137,11 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 'base_amount' => $baseAmount,
                 'transaction_charge' => $splitCharge,
                 'base_transaction_charge' => $baseSplitCharge,
+                'wht_rate_id' => $wht['rate_id'] ?? null,
+                'wht_rate' => $wht['rate'] ?? null,
+                'wht_amount' => $whtShares[$index],
+                'wht_section' => $wht['section'] ?? null,
+                'wht_filer_status' => $wht['filer_status'] ?? null,
                     'payment_method' => $split['payment_method'],
                     'payment_account_id' => $split['payment_account_id'],
                     'reference_number' => $split['reference_number'] ?? $params['reference_number'] ?? null,
@@ -401,6 +420,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 'payment_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Paid from account'],
                 'payment_date' => ['hint' => 'Date'],
                 'amount' => ['hint' => 'Amount'],
+                'wht_rate_id' => ['inputType' => 'search', 'searchEntity' => 'wht_rate', 'hint' => 'Withholding rate'],
             ],
         ];
     }

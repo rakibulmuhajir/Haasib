@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\PostingService;
+use App\Modules\Accounting\Services\WithholdingTax;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -163,6 +164,10 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             $payment->payment_date = $newDate;
             $payment->amount = $newAmount;
             $payment->base_amount = round($newAmount * ($payment->exchange_rate ?? 1), 2);
+            // Tax withheld follows the amount, at the rate it was taken at.
+            if ($amountChanged && (float) $payment->wht_amount > 0 && $payment->wht_rate !== null) {
+                $payment->wht_amount = app(WithholdingTax::class)->amount($company, (float) $payment->base_amount, (float) $payment->wht_rate);
+            }
             $payment->payment_method = $newMethod;
             $payment->payment_account_id = $newAccountId;
             if (array_key_exists('reference_number', $params)) {

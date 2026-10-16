@@ -136,8 +136,19 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             $oldPaymentDate = $payment->payment_date?->toDateString();
             $oldAmount = round((float) $payment->amount, 2);
 
+            // Tax the customer withheld follows the amount at the rate it was taken at; a flat
+            // figure has no rate to follow, so changing the amount asks for a re-entry instead.
+            $whtAmount = (float) $payment->wht_amount;
+            if ($whtAmount > 0 && abs($oldAmount - round($newAmount, 2)) >= 0.005) {
+                if ($payment->wht_rate === null) {
+                    throw new \InvalidArgumentException('This payment has withholding tax entered as an amount. Void it and enter it again.');
+                }
+                $whtAmount = app(\App\Modules\Accounting\Services\WithholdingTax::class)->amount($company, $baseAmount, (float) $payment->wht_rate);
+            }
+
             // Update payment record
             $payment->update([
+                'wht_amount' => $whtAmount,
                 'customer_id' => $invoice->customer_id,
                 'payment_date' => $paymentDate,
                 'amount' => $newAmount,

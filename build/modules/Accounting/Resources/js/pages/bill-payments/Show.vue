@@ -11,7 +11,7 @@ import { formatMoneyText } from '@/lib/money';
 import { paymentMethodLabel } from '@/lib/payment-method';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { CreditCard, PencilLine } from 'lucide-vue-next';
+import { CreditCard, FileText, PencilLine } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import CorrectRecordDialog from '../../components/CorrectRecordDialog.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -45,6 +45,10 @@ interface PaymentRef {
     amount: number;
     transaction_charge?: number;
     base_transaction_charge?: number;
+    exchange_rate?: number | string | null;
+    wht_amount?: number | string | null;
+    wht_rate?: number | string | null;
+    wht_section?: string | null;
     currency: string;
     base_currency?: string;
     payment_method: string;
@@ -153,8 +157,17 @@ const groupedCharge = computed(() =>
     ),
 );
 
+// Tax withheld is stored in base currency; shown here in the payment's own currency.
+const groupedWht = computed(() =>
+    (props.groupPayments || [props.payment]).reduce(
+        (sum, payment) =>
+            sum + Number(payment.wht_amount || 0) / Number(payment.exchange_rate || 1),
+        0,
+    ),
+);
+
 const groupedCashMovement = computed(
-    () => groupedAmount.value + groupedCharge.value,
+    () => groupedAmount.value + groupedCharge.value - groupedWht.value,
 );
 </script>
 
@@ -198,6 +211,14 @@ const groupedCashMovement = computed(
             >
                 View Journal
             </Button>
+            <Button
+                v-if="Number(payment.wht_amount) > 0"
+                variant="outline"
+                @click="router.get(`/${company.slug}/bill-payments/${payment.id}/wht-certificate`)"
+            >
+                <FileText class="mr-2 h-4 w-4" />
+                WHT certificate
+            </Button>
             <Button v-if="canCorrect" variant="outline" @click="correcting = true">
                 <PencilLine class="mr-2 h-4 w-4" />
                 Correct
@@ -235,6 +256,14 @@ const groupedCashMovement = computed(
                         :amount="groupedCharge"
                         :currency="payment.currency"
                     />
+                </div>
+            </div>
+            <div v-if="groupedWht > 0" class="space-y-1">
+                <div class="text-sm text-muted-foreground">
+                    Tax withheld (WHT){{ payment.wht_section ? `, section ${payment.wht_section}` : '' }}
+                </div>
+                <div class="font-semibold">
+                    <MoneyText :amount="groupedWht" :currency="payment.currency" />
                 </div>
             </div>
             <div class="space-y-1">

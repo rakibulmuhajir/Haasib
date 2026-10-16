@@ -54,6 +54,8 @@ interface PaymentRef {
     payment_account_id: string | null;
     reference_number: string | null;
     notes: string | null;
+    wht_amount?: number | string | null;
+    wht_rate?: number | string | null;
     vendor?: { id: string; name: string };
     allocations?: Allocation[];
 }
@@ -228,6 +230,9 @@ const handleSubmit = () => {
                         <MoneyText :amount="unappliedAmount ?? 0" :currency="payment.currency" />
                         of this payment is on account as an advance for this
                         vendor.
+                    </p>
+                    <p v-if="Number(payment.wht_amount) > 0 && payment.wht_rate" class="mt-1 text-xs text-muted-foreground">
+                        Tax withheld follows the amount at {{ Number(payment.wht_rate) }}%.
                     </p>
                     <InputError :message="form.errors.amount" />
                 </div>

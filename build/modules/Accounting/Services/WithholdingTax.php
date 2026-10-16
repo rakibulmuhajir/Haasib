@@ -73,6 +73,26 @@ class WithholdingTax
         return ['rate_id' => $rate->id, 'rate' => $pct, 'section' => $rate->section, 'filer_status' => $status];
     }
 
+    /**
+     * Rates a payment form can offer: the company's active withholding rates for this side.
+     * Empty while the Charge tax switch is off.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function ratesFor(Company $company, string $side): array
+    {
+        if (! $this->enabled($company)) {
+            return [];
+        }
+
+        return TaxRate::where('company_id', $company->id)->active()
+            ->where('tax_type', 'withholding')
+            ->whereIn('applies_to', [$side, 'both'])
+            ->orderBy('section')->orderBy('name')
+            ->get(['id', 'name', 'code', 'section', 'rate', 'rate_non_filer', 'applies_to'])
+            ->toArray();
+    }
+
     /** WHT on a base-currency amount, rounded the way the company's tax settings round. */
     public function amount(Company $company, float $baseAmount, float $ratePct): float
     {

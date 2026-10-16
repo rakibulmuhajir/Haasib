@@ -72,6 +72,12 @@ class ScenarioFuelStationSeeder extends Seeder
         'Pak Freight Lines',
     ];
 
+    /**
+     * The one customer who leaves trust money with the station. Not one of the credit buyers:
+     * the daily close refuses a credit sale to an amanat holder.
+     */
+    public const AMANAT_DEPOSITOR = 'Zahid Trust Depositor';
+
     public const VENDORS = [
         'PSO Depot — Korangi',
         'Mobil Distributor — Karachi',
@@ -79,9 +85,6 @@ class ScenarioFuelStationSeeder extends Seeder
     ];
 
     public const BANKS = ['HBL Current', 'Meezan Current', 'UBL Savings'];
-
-    /** The one buyer who leaves trust money with the station. */
-    public const AMANAT_HOLDER = 'Karachi Cement Haulage';
 
     /** Salaries sum to 100,000 so a month's payroll is a round figure. */
     public const EMPLOYEES = [
@@ -243,7 +246,7 @@ class ScenarioFuelStationSeeder extends Seeder
              'amount' => self::OPENING_CASH + self::OPENING_BANK + $openingStock],
         ]);
 
-        foreach (self::CUSTOMERS as $i => $name) {
+        foreach ([...self::CUSTOMERS, self::AMANAT_DEPOSITOR] as $i => $name) {
             Customer::create([
                 'company_id' => $company->id,
                 'customer_number' => sprintf('CUST-%04d', $i + 1),
@@ -256,15 +259,16 @@ class ScenarioFuelStationSeeder extends Seeder
             ]);
         }
 
-        // Every buyer is a credit customer; the amanat depositor additionally needs a
-        // fuel CustomerProfile flagged is_amanat_holder, or DailyCloseService refuses the
-        // deposit with "Selected Amanat depositor was not found."
+        // The six buyers are credit customers. The depositor is a seventh customer with a
+        // CustomerProfile flagged is_amanat_holder (without it DailyCloseService refuses the
+        // deposit with "Selected Amanat depositor was not found."), and is not a credit
+        // customer: the close refuses a credit sale to an amanat holder.
         foreach (Customer::where('company_id', $company->id)->orderBy('customer_number')->get() as $i => $customer) {
             CustomerProfile::create([
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
-                'is_credit_customer' => true,
-                'is_amanat_holder' => $customer->name === self::AMANAT_HOLDER,
+                'is_credit_customer' => $customer->name !== self::AMANAT_DEPOSITOR,
+                'is_amanat_holder' => $customer->name === self::AMANAT_DEPOSITOR,
                 'is_investor' => false,
             ]);
         }

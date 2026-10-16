@@ -127,7 +127,7 @@ screens, which is where it actually has to work.
 **Buyers** — Al-Habib Transport · Sindh Goods Carriers · Mehran Logistics · Karachi Cement
 Haulage · Indus Travel · Pak Freight Lines (15-day terms, limit 200,000)
 **Suppliers** — PSO Depot — Korangi · Mobil Distributor — Karachi · Al-Noor Maintenance
-**Amanat holder** — Karachi Cement Haulage
+**Amanat depositor** — Zahid Trust Depositor (a seventh customer, not one of the six buyers: the close refuses a credit sale to an amanat holder)
 
 ### How the daily close screen works
 
@@ -173,7 +173,7 @@ Food & Tea "Attendant meals" **1400** · Deposit HBL Current **150000**
 
 ## Day 2 — Monday 2 March · amanat posted on its own page
 
-**Before the close** — `/fuel/amanat` → Karachi Cement Haulage → **Deposit 25,000**,
+**Before the close** — `/fuel/amanat` → Zahid Trust Depositor → **Deposit 25,000**,
 dated 2026-03-02, received into the cash drawer.
 
 **Meter Sales**
@@ -308,7 +308,7 @@ Everything in the close, so the shortage has only one possible cause.
 Other sales: Mobil Super 4L × **5** · Open Engine Oil × **6** L
 
 **Tank Dip** — Petrol **24189.0** (604.7) · Diesel **9192.5** (229.8)
-**Cash In** — Opening cash **857100** · Amanat Karachi Cement Haulage **15000**
+**Cash In** — Opening cash **857100** · Amanat Zahid Trust Depositor **15000**
 **Cash Out** — Credit: Sindh Goods Carriers **35000** · Credit: Indus Travel **20000** ·
 tea **600** · meals **1400** · Deposit Meezan Current **150000**
 **Review** — Closing cash **1085550** → Post
@@ -364,7 +364,7 @@ Credit **Pak Freight Lines 45000** · tea **600** · meals **1400**
 
 ## Day 7 — Saturday 7 March · amanat repaid on its own page
 
-**Before the close** — `/fuel/amanat` → Karachi Cement Haulage → **Withdraw 10,000**,
+**Before the close** — `/fuel/amanat` → Zahid Trust Depositor → **Withdraw 10,000**,
 dated 2026-03-07, paid from the cash drawer.
 
 **Meter Sales**
@@ -432,7 +432,7 @@ Must read **"The books balance."** Difference 0.00.
 Must read **"Assets equal liabilities plus equity."** Difference 0.00.
 
 ### Amanat — `/fuel/amanat`
-Karachi Cement Haulage holds **30,000.00** (25,000 + 15,000 − 10,000).
+Zahid Trust Depositor holds **30,000.00** (25,000 + 15,000 − 10,000).
 
 ### Bank balances
 HBL 2,000,000 + 150,000 + 200,000 + 190,000 = **2,540,000.00**

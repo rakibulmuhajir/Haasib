@@ -121,6 +121,12 @@ const resultingBalance = (row: { current_balance?: number; amount: number }) =>
 const isOverLimit = (row: { credit_limit?: number; current_balance?: number; amount: number }) =>
     !!row.credit_limit && row.credit_limit > 0 && resultingBalance(row) > row.credit_limit
 
+// Same buyer and amount twice with no slip number on either: may be a repeat. Warn only.
+const looksRepeated = (row: { customer_id: string; amount: number; reference?: string }, index: number) =>
+    !!row.customer_id && Number(row.amount) > 0 && !String(row.reference ?? '').trim() &&
+    rows.value.some((other, i) => i !== index && other.customer_id === row.customer_id &&
+        Math.round(Number(other.amount) * 100) === Math.round(Number(row.amount) * 100) && !String(other.reference ?? '').trim())
+
 // Inline "new credit buyer" without leaving the close: EntitySearch's own quick-add
 // button opens the same QuickAddModal used by /invoices and /bills, then selects the
 // created buyer into whichever row asked for it.
@@ -242,6 +248,7 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
         </div>
         <Button type="button" variant="ghost" size="icon" class="h-9 w-9" aria-label="Remove sale" :disabled="disabled" @click="rows.splice(index, 1)"><Trash2 class="h-4 w-4" /></Button>
       </div>
+      <p v-if="!isLocked(row) && looksRepeated(row, index)" class="mt-1 text-xs text-status-attention" data-testid="repeat-warning">Same customer and amount twice — check it's not a repeat.</p>
     </div>
     <button type="button" class="text-xs text-primary underline-offset-2 hover:underline" :disabled="disabled" @click="rows.push({ customer_id: '', customer_name: '', amount: 0, reference: '' })">+ Add another</button>
     <QuickAddModal v-model:open="showQuickAdd" entity-type="customer" :initial-name="quickAddQuery" @created="onCustomerCreated" />

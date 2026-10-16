@@ -92,6 +92,49 @@ test('one customer can have several credit rows on the same day', function () {
     expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(2);
 });
 
+// The same slip typed twice for one customer is blocked; everything else stays allowed.
+test('the same slip twice for one customer is refused on the second row, ignoring case and spaces', function (string $second) {
+    $f = creditCloseFixture();
+    $f['payload']['credit_sales'][0]['reference'] = 'Slip 42';
+    $f['payload']['credit_sales'][] = ['customer_id' => $f['customer']->id, 'amount' => 6000, 'reference' => $second];
+    $f['payload']['closing_cash'] = 19000;
+    try {
+        creditClosePost($f);
+        $this->fail('expected a ValidationException');
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        expect($e->errors())->toBe(['credit_sales.1.reference' => ['Slip already entered for this customer.']]);
+    }
+    expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(0);
+})->with(['same' => ['Slip 42'], 'case' => ['SLIP 42'], 'spaces' => ['  slip42 ']]);
+
+test('the same slip for two different customers, or two slips for one customer, are allowed', function (string $case) {
+    $f = creditCloseFixture();
+    $f['payload']['credit_sales'][0]['reference'] = 'Slip 42';
+    $customerId = $f['customer']->id;
+    if ($case === 'other-customer') {
+        $customerId = Customer::create(['company_id' => $f['company']->id, 'customer_number' => 'C-9', 'name' => 'Second buyer', 'base_currency' => 'PKR', 'ar_account_id' => $f['accounts']['1100']->id, 'is_active' => true])->id;
+    }
+    $f['payload']['credit_sales'][] = ['customer_id' => $customerId, 'amount' => 6000, 'reference' => $case === 'other-customer' ? 'Slip 42' : 'Slip 43'];
+    $f['payload']['closing_cash'] = 19000;
+    creditClosePost($f);
+    expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(2);
+})->with(['other-customer', 'other-slip']);
+
+test('the same customer and amount with no slip number is allowed (the warning is client-only)', function () {
+    $f = creditCloseFixture();
+    $f['payload']['credit_sales'][0]['reference'] = '';
+    $f['payload']['credit_sales'][] = ['customer_id' => $f['customer']->id, 'amount' => $f['payload']['credit_sales'][0]['amount'], 'reference' => ''];
+    $f['payload']['closing_cash'] = 19000;
+    creditClosePost($f);
+    expect(Invoice::where('company_id', $f['company']->id)->count())->toBe(2);
+});
+
+test('the request rule gives the same answer for a parked close', function () {
+    $rows = [['customer_id' => 'a', 'reference' => 'X 1'], ['customer_id' => 'a', 'reference' => 'x1'], ['customer_id' => 'a', 'reference' => ''], ['customer_id' => 'a', 'reference' => '']];
+    expect(\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::duplicateSlipErrors($rows))
+        ->toBe(['credit_sales.1.reference' => 'Slip already entered for this customer.']);
+});
+
 test('parking credit sales creates no invoice and posting a date twice does not duplicate it', function () {
     $f = creditCloseFixture();
     $service = app(DailyCloseReconciliationService::class);

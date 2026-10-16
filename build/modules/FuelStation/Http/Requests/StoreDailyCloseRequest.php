@@ -273,6 +273,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
         $validator->after(function ($validator) {
+            foreach (\App\Modules\FuelStation\Services\DailyCloseCreditSaleService::duplicateSlipErrors((array) $this->input('credit_sales', [])) as $key => $message) {
+                $validator->errors()->add($key, $message);
+            }
 
             foreach ((array) $this->input('nozzle_readings', []) as $i => $reading) {
                 $opening = $reading['opening_electronic'] ?? null;

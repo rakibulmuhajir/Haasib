@@ -18,6 +18,7 @@ import DefinitionList from '@/components/DefinitionList.vue';
 import type {
     DocumentIssuer,
     DocumentLine,
+    DocumentTotal,
 } from '@/components/LedgerDocument.vue';
 import LedgerDocument from '@/components/LedgerDocument.vue';
 import type { DocumentStampData } from '@/components/DocumentStamp.vue';
@@ -76,6 +77,10 @@ interface Payment {
     amount: number;
     transaction_charge?: number;
     base_transaction_charge?: number;
+    exchange_rate?: number | string | null;
+    wht_amount?: number | string | null;
+    wht_section?: string | null;
+    wht_certificate_number?: string | null;
     currency: string;
     payment_method: string;
     reference_number?: string;
@@ -219,8 +224,34 @@ const applyToInvoices = () => {
         .post(`/${props.company.slug}/payments/${props.payment.id}/apply`, { preserveScroll: true });
 };
 
+// Tax the customer deducted (stored in base currency): the invoices settle by the full amount,
+// the bank receives that less the tax.
+const whtAmount = computed(
+    () => Number(props.payment.wht_amount ?? 0) / Number(props.payment.exchange_rate || 1),
+);
+const documentTotals = computed<DocumentTotal[]>(() =>
+    whtAmount.value > 0
+        ? [
+              { label: 'Settled against invoices', amount: Number(props.payment.amount), muted: true },
+              {
+                  label: `Tax withheld by customer${props.payment.wht_section ? ` (${props.payment.wht_section})` : ''}`,
+                  amount: whtAmount.value,
+                  sign: '−',
+                  muted: true,
+              },
+          ]
+        : [],
+);
+const amountReceived = computed(() => Number(props.payment.amount) - whtAmount.value);
+
 const summaryItems = computed(() => [
     { term: 'Method', value: methodLabel.value },
+    ...(whtAmount.value > 0
+        ? [
+              { term: 'Tax withheld (WHT)', value: formatMoney(whtAmount.value, props.payment.currency) },
+              { term: 'Their certificate no.', value: props.payment.wht_certificate_number ?? null },
+          ]
+        : []),
     {
         term: 'Transaction charges',
         value: formatMoney(
@@ -234,7 +265,8 @@ const summaryItems = computed(() => [
             Math.max(
                 0,
                 Number(props.payment.amount) -
-                    Number(props.payment.transaction_charge ?? 0),
+                    Number(props.payment.transaction_charge ?? 0) -
+                    whtAmount.value,
             ),
             props.payment.currency,
         ),
@@ -305,7 +337,8 @@ const summaryItems = computed(() => [
                     :dates="documentDates"
                     :lines="documentLines"
                     grand-total-label="Amount received"
-                    :grand-total-amount="payment.amount"
+                    :totals="documentTotals"
+                    :grand-total-amount="amountReceived"
                     :currency="payment.currency"
                     locale="en-PK"
                     :show-quantity="false"

@@ -86,7 +86,7 @@ class PaymentController extends Controller
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'filer_status', 'default_wht_rate_id']);
 
         // Get unpaid invoices (balance > 0, not cancelled/void)
         // Also include 'approved' status since some invoices may be approved but not sent
@@ -124,6 +124,8 @@ class PaymentController extends Controller
             'depositAccounts' => $depositAccounts,
             'preselect' => $preselect,
             'receiptModes' => app(\App\Modules\Accounting\Extensions\PaymentReceiptModes::class)->availableFor($company, $request->user()),
+            // Withholding rates for payments we receive; empty (and the row hidden) while tax is off.
+            'whtRates' => app(\App\Modules\Accounting\Services\WithholdingTax::class)->ratesFor($company, \App\Modules\Accounting\Services\WithholdingTax::SIDE_RECEIVED),
         ]);
     }
 
@@ -170,6 +172,9 @@ class PaymentController extends Controller
             'allocations' => $validated['allocations'] ?? null,
             'amount' => $validated['amount'],
             'transaction_charge' => $validated['transaction_charge'] ?? 0,
+            'wht_rate_id' => $validated['wht_rate_id'] ?? null,
+            'wht_amount' => $validated['wht_amount'] ?? null,
+            'wht_certificate_number' => $validated['wht_certificate_number'] ?? null,
             'method' => $method,
             'currency' => $validated['currency'] ?? null,
             'date' => $validated['payment_date'] ?? null,

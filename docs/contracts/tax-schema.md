@@ -139,6 +139,15 @@ Single source of truth for tax jurisdictions, rates, groups, and company tax set
   - gl_account_id for sales tax collected (liability); recoverable_account_id for purchase tax (asset).
   - Cannot delete rate with existing usage; deactivate instead.
 
+### Withholding tax (2026-10-16)
+Added to the tables above by migration `2026_10_16_000001_add_withholding_tax`. No new tables, so RLS is unchanged. **No rate numbers are seeded**: rates change every budget and the owner enters them under Tax.
+- `acct.tax_rates` (+ model `$fillable`/`$casts`): `section` varchar(50) nullable (e.g. `153(1)(b)`), `rate_non_filer` numeric(8,4) nullable, check 0..100 (`rate` is the filer rate), `applies_to` varchar(20) not null default `both`, check in `payments_made`, `payments_received`, `both`. Used only by rows with `tax_type = 'withholding'`.
+- `acct.company_tax_settings`: `wht_payable_account_id`, `advance_tax_account_id` uuid nullable FK -> `acct.accounts.id` (SET NULL). Filled on first use (see `WithholdingTax`); never written through the Eloquent model, so a settings row's "was it chosen" timestamps stay untouched.
+- Accounts created on first use, only when the Charge tax switch is on: `2310 Withholding Tax Payable` (liability, `other_current_liability`) and `1196 Advance Income Tax (WHT deducted by customers)` (asset, `other_current_asset`). 1190 and 2300 are taken by the packs (Input Tax Recoverable, Sales Tax Payable / others), 1195 by the account template.
+- The "Charge tax" switch (`CompanyTax::enabled`) governs everything: with it off, no WHT is offered, computed or posted; payments that already carry WHT keep showing it.
+- Filer status picks the rate: `filer` -> `rate`, `non_filer` -> `rate_non_filer` (refused when blank, never replaced by `rate`), `unknown` -> `rate`.
+
+
 ### tax.tax_groups
 - Purpose: combine multiple tax rates (e.g., GST + PST = Combined 12%).
 - Columns:

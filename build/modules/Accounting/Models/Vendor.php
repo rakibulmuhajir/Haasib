@@ -26,6 +26,8 @@ class Vendor extends Model
         'vendor_type',
         'address',
         'tax_id',
+        'filer_status',
+        'default_wht_rate_id',
         'base_currency',
         'payment_terms',
         'account_number',

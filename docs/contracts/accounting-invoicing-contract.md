@@ -699,3 +699,9 @@ nothing new — the underlying invoices remain the receivable. Service: `Consoli
   the close snapshot exists while allowing valid payment settlement fields.
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.
 - Keep enums and validation snippets in sync across requests, DTOs, Vue components, and tests.
+
+### Withholding tax received (2026-10-16)
+- `acct.customers`: `filer_status` varchar(20) not null default `unknown` (check `filer`, `non_filer`, `unknown`), `default_wht_rate_id` uuid nullable FK -> `acct.tax_rates.id` (SET NULL). NTN/CNIC stays in `tax_id`.
+- `acct.payments`: `wht_rate_id`, `wht_rate`, `wht_amount` (base currency, default 0), `wht_section`, `wht_filer_status` as on `acct.bill_payments`, plus `wht_certificate_number` varchar(100) nullable (the number on the certificate the customer issued).
+- `payment.create` takes `wht_rate_id` and/or `wht_amount`; an explicit amount wins. `amount` stays the total settled against invoices; the bank receives `amount - wht - transaction_charge`. Posting (tax on): DR bank `amount - wht - charge`; DR Advance Income Tax `wht`; (DR charges); CR AR `amount`. Allocations still equal `amount`, so invoices settle by the gross. Voiding reverses the journal.
+- Corrections that move or split a payment are refused for a payment with WHT.

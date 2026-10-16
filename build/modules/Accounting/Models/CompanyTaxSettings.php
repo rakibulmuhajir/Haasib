@@ -27,6 +27,8 @@ class CompanyTaxSettings extends Model
         'rounding_precision',
         'tax_number_label',
         'show_tax_column',
+        'wht_payable_account_id',
+        'advance_tax_account_id',
     ];
 
     protected $casts = [
@@ -38,6 +40,8 @@ class CompanyTaxSettings extends Model
         'price_includes_tax' => 'boolean',
         'rounding_precision' => 'integer',
         'show_tax_column' => 'boolean',
+        'wht_payable_account_id' => 'string',
+        'advance_tax_account_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

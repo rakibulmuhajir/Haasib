@@ -53,6 +53,8 @@ class Customer extends Model
         'billing_address',
         'shipping_address',
         'tax_id',
+        'filer_status',
+        'default_wht_rate_id',
         'base_currency',
         'payment_terms',
         'credit_limit',

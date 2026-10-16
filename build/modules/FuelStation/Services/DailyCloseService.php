@@ -1926,7 +1926,13 @@ class DailyCloseService
             }
 
             // Cash variance (over/short)
-            if (abs($variance) > 0.01 && $accounts['cash_over_short']) {
+            if (abs($variance) > 0.01) {
+                // Without the account the variance has no line and the entry cannot balance.
+                if (! $accounts['cash_over_short']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'closing_cash' => 'Set the cash over/short account in Station settings first.',
+                    ]);
+                }
                 $entries[] = [
                     'account_id' => $accounts['cash_over_short'],
                     'type' => $variance > 0 ? 'credit' : 'debit',

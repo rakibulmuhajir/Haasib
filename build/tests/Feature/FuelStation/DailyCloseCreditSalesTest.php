@@ -50,6 +50,12 @@ test('cash card and credit meter sales post revenue once and create a collectibl
     expect(array_sum(array_column($next, 'cash_effect')))->toBe(6000.0);
 });
 
+test('a cash variance with no over/short account is refused with a clear message', function () {
+    $f = creditCloseFixture(); $f['payload']['closing_cash'] = 24000; // 1,000 short
+    expect(fn () => creditClosePost($f))->toThrow(\Illuminate\Validation\ValidationException::class, 'Set the cash over/short account in Station settings first.');
+    expect(Transaction::where('company_id', $f['company']->id)->count())->toBe(0);
+});
+
 test('card-only allocation is gross in both posted and current reconciliation', function () {
     $f = creditCloseFixture(); $f['payload']['credit_sales'] = []; $f['payload']['closing_cash'] = 31000;
     $posted = creditClosePost($f);

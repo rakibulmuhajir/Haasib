@@ -66,20 +66,21 @@ test('a company that never chose and uses no tax is off', function () {
     expect(app(CompanyTax::class)->enabled($f['company']))->toBeFalse();
 });
 
-test('a company that already uses tax stays on until it chooses otherwise', function () {
+test('tax is off by default: a tax rate alone does not turn it on, a choice does', function () {
     $f = billLineTotalFixture();
-    $f['company']->forceFill(['tax_registered' => true])->save();
-    expect(app(CompanyTax::class)->enabled($f['company']))->toBeTrue();
-
-    $f['company']->forceFill(['tax_registered' => false])->save();
     TaxRate::create([
         'company_id' => $f['company']->id, 'jurisdiction_id' => Jurisdiction::query()->value('id'),
         'code' => 'GST', 'name' => 'GST', 'rate' => 18,
     ]);
     CompanyTaxSettings::forCompany($f['company']); // untouched row, false
+    expect(app(CompanyTax::class)->enabled($f['company']))->toBeFalse();
+
+    // Registered for tax at onboarding is a choice: on.
+    $f['company']->forceFill(['tax_registered' => true])->save();
     expect(app(CompanyTax::class)->enabled($f['company']))->toBeTrue();
 
-    taxSwitchSet($f['company'], false); // chosen on purpose: wins over the rate
+    // The saved switch wins over the onboarding choice.
+    taxSwitchSet($f['company'], false);
     expect(app(CompanyTax::class)->enabled($f['company']))->toBeFalse();
 });
 

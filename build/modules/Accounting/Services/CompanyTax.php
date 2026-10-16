@@ -4,20 +4,16 @@ namespace App\Modules\Accounting\Services;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\CompanyTaxSettings;
-use App\Modules\Accounting\Models\TaxRate;
-use Illuminate\Support\Facades\DB;
 
 /**
  * The single answer to "does this company charge tax?".
  *
- * The switch is CompanyTaxSettings.tax_enabled, but that column alone cannot say
- * "never chosen": it defaults to false and the Tax settings page used to create the row
- * just by being opened. So the effective value is:
+ * Tax is OFF unless someone chose it (owner's decision, 2026-10-16):
  *
- *   1. a switch that was saved on purpose (row edited after creation) wins, either way;
- *   2. otherwise the company is "on" when it already uses tax -- it has a tax rate, a
- *      taxed document, or registered for tax at onboarding -- so nothing changes for it;
- *   3. otherwise "off".
+ *   1. the "Charge tax" switch, once saved, wins either way;
+ *   2. otherwise "registered for tax" chosen at onboarding turns it on;
+ *   3. otherwise off. Tax rates or old taxed documents alone do not turn it on;
+ *      documents that already carry tax keep it (see allows()).
  */
 class CompanyTax
 {
@@ -34,7 +30,9 @@ class CompanyTax
             return true;
         }
 
-        return $this->usesTax($companyId, $company instanceof Company ? $company : null);
+        $company = $company instanceof Company ? $company : Company::find($companyId);
+
+        return (bool) $company?->tax_registered;
     }
 
     /**
@@ -60,30 +58,5 @@ class CompanyTax
 
             return $line;
         }, $lines);
-    }
-
-    private function usesTax(string $companyId, ?Company $company): bool
-    {
-        $company ??= Company::find($companyId);
-        if ($company?->tax_registered) {
-            return true;
-        }
-
-        if (TaxRate::where('company_id', $companyId)->exists()) {
-            return true;
-        }
-
-        foreach (['acct.invoices', 'acct.bills'] as $table) {
-            if (DB::table($table)->where('company_id', $companyId)->where('tax_amount', '>', 0)->exists()) {
-                return true;
-            }
-        }
-        foreach (['acct.credit_note_items', 'acct.vendor_credit_items'] as $table) {
-            if (DB::table($table)->where('company_id', $companyId)->where('tax_amount', '>', 0)->exists()) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

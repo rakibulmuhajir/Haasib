@@ -483,6 +483,8 @@ const props = defineProps<{
             employee_id: string;
             amount: number;
             reason?: string;
+            advance_id?: string;
+            kept_advance_id?: string;
         }>;
         payroll_payouts?: PayrollPayout[];
         bill_payments?: PendingBillPayment[];
@@ -1279,6 +1281,10 @@ const form = useForm({
         amount: number;
         reason: string;
         kind?: 'salary' | 'advance';
+        // Set by Edit day: the advance this row was posted as, so re-posting updates it. kept_advance_id
+        // marks one with repayments (locked).
+        advance_id?: string;
+        kept_advance_id?: string;
         payslip_id?: string;
         payslip_number?: string;
         due_label?: string | null;

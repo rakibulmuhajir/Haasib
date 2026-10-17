@@ -117,7 +117,10 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.kept_bill_number' => 'nullable|string|max:50',
             'direct_sales.*.kept_invoice_id' => 'nullable|uuid',
             'direct_sales.*.kept_invoice_number' => 'nullable|string|max:50',
+            // Edit day carries each advance's id so the re-post updates that row instead of adding
+            // another; kept_advance_id additionally marks one with repayments (locked on the form).
             'employee_advances.*.kept_advance_id' => 'nullable|uuid',
+            'employee_advances.*.advance_id' => 'nullable|uuid',
             'credit_sales.*.litres' => 'nullable|numeric|min:0.01',
             'bank_deposits' => 'nullable|array',
             'bank_deposits.*.bank_account_id' => 'required|uuid',

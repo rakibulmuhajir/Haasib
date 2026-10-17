@@ -41,6 +41,8 @@ class FuelStationServiceProvider extends ServiceProvider
             'calculator.delete' => \App\Modules\FuelStation\Actions\Calculator\DeleteCalculatorFormulaAction::class,
             'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
             'fuel.products.setup' => \App\Modules\FuelStation\Actions\Product\SetupAction::class,
+            'fuel.card_tax.record' => \App\Modules\FuelStation\Actions\CardTax\RecordAction::class,
+            'fuel.card_tax.undo' => \App\Modules\FuelStation\Actions\CardTax\UndoAction::class,
         ])]);
     }
 
@@ -96,6 +98,10 @@ class FuelStationServiceProvider extends ServiceProvider
             return collect($channels)->contains(fn ($channel) => ($channel['settles_to'] ?? null) === 'supplier'
                 && ($channel['clearing_account_id'] ?? null) === $accountId);
         });
+
+        // Tax card companies deducted from card sales joins the withholding register (received side).
+        \App\Modules\Accounting\Extensions\WithholdingRegisterSources::extend('fuel_station', fn (string $companyId, string $slug, string $from, string $to, string $side) => $side === 'made'
+            ? [] : app(\App\Modules\FuelStation\Services\CardTaxService::class)->registerLines($companyId, $slug, $from, $to));
 
         // Invoice guard: assertMutable ran for every company before the hooks existed, so it
         // stays ungated (a no-op for invoices no daily close references).

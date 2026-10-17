@@ -139,6 +139,9 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('vendor-cards/pending', [VendorCardSettlementController::class, 'pending'])->name('fuel.vendor-cards.pending');
     Route::post('vendor-cards/settle', [VendorCardSettlementController::class, 'settle'])->name('fuel.vendor-cards.settle');
     Route::post('payment-channels/settle', [VendorCardSettlementController::class, 'settleClearing'])->name('fuel.payment-channels.settle');
+    // Tax a card company deducted from card sales, entered on any date (usually month end).
+    Route::post('card-tax', [VendorCardSettlementController::class, 'recordTax'])->name('fuel.card-tax.store');
+    Route::delete('card-tax/{deduction}', [VendorCardSettlementController::class, 'undoTax'])->name('fuel.card-tax.destroy');
 
     // Station Settings
     Route::get('settings', [StationSettingsController::class, 'edit'])->name('fuel.settings.edit');

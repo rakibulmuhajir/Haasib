@@ -542,6 +542,8 @@ const formatFuelCategory = (category: string | null) => {
                   class="w-28"
                   @update:model-value="(v) => updateChannelFee(channel.code, v)"
                 />
+                <!-- Card charges can instead be entered by hand (CardChargeService), usually at month end. -->
+                <p v-if="['card_pos', 'fuel_card'].includes(channel.type)" class="text-xs text-muted-foreground">Taken at each daily close. Leave empty to record charges monthly.</p>
                 <InputError :message="channelError(channelIndex, 'fee_percent')" />
               </div>
 

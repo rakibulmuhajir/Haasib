@@ -4,10 +4,10 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\FuelStation\Http\Requests\RecordCardTaxRequest;
+use App\Modules\FuelStation\Http\Requests\RecordCardChargeRequest;
 use App\Modules\FuelStation\Http\Requests\SettlePaymentChannelRequest;
 use App\Modules\FuelStation\Http\Requests\SettleVendorCardRequest;
-use App\Modules\FuelStation\Services\CardTaxService;
+use App\Modules\FuelStation\Services\CardChargeService;
 use App\Modules\FuelStation\Services\VendorCardSettlementService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -42,11 +42,10 @@ class VendorCardSettlementController extends Controller
             'clearingAccounts' => $summary['clearing_accounts'] ?? [],
             'todaySettlements' => [],
             'bankAccounts' => $bankAccounts,
-            // Tax deducted from card sales: only with the company's tax switch on.
-            'taxEnabled' => app(\App\Modules\Accounting\Services\WithholdingTax::class)->enabled($company),
-            'cardTaxChannels' => app(CardTaxService::class)->channels($company),
-            'cardTaxes' => app(CardTaxService::class)->recent($company->id),
-            'canRecordTax' => request()->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_CREATE),
+            // Card charges entered by hand (usually month end), next to the daily close's own %.
+            'cardChargeChannels' => app(CardChargeService::class)->channels($company),
+            'cardCharges' => app(CardChargeService::class)->recent($company->id),
+            'canRecordCharge' => request()->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_CREATE),
         ]);
     }
 
@@ -63,16 +62,16 @@ class VendorCardSettlementController extends Controller
         }
     }
 
-    public function recordTax(RecordCardTaxRequest $request): RedirectResponse
+    public function recordCharge(RecordCardChargeRequest $request): RedirectResponse
     {
-        $result = app(\App\Services\CommandBus::class)->dispatch('fuel.card_tax.record', $request->validated(), $request->user());
+        $result = app(\App\Services\CommandBus::class)->dispatch('fuel.card_charge.record', $request->validated(), $request->user());
 
         return redirect()->back()->with('success', $result['message']);
     }
 
-    public function undoTax(\Illuminate\Http\Request $request): RedirectResponse
+    public function undoCharge(\Illuminate\Http\Request $request): RedirectResponse
     {
-        $result = app(\App\Services\CommandBus::class)->dispatch('fuel.card_tax.undo', ['id' => $request->route('deduction')], $request->user());
+        $result = app(\App\Services\CommandBus::class)->dispatch('fuel.card_charge.undo', ['id' => $request->route('charge')], $request->user());
 
         return redirect()->back()->with('success', $result['message']);
     }

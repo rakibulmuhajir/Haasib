@@ -1,0 +1,1 @@
+import{d as t,c as r,o,n,u as l,Y as c,H as m}from"./app-Y-ywjGbl.js";const d=t({__name:"CardFigure",props:{class:{}},setup(a){const s=a;return(e,p)=>(o(),r("div",{"data-slot":"card-figure",class:n(l(c)("font-mono tabular-nums text-tally text-text-primary",s.class))},[m(e.$slots,"default")],2))}});export{d as _};

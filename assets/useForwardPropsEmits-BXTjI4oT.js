@@ -1,0 +1,1 @@
+import{ao as r,ap as c,aq as p,am as u,z as m}from"./app-Y-ywjGbl.js";function i(o){const e=r(),s=e?.type.emits,t={};return s?.length||console.warn(`No emitted event found. Please check component: ${e?.type.__name}`),s?.forEach(n=>{t[c(p(n))]=(...a)=>o(n,...a)}),t}function l(o,e){const s=u(o),t=e?i(e):{};return m(()=>({...s.value,...t}))}export{i as a,l as u};

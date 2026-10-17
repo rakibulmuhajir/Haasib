@@ -84,6 +84,7 @@ class BankFeedController extends Controller
             if ($activeBankAccount->gl_account_id) {
                 $ledgerBalance = DB::table('acct.journal_entries')
                     ->join('acct.transactions', 'acct.journal_entries.transaction_id', '=', 'acct.transactions.id')
+                    ->whereNull('acct.transactions.deleted_at')
                     ->where('acct.journal_entries.company_id', $currentCompany->id) // Security Fix: Add company_id
                     ->where('acct.journal_entries.account_id', $activeBankAccount->gl_account_id)
                     ->where('acct.transactions.status', 'posted')

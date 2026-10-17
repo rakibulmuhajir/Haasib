@@ -98,7 +98,7 @@ class BankAccountController extends Controller
         return DB::table('acct.accounts as a')
             ->leftJoin('acct.journal_entries as je', 'je.account_id', '=', 'a.id')
             ->leftJoin('acct.transactions as t', function ($join) {
-                $join->on('t.id', '=', 'je.transaction_id')->whereIn('t.status', ['posted', 'locked']);
+                $join->on('t.id', '=', 'je.transaction_id')->whereNull('t.deleted_at')->whereIn('t.status', ['posted', 'locked']);
             })
             ->where('a.company_id', $companyId)
             ->whereIn('a.id', $glAccountIds)

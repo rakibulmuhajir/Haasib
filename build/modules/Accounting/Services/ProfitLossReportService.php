@@ -22,6 +22,7 @@ class ProfitLossReportService
         /** @var Collection<int, object{ id:string, code:string, name:string, type:string, normal_balance:string, debit:string|float|null, credit:string|float|null, line_count:int, transaction_count:int }> $rows */
         $rows = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
             ->where('t.company_id', $companyId)
             ->where('t.status', 'posted')
@@ -208,6 +209,7 @@ class ProfitLossReportService
     {
         return DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
             ->where('t.company_id', $companyId)
             ->where('t.status', 'posted')

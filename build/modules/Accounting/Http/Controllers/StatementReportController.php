@@ -71,6 +71,7 @@ class StatementReportController extends Controller
         // Employees, when payroll is on: salary earned against advances and salary paid.
         $employees = $company->isModuleEnabled('payroll')
             ? DB::table('pay.employees')->where('company_id', $company->id)->where('is_active', true)
+                ->whereNull('deleted_at')
                 ->orderBy('first_name')->orderBy('last_name')
                 ->get(['id', 'first_name', 'last_name', 'employee_number'])
                 ->map(fn ($e) => ['id' => $e->id, 'name' => trim($e->first_name.' '.$e->last_name), 'customer_number' => $e->employee_number])

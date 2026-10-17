@@ -718,6 +718,7 @@ class TravelReportService
         }
 
         return DB::table('acct.transactions as t')
+            ->whereNull('t.deleted_at')
             ->join('acct.journal_entries as j', 'j.transaction_id', '=', 't.id')
             ->where('t.company_id', $company->id)
             ->where('t.transaction_type', 'umrah_group_sale_adjustment')

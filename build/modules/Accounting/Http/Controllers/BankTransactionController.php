@@ -70,6 +70,7 @@ class BankTransactionController extends Controller
         if ($accountId) {
             $ledgerRows = DB::table('acct.journal_entries')
                 ->join('acct.transactions', 'acct.transactions.id', '=', 'acct.journal_entries.transaction_id')
+                ->whereNull('acct.transactions.deleted_at')
                 ->where('acct.transactions.company_id', $company->id)
                 ->whereIn('acct.transactions.status', ['posted', 'locked'])
                 ->where('acct.journal_entries.account_id', $accountId)
@@ -118,6 +119,7 @@ class BankTransactionController extends Controller
         $balances = $accounts->mapWithKeys(function (Account $account) use ($company) {
             $debit = DB::table('acct.journal_entries')
                 ->join('acct.transactions', 'acct.transactions.id', '=', 'acct.journal_entries.transaction_id')
+                ->whereNull('acct.transactions.deleted_at')
                 ->where('acct.transactions.company_id', $company->id)
                 ->whereIn('acct.transactions.status', ['posted', 'locked'])
                 ->where('acct.journal_entries.account_id', $account->id)

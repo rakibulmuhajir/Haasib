@@ -48,6 +48,7 @@ class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
         $vendors = $query->limit($limit)->get();
 
         $outstanding = DB::table('acct.bills')
+            ->whereNull('deleted_at')
             ->whereIn('vendor_id', $vendors->pluck('id'))
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->where('balance', '>', 0)

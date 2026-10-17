@@ -28,6 +28,7 @@ class TrialBalanceReportService
     {
         $rows = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
             ->where('t.company_id', $companyId)
             ->whereIn('t.status', self::POSTED)

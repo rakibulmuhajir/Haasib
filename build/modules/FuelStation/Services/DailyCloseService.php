@@ -122,6 +122,7 @@ class DailyCloseService
 
         return BillLineItem::query()
             ->join('acct.bills', 'acct.bills.id', '=', 'acct.bill_line_items.bill_id')
+            ->whereNull('acct.bills.deleted_at')
             ->where('acct.bill_line_items.company_id', $companyId)
             ->where('acct.bill_line_items.item_id', $itemId)
             ->whereNotIn('acct.bills.status', ['void', 'cancelled', 'draft'])
@@ -183,6 +184,7 @@ class DailyCloseService
             if ($cashAccountId) {
                 $row = DB::table('acct.journal_entries as je')
                     ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                    ->whereNull('t.deleted_at')
                     ->where('t.company_id', $companyId)
                     ->where('je.account_id', $cashAccountId)
                     ->where('t.transaction_date', '<', $date)

@@ -118,6 +118,7 @@ class PartnerLedgerService
     {
         $row = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('t.company_id', $companyId)
             ->where('je.account_id', $accountId)
             ->whereIn('t.status', self::POSTED)

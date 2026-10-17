@@ -49,6 +49,7 @@ class ItemDeletionService
 
         // Daily closes keep their lines (other sales and the rest) in the close's metadata.
         return DB::table('acct.transactions')
+            ->whereNull('deleted_at')
             ->where('company_id', $item->company_id)
             ->whereRaw('metadata::text like ?', ['%'.$item->id.'%'])
             ->exists();

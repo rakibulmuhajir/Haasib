@@ -57,6 +57,7 @@ class StockVarianceReportService
     {
         $corrections = DB::table('fuel.daily_close_reading_corrections as corrections')
             ->join('acct.transactions as close_transactions', 'close_transactions.id', '=', 'corrections.close_transaction_id')
+            ->whereNull('close_transactions.deleted_at')
             ->where('corrections.company_id', $companyId)
             ->where('corrections.reading_type', 'tank')
             ->whereBetween('close_transactions.transaction_date', [

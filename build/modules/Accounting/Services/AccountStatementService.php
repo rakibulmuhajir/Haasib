@@ -53,6 +53,7 @@ class AccountStatementService
 
         $openingRows = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('t.company_id', $account->company_id)
             ->where('je.account_id', $account->id)
             ->whereIn('t.status', self::POSTED)
@@ -70,6 +71,7 @@ class AccountStatementService
 
         $lines = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('t.company_id', $account->company_id)
             ->where('je.account_id', $account->id)
             ->whereIn('t.status', self::POSTED)

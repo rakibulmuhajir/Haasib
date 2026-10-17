@@ -55,6 +55,7 @@ class ConsolidatedInvoiceController extends Controller
 
         $isDate = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
         $oldestUnpaid = $customer ? DB::table('acct.invoices')->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->whereNull('deleted_at')
             ->whereNotIn('status', ['draft', 'void', 'cancelled'])->where('balance', '>', 0.005)->min('invoice_date') : null;
         $from = $isDate($request->query('from')) ? $request->query('from') : ($oldestUnpaid ? substr((string) $oldestUnpaid, 0, 10) : app(CompanyClock::class)->now()->startOfMonth()->toDateString());
         $to = $isDate($request->query('to')) ? $request->query('to') : app(CompanyClock::class)->today();

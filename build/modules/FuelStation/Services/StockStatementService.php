@@ -82,7 +82,7 @@ class StockStatementService
         if (! $item) {
             return $result;
         }
-        if (! DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')->where('linked_item_id', $itemId)->exists()) {
+        if (! DB::table('inv.warehouses')->whereNull('deleted_at')->where('company_id', $companyId)->where('warehouse_type', 'tank')->where('linked_item_id', $itemId)->exists()) {
             return $this->runBook($companyId, $item, $startDate, $endDate, $result);
         }
 
@@ -99,6 +99,7 @@ class StockStatementService
 
         // Tanks holding this product: the ledger's tanks, plus any the closes name for it.
         $tankIds = DB::table('inv.warehouses')->where('company_id', $companyId)->where('warehouse_type', 'tank')
+            ->whereNull('deleted_at')
             ->where('linked_item_id', $itemId)->pluck('id')->all();
         foreach ($byDate as $t) {
             foreach ((array) ($t->metadata['posting_snapshot']['tanks'] ?? []) as $tk) {

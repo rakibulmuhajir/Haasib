@@ -44,6 +44,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
 
         // Check for active credit notes
         $creditNoteCount = DB::table('acct.credit_notes')
+            ->whereNull('deleted_at')
             ->where('customer_id', $customer->id)
             ->where('status', '!=', 'void')
             ->count();

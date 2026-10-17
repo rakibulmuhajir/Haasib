@@ -33,7 +33,7 @@ class CustomerPeriodDiscountService
         if ($lock) {
             $query->lockForUpdate();
         }
-        $invoices = $query->get(['id', 'invoice_number', 'invoice_date', 'currency', 'discount_amount', 'tax_amount', 'total_amount', 'balance']);
+        $invoices = $query->get(['id', 'invoice_number', 'invoice_date', 'currency', 'discount_amount', 'tax_amount', 'total_amount', 'balance', 'discount_blocked', 'discount_block_reason']);
         // Aggregate quantities in PostgreSQL rather than hydrating every invoice's line items.
         $fuelTotals = DB::table('acct.invoice_line_items as line')
             ->join('inv.items as item', 'item.id', '=', 'line.item_id')
@@ -49,7 +49,14 @@ class CustomerPeriodDiscountService
         $opening = $company->settings['opening_balances'] ?? [];
         $openingIds = array_merge($opening['invoice_ids'] ?? [], $opening['retired_invoice_ids'] ?? []);
         $sources = [];
+        $blocked = [];
         foreach ($invoices as $invoice) {
+            if ($invoice->discount_blocked) {
+                $blocked[] = ['id' => $invoice->id, 'number' => $invoice->invoice_number,
+                    'date' => $invoice->invoice_date->toDateString(), 'reason' => $invoice->discount_block_reason];
+
+                continue;
+            }
             if ($invoice->currency !== $company->base_currency || (float) $invoice->discount_amount > 0
                 || (float) $invoice->tax_amount > 0 || in_array($invoice->id, $credited, true) || in_array($invoice->id, $coveredIds, true)
                 || in_array($invoice->id, $openingIds, true)) {
@@ -86,7 +93,7 @@ class CustomerPeriodDiscountService
                 : ($amount > $gross ? 'The discount cannot exceed eligible sales.' : null));
 
         return ['snapshot' => $snapshot, 'amount' => $amount, 'invoice_count' => count($sources),
-            'excluded_count' => $invoices->count() - count($sources), 'applied' => min($open, $amount),
+            'excluded_count' => $invoices->count() - count($sources), 'blocked' => $blocked, 'applied' => min($open, $amount),
             'remaining_credit' => max(0, round($amount - $open, 2)), 'error' => $error];
     }
 

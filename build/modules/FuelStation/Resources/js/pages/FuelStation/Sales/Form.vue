@@ -103,6 +103,15 @@ const discountPercent = ref<number | null>(null)
 // True once the operator has typed into a discount field themselves, so a customer's
 // stored discount only prefills the field, it never overwrites a manual edit.
 const discountTouched = ref(false)
+// "No discount" on this sale, with why: the buyer's stored rate is not applied.
+const noDiscount = ref(false)
+const noDiscountReason = ref('')
+watch(noDiscount, (on) => {
+  if (!on) return
+  discountPerLiter.value = null
+  discountPercent.value = null
+  discountTouched.value = true
+})
 
 // Direct from the supplier's tanker to a customer: no pump, no tank. It posts its own income
 // as a direct-delivery invoice (FuelSaleController::storeDirect), so it takes a customer, a
@@ -347,6 +356,8 @@ const submitSale = () => {
     investor_id: selectedInvestor.value?.id || null,
     discount_per_liter: discountPerLiter.value || null,
     discount_percent: discountPercent.value || null,
+    no_discount: noDiscount.value,
+    no_discount_reason: noDiscount.value ? noDiscountReason.value.trim() || null : null,
     payment_breakdown: {
       cash: cashAmount.value,
       easypaisa: easypaisaAmount.value,
@@ -574,7 +585,7 @@ rememberEntryDate(companySlug.value, saleDate)
                   min="0"
                   step="0.01"
                   placeholder="0.00"
-                  :disabled="!!discountPercent"
+                  :disabled="!!discountPercent || noDiscount"
                   :class="{ 'border-destructive': formErrors.discount_per_liter }"
                   @input="discountTouched = true"
                 />
@@ -589,11 +600,19 @@ rememberEntryDate(companySlug.value, saleDate)
                   max="100"
                   step="0.01"
                   placeholder="0.00"
-                  :disabled="!!discountPerLiter"
+                  :disabled="!!discountPerLiter || noDiscount"
                   :class="{ 'border-destructive': formErrors.discount_percent }"
                   @input="discountTouched = true"
                 />
                 <InputError :message="formErrors.discount_percent?.[0]" />
+              </div>
+              <div class="space-y-2 sm:col-span-2">
+                <Label class="flex items-center gap-2 font-normal">
+                  <Checkbox v-model="noDiscount" />
+                  No discount
+                </Label>
+                <Input v-if="noDiscount" v-model="noDiscountReason" maxlength="255" placeholder="Reason" aria-label="No discount reason" />
+                <InputError :message="formErrors.no_discount_reason?.[0]" />
               </div>
             </div>
           </CardContent>

@@ -37,6 +37,9 @@ const rows = defineModel<Array<{
     pending_accounting_invoice?: boolean
     // Edit day kept this row's invoice because a later payment settled it; posting re-uses it.
     kept_invoice_id?: string
+    // "No discount" on this slip, with why: the customer's stored rate is not applied.
+    no_discount?: boolean
+    no_discount_reason?: string | null
     // Credit-limit context captured at selection time (see onCustomerSelected) so the
     // row can warn inline without a second round trip per keystroke on amount.
     credit_limit?: number
@@ -106,9 +109,9 @@ const onFuelChange = (row: Row) => {
     if (rate > 0 && row.litres) row.amount = round2(Number(row.litres) * rate)
 }
 
-const missingLitres = (row: { item_id?: string; customer_id: string; litres?: number }): boolean => {
+const missingLitres = (row: { item_id?: string; customer_id: string; litres?: number; no_discount?: boolean }): boolean => {
     const discount = discountFor(row)
-    return !!discount && discount.discount_type === 'per_litre' && !row.litres
+    return !!discount && !row.no_discount && discount.discount_type === 'per_litre' && !row.litres
 }
 
 // A blocked buyer is refused outright server-side (DailyCloseCreditSaleService::prepare);
@@ -228,9 +231,18 @@ const onCustomerSelected = (row: (typeof rows.value)[number], entity: {
           <p v-if="!row.is_credit_blocked && isOverLimit(row)" class="text-xs text-status-attention">
             Over limit <MoneyText :amount="row.credit_limit ?? 0" :currency="currency ?? 'PKR'" :fraction-digits="0" />
           </p>
-          <p v-if="discountFor(row) && !missingLitres(row)" class="text-xs text-status-success">
+          <p v-if="discountFor(row) && !missingLitres(row) && !row.no_discount" class="text-xs text-status-success">
             Discount <MoneyText :amount="discountAmount(row)" :currency="currency ?? 'PKR'" :fraction-digits="0" />
+            <button type="button" class="ml-1 text-muted-foreground underline-offset-2 hover:underline" :disabled="disabled" @click="row.no_discount = true">Remove</button>
           </p>
+          <template v-if="row.no_discount">
+            <p class="text-xs text-muted-foreground">
+              No discount
+              <button type="button" class="ml-1 underline-offset-2 hover:underline" :disabled="disabled" @click="row.no_discount = false; row.no_discount_reason = null">Undo</button>
+            </p>
+            <Input class="mt-1 h-8 text-xs" v-model="row.no_discount_reason" maxlength="255" placeholder="Reason" :aria-label="`No discount reason, row ${index + 1}`" :disabled="disabled" />
+            <InputError :message="errors[`credit_sales.${index}.no_discount_reason`]" />
+          </template>
         </div>
         <div v-if="unitsFor(row).length">
           <Select v-model="row.unit_id" :disabled="disabled">

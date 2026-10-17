@@ -80,6 +80,8 @@ class DailyCloseCreditSaleService
             'credit_sales.*.amount' => 'required|numeric|min:0.01|decimal:0,2',
             'credit_sales.*.reference' => 'nullable|string|max:100',
             'credit_sales.*.unit_id' => 'nullable|uuid',
+            'credit_sales.*.no_discount' => 'nullable|boolean',
+            'credit_sales.*.no_discount_reason' => 'required_if_accepted:credit_sales.*.no_discount|nullable|string|max:255',
         ])->validate();
 
         $duplicates = self::duplicateSlipErrors($rows);
@@ -176,7 +178,9 @@ class DailyCloseCreditSaleService
             $itemId = $row['item_id'] ?? null;
             $litres = isset($row['litres']) ? (float) $row['litres'] : null;
             $discountAmount = 0.0;
-            if ($itemId) {
+            // "No discount" on this slip: the customer's stored rate is not applied.
+            $noDiscount = filter_var($row['no_discount'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($itemId && ! $noDiscount) {
                 $stored = app(CustomerFuelDiscountService::class)->for($companyId, $customer->id, $itemId);
                 if ($stored) {
                     if ($stored['discount_type'] === CustomerFuelDiscount::TYPE_PER_LITRE && !$litres) {
@@ -210,6 +214,8 @@ class DailyCloseCreditSaleService
                 'notes' => "Credit portion of meter sales for {$date}. ".($row['reference'] ?? ''),
                 'reference' => $row['reference'] ?? null,
                 'unit_id' => $row['unit_id'] ?? null,
+                'no_discount' => $noDiscount,
+                'no_discount_reason' => $noDiscount ? ($row['no_discount_reason'] ?? null) : null,
                 'line_items' => [['description' => "Meter sales on credit — {$date}", 'item_id' => $itemId, 'quantity' => $lineQuantity,
                     'unit_price' => $lineUnitPrice, 'tax_rate' => 0, 'discount_amount' => $discountAmount]],
             ], $user, true));

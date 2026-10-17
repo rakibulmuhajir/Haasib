@@ -195,6 +195,10 @@ class InvoiceController extends Controller
             'customerUnits' => \App\Modules\Accounting\Models\CustomerUnit::where('company_id', $company->id)->where('customer_id', $invoiceRecord->customer_id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             // Corrections: who it can be moved to, and what was corrected before.
             'canCorrect' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::INVOICE_UPDATE),
+            // "No discount" on this invoice: who may set it, and who did.
+            'canBlockDiscount' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::CREDIT_NOTE_CREATE),
+            'discountBlockedBy' => $invoiceRecord->discount_blocked_by_user_id
+                ? \App\Models\User::whereKey($invoiceRecord->discount_blocked_by_user_id)->value('name') : null,
             'correctionCustomers' => \App\Modules\Accounting\Models\Customer::where('company_id', $company->id)
                 ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'invoice', $invoiceRecord->id),
@@ -415,5 +419,15 @@ class InvoiceController extends Controller
         ], $request->user());
 
         return back()->with('success', 'Slip saved');
+    }
+
+    public function setDiscountBlock(\App\Modules\Accounting\Http\Requests\SetInvoiceDiscountBlockRequest $request): \Illuminate\Http\RedirectResponse
+    {
+        $result = app(\App\Services\CommandBus::class)->dispatch('invoice.set_discount_block', [
+            'id' => $request->route('invoice'),
+            ...$request->safe()->only(['blocked', 'reason']),
+        ], $request->user());
+
+        return back()->with('success', $result['message']);
     }
 }

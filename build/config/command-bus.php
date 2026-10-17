@@ -62,6 +62,7 @@ return [
     'invoice.update' => \App\Modules\Accounting\Actions\Invoice\UpdateAction::class,
     'invoice.set_unit' => \App\Modules\Accounting\Actions\Invoice\SetUnitAction::class,
     'invoice.set_reference' => \App\Modules\Accounting\Actions\Invoice\SetReferenceAction::class,
+    'invoice.set_discount_block' => \App\Modules\Accounting\Actions\Invoice\SetDiscountBlockAction::class,
     'invoice.delete' => \App\Modules\Accounting\Actions\Invoice\DeleteAction::class,
 
     // Payment

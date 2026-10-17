@@ -84,7 +84,11 @@ class FuelSaleService
             // server is what actually enforces it, so an API caller gets the same price.
             $discount = 0;
             $discountReason = null;
-            if ($saleType !== SaleMetadata::TYPE_INVESTOR) {
+            $noDiscount = filter_var($data['no_discount'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($noDiscount && ((float) ($data['discount_per_liter'] ?? 0) > 0 || (float) ($data['discount_percent'] ?? 0) > 0)) {
+                throw new \InvalidArgumentException('This sale is marked no discount. Clear the discount.');
+            }
+            if ($saleType !== SaleMetadata::TYPE_INVESTOR && ! $noDiscount) {
                 $perLiter = (float) ($data['discount_per_liter'] ?? 0);
                 $percent = (float) ($data['discount_percent'] ?? 0);
                 $discountService = app(CustomerFuelDiscountService::class);
@@ -121,6 +125,10 @@ class FuelSaleService
                 'currency' => $company->base_currency ?: 'PKR',
                 'base_currency' => $company->base_currency ?: 'PKR',
                 'status' => $this->determineInvoiceStatus($saleType),
+                'discount_blocked' => $noDiscount,
+                'discount_block_reason' => $noDiscount ? trim((string) ($data['no_discount_reason'] ?? '')) ?: null : null,
+                'discount_blocked_by_user_id' => $noDiscount ? auth()->id() : null,
+                'discount_blocked_at' => $noDiscount ? now() : null,
             ]);
 
             // Create invoice line item (using actual InvoiceLineItem model columns)

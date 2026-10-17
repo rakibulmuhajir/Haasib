@@ -314,8 +314,8 @@ test('each undo needs its own permission', function () {
     $deposit = undoDeposit($f);
     $sale = undoDispatch($f, 'sale.create', ['amount' => 100, 'deposit_account_id' => $f['cash']->id]);
 
-    // "operations" may not delete expenses or void invoices; a stranger may do nothing here.
-    expect(fn () => undoDispatch($f, 'expense.reverse', ['id' => $expense['data']['id']], $f['limited']))->toThrow(AuthorizationException::class, 'expense.delete');
+    // Undoing an expense needs expense.create (who may record it may undo it); "operations" may not void invoices; a stranger may do nothing here.
+    expect(fn () => undoDispatch($f, 'expense.reverse', ['id' => $expense['data']['id']], $stranger))->toThrow(AuthorizationException::class, 'expense.create');
     expect(fn () => undoDispatch($f, 'sale.void', ['id' => $sale['data']['invoice_id']], $f['limited']))->toThrow(AuthorizationException::class);
     expect(fn () => undoDispatch($f, 'bank_transaction.reverse', ['id' => $deposit['data']['id']], $stranger))->toThrow(AuthorizationException::class, 'bank_account.update');
 

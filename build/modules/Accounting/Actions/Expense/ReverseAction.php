@@ -25,7 +25,8 @@ class ReverseAction implements DescribesPalette, PaletteAction
 
     public function permission(): ?string
     {
-        return Permissions::EXPENSE_DELETE;
+        // Whoever may record an expense may undo it (owner's decision, 2026-10-17).
+        return Permissions::EXPENSE_CREATE;
     }
 
     public function handle(array $params): array

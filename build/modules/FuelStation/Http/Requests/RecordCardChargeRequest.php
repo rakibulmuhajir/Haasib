@@ -5,7 +5,7 @@ namespace App\Modules\FuelStation\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 
-class RecordCardTaxRequest extends BaseFormRequest
+class RecordCardChargeRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
@@ -16,9 +16,11 @@ class RecordCardTaxRequest extends BaseFormRequest
     {
         return [
             'channel_code' => ['required', 'string', 'max:50'],
-            'deduction_date' => ['required', 'date'],
+            'charge_date' => ['required', 'date'],
+            // The card sales it covers; empty means the month of charge_date.
+            'period_from' => ['nullable', 'date'],
+            'period_to' => ['nullable', 'date', 'after_or_equal:period_from'],
             'amount' => ['required', 'numeric', 'min:0.01', 'decimal:0,2'],
-            'section' => ['nullable', 'string', 'max:30'],
             'reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:500'],
         ];

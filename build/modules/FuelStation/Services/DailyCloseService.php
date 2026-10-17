@@ -1057,7 +1057,9 @@ class DailyCloseService
                         // The bank keeps a percentage of card / wallet sales, set on the channel in
                         // Station settings. The sales stay gross; the account receives the rest and
                         // the charge is an expense.
-                        $feePercent = (float) ($channel['fee_percent'] ?? 0);
+                        // A card on manual charges has none at the close: the real charge is entered
+                        // later from the statement (CardChargeService).
+                        $feePercent = ($channel['charge_mode'] ?? 'automatic') === 'manual' ? 0.0 : (float) ($channel['fee_percent'] ?? 0);
                         $paymentReceiptPostings[] = [
                             'channel_code' => $channelCode,
                             'channel_label' => $channel['label'] ?? $channelCode,

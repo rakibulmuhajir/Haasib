@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Modules\FuelStation\Actions\CardTax;
+namespace App\Modules\FuelStation\Actions\CardCharge;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
-use App\Modules\FuelStation\Services\CardTaxService;
+use App\Modules\FuelStation\Services\CardChargeService;
 
-/** Tax a card company deducted from card sales, entered on any date; see CardTaxService. */
+/** A card charge the bank or card supplier kept, entered on any date; see CardChargeService. */
 class RecordAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
@@ -19,9 +19,10 @@ class RecordAction implements PaletteAction, \App\Contracts\DescribesPalette
     {
         return [
             'channel_code' => 'required|string|max:50',
-            'deduction_date' => 'required|date',
+            'charge_date' => 'required|date',
+            'period_from' => 'nullable|date',
+            'period_to' => 'nullable|date|after_or_equal:period_from',
             'amount' => 'required|numeric|min:0.01|decimal:0,2',
-            'section' => 'nullable|string|max:30',
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
         ];
@@ -30,9 +31,9 @@ class RecordAction implements PaletteAction, \App\Contracts\DescribesPalette
     public function handle(array $params): array
     {
         $company = CompanyContext::requireCompany();
-        $deduction = app(CardTaxService::class)->record($company, $params, auth()->user());
+        $charge = app(CardChargeService::class)->record($company, $params, auth()->user());
 
-        return ['message' => 'Card tax recorded', 'data' => ['id' => $deduction->id]];
+        return ['message' => 'Card charge recorded', 'data' => ['id' => $charge->id]];
     }
 
     public function palette(): array

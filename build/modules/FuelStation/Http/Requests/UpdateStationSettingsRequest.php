@@ -45,6 +45,8 @@ class UpdateStationSettingsRequest extends BaseFormRequest
             'payment_channels.*.settles_to_vendor_id' => ['nullable', 'uuid', Rule::exists(Vendor::class, 'id')->where('company_id', $companyId)],
             // What the bank keeps of this channel's sales, e.g. 0.8 / 1 / 1.2 (% of the total).
             'payment_channels.*.fee_percent' => ['nullable', 'numeric', 'min:0', 'max:10'],
+            // A card's charge: a % taken at every daily close, or entered by hand (CardChargeService).
+            'payment_channels.*.charge_mode' => ['nullable', 'string', 'in:automatic,manual'],
             'cash_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyId)],
             'fuel_sales_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyId)],
             'fuel_cogs_account_id' => ['nullable', 'uuid', Rule::exists(Account::class, 'id')->where('company_id', $companyId)],

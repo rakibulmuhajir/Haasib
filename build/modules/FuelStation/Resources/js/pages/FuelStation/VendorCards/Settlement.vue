@@ -63,7 +63,7 @@ interface BankAccount {
   name: string
 }
 
-interface CardTaxChannel {
+interface CardChargeChannel {
   code: string
   label: string
   settles_to: 'clearing' | 'bank' | 'supplier'
@@ -71,12 +71,15 @@ interface CardTaxChannel {
   account_name: string | null
 }
 
-interface CardTax {
+interface CardChargeRow {
   id: string
   date: string
   channel: string
   amount: number
-  section: string | null
+  period_from: string
+  period_to: string
+  sales: number
+  rate: number | null
   reference: string | null
   bill_id: string | null
   undone: boolean
@@ -88,13 +91,12 @@ const props = defineProps<{
   summary: VendorCardSummary
   todaySettlements: VendorCardSale[]
   bankAccounts: BankAccount[]
-  taxEnabled?: boolean
-  cardTaxChannels?: CardTaxChannel[]
-  cardTaxes?: CardTax[]
-  canRecordTax?: boolean
+  cardChargeChannels?: CardChargeChannel[]
+  cardCharges?: CardChargeRow[]
+  canRecordCharge?: boolean
 }>()
 
-// Tax a card company deducted from card sales, entered by hand -- usually at month end, so the
+// The charge the bank or card supplier kept, entered by hand -- usually at month end, so the
 // date starts on the last day of last month (or today, when today is month end).
 const monthEnd = () => {
   const today = localToday()
@@ -103,37 +105,46 @@ const monthEnd = () => {
   const last = new Date(y, m - 1, 0)
   return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
 }
-const showTaxDialog = ref(false)
-const taxForm = useForm({
+// The card sales a charge covers: the month of its date unless changed.
+const monthOf = (date: string) => {
+  const [y, m] = date.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { from: `${y}-${String(m).padStart(2, '0')}-01`, to: `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}` }
+}
+const showChargeDialog = ref(false)
+const chargeForm = useForm({
   channel_code: '',
-  deduction_date: monthEnd(),
+  charge_date: monthEnd(),
+  period_from: monthOf(monthEnd()).from,
+  period_to: monthOf(monthEnd()).to,
   amount: null as number | null,
-  section: '',
   reference: '',
   notes: '',
 })
-const taxChannel = computed(() => (props.cardTaxChannels ?? []).find((c) => c.code === taxForm.channel_code))
-const taxComesFrom = (c: CardTaxChannel | undefined) =>
+const chargeChannel = computed(() => (props.cardChargeChannels ?? []).find((c) => c.code === chargeForm.channel_code))
+const chargeComesFrom = (c: CardChargeChannel | undefined) =>
   !c ? '' : c.settles_to === 'supplier' ? `Added to what you owe ${c.vendor_name}` : `Taken from ${c.account_name}`
-const openTaxDialog = () => {
-  taxForm.reset()
-  taxForm.clearErrors()
-  taxForm.channel_code = props.cardTaxChannels?.[0]?.code ?? ''
-  taxForm.deduction_date = monthEnd()
-  showTaxDialog.value = true
+const openChargeDialog = () => {
+  chargeForm.reset()
+  chargeForm.clearErrors()
+  chargeForm.channel_code = props.cardChargeChannels?.[0]?.code ?? ''
+  chargeForm.charge_date = monthEnd()
+  chargeForm.period_from = monthOf(chargeForm.charge_date).from
+  chargeForm.period_to = monthOf(chargeForm.charge_date).to
+  showChargeDialog.value = true
 }
-const submitTax = () => {
-  taxForm.post(`/${companySlug.value}/fuel/card-tax`, {
+const submitCharge = () => {
+  chargeForm.post(`/${companySlug.value}/fuel/card-charges`, {
     preserveScroll: true,
-    onSuccess: () => { showTaxDialog.value = false },
+    onSuccess: () => { showChargeDialog.value = false },
   })
 }
-const undoingTax = ref<string | null>(null)
-const undoTax = (tax: CardTax) => {
-  undoingTax.value = tax.id
-  router.delete(`/${companySlug.value}/fuel/card-tax/${tax.id}`, {
+const undoingCharge = ref<string | null>(null)
+const undoCharge = (charge: CardChargeRow) => {
+  undoingCharge.value = charge.id
+  router.delete(`/${companySlug.value}/fuel/card-charges/${charge.id}`, {
     preserveScroll: true,
-    onFinish: () => { undoingTax.value = null },
+    onFinish: () => { undoingCharge.value = null },
   })
 }
 
@@ -470,33 +481,34 @@ const todayTableData = computed(() => {
       </CardContent>
     </Card>
 
-    <!-- Tax the bank or the card's supplier deducted from card sales -->
-    <Card v-if="taxEnabled && ((cardTaxChannels ?? []).length || (cardTaxes ?? []).length)" class="border-border/80">
+    <!-- The charge the bank or the card's supplier kept on card sales -->
+    <Card class="border-border/80">
       <CardHeader class="flex flex-row items-start justify-between gap-3">
         <div>
-          <CardTitle class="text-base">Card tax</CardTitle>
-          <CardDescription>Tax deducted from card sales</CardDescription>
+          <CardTitle class="text-base">Card charges</CardTitle>
+          <CardDescription>Charges the bank or supplier kept</CardDescription>
         </div>
-        <Button v-if="canRecordTax && (cardTaxChannels ?? []).length" size="sm" @click="openTaxDialog">Record tax</Button>
+        <Button v-if="canRecordCharge && (cardChargeChannels ?? []).length" size="sm" @click="openChargeDialog">Record charge</Button>
+        <p v-else-if="!(cardChargeChannels ?? []).length" class="text-xs text-muted-foreground">Set a card to manual charges in Station settings.</p>
       </CardHeader>
       <CardContent class="space-y-2">
-        <p v-if="!(cardTaxes ?? []).length" class="text-sm text-muted-foreground">None recorded yet.</p>
+        <p v-if="!(cardCharges ?? []).length" class="text-sm text-muted-foreground">None recorded yet.</p>
         <div
-          v-for="tax in cardTaxes ?? []"
-          :key="tax.id"
+          v-for="charge in cardCharges ?? []"
+          :key="charge.id"
           class="flex items-center justify-between gap-3 rounded-lg border p-3"
-          :class="{ 'opacity-60': tax.undone }"
+          :class="{ 'opacity-60': charge.undone }"
         >
           <div class="min-w-0">
-            <div class="font-medium" :class="{ 'line-through': tax.undone }">{{ tax.channel }}</div>
+            <div class="font-medium" :class="{ 'line-through': charge.undone }">{{ charge.channel }}</div>
             <div class="text-xs text-muted-foreground">
-              {{ formatDate(tax.date) }}<template v-if="tax.section"> · {{ tax.section }}</template><template v-if="tax.reference"> · {{ tax.reference }}</template>
-              <template v-if="tax.undone"> · Undone</template>
+              {{ formatDate(charge.date) }} · sales {{ formatDate(charge.period_from) }} to {{ formatDate(charge.period_to) }}<template v-if="charge.rate !== null"> · {{ +charge.rate.toFixed(2) }}% of {{ formatCurrency(charge.sales) }}</template><template v-if="charge.reference"> · {{ charge.reference }}</template>
+              <template v-if="charge.undone"> · Undone</template>
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <MoneyText class="font-semibold" :amount="tax.amount" :currency="currencyCode" :fraction-digits="0" />
-            <Button v-if="canRecordTax && !tax.undone" size="sm" variant="ghost" :disabled="undoingTax === tax.id" @click="undoTax(tax)">Undo</Button>
+            <MoneyText class="font-semibold" :amount="charge.amount" :currency="currencyCode" :fraction-digits="0" />
+            <Button v-if="canRecordCharge && !charge.undone" size="sm" variant="ghost" :disabled="undoingCharge === charge.id" @click="undoCharge(charge)">Undo</Button>
           </div>
         </div>
       </CardContent>
@@ -637,51 +649,56 @@ const todayTableData = computed(() => {
         </form>
       </DialogContent>
     </Dialog>
-    <Dialog v-model:open="showTaxDialog">
+    <Dialog v-model:open="showChargeDialog">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Record card tax</DialogTitle>
-          <DialogDescription>Tax the bank or supplier deducted from card sales.</DialogDescription>
+          <DialogTitle>Record card charge</DialogTitle>
+          <DialogDescription>What the bank or supplier kept from card sales.</DialogDescription>
         </DialogHeader>
-        <form class="space-y-4" @submit.prevent="submitTax">
+        <form class="space-y-4" @submit.prevent="submitCharge">
           <div class="space-y-2">
             <Label>Card</Label>
-            <Select v-model="taxForm.channel_code">
+            <Select v-model="chargeForm.channel_code">
               <SelectTrigger><SelectValue placeholder="Choose a card" /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="c in cardTaxChannels ?? []" :key="c.code" :value="c.code">{{ c.label }}</SelectItem>
+                <SelectItem v-for="c in cardChargeChannels ?? []" :key="c.code" :value="c.code">{{ c.label }}</SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="taxChannel" class="text-xs text-muted-foreground">{{ taxComesFrom(taxChannel) }}</p>
-            <InputError :message="taxForm.errors.channel_code" />
+            <p v-if="chargeChannel" class="text-xs text-muted-foreground">{{ chargeComesFrom(chargeChannel) }}</p>
+            <InputError :message="chargeForm.errors.channel_code" />
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label>Date</Label>
-              <Input v-model="taxForm.deduction_date" type="date" />
-              <InputError :message="taxForm.errors.deduction_date" />
+              <Input v-model="chargeForm.charge_date" type="date" @update:model-value="(v) => { const p = monthOf(String(v)); chargeForm.period_from = p.from; chargeForm.period_to = p.to }" />
+              <InputError :message="chargeForm.errors.charge_date" />
             </div>
             <div class="space-y-2">
-              <Label>Tax amount</Label>
-              <Input v-model.number="taxForm.amount" type="number" min="0.01" step="0.01" />
-              <InputError :message="taxForm.errors.amount" />
+              <Label>Charge</Label>
+              <Input v-model.number="chargeForm.amount" type="number" min="0.01" step="0.01" />
+              <InputError :message="chargeForm.errors.amount" />
             </div>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
-              <Label>Section</Label>
-              <Input v-model="taxForm.section" maxlength="30" placeholder="Optional" />
-              <InputError :message="taxForm.errors.section" />
+              <Label>Sales from</Label>
+              <Input v-model="chargeForm.period_from" type="date" />
+              <InputError :message="chargeForm.errors.period_from" />
             </div>
             <div class="space-y-2">
-              <Label>Reference</Label>
-              <Input v-model="taxForm.reference" maxlength="100" placeholder="Statement or certificate no." />
-              <InputError :message="taxForm.errors.reference" />
+              <Label>Sales to</Label>
+              <Input v-model="chargeForm.period_to" type="date" />
+              <InputError :message="chargeForm.errors.period_to" />
             </div>
           </div>
+          <div class="space-y-2">
+            <Label>Reference</Label>
+            <Input v-model="chargeForm.reference" maxlength="100" placeholder="Statement no." />
+            <InputError :message="chargeForm.errors.reference" />
+          </div>
           <DialogFooter class="gap-2">
-            <Button type="button" variant="outline" @click="showTaxDialog = false">Cancel</Button>
-            <Button type="submit" :disabled="taxForm.processing || !taxForm.channel_code || !taxForm.amount">Record tax</Button>
+            <Button type="button" variant="outline" @click="showChargeDialog = false">Cancel</Button>
+            <Button type="submit" :disabled="chargeForm.processing || !chargeForm.channel_code || !chargeForm.amount">Record charge</Button>
           </DialogFooter>
         </form>
       </DialogContent>

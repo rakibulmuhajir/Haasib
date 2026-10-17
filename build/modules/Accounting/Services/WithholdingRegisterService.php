@@ -32,8 +32,6 @@ class WithholdingRegisterService
             $rows = $rows->merge($this->received($companyId, $slug, $from, $to));
         }
 
-        $rows = $rows->merge(app(\App\Modules\Accounting\Extensions\WithholdingRegisterSources::class)->lines($companyId, $slug, $from, $to, $side));
-
         $rows = $rows->sortBy([['date', 'asc'], ['payment_number', 'asc'], ['kind', 'asc']])->values();
 
         $sections = $rows

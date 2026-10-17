@@ -41,8 +41,8 @@ class FuelStationServiceProvider extends ServiceProvider
             'calculator.delete' => \App\Modules\FuelStation\Actions\Calculator\DeleteCalculatorFormulaAction::class,
             'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
             'fuel.products.setup' => \App\Modules\FuelStation\Actions\Product\SetupAction::class,
-            'fuel.card_tax.record' => \App\Modules\FuelStation\Actions\CardTax\RecordAction::class,
-            'fuel.card_tax.undo' => \App\Modules\FuelStation\Actions\CardTax\UndoAction::class,
+            'fuel.card_charge.record' => \App\Modules\FuelStation\Actions\CardCharge\RecordAction::class,
+            'fuel.card_charge.undo' => \App\Modules\FuelStation\Actions\CardCharge\UndoAction::class,
         ])]);
     }
 
@@ -99,9 +99,8 @@ class FuelStationServiceProvider extends ServiceProvider
                 && ($channel['clearing_account_id'] ?? null) === $accountId);
         });
 
-        // Tax card companies deducted from card sales joins the withholding register (received side).
-        \App\Modules\Accounting\Extensions\WithholdingRegisterSources::extend('fuel_station', fn (string $companyId, string $slug, string $from, string $to, string $side) => $side === 'made'
-            ? [] : app(\App\Modules\FuelStation\Services\CardTaxService::class)->registerLines($companyId, $slug, $from, $to));
+        // A supplier bill a vendor card's money paid shows its share of that card's charges.
+        \App\Modules\Accounting\Extensions\BillNotes::extend('fuel_station', fn (\App\Modules\Accounting\Models\Bill $bill) => app(\App\Modules\FuelStation\Services\CardChargeService::class)->billNotes($bill));
 
         // Invoice guard: assertMutable ran for every company before the hooks existed, so it
         // stays ungated (a no-op for invoices no daily close references).

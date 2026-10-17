@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Modules\FuelStation\Actions\CardTax;
+namespace App\Modules\FuelStation\Actions\CardCharge;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
-use App\Modules\FuelStation\Models\CardTaxDeduction;
-use App\Modules\FuelStation\Services\CardTaxService;
+use App\Modules\FuelStation\Models\CardCharge;
+use App\Modules\FuelStation\Services\CardChargeService;
 
-/** Reverse a card tax deduction; the row stays, marked undone. */
+/** Reverse a card charge on its own date; the row stays, marked undone. */
 class UndoAction implements PaletteAction, \App\Contracts\DescribesPalette
 {
     public function permission(): ?string
@@ -24,10 +24,10 @@ class UndoAction implements PaletteAction, \App\Contracts\DescribesPalette
     public function handle(array $params): array
     {
         $company = CompanyContext::requireCompany();
-        $deduction = CardTaxDeduction::where('company_id', $company->id)->findOrFail($params['id']);
-        app(CardTaxService::class)->undo($company, $deduction, auth()->user());
+        $charge = CardCharge::where('company_id', $company->id)->findOrFail($params['id']);
+        app(CardChargeService::class)->undo($company, $charge, auth()->user());
 
-        return ['message' => 'Card tax undone', 'data' => ['id' => $deduction->id]];
+        return ['message' => 'Card charge undone', 'data' => ['id' => $charge->id]];
     }
 
     public function palette(): array

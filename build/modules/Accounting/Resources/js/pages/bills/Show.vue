@@ -149,6 +149,8 @@ const props = defineProps<{
   correctionSuppliers?: { id: string; name: string }[]
   corrections?: Correction[]
   appliedPayments?: { payment_id?: string; number: string; date?: string | null; party: string | null; amount: number | string }[]
+  // Read-only lines a module adds, e.g. a card charge's share of the money that paid this bill.
+  billNotes?: { label: string; detail?: string | null; amount: number }[]
 }>()
 
 // Take a payment off this bill: the bill is owed that much again, the money stays as credit.
@@ -646,6 +648,16 @@ const navigateToVendor = () => {
               <p v-for="row in paidFromAdvances" :key="row.payment_id">
                 Paid <MoneyText :amount="row.amount" :currency="bill.currency" :show-currency="false" /> from advance {{ row.payment_number ?? row.payment_id }}
               </p>
+            </div>
+
+            <div v-if="billNotes?.length" class="space-y-1 text-sm">
+              <div v-for="(note, i) in billNotes" :key="i" class="flex items-start justify-between gap-2">
+                <span class="min-w-0">
+                  {{ note.label }}
+                  <span v-if="note.detail" class="block text-xs text-muted-foreground">{{ note.detail }}</span>
+                </span>
+                <MoneyText :amount="note.amount" :currency="bill.currency" :show-currency="false" />
+              </div>
             </div>
 
             <!-- Payments on this bill: each can be taken off (kept as credit with the supplier). -->

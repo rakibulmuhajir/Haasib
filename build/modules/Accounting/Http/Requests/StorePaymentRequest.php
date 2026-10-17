@@ -7,6 +7,7 @@ use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\TaxRate;
 use Illuminate\Validation\Rule;
 
 class StorePaymentRequest extends BaseFormRequest
@@ -51,6 +52,10 @@ class StorePaymentRequest extends BaseFormRequest
             'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
+            // Tax the customer deducted; read only while the company charges tax.
+            'wht_rate_id' => ['nullable', 'uuid', Rule::exists(TaxRate::class, 'id')->where('tax_type', 'withholding')],
+            'wht_amount' => ['nullable', 'numeric', 'min:0'],
+            'wht_certificate_number' => ['nullable', 'string', 'max:100'],
             // Optional: the form only shows a picker when the company uses more than one
             // currency (see CompanyCurrencyOptions). Left blank, Payment\CreateAction
             // defaults to the allocated invoice's currency, then the buyer's/company's

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Transition } from 'vue'
+import { Transition, nextTick, watch } from 'vue'
 import PaletteHeader from '@/components/palette/PaletteHeader.vue'
 import PaletteOutput from '@/components/palette/PaletteOutput.vue'
 import { useCommandPalette, type CommandPaletteProps } from '@/composables/palette/useCommandPalette'
@@ -43,6 +43,7 @@ const {
   output,
   parseFormatTags,
   missingRequiredChips,
+  quick,
   quickActions,
   requiredChips,
   selectChipSuggestion,
@@ -67,6 +68,12 @@ const {
   suggestions,
   tableState,
 } = useCommandPalette(props, emit)
+
+// Keep the highlighted choice of a long list in view as the arrows move.
+watch(
+  () => quick.choiceIndex,
+  () => nextTick(() => document.querySelector('.quick-choice--selected')?.scrollIntoView({ block: 'nearest' })),
+)
 </script>
 
 <template>
@@ -226,16 +233,78 @@ const {
               </button>
             </div>
 
+            <!-- Typed transaction: what will be booked, before it is posted -->
+            <div v-if="quick.active || quick.hint || (quick.lastResult && !entityVerbInput.trim())" class="quick-panel" data-testid="quick-entry">
+              <div v-if="quick.hint && !quick.active" class="quick-hint">{{ quick.hint }}</div>
+
+              <template v-if="quick.active">
+                <div v-if="quick.phase === 'working'" class="quick-working">Checking…</div>
+
+                <div v-else-if="quick.phase === 'error'" class="quick-error" role="alert" data-testid="quick-error">{{ quick.problem }}</div>
+
+                <div v-else-if="quick.phase === 'choices'" class="quick-choices" data-testid="quick-choices">
+                  <div class="quick-title">{{ quick.choicePrompt }}</div>
+                  <button
+                    v-for="(choice, index) in quick.choices"
+                    :key="choice.value"
+                    type="button"
+                    class="quick-choice"
+                    :class="{ 'quick-choice--selected': index === quick.choiceIndex }"
+                    @click="quick.pickChoice(index)"
+                    @mouseenter="quick.choiceIndex = index"
+                  >
+                    <span>{{ choice.label }}</span>
+                    <span v-if="choice.meta" class="quick-meta">{{ choice.meta }}</span>
+                  </button>
+                </div>
+
+                <div v-else-if="quick.phase === 'preview' && quick.resolved && quick.preview" data-testid="quick-preview">
+                  <div class="quick-title">{{ quick.resolved.summary }} <span class="quick-meta" data-testid="quick-date">{{ quick.resolved.dateLabel }}</span></div>
+                  <div class="quick-lines">
+                    <div v-for="(line, index) in quick.preview.lines" :key="index" class="quick-line" data-testid="quick-line">
+                      <span class="quick-side">{{ line.side === 'debit' ? 'Dr' : 'Cr' }}</span>
+                      <span class="quick-account">{{ line.account_code }} {{ line.account_name }}</span>
+                      <span class="quick-amount">{{ line.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                    </div>
+                  </div>
+                  <div v-if="quick.preview.balances.length" class="quick-balances">
+                    <div v-for="balance in quick.preview.balances" :key="balance.account_name" class="quick-balance">
+                      <span class="quick-account">{{ balance.account_name }}</span>
+                      <span class="quick-amount">{{ balance.before.toLocaleString('en-US') }} → {{ balance.after.toLocaleString('en-US') }}</span>
+                    </div>
+                  </div>
+                  <div v-for="note in quick.resolved.notes" :key="note" class="quick-note">{{ note }}</div>
+                </div>
+              </template>
+
+              <div v-else-if="quick.lastResult" class="quick-result" data-testid="quick-result">
+                <span class="quick-result-text">✓ {{ quick.lastResult.message }}</span>
+                <button v-if="quick.lastResult.openUrl" type="button" class="quick-action" @click="quick.open()">Open</button>
+                <button
+                  v-if="quick.lastResult.undo && !quick.lastResult.undone"
+                  type="button"
+                  class="quick-action"
+                  :disabled="quick.posting"
+                  @click="quick.undo()"
+                >Undo</button>
+                <span v-if="quick.lastResult.undone" class="quick-meta">Undone</span>
+              </div>
+            </div>
+
             <!-- Status Bar -->
             <div class="palette-status">
-              <span class="status-message" :class="{ 'status-ready': canExecute }">
+              <span class="status-message" :class="{ 'status-ready': canExecute || quick.canPost }">
                 {{ statusMessage }}
               </span>
               <span v-if="missingRequiredChips.length" class="status-pill">
                 Required: {{ missingRequiredChips.map((chip) => chip.name).join(', ') }}
               </span>
               <div class="status-keys">
-                <template v-if="stage === 'chips'">
+                <template v-if="quick.active">
+                  <span v-if="quick.phase === 'choices'"><kbd>↑↓</kbd> choose</span>
+                  <span v-if="quick.phase === 'choices' || quick.phase === 'preview'"><kbd>Enter</kbd> {{ quick.phase === 'choices' ? 'select' : 'post' }}</span>
+                </template>
+                <template v-else-if="stage === 'chips'">
                   <span><kbd>Tab</kbd> next</span>
                   <span><kbd>↑↓</kbd> dropdown</span>
                   <span><kbd>Enter</kbd> {{ canExecute ? 'execute' : 'next' }}</span>
@@ -1274,5 +1343,100 @@ const {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Typed transaction preview */
+.quick-panel {
+  margin: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: #e2e8f0;
+  animation: fieldEnter var(--palette-duration-normal) ease-out;
+}
+.quick-hint,
+.quick-working,
+.quick-meta,
+.quick-note {
+  color: #64748b;
+}
+.quick-error {
+  color: #f87171;
+}
+.quick-title {
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+.quick-line,
+.quick-balance {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+}
+.quick-side {
+  width: 20px;
+  color: #22d3ee;
+}
+.quick-account {
+  flex: 1;
+}
+.quick-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.quick-balances {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #1e293b;
+  color: #94a3b8;
+}
+.quick-note {
+  margin-top: 6px;
+}
+.quick-choices {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.quick-choice {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  color: #f8fafc;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.quick-choice--selected {
+  color: #22d3ee;
+}
+.quick-choice--selected::before {
+  content: '›';
+}
+.quick-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.quick-result-text {
+  flex: 1;
+  color: #4ade80;
+}
+.quick-action {
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #22d3ee;
+  font: inherit;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.quick-action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 </style>

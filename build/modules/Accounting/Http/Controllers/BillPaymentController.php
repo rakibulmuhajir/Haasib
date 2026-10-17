@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\DocumentDateLock;
+use App\Modules\Accounting\Services\WithholdingTax;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\CompanyLetterhead;
@@ -103,7 +104,7 @@ class BillPaymentController extends Controller
         app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'filer_status', 'default_wht_rate_id']);
 
         $bankAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
@@ -174,6 +175,8 @@ class BillPaymentController extends Controller
             'vendors' => $vendors,
             'bankAccounts' => $bankAccounts,
             'apAccounts' => $apAccounts,
+            // Withholding rates for payments we make; empty (and the row hidden) while tax is off.
+            'whtRates' => app(WithholdingTax::class)->ratesFor($company, WithholdingTax::SIDE_MADE),
             'unpaidBills' => $unpaidBills,
             'selectedBill' => $selectedBill,
             'filters' => [
@@ -267,6 +270,62 @@ class BillPaymentController extends Controller
             'correctionSuppliers' => \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
                 ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'corrections' => app(\App\Modules\Accounting\Services\CorrectionService::class)->history($company->id, 'bill_payment', $record->id),
+        ]);
+    }
+
+    /**
+     * The "Withholding tax deduction certificate" for a payment: what we withheld from a vendor,
+     * for the vendor to claim against their own tax. Split payments share one certificate.
+     */
+    public function whtCertificate(string $company, string $payment): Response
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+        $record = \App\Modules\Accounting\Models\BillPayment::withTrashed()->with('vendor')
+            ->where('company_id', $company->id)
+            ->findOrFail($payment);
+        abort_unless((float) $record->wht_amount > 0, 404);
+
+        $rows = \App\Modules\Accounting\Models\BillPayment::withTrashed()
+            ->where('company_id', $company->id)
+            ->where('payment_group_id', $record->payment_group_id ?: $record->id)
+            ->get();
+        if ($rows->isEmpty()) {
+            $rows = collect([$record]);
+        }
+
+        $gross = round((float) $rows->sum('base_amount'), 2);
+        $wht = round((float) $rows->sum('wht_amount'), 2);
+        $vendor = $record->vendor;
+        $letterhead = app(CompanyLetterhead::class);
+
+        return Inertia::render('accounting/bill-payments/WhtCertificate', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+                'letterhead' => $letterhead->forCompany($company),
+            ],
+            'certificate' => [
+                'payment_id' => $record->id,
+                'number' => $record->payment_group_number ?: $record->payment_number,
+                'date' => $record->payment_date?->toDateString(),
+                'reference' => $record->reference_number,
+                'section' => $record->wht_section,
+                'rate' => $record->wht_rate !== null ? (float) $record->wht_rate : null,
+                'filer_status' => $record->wht_filer_status,
+                'gross' => $gross,
+                'wht' => $wht,
+                'net' => round($gross - $wht, 2),
+                'currency' => $company->base_currency,
+                'voided' => $rows->every(fn ($row) => $row->trashed()),
+                'vendor' => [
+                    'name' => $vendor?->name,
+                    'tax_id' => $vendor?->tax_id,
+                    'email' => $vendor?->email,
+                    'lines' => $letterhead->addressLines($vendor?->address),
+                ],
+            ],
         ]);
     }
 

@@ -1,4 +1,5 @@
 import { GRAMMAR } from './grammar'
+import { quickEntryHelpLines } from './quick-entry'
 
 const MODULE_GROUPS: Record<string, string[]> = {
   sales: ['customer', 'invoice', 'payment'],
@@ -101,6 +102,8 @@ function getGeneralHelp(): string {
   lines.push('  user.invite john@example.com    Invite user')
   lines.push('')
   lines.push('Type "help <entity>" for detailed help (e.g., help company)')
+  lines.push('')
+  lines.push(...quickEntryHelpLines())
 
   return lines.join('\n')
 }

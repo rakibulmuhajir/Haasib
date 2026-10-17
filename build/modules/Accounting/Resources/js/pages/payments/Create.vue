@@ -29,6 +29,8 @@ import { computed, ref, watch } from 'vue';
 import { formatDateTime } from '@/lib/datetime';
 import { entryDateDefault, rememberEntryDate } from '@/composables/useEntryDate';
 import EntryDateNote from '@/components/EntryDateNote.vue';
+import { useTaxEnabled } from '@/composables/useTaxEnabled';
+import { pctText, withholdingFor, type WhtRateOption } from '@/composables/useWithholding';
 
 interface CompanyRef {
     id: string;
@@ -60,7 +62,7 @@ interface AccountOption {
 
 const props = defineProps<{
     company: CompanyRef;
-    customers: Array<{ id: string; name: string }>;
+    customers: Array<{ id: string; name: string; filer_status?: 'filer' | 'non_filer' | 'unknown'; default_wht_rate_id?: string | null }>;
     invoices: InvoiceRef[];
     currencies: CurrencyRef[];
     depositAccounts?: AccountOption[];
@@ -69,7 +71,10 @@ const props = defineProps<{
         invoice_id?: string | null;
     };
     receiptModes?: Array<{ key: string; label: string; hint?: string | null }>;
+    whtRates?: WhtRateOption[];
 }>();
+
+const taxEnabled = useTaxEnabled();
 
 // API decimal values may arrive as six-place strings (the database keeps
 // extra precision for posting). Keep money inputs at the user-facing two-place
@@ -168,6 +173,12 @@ watch(
     () => form.customer_id,
     () => {
         selectedInvoiceIds.value = [];
+        // The customer's usual withholding rate, when they have one.
+        const usual = props.customers.find((c) => c.id === form.customer_id)?.default_wht_rate_id;
+        if (usual && (props.whtRates ?? []).some((r) => r.id === usual)) {
+            whtRateId.value = usual;
+            showWht.value = true;
+        }
         if (customerInvoices.value.length === 1) {
             const only = customerInvoices.value[0];
             form.currency = only.currency;
@@ -202,18 +213,57 @@ const allocationPreview = computed(() => {
     };
 });
 
+// Tax the customer deducted. `amount` stays the total the invoices are settled by; the
+// bank receives that less the tax (and any bank charge).
+const serverError = (key: string) => (form.errors as Record<string, string | undefined>)[key];
+const showWht = ref(false);
+const whtRateId = ref('');
+const whtAmount = ref<number | ''>('');
+const whtOverridden = ref(false);
+const whtCertificate = ref('');
+const customer = computed(() => props.customers.find((c) => c.id === form.customer_id));
+const whtRate = computed(() => (props.whtRates ?? []).find((r) => r.id === whtRateId.value));
+const whtPreview = computed(() =>
+    withholdingFor(whtRate.value, customer.value?.filer_status, moneyNumber(form.amount)),
+);
+
+// A picked rate fills the amount until the user types their own.
+watch([whtPreview, () => form.amount], () => {
+    if (whtRate.value && !whtOverridden.value && !whtPreview.value.missingNonFiler) {
+        whtAmount.value = whtPreview.value.wht;
+    }
+});
+watch(whtRateId, () => {
+    whtOverridden.value = false;
+    if (!whtRateId.value) whtAmount.value = '';
+});
+
+const whtCurrent = computed(() =>
+    taxEnabled.value && form.received_as === 'invoices' ? moneyNumber(whtAmount.value) : 0,
+);
+
 const netMovement = computed(() =>
     Math.max(
         0,
-        Number(form.amount || 0) - Number(form.transaction_charge || 0),
+        Number(form.amount || 0) - Number(form.transaction_charge || 0) - whtCurrent.value,
     ),
 );
 
 const showBankCharge = ref(false);
 
 const submit = () => {
+    if (whtPreview.value.missingNonFiler) {
+        showError('This rate has no non-filer value. Add it on the Tax page.');
+        return;
+    }
+    const withheld = whtCurrent.value > 0;
+    // Rate and amount agree: send the rate and let the server work it out. Typed over: send the amount.
+    const sendRate = withheld && whtRate.value && !whtOverridden.value;
     form.transform((data) => ({
         ...data,
+        wht_rate_id: withheld && whtRate.value ? whtRate.value.id : undefined,
+        wht_amount: withheld && !sendRate ? whtCurrent.value : undefined,
+        wht_certificate_number: withheld ? whtCertificate.value || undefined : undefined,
         invoice_ids: selectedInvoiceIds.value,
         // The server derives payment_method from the deposit account's own subtype
         // (cash vs bank) when this is left blank - see PaymentController::store().
@@ -547,6 +597,67 @@ rememberEntryDate(props.company.slug, () => form.payment_date);
                                 rows="1"
                             />
                             <InputError :message="form.errors.notes" />
+                        </div>
+                    </div>
+
+                    <div v-if="taxEnabled && form.received_as === 'invoices'">
+                        <Button
+                            v-if="!showWht"
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            class="h-auto p-0 text-muted-foreground"
+                            @click="showWht = true"
+                        >
+                            Customer deducted tax (WHT)?
+                        </Button>
+                        <div v-else class="space-y-3">
+                            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div v-if="(whtRates?.length ?? 0) > 0">
+                                    <Label for="wht_rate_id">Rate</Label>
+                                    <Select
+                                        :model-value="whtRateId || '__none'"
+                                        @update:model-value="(v) => (whtRateId = v === '__none' ? '' : String(v))"
+                                    >
+                                        <SelectTrigger id="wht_rate_id">
+                                            <SelectValue placeholder="None" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none">None</SelectItem>
+                                            <SelectItem v-for="r in whtRates" :key="r.id" :value="r.id">
+                                                {{ r.name }}{{ r.section ? ` (${r.section})` : '' }} — {{ pctText(r.rate) }}<template v-if="r.rate_non_filer !== null"> / {{ pctText(r.rate_non_filer) }} non-filer</template>
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError :message="serverError('wht_rate_id')" />
+                                </div>
+                                <div>
+                                    <Label for="wht_amount">Tax deducted</Label>
+                                    <Input
+                                        id="wht_amount"
+                                        v-model.number="whtAmount"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        @input="whtOverridden = true"
+                                    />
+                                    <InputError :message="serverError('wht_amount')" />
+                                </div>
+                                <div>
+                                    <Label for="wht_certificate_number">Their certificate no.</Label>
+                                    <Input id="wht_certificate_number" v-model="whtCertificate" />
+                                    <InputError :message="serverError('wht_certificate_number')" />
+                                </div>
+                            </div>
+                            <p v-if="whtPreview.missingNonFiler" class="text-sm text-destructive">
+                                {{ customer?.name }} is a non-filer and this rate has no non-filer value. Add it on the Tax page.
+                            </p>
+                            <p v-else-if="whtCurrent > 0" class="text-sm text-muted-foreground">
+                                WHT {{ whtCurrent.toFixed(2) }}; bank receives
+                                <MoneyText :amount="netMovement" :currency="form.currency || 'USD'" />.
+                                Invoices settle by {{ moneyNumber(form.amount).toFixed(2) }}.
+                            </p>
                         </div>
                     </div>
 

@@ -748,6 +748,41 @@ function inferFromSubject(result: ParsedCommand) {
 
 ---
 
+### 4.5 Typing transactions
+
+The day's ordinary entries are typed as one line. The palette shows the journal lines and the
+balances before and after, and Enter posts it. Nothing is stored until Enter: the preview runs
+the real command inside a transaction that is always rolled back (`POST /api/palette/preview`).
+
+| Type | Books |
+|---|---|
+| `deposit 50000 meezan` | Cash to bank |
+| `withdraw 20000 meezan` | Bank to cash |
+| `transfer 100000 meezan to hbl` | Bank to bank |
+| `bank charge 500 meezan [for note]` | Bank charges expense, out of the bank |
+| `received 15000 from al noor [into meezan]` | Customer payment, settles oldest invoices first |
+| `paid 8000 to karachi office [from meezan]` | Supplier payment, settles oldest bills first |
+| `expense 2500 tea [from meezan]` | Expense; account matched by name, else you choose |
+| `sale 12000 [note]` | Cash sale (invoice and payment) |
+
+Amounts: `50000`, `50,000`, `1,50,000`, `50k`, `1.5 lakh`, `2 lac`. Anything else is refused.
+Dates: end the line with `today`, `yesterday`, `tomorrow`, or `on 14 oct`, `on 14 oct 2026`,
+`on 14/10`, `on 14-10-2026` (day first). Relative words count from the company date, not the
+browser's. The preview header shows the day it will book on. A future date is allowed to be typed;
+if the command refuses it, the preview shows that message.
+
+Left out: the date is the company date. Money in (`received`, `sale`) goes to Settings > Quick
+entry > "Money received goes to", money out (`paid`, `expense`) comes from "Money paid comes from";
+unset, the cash account (the bank when there is none). A deposit uses the received account when it
+is a bank, a withdrawal or bank charge the paid account when it is a bank, else the company default
+bank. An account named in the line (`into`, `from`) always wins. A name matching several records
+is listed to choose from, never guessed. `help` lists these verbs.
+
+Undo: the result line offers Undo for every verb, with no confirmation. `received` and `paid` void
+the payment (withholding tax included); `expense` and the bank verbs post a reversal entry dated
+today (`expense.reverse`, `bank_transaction.reverse`); `sale` voids the payment then the invoice in
+one transaction (`sale.void`). Refused when already undone or when the day or period is locked.
+
 ## 5. Autocomplete
 
 ### 5.1 Trigger Conditions

@@ -9,6 +9,7 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\UsersPageController;
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AccountingDefaultsController;
+use App\Modules\Accounting\Http\Controllers\QuickEntryDefaultsController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetReportController;
 use App\Modules\Accounting\Http\Controllers\BankAccountController;
 use App\Modules\Accounting\Http\Controllers\BankFeedController;
@@ -116,6 +117,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/reports/receivables-aging', [ReceivablesAgingReportController::class, 'index'])->name('reports.receivables-aging');
         Route::get('/{company}/reports/payables-aging', [PayablesAgingReportController::class, 'index'])->name('reports.payables-aging');
         Route::get('/{company}/reports/statements', [StatementReportController::class, 'index'])->name('reports.statements');
+        Route::get('/{company}/reports/withholding-tax', [\App\Modules\Accounting\Http\Controllers\WithholdingRegisterController::class, 'index'])->name('reports.withholding-tax');
         Route::get('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'index'])->name('consolidated-invoices.index');
         Route::get('/{company}/consolidated-invoices/create', [ConsolidatedInvoiceController::class, 'create'])->name('consolidated-invoices.create');
         Route::post('/{company}/consolidated-invoices', [ConsolidatedInvoiceController::class, 'store'])->name('consolidated-invoices.store');
@@ -232,6 +234,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->whereUuid('account')->name('accounts.destroy');
         Route::get('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'edit'])->name('accounting-defaults.edit');
         Route::patch('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'update'])->name('accounting-defaults.update');
+        Route::get('/{company}/accounting/quick-entry', [QuickEntryDefaultsController::class, 'edit'])->name('quick-entry-defaults.edit');
+        Route::patch('/{company}/accounting/quick-entry', [QuickEntryDefaultsController::class, 'update'])->name('quick-entry-defaults.update');
 
         // Vendors
         Route::get('/{company}/vendors', [VendorController::class, 'index'])->name('vendors.index');
@@ -272,6 +276,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/bill-payments/create', [BillPaymentController::class, 'create'])->name('bill-payments.create');
         Route::post('/{company}/bill-payments', [BillPaymentController::class, 'store'])->name('bill-payments.store');
         Route::get('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'show'])->name('bill-payments.show');
+        Route::get('/{company}/bill-payments/{payment}/wht-certificate', [BillPaymentController::class, 'whtCertificate'])->name('bill-payments.wht-certificate');
         Route::get('/{company}/bill-payments/{payment}/edit', [BillPaymentController::class, 'edit'])->name('bill-payments.edit');
         Route::put('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'update'])->name('bill-payments.update');
         Route::delete('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'destroy'])->name('bill-payments.destroy');

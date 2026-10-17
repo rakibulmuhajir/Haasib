@@ -201,6 +201,30 @@ class Company extends Model
         $this->save();
     }
 
+    /**
+     * The cash or bank accounts one-line entries use when the line names none: where money received
+     * goes and where money paid comes from. Kept in settings; the ids are checked where they are used.
+     *
+     * @return array{receive_account_id: ?string, pay_account_id: ?string}
+     */
+    public function quickEntryDefaults(): array
+    {
+        $saved = (array) (($this->settings ?? [])['quick_entry'] ?? []);
+
+        return [
+            'receive_account_id' => $saved['receive_account_id'] ?? null,
+            'pay_account_id' => $saved['pay_account_id'] ?? null,
+        ];
+    }
+
+    public function setQuickEntryDefaults(?string $receiveAccountId, ?string $payAccountId): void
+    {
+        $this->settings = array_merge((array) ($this->settings ?? []), [
+            'quick_entry' => ['receive_account_id' => $receiveAccountId, 'pay_account_id' => $payAccountId],
+        ]);
+        $this->save();
+    }
+
     public function isModuleEnabled(string $moduleKey): bool
     {
         $modules = (array) ($this->settings['modules'] ?? []);

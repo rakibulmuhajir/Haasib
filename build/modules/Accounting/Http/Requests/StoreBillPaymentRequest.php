@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -61,6 +62,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'payment_date' => ['required', 'date', 'before_or_equal:'.app(CompanyClock::class)->today()],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'transaction_charge' => ['nullable', 'numeric', 'min:0'],
+            'wht_rate_id' => ['nullable', 'uuid', Rule::exists(TaxRate::class, 'id')->where('tax_type', 'withholding')],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'exchange_rate' => $exchangeRateRules,
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],

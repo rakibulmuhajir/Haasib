@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { generateSuggestions } from '@/palette/autocomplete'
 import { formatText } from '@/palette/formatter'
@@ -7,6 +7,8 @@ import { resolveEntityShortcut, getVerbs, ENTITY_ICONS } from '@/palette/grammar
 import { getQuickActions, resolveQuickActionCommand, getQuickActionLabel } from '@/palette/quick-actions'
 import { catalogMeta, getFieldPlaceholder, getSchema, registerCatalogSchemas } from '@/palette/schemas'
 import { parse } from '@/palette/parser'
+import { isHelpRequest, looksLikeQuickEntry, quickEntryHelpLines, startsQuickEntryWord } from '@/palette/quick-entry'
+import { useQuickEntry } from '@/composables/palette/useQuickEntry'
 import type { InputType } from '@/palette/schemas'
 import type { OutputLine, QuickAction, Suggestion, TableState } from '@/types/palette'
 
@@ -188,6 +190,12 @@ export function useCommandPalette(props: CommandPaletteProps, emit: PaletteEmit)
   
   
   const statusMessage = computed(() => {
+    if (quick.active.value) {
+      if (quick.phase.value === 'preview') return 'Ready — press Enter to post'
+      if (quick.phase.value === 'choices') return 'Several match — choose one'
+      if (quick.phase.value === 'error') return 'Fix the entry'
+      return 'Checking…'
+    }
     if (stage.value === 'entity') return 'Type a command or entity (e.g., invoice, company, customer)'
     if (stage.value === 'verb') return `Select action for ${confirmedEntity.value}`
     if (!allRequiredFilled.value) {
@@ -245,6 +253,16 @@ export function useCommandPalette(props: CommandPaletteProps, emit: PaletteEmit)
     return chips.value.findIndex(c => c.name === chip.name)
   }
   
+  // One-line transactions ("deposit 5000 meezan"): parsed, previewed and posted by useQuickEntry.
+  const quick = useQuickEntry({
+    input: entityVerbInput,
+    slug: () => activeCompany.value?.slug,
+    log: (type, text) => addOutput(type, text),
+    remember: (text) => addToHistory(text),
+    afterPost: () => resetForNextCommand(),
+    closePalette: () => close(),
+  })
+
   // ============================================================================
   // Watchers
   // ============================================================================
@@ -304,6 +322,13 @@ export function useCommandPalette(props: CommandPaletteProps, emit: PaletteEmit)
     const trimmed = val.trim()
     const tokens = trimmed.split(/\s+/).filter(t => t)
     const hasTrailingSpace = val.endsWith(' ')
+
+    // A quick entry is typed as one line: no entity suggestions, no rewriting of its first word.
+    if (looksLikeQuickEntry(val) || (stage.value === 'entity' && tokens.length === 1 && hasTrailingSpace && startsQuickEntryWord(tokens[0]))) {
+      showSuggestions.value = false
+      suggestions.value = []
+      return
+    }
   
     // Stage: Entity
     if (stage.value === 'entity') {
@@ -1197,6 +1222,15 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     // Enter - accept suggestion or execute complete command
     if (e.key === 'Enter') {
       e.preventDefault()
+      if (stage.value !== 'chips' && isHelpRequest(entityVerbInput.value)) {
+        addOutput('input', `❯ ${entityVerbInput.value.trim()}`)
+        quickEntryHelpLines().forEach((line) => addOutput('output', line))
+        resetForNextCommand()
+        return
+      }
+      if (quick.handleEnter()) {
+        return
+      }
       if (showSuggestions.value && suggestions.value.length > 0) {
         acceptSuggestion()
         // After accepting, check if we can execute immediately (no required fields)
@@ -1238,6 +1272,9 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     // Arrow down - navigate suggestions or table rows
     if (e.key === 'ArrowDown') {
       e.preventDefault()
+      if (quick.moveChoice(1)) {
+        return
+      }
       if (showSuggestions.value) {
         suggestionIndex.value = Math.min(suggestions.value.length - 1, suggestionIndex.value + 1)
       } else if (tableState.value && tableState.value.rows.length > 0) {
@@ -1253,6 +1290,9 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     // Arrow up - navigate suggestions or table rows
     if (e.key === 'ArrowUp') {
       e.preventDefault()
+      if (quick.moveChoice(-1)) {
+        return
+      }
       if (showSuggestions.value) {
         suggestionIndex.value = Math.max(0, suggestionIndex.value - 1)
       } else if (tableState.value && tableState.value.rows.length > 0) {
@@ -1282,7 +1322,7 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     }
   
     // Number keys (0-9) - trigger quick actions
-    if (quickActions.value.length > 0 && /^[0-9]$/.test(e.key)) {
+    if (quickActions.value.length > 0 && /^[0-9]$/.test(e.key) && !looksLikeQuickEntry(entityVerbInput.value)) {
       const action = quickActions.value.find(a => a.key === e.key)
       if (action) {
         e.preventDefault()
@@ -1457,6 +1497,7 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     defaults.value = {}
     // Reset localActiveCompany on close so next open picks up fresh Inertia props
     localActiveCompany.value = null
+    quick.reset()
   }
   
   function resetForNextCommand() {
@@ -1767,6 +1808,7 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     output,
     parseFormatTags,
     missingRequiredChips,
+    quick: reactive(quick),
     quickActions,
     requiredChips,
     selectChipSuggestion,

@@ -18,6 +18,7 @@ import {
   Clock,
   ScrollText,
   CalendarDays,
+  Percent,
 } from 'lucide-vue-next'
 
 export const accountingNav: ModuleNavConfig = {
@@ -25,7 +26,7 @@ export const accountingNav: ModuleNavConfig = {
   label: 'Accounting',
   isEnabled: (context) => Boolean(context.slug),
   getNavGroups: (context) => {
-    const { slug, t } = context
+    const { slug, t, isTaxEnabled } = context
     if (!slug) return []
 
     return [
@@ -40,6 +41,7 @@ export const accountingNav: ModuleNavConfig = {
           { title: 'Who Owes Us', href: `/${slug}/reports/receivables-aging`, icon: Clock },
           { title: 'What We Owe', href: `/${slug}/reports/payables-aging`, icon: Clock },
           { title: 'Statements', href: `/${slug}/reports/statements`, icon: ScrollText },
+          ...(isTaxEnabled ? [{ title: 'Withholding Tax', href: `/${slug}/reports/withholding-tax`, icon: Percent }] : []),
           { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: CalendarDays },
           { title: 'Settings', href: `/${slug}/setup`, icon: Settings },
         ],

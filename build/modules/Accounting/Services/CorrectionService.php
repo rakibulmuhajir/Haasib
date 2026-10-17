@@ -151,6 +151,7 @@ class CorrectionService
      */
     public function paymentChangeCustomer(Payment $payment, string $customerId, string $reason, bool $applyOldestFirst = true): array
     {
+        WithholdingTax::refuseCorrection($payment);
         $to = $this->customer($payment->company_id, $customerId);
         if ($to->id === $payment->customer_id) {
             throw ValidationException::withMessages(['customer_id' => 'That is already this payment\'s customer.']);
@@ -193,6 +194,7 @@ class CorrectionService
      */
     public function paymentSplit(Payment $payment, array $shares, string $reason): array
     {
+        WithholdingTax::refuseCorrection($payment);
         $total = round((float) $payment->amount, 2);
         $shares = array_values(array_filter(array_map(fn ($s) => ['customer_id' => (string) $s['customer_id'], 'amount' => round((float) $s['amount'], 2)], $shares), fn ($s) => $s['amount'] > 0));
         if (count($shares) < 2) {

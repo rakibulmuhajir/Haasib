@@ -62,8 +62,9 @@ class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
                 }
             }
 
+            $reversal = null;
             if ($transaction) {
-                app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+                $reversal = app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
             }
 
             $allocations = BillPaymentAllocation::where('company_id', $company->id)
@@ -98,7 +99,10 @@ class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
 
             $payment->delete();
 
-            return ['message' => "Payment {$payment->payment_number} voided"];
+            return [
+                'message' => "Payment {$payment->payment_number} voided",
+                'data' => ['id' => $payment->id, 'reversal_id' => $reversal?->id],
+            ];
         });
     }
 

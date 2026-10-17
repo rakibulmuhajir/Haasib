@@ -48,6 +48,12 @@ class TaxSettingsController extends Controller
             'taxSettings' => $taxSettings,
             'jurisdictions' => $jurisdictions,
             'taxRates' => $taxRates,
+            // Every withholding rate, stopped ones included, so one can be started again.
+            'withholdingRates' => TaxRate::forCompany($company->id)->ofType('withholding')
+                ->orderBy('section')->orderBy('name')->orderByDesc('effective_from')->get(),
+            // Suggestions for the withholding section; rates are never filled in.
+            'withholdingSections' => collect(\App\Modules\Accounting\Services\WithholdingTax::SECTIONS)
+                ->map(fn ($label, $section) => ['section' => $section, 'label' => $label])->values(),
             'taxGroups' => $taxGroups,
             'taxRegistrations' => $taxRegistrations,
             'taxExemptions' => $taxExemptions,
@@ -71,7 +77,18 @@ class TaxSettingsController extends Controller
     {
         $company = app(CurrentCompany::class)->getOrFail();
 
-        TaxRate::create(array_merge($request->validated(), [
+        $values = $request->validated();
+        if (($values['tax_type'] ?? null) === 'withholding') {
+            // Withholding rates are picked per payment, never a default; a missing jurisdiction
+            // and code are filled in for the owner.
+            $values['is_default'] = false;
+            $values['is_compound'] = false;
+            $values['applies_to'] ??= 'both';
+            $values['jurisdiction_id'] ??= $this->defaultJurisdictionId($company);
+            $values['code'] = ($values['code'] ?? null) ?: $this->withholdingCode($company->id, $values);
+        }
+
+        TaxRate::create(array_merge($values, [
             'company_id' => $company->id,
             'created_by_user_id' => auth()->id(),
             'updated_by_user_id' => auth()->id(),
@@ -80,7 +97,40 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax rate created successfully.');
     }
 
-    public function updateTaxRate(UpdateTaxRateRequest $request, $id)
+    private function defaultJurisdictionId($company): ?string
+    {
+        $settings = CompanyTaxSettings::where('company_id', $company->id)->first();
+        if ($settings?->default_jurisdiction_id) {
+            return $settings->default_jurisdiction_id;
+        }
+
+        $country = trim((string) $company->country);
+        $match = $country === '' ? null : Jurisdiction::active()->where('level', 'country')
+            ->where(fn ($q) => $q->whereRaw('lower(country_code) = ?', [strtolower($country)])->orWhereRaw('lower(name) = ?', [strtolower($country)]))
+            ->value('id');
+
+        return $match ?? Jurisdiction::active()->where('level', 'country')->orderBy('name')->value('id');
+    }
+
+    /** WHT-153-1-B from the section, made unique with the effective date when the code is taken. */
+    private function withholdingCode(string $companyId, array $values): string
+    {
+        $base = 'WHT-'.trim(preg_replace('/[^A-Z0-9]+/', '-', strtoupper((string) (($values['section'] ?? '') ?: $values['name']))), '-');
+        $base = substr($base, 0, 38);
+        $taken = fn (string $code) => TaxRate::withTrashed()->where('company_id', $companyId)->where('code', $code)->exists();
+
+        $code = $base;
+        if ($taken($code)) {
+            $code = $base.'-'.str_replace('-', '', (string) ($values['effective_from'] ?? now()->toDateString()));
+        }
+        while ($taken($code)) {
+            $code = $base.'-'.strtoupper(\Illuminate\Support\Str::random(4));
+        }
+
+        return $code;
+    }
+
+    public function updateTaxRate(UpdateTaxRateRequest $request, string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $taxRate = TaxRate::forCompany($company->id)->findOrFail($id);
@@ -92,7 +142,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax rate updated successfully.');
     }
 
-    public function deleteTaxRate(DeleteTaxRateRequest $request, $id)
+    public function deleteTaxRate(DeleteTaxRateRequest $request, string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $taxRate = TaxRate::forCompany($company->id)->findOrFail($id);
@@ -127,7 +177,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax group created successfully.');
     }
 
-    public function updateTaxGroup(CreateTaxGroupRequest $request, $id)
+    public function updateTaxGroup(CreateTaxGroupRequest $request, string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $taxGroup = TaxGroup::forCompany($company->id)->findOrFail($id);
@@ -149,7 +199,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax group updated successfully.');
     }
 
-    public function deleteTaxGroup($id)
+    public function deleteTaxGroup(string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $taxGroup = TaxGroup::forCompany($company->id)->findOrFail($id);
@@ -171,7 +221,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax registration created successfully.');
     }
 
-    public function updateTaxRegistration(CreateTaxRegistrationRequest $request, $id)
+    public function updateTaxRegistration(CreateTaxRegistrationRequest $request, string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $registration = CompanyTaxRegistration::forCompany($company->id)->findOrFail($id);
@@ -181,7 +231,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax registration updated successfully.');
     }
 
-    public function deleteTaxRegistration($id)
+    public function deleteTaxRegistration(string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $registration = CompanyTaxRegistration::forCompany($company->id)->findOrFail($id);
@@ -201,7 +251,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax exemption created successfully.');
     }
 
-    public function updateTaxExemption(CreateTaxExemptionRequest $request, $id)
+    public function updateTaxExemption(CreateTaxExemptionRequest $request, string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $exemption = TaxExemption::forCompany($company->id)->findOrFail($id);
@@ -211,7 +261,7 @@ class TaxSettingsController extends Controller
         return redirect()->back()->with('success', 'Tax exemption updated successfully.');
     }
 
-    public function deleteTaxExemption($id)
+    public function deleteTaxExemption(string $companySlug, $id)
     {
         $company = app(CurrentCompany::class)->getOrFail();
         $exemption = TaxExemption::forCompany($company->id)->findOrFail($id);

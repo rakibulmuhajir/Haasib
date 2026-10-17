@@ -40,6 +40,8 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'logo_url' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
             'category_id' => 'nullable|uuid',
+            'filer_status' => 'nullable|string|in:filer,non_filer,unknown',
+            'default_wht_rate_id' => 'nullable|uuid',
         ];
     }
 
@@ -140,6 +142,13 @@ class UpdateAction implements PaletteAction, \App\Contracts\DescribesPalette
         if (array_key_exists('tax_id', $params)) {
             $updates['tax_id'] = $params['tax_id'] ?: null;
             $changes[] = 'tax_id → '.($params['tax_id'] ?: 'removed');
+        }
+
+        // Withholding: filer status and the usual rate (only while tax is on).
+        $withholding = app(\App\Modules\Accounting\Services\WithholdingTax::class)->partyUpdates($company, $params, \App\Modules\Accounting\Services\WithholdingTax::SIDE_RECEIVED);
+        if ($withholding) {
+            $updates = array_merge($updates, $withholding);
+            $changes[] = 'withholding tax settings updated';
         }
 
         if (array_key_exists('credit_limit', $params)) {

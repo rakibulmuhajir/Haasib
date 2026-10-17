@@ -46,6 +46,14 @@ class CommandBus
     }
 
     /**
+     * The permission a command requires, or null when it needs none.
+     */
+    public function permissionFor(string $action): ?string
+    {
+        return $this->resolveHandler($action)->permission();
+    }
+
+    /**
      * List registered command names.
      *
      * @return array<int, string>

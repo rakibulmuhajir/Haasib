@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { localToday } from '@/composables/useEntryDate'
 import PageShell from '@/components/PageShell.vue'
 import InputError from '@/components/InputError.vue'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +31,10 @@ interface TaxRate {
   code: string
   name: string
   rate: number
+  rate_non_filer?: number | string | null
+  section?: string | null
+  applies_to?: 'payments_made' | 'payments_received' | 'both'
+  effective_from?: string
   tax_type: string
   is_active: boolean
   jurisdiction_id: string
@@ -79,6 +84,8 @@ const props = defineProps<{
   }
   jurisdictions: Jurisdiction[]
   taxRates: TaxRate[]
+  withholdingRates: TaxRate[]
+  withholdingSections: Array<{ section: string; label: string }>
   taxGroups: TaxGroup[]
   taxRegistrations: TaxRegistration[]
   taxExemptions: TaxExemption[]
@@ -121,6 +128,55 @@ const rateForm = useForm({
   is_active: true,
   description: '',
 })
+
+// Withholding tax (WHT): own rates, picked per payment. Never a default.
+const whtEditing = ref<string | null>(null)
+const whtForm = useForm({
+  section: '',
+  name: '',
+  rate: '' as number | string,
+  rate_non_filer: '' as number | string,
+  applies_to: 'both',
+  effective_from: localToday(),
+})
+const appliesToLabel: Record<string, string> = { both: 'Both', payments_made: 'Payments we make', payments_received: 'Payments we receive' }
+const pct = (value: number | string | null | undefined) => (value === null || value === undefined || value === '' ? '—' : `${Number(value)}%`)
+
+const salesPurchaseRates = computed(() => props.taxRates.filter((rate) => rate.tax_type !== 'withholding'))
+
+const resetWht = () => {
+  whtEditing.value = null
+  whtForm.reset()
+  whtForm.clearErrors()
+  whtForm.effective_from = localToday()
+}
+
+const editWht = (rate: TaxRate) => {
+  whtEditing.value = rate.id
+  whtForm.section = rate.section ?? ''
+  whtForm.name = rate.name
+  whtForm.rate = Number(rate.rate)
+  whtForm.rate_non_filer = rate.rate_non_filer === null || rate.rate_non_filer === undefined ? '' : Number(rate.rate_non_filer)
+  whtForm.applies_to = rate.applies_to ?? 'both'
+  whtForm.effective_from = (rate.effective_from ?? localToday()).slice(0, 10)
+}
+
+const saveWht = () => {
+  const editing = whtEditing.value
+  const form = whtForm.transform((data) => ({
+    ...data,
+    section: data.section || null,
+    rate_non_filer: data.rate_non_filer === '' ? null : data.rate_non_filer,
+    ...(editing ? {} : { tax_type: 'withholding' }),
+  }))
+  const options = { preserveScroll: true, onSuccess: resetWht, onFinish: () => whtForm.transform((data) => data) }
+  if (editing) form.put(`/${props.company.slug}/tax/rates/${editing}`, options)
+  else form.post(`/${props.company.slug}/tax/rates`, options)
+}
+
+const toggleWht = (rate: TaxRate) => {
+  useForm({ is_active: !rate.is_active }).put(`/${props.company.slug}/tax/rates/${rate.id}`, { preserveScroll: true })
+}
 
 const groupForm = useForm({
   jurisdiction_id: '',
@@ -309,7 +365,7 @@ const createExemption = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem :value="noneValue">None</SelectItem>
-                    <SelectItem v-for="rate in taxRates" :key="rate.id" :value="rate.id">
+                    <SelectItem v-for="rate in salesPurchaseRates" :key="rate.id" :value="rate.id">
                       {{ rate.code }} — {{ rate.rate }}%
                     </SelectItem>
                   </SelectContent>
@@ -324,7 +380,7 @@ const createExemption = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem :value="noneValue">None</SelectItem>
-                    <SelectItem v-for="rate in taxRates" :key="rate.id" :value="rate.id">
+                    <SelectItem v-for="rate in salesPurchaseRates" :key="rate.id" :value="rate.id">
                       {{ rate.code }} — {{ rate.rate }}%
                     </SelectItem>
                   </SelectContent>
@@ -417,7 +473,6 @@ const createExemption = () => {
                   <SelectContent>
                     <SelectItem value="sales">Sales</SelectItem>
                     <SelectItem value="purchase">Purchase</SelectItem>
-                    <SelectItem value="withholding">Withholding</SelectItem>
                     <SelectItem value="both">Both</SelectItem>
                   </SelectContent>
                 </Select>
@@ -469,6 +524,105 @@ const createExemption = () => {
             <Button class="w-full" :disabled="!canManage || rateForm.processing" @click="createRate">
               Create rate
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card variant="form" class="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Withholding tax rates (WHT)</CardTitle>
+            <CardDescription>
+              Tax held back when paying vendors or when customers pay us. Rates change every budget, so enter them here; filers and non-filers differ.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <p v-if="!taxSettings.tax_enabled" class="text-sm text-muted-foreground">
+              Charge tax is off, so withholding is not offered on payments yet.
+            </p>
+
+            <div v-if="withholdingRates.length" class="overflow-x-auto rounded-lg border">
+              <table class="w-full text-sm">
+                <thead class="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th class="px-3 py-2">Section</th>
+                    <th class="px-3 py-2">Description</th>
+                    <th class="px-3 py-2 text-right">Filer</th>
+                    <th class="px-3 py-2 text-right">Non-filer</th>
+                    <th class="px-3 py-2">For</th>
+                    <th class="px-3 py-2">From</th>
+                    <th class="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="rate in withholdingRates" :key="rate.id" class="border-t" :class="{ 'opacity-60': !rate.is_active }">
+                    <td class="px-3 py-2 font-mono">{{ rate.section || '—' }}</td>
+                    <td class="px-3 py-2">{{ rate.name }} <Badge v-if="!rate.is_active" variant="outline">Stopped</Badge></td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ pct(rate.rate) }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ pct(rate.rate_non_filer) }}</td>
+                    <td class="px-3 py-2">{{ appliesToLabel[rate.applies_to ?? 'both'] }}</td>
+                    <td class="px-3 py-2 tabular-nums">{{ (rate.effective_from ?? '').slice(0, 10) }}</td>
+                    <td class="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" :disabled="!canManage" @click="editWht(rate)">Edit</Button>
+                      <Button variant="ghost" size="sm" :disabled="!canManage" @click="toggleWht(rate)">{{ rate.is_active ? 'Stop' : 'Start' }}</Button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="text-sm text-muted-foreground">No withholding rates yet.</p>
+
+            <div class="space-y-4 rounded-lg border p-3">
+              <p class="text-sm font-medium">{{ whtEditing ? 'Change rate' : 'Add a rate' }}</p>
+              <div class="grid gap-4 md:grid-cols-3">
+                <div class="space-y-2">
+                  <Label for="wht_section">Section</Label>
+                  <Input id="wht_section" v-model="whtForm.section" list="wht-sections" placeholder="153(1)(b)" :disabled="!canManage" />
+                  <datalist id="wht-sections">
+                    <option v-for="s in withholdingSections" :key="s.section" :value="s.section">{{ s.label }}</option>
+                  </datalist>
+                  <InputError :message="whtForm.errors.section" />
+                </div>
+                <div class="space-y-2 md:col-span-2">
+                  <Label for="wht_name">Description</Label>
+                  <Input id="wht_name" v-model="whtForm.name" placeholder="Services" :disabled="!canManage" />
+                  <InputError :message="whtForm.errors.name" />
+                </div>
+              </div>
+              <div class="grid gap-4 md:grid-cols-4">
+                <div class="space-y-2">
+                  <Label for="wht_rate">Filer (%)</Label>
+                  <Input id="wht_rate" v-model="whtForm.rate" type="number" min="0" max="100" step="0.01" :disabled="!canManage" />
+                  <InputError :message="whtForm.errors.rate" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="wht_rate_non_filer">Non-filer (%)</Label>
+                  <Input id="wht_rate_non_filer" v-model="whtForm.rate_non_filer" type="number" min="0" max="100" step="0.01" :disabled="!canManage" />
+                  <InputError :message="whtForm.errors.rate_non_filer" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="wht_applies_to">For</Label>
+                  <Select v-model="whtForm.applies_to" :disabled="!canManage">
+                    <SelectTrigger id="wht_applies_to"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="both">Both</SelectItem>
+                      <SelectItem value="payments_made">Payments we make</SelectItem>
+                      <SelectItem value="payments_received">Payments we receive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <InputError :message="whtForm.errors.applies_to" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="wht_effective_from">From</Label>
+                  <Input id="wht_effective_from" v-model="whtForm.effective_from" type="date" :disabled="!canManage" />
+                  <InputError :message="whtForm.errors.effective_from" />
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <Button :disabled="!canManage || whtForm.processing || !whtForm.name || whtForm.rate === ''" @click="saveWht">
+                  {{ whtEditing ? 'Save changes' : 'Add rate' }}
+                </Button>
+                <Button v-if="whtEditing" variant="outline" @click="resetWht">Cancel</Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

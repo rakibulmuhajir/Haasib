@@ -93,12 +93,13 @@ class VendorController extends Controller
         return redirect("/{$company->slug}/vendors")->with('success', 'Vendor created');
     }
 
-    public function update(UpdateVendorRequest $request, string $vendor): RedirectResponse
+    public function update(UpdateVendorRequest $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        // From the route, not a method argument: the first positional argument is {company}.
         app(CommandBus::class)->dispatch('vendor.update', [
             ...$request->validated(),
-            'id' => $vendor,
+            'id' => $request->route('vendor'),
             'company_id' => $company->id,
         ], $request->user());
 
@@ -196,6 +197,7 @@ class VendorController extends Controller
             ],
             'vendor' => $record,
             'apAccounts' => $apAccounts,
+            'whtRates' => app(\App\Modules\Accounting\Services\WithholdingTax::class)->ratesFor($company, \App\Modules\Accounting\Services\WithholdingTax::SIDE_MADE),
             'vendorTypes' => $this->offeredVendorTypes($company, $record->vendor_type ?? null),
         ]);
     }

@@ -668,3 +668,9 @@ ALTER TABLE acct.bill_line_items ADD CONSTRAINT bill_line_items_direct_quantity_
 
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.
+
+### Withholding tax on bill payments (2026-10-16)
+- `acct.vendors`: `filer_status` varchar(20) not null default `unknown` (check `filer`, `non_filer`, `unknown`), `default_wht_rate_id` uuid nullable FK -> `acct.tax_rates.id` (SET NULL). The NTN/CNIC stays in `tax_id`.
+- `acct.bill_payments`: `wht_rate_id` uuid nullable FK -> `acct.tax_rates.id` (SET NULL), `wht_rate` numeric(8,4) nullable (the % applied), `wht_amount` numeric(15,2) not null default 0 (base currency), `wht_section` varchar(50) nullable, `wht_filer_status` varchar(20) nullable. A snapshot taken at posting time, for the register and certificate.
+- Posting (`bill_payment.create` with `wht_rate_id`, tax on): DR AP `amount`; CR bank/cash `amount - wht`; CR Withholding Tax Payable `wht`. `wht` = payment amount (base) x rate, rounded by the company's tax rounding settings, spread over split rows. Voiding reverses the journal, so the WHT line reverses with it. Editing the amount recomputes `wht_amount` at the stored `wht_rate`.
+- Corrections that move or split a payment (`correction.bill_payment_*`) are refused for a payment with WHT: void it and enter it again.

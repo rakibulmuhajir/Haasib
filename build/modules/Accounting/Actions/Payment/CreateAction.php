@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\PaymentAllocation;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Accounting\Services\PaymentAllocationService;
+use App\Modules\Accounting\Services\WithholdingTax;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +54,11 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'allocations.*.amount' => 'required_with:allocations|numeric|min:0.01',
             'amount' => 'required|numeric|min:0.01|max:999999999.99',
             'transaction_charge' => 'nullable|numeric|min:0|max:999999999.99',
+            // Tax the customer withheld from what they paid. `amount` stays the total settled
+            // (invoice side); the bank receives amount minus this. Read only while tax is on.
+            'wht_rate_id' => 'nullable|uuid',
+            'wht_amount' => 'nullable|numeric|min:0|max:999999999.99',
+            'wht_certificate_number' => 'nullable|string|max:100',
             'method' => 'required|string|in:cash,check,card,bank_transfer,other',
             'currency' => 'nullable|string|size:3|uppercase', // must match invoice currency or base
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
@@ -111,6 +117,24 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
         $baseAmount = $currency === $baseCurrency ? round($amount, 2) : round($amount * ($exchangeRate ?? 1), 2);
         $baseTransactionCharge = round($transactionCharge * ($exchangeRate ?? 1), 2);
 
+        // Tax the customer withheld: a flat amount, or a rate applied to the total settled.
+        // An explicit amount wins when both are given.
+        $withholding = app(WithholdingTax::class);
+        $wht = $withholding->resolve($company, $params['wht_rate_id'] ?? null, WithholdingTax::SIDE_RECEIVED, $customer->filer_status);
+        $whtBase = 0.0;
+        $whtRate = null;
+        if ($withholding->enabled($company)) {
+            if ((float) ($params['wht_amount'] ?? 0) > 0) {
+                $whtBase = round((float) $params['wht_amount'] * ($exchangeRate ?? 1), 2);
+            } elseif ($wht) {
+                $whtRate = $wht['rate'];
+                $whtBase = $withholding->amount($company, $baseAmount, $whtRate);
+            }
+        }
+        if ($whtBase > $baseAmount - $baseTransactionCharge + 0.001) {
+            throw ValidationException::withMessages(['wht_amount' => 'Tax withheld cannot be more than the amount paid.']);
+        }
+
         $payment = Payment::create([
             'company_id' => $company->id,
             'customer_id' => $customer->id,
@@ -123,6 +147,12 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'base_amount' => $baseAmount,
             'transaction_charge' => $transactionCharge,
             'base_transaction_charge' => $baseTransactionCharge,
+            'wht_rate_id' => $whtBase > 0 ? ($wht['rate_id'] ?? null) : null,
+            'wht_rate' => $whtBase > 0 ? $whtRate : null,
+            'wht_amount' => $whtBase,
+            'wht_section' => $whtBase > 0 ? ($wht['section'] ?? null) : null,
+            'wht_filer_status' => $whtBase > 0 ? ($wht['filer_status'] ?? $customer->filer_status) : null,
+            'wht_certificate_number' => $whtBase > 0 ? ($params['wht_certificate_number'] ?? null) : null,
             'payment_method' => $params['method'] ?? 'bank_transfer',
             'deposit_account_id' => $params['deposit_account_id'] ?? null,
             'reference_number' => $params['reference'] ?? null,
@@ -415,6 +445,7 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 'deposit_account_id' => ['inputType' => 'search', 'searchEntity' => 'account', 'hint' => 'Deposited into account'],
                 'amount' => ['hint' => 'Amount'],
                 'date' => ['hint' => 'Date'],
+                'wht_rate_id' => ['inputType' => 'search', 'searchEntity' => 'wht_rate', 'hint' => 'Tax they withheld'],
             ],
         ];
     }

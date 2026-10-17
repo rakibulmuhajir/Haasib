@@ -72,7 +72,7 @@ class StorePayslipRequest extends BaseFormRequest
             'lines.*.salary_advance_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists(SalaryAdvance::class, 'id')->where('company_id', $company->id),
+                Rule::exists(SalaryAdvance::class, 'id')->where('company_id', $company->id)->whereNull('deleted_at'),
             ],
             'lines.*.description' => 'nullable|string|max:255',
             'lines.*.quantity' => 'required|numeric|min:0',

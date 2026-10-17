@@ -231,3 +231,22 @@ test('the settings endpoint saves, keeps other keys, and rejects a non-cash acco
         ->and($settings['modules']['payroll'])->toBeTrue()
         ->and(app(PayrollPostingService::class)->paymentRecording($company->id))->toBe(['mode' => 'on_approval', 'account_id' => $cash->id]);
 });
+
+test('the employee statement ignores advances deleted when a daily close was reopened and posted again', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-10-15 10:00:00'));
+    [$user, $company, $employee] = payRecCompany();
+    $make = fn () => SalaryAdvance::create([
+        'company_id' => $company->id, 'employee_id' => $employee->id, 'advance_date' => '2026-10-10',
+        'amount' => 12000, 'amount_outstanding' => 12000, 'reason' => 'Daily advance', 'status' => 'pending', 'payment_method' => 'cash',
+    ]);
+    // Saved, reopened and posted again twice: two deleted copies, one live advance.
+    $make()->delete();
+    $make()->delete();
+    $make();
+
+    $statement = app(\App\Modules\Payroll\Services\EmployeeStatementService::class)->statement($employee, '2026-10-01', '2026-10-15');
+    $advances = collect($statement['rows'])->where('type', 'advance');
+
+    expect($advances)->toHaveCount(1)
+        ->and((float) $advances->first()['money_out'])->toBe(12000.0);
+});

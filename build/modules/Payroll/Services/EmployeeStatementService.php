@@ -134,8 +134,11 @@ class EmployeeStatementService
             }
         }
 
+        // Soft-deleted advances are gone: a daily close that is reopened and posted again
+        // deletes its advances and writes them afresh, so counting deleted rows multiplied them.
         $advances = DB::table('pay.salary_advances')
             ->where('company_id', $companyId)->where('employee_id', $employee->id)
+            ->whereNull('deleted_at')
             ->where('status', '!=', 'cancelled')
             ->get(['id', 'advance_date', 'amount', 'reason']);
         foreach ($advances as $a) {
@@ -147,6 +150,7 @@ class EmployeeStatementService
             ->join('pay.salary_advances as a', 'a.id', '=', 'r.salary_advance_id')
             ->where('r.company_id', $companyId)->where('a.employee_id', $employee->id)
             ->whereIn('r.recovery_type', ['manual_repayment', 'adjustment'])
+            ->whereNull('a.deleted_at')
             ->where('a.status', '!=', 'cancelled')
             ->get(['r.recovery_date', 'r.amount', 'r.recovery_type']);
         foreach ($repaid as $r) {

@@ -318,3 +318,36 @@ test('changing only a paid bill\'s date saves it and reposts the bill on the new
         ->and(Transaction::find($before)->reversed_by_id)->not->toBeNull()
         ->and($bill->status)->toBe('paid');
 });
+
+test('a received bill whose lines were updated saves a date-only change from its own edit page', function () {
+    $f = billEditFixture();
+    BillLineItem::create([
+        'company_id' => $f['company']->id, 'bill_id' => $f['bill']->id, 'line_number' => 2,
+        'item_id' => null, 'description' => 'Delivery charge', 'quantity' => 1, 'quantity_received' => 0,
+        'unit_price' => 0.01, 'tax_rate' => 0, 'discount_rate' => 0, 'line_total' => 0.01, 'tax_amount' => 0, 'total' => 0.01,
+        'expense_account_id' => $f['inventory']->id, 'created_by_user_id' => $f['user']->id,
+    ]);
+    // Updating line 1 after line 2 exists is what leaves the table rows out of line order --
+    // the production shape (BILL-00045 loaded as 3,4,5,1,2).
+    $f['bill']->lineItems()->where('line_number', 1)->update([
+        'item_id' => $f['item']->id, 'quantity_received' => 100, 'expense_account_id' => $f['inventory']->id,
+    ]);
+
+    $lines = null;
+    $this->actingAs($f['user'])->get("/{$f['company']->slug}/bills/{$f['bill']->id}/edit")->assertOk()
+        ->assertInertia(function ($page) use (&$lines) {
+            $lines = $page->toArray()['props']['bill']['line_items'];
+        });
+    expect(array_column($lines, 'line_number'))->toBe([1, 2]);
+
+    $this->put("/{$f['company']->slug}/bills/{$f['bill']->id}", [
+        'vendor_id' => $f['vendor']->id, 'bill_date' => '2026-09-08', 'due_date' => '2026-09-08',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'payment_terms' => 0,
+        'line_items' => array_map(fn ($l) => array_intersect_key($l, array_flip([
+            'item_id', 'warehouse_id', 'description', 'quantity', 'direct_quantity', 'unit_price', 'line_total', 'tax_rate', 'discount_rate', 'expense_account_id',
+        ])), $lines),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    expect(session('error'))->toBeNull()
+        ->and($f['bill']->fresh()->bill_date->toDateString())->toBe('2026-09-08');
+});

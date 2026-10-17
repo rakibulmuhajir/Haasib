@@ -333,6 +333,8 @@ class BillController extends Controller
         // document is filed under.
         $record = \App\Modules\Accounting\Models\Bill::with([
             'vendor:id,name,logo_url,email,phone,address,tax_id',
+            // In line order: the bill's lines are numbered, the table rows are not.
+            'lineItems' => fn ($q) => $q->orderBy('line_number'),
             'lineItems.item',
         ])
             ->where('company_id', $companyModel->id)
@@ -442,7 +444,7 @@ class BillController extends Controller
     public function edit(string $company, string $bill): RedirectResponse|Response
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\Bill::with('lineItems')
+        $record = \App\Modules\Accounting\Models\Bill::with(['lineItems' => fn ($q) => $q->orderBy('line_number')])
             ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
 

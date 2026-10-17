@@ -49,6 +49,9 @@ export interface QuickDefaults {
   currency: string
   default_bank_id: string | null
   default_cash_id: string | null
+  /** Settings > Quick entry: where money received goes / where money paid comes from. */
+  receive_account_id?: string | null
+  pay_account_id?: string | null
   bank_charges_account_id: string | null
   banks: Account[]
   cash: Account[]
@@ -460,9 +463,28 @@ function defaultBank(d: QuickDefaults): Account | null {
   return d.banks.find((a) => a.id === d.default_bank_id) ?? d.banks[0] ?? null
 }
 
-/** Cash or bank account the money moves through when the line names none: the cash drawer first. */
+/** Cash or bank account the money moves through when nothing is set: the cash drawer first. */
 function defaultSettlement(d: QuickDefaults): Account | null {
   return defaultCash(d) ?? defaultBank(d)
+}
+
+type Direction = 'in' | 'out'
+
+/** The account chosen in settings for money in (received, sale) or out (paid, expense), if still usable. */
+function configured(d: QuickDefaults, direction: Direction): Account | null {
+  const id = direction === 'in' ? d.receive_account_id : d.pay_account_id
+  return id ? [...d.cash, ...d.banks].find((a) => a.id === id) ?? null : null
+}
+
+/** Where money goes, or comes from, when the line names no account: the setting, else the cash drawer. */
+function settlementFallback(d: QuickDefaults, direction: Direction): Account | null {
+  return configured(d, direction) ?? defaultSettlement(d)
+}
+
+/** Bank for deposit / withdraw / charge when none is named: the setting if it is a bank, else the company default. */
+function bankFallback(d: QuickDefaults, direction: Direction): Account | null {
+  const chosen = configured(d, direction)
+  return (chosen && d.banks.find((a) => a.id === chosen.id)) ?? defaultBank(d)
 }
 
 /** Names the bank at the front of a charge line; whatever follows is the note. */
@@ -491,16 +513,16 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
   const when = { date: day, dateLabel: formatDay(day) }
 
   // A named bank, or the company default when none was typed.
-  const bankFor = (field: string, name: string | null): Picked<Account> => {
+  const bankFor = (field: string, name: string | null, direction: Direction): Picked<Account> => {
     if (name) return pickAccount(field, 'bank', d.banks, name, picks)
-    const fallback = defaultBank(d)
+    const fallback = bankFallback(d, direction)
     return fallback
       ? { ok: true, value: fallback }
       : { ok: false, result: { status: 'error', message: 'Add a bank account first' } }
   }
-  const settlementFor = (field: string, name: string | null): Picked<Account> => {
+  const settlementFor = (field: string, name: string | null, direction: Direction): Picked<Account> => {
     if (name) return pickAccount(field, 'account', [...d.cash, ...d.banks], name, picks)
-    const fallback = defaultSettlement(d)
+    const fallback = settlementFallback(d, direction)
     return fallback
       ? { ok: true, value: fallback }
       : { ok: false, result: { status: 'error', message: 'Add a cash or bank account first' } }
@@ -513,11 +535,11 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
   switch (entry.kind) {
     case 'deposit':
     case 'withdraw': {
-      const bank = bankFor('bank', entry.bank)
+      const deposit = entry.kind === 'deposit'
+      const bank = bankFor('bank', entry.bank, deposit ? 'in' : 'out')
       if (!bank.ok) return bank.result
       const cash = cashDrawer()
       if (!cash.ok) return cash.result
-      const deposit = entry.kind === 'deposit'
       return {
         status: 'ready',
         key: 'bank_transaction.create',
@@ -556,7 +578,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         bankName = split.bank
         note = split.note
       }
-      const bank = bankFor('bank', bankName)
+      const bank = bankFor('bank', bankName, 'out')
       if (!bank.ok) return bank.result
       if (!d.bank_charges_account_id) return { status: 'error', message: 'Add a Bank Charges account first' }
       const charges = d.expense.find((a) => a.id === d.bank_charges_account_id)
@@ -575,7 +597,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
     case 'received': {
       const customer = await pickParty('customer', entry.party, lookups, picks)
       if (!customer.ok) return customer.result
-      const into = settlementFor('into', entry.into)
+      const into = settlementFor('into', entry.into, 'in')
       if (!into.ok) return into.result
       return {
         status: 'ready',
@@ -594,7 +616,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
     case 'paid': {
       const vendor = await pickParty('vendor', entry.party, lookups, picks)
       if (!vendor.ok) return vendor.result
-      const from = settlementFor('from', entry.from)
+      const from = settlementFor('from', entry.from, 'out')
       if (!from.ok) return from.result
 
       // Settle the supplier's open bills oldest first; whatever is left stays as an advance.
@@ -632,7 +654,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
     case 'expense': {
       const account = pickAccount('expense', 'expense account', d.expense, entry.what, picks, true)
       if (!account.ok) return account.result
-      const from = settlementFor('from', entry.from)
+      const from = settlementFor('from', entry.from, 'out')
       if (!from.ok) return from.result
       return {
         status: 'ready',
@@ -647,7 +669,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
     }
 
     case 'sale': {
-      const into = defaultSettlement(d)
+      const into = settlementFallback(d, 'in')
       return {
         status: 'ready',
         key: 'sale.create',

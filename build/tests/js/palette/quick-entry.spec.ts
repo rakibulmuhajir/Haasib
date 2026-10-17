@@ -413,3 +413,53 @@ describe('dates', () => {
     expect(formatDay('2028-02-29')).toBe('Tue 29 Feb 2028')
   })
 })
+
+describe('quick entry defaults from settings', () => {
+  const withSettings = (over: Partial<QuickDefaults>): Lookups => ({
+    ...lookups({ customer: [{ value: 'cust-1', label: 'Al Noor' }], vendor: [{ value: 'ven-1', label: 'Karachi Office' }] }),
+    defaults: { ...defaults, ...over },
+  })
+  const run = (line: string, lk: Lookups) => resolveQuickEntry(parseQuickEntry(line)!, lk)
+
+  it('received and sale go to the money-received account', async () => {
+    const lk = withSettings({ receive_account_id: 'bank-hbl' })
+    expect(await run('received 100 from al noor', lk)).toMatchObject({ params: { deposit_account_id: 'bank-hbl', method: 'bank_transfer' } })
+    expect(await run('sale 100', lk)).toMatchObject({ params: { deposit_account_id: 'bank-hbl' } })
+  })
+
+  it('paid and expense come from the money-paid account', async () => {
+    const lk = withSettings({ pay_account_id: 'bank-hbl' })
+    expect(await run('paid 100 to karachi office', lk)).toMatchObject({ params: { payment_account_id: 'bank-hbl', payment_method: 'bank_transfer' } })
+    expect(await run('expense 100 tea', lk)).toMatchObject({ params: { paid_from_account_id: 'bank-hbl' } })
+  })
+
+  it('an account named in the line wins over the setting', async () => {
+    const lk = withSettings({ receive_account_id: 'bank-hbl', pay_account_id: 'bank-hbl' })
+    expect(await run('received 100 from al noor into meezan', lk)).toMatchObject({ params: { deposit_account_id: 'bank-meezan' } })
+    expect(await run('paid 100 to karachi office from cash on hand', lk)).toMatchObject({ params: { payment_account_id: 'cash-1', payment_method: 'cash' } })
+    expect(await run('expense 100 tea from meezan', lk)).toMatchObject({ params: { paid_from_account_id: 'bank-meezan' } })
+  })
+
+  it('a cash account as the setting is used like any other', async () => {
+    const lk = withSettings({ receive_account_id: 'cash-1', default_cash_id: 'cash-1' })
+    expect(await run('received 100 from al noor', lk)).toMatchObject({ params: { deposit_account_id: 'cash-1', method: 'cash' } })
+  })
+
+  it('deposit uses the money-received account when it is a bank; withdraw and charge the money-paid one', async () => {
+    const lk = withSettings({ receive_account_id: 'bank-hbl', pay_account_id: 'bank-hbl2' })
+    expect(await run('deposit 100', lk)).toMatchObject({ params: { bank_account_id: 'bank-hbl' } })
+    expect(await run('withdraw 100', lk)).toMatchObject({ params: { bank_account_id: 'bank-hbl2' } })
+    expect(await run('bank charge 50', lk)).toMatchObject({ params: { bank_account_id: 'bank-hbl2' } })
+    expect(await run('deposit 100 meezan', lk)).toMatchObject({ params: { bank_account_id: 'bank-meezan' } })
+  })
+
+  it('deposit falls back to the company default bank when the setting is cash or empty', async () => {
+    expect(await run('deposit 100', withSettings({ receive_account_id: 'cash-1' }))).toMatchObject({ params: { bank_account_id: 'bank-meezan' } })
+    expect(await run('deposit 100', withSettings({ receive_account_id: null, pay_account_id: null }))).toMatchObject({ params: { bank_account_id: 'bank-meezan' } })
+  })
+
+  it('empty or stale settings change nothing', async () => {
+    expect(await run('received 100 from al noor', withSettings({ receive_account_id: 'gone' }))).toMatchObject({ params: { deposit_account_id: 'cash-1' } })
+    expect(await run('expense 100 tea', withSettings({}))).toMatchObject({ params: { paid_from_account_id: 'cash-1' } })
+  })
+})

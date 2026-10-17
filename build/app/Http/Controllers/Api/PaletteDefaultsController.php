@@ -35,6 +35,13 @@ class PaletteDefaultsController extends Controller
         // The sales page's own notion of the default bank, when it is a bank account.
         $defaultBank = $banks->firstWhere('id', $company->bank_account_id) ?? $banks->first();
 
+        // Where one-line entries put money when the line names no account (Settings, Quick entry).
+        // An account that has since been closed or changed type is ignored.
+        $chosen = $company->quickEntryDefaults();
+        $usable = $cash->concat($banks);
+        $receive = $usable->firstWhere('id', $chosen['receive_account_id']);
+        $pay = $usable->firstWhere('id', $chosen['pay_account_id']);
+
         $charges = $expense->first(fn ($a) => (bool) preg_match('/bank\s+(charge|fee|service)/i', $a->name));
 
         return response()->json([
@@ -42,6 +49,8 @@ class PaletteDefaultsController extends Controller
             'currency' => $company->base_currency,
             'default_bank_id' => $defaultBank?->id,
             'default_cash_id' => $cash->first()?->id,
+            'receive_account_id' => $receive?->id,
+            'pay_account_id' => $pay?->id,
             'bank_charges_account_id' => $charges?->id,
             'banks' => $banks->values(),
             'cash' => $cash->values(),

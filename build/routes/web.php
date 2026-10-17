@@ -9,6 +9,7 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\UsersPageController;
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AccountingDefaultsController;
+use App\Modules\Accounting\Http\Controllers\QuickEntryDefaultsController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetReportController;
 use App\Modules\Accounting\Http\Controllers\BankAccountController;
 use App\Modules\Accounting\Http\Controllers\BankFeedController;
@@ -233,6 +234,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->whereUuid('account')->name('accounts.destroy');
         Route::get('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'edit'])->name('accounting-defaults.edit');
         Route::patch('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'update'])->name('accounting-defaults.update');
+        Route::get('/{company}/accounting/quick-entry', [QuickEntryDefaultsController::class, 'edit'])->name('quick-entry-defaults.edit');
+        Route::patch('/{company}/accounting/quick-entry', [QuickEntryDefaultsController::class, 'update'])->name('quick-entry-defaults.update');
 
         // Vendors
         Route::get('/{company}/vendors', [VendorController::class, 'index'])->name('vendors.index');

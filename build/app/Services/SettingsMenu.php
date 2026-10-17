@@ -43,6 +43,7 @@ class SettingsMenu
             $section('Accounting', [
                 $item('Chart of accounts', 'Every account in the books', 'accounts', $can(Permissions::ACCOUNT_VIEW)),
                 $item('Default accounts', 'Receivables, payables, retained earnings and other company-wide accounts', 'accounting/default-accounts', $can(Permissions::ACCOUNT_UPDATE)),
+                $item('Quick entry', 'Where typed receipts, payments and sales go when no account is named', 'accounting/quick-entry', $can(Permissions::ACCOUNT_UPDATE)),
                 $item('Opening balances', 'Cash, banks, stock and balances on the start date', 'accounting/opening-balances', $can(Permissions::OPENING_BALANCE_VIEW)),
                 $item('Tax', 'Tax registration and rates', 'tax/settings', $can(Permissions::TAX_VIEW)),
                 $item('Posting templates', 'How documents post to the books', 'posting-templates', $can(Permissions::ACCOUNT_UPDATE)),

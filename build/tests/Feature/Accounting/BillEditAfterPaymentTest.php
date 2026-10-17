@@ -343,9 +343,13 @@ test('a received bill whose lines were updated saves a date-only change from its
     $this->put("/{$f['company']->slug}/bills/{$f['bill']->id}", [
         'vendor_id' => $f['vendor']->id, 'bill_date' => '2026-09-08', 'due_date' => '2026-09-08',
         'currency' => 'PKR', 'base_currency' => 'PKR', 'payment_terms' => 0,
-        'line_items' => array_map(fn ($l) => array_intersect_key($l, array_flip([
-            'item_id', 'warehouse_id', 'description', 'quantity', 'direct_quantity', 'unit_price', 'line_total', 'tax_rate', 'discount_rate', 'expense_account_id',
-        ])), $lines),
+        // As bills/Edit.vue sends them: the stored figures, numbers parsed with Number().
+        'line_items' => array_map(fn ($l) => array_merge(array_intersect_key($l, array_flip([
+            'item_id', 'warehouse_id', 'description', 'tax_rate', 'discount_rate', 'expense_account_id',
+        ])), [
+            'quantity' => (float) $l['quantity'], 'direct_quantity' => (float) ($l['direct_quantity'] ?? 0),
+            'unit_price' => (float) $l['unit_price'], 'line_total' => (float) $l['line_total'],
+        ]), $lines),
     ])->assertSessionHasNoErrors()->assertRedirect();
 
     expect(session('error'))->toBeNull()

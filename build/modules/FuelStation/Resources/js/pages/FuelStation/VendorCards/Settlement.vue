@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { localToday } from '@/composables/useEntryDate'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
@@ -94,6 +94,8 @@ const props = defineProps<{
   cardChargeChannels?: CardChargeChannel[]
   cardCharges?: CardChargeRow[]
   canRecordCharge?: boolean
+  // The chosen card's sales over the dialog's period (partial reload), for a % charge.
+  cardChargeSales?: number | null
 }>()
 
 // The charge the bank or card supplier kept, entered by hand -- usually at month end, so the
@@ -118,9 +120,25 @@ const chargeForm = useForm({
   period_from: monthOf(monthEnd()).from,
   period_to: monthOf(monthEnd()).to,
   amount: null as number | null,
+  percent: null as number | null,
   reference: '',
   notes: '',
 })
+// A charge is entered as rupees from the statement, or as a % of the card's sales in the period.
+const chargeBy = ref<'amount' | 'percent'>('amount')
+const loadChargeSales = () => {
+  if (!chargeForm.channel_code || !chargeForm.period_from || !chargeForm.period_to) return
+  router.reload({
+    only: ['cardChargeSales'],
+    data: { charge_channel: chargeForm.channel_code, charge_from: chargeForm.period_from, charge_to: chargeForm.period_to },
+  })
+}
+watch(() => [chargeForm.channel_code, chargeForm.period_from, chargeForm.period_to, showChargeDialog.value], () => {
+  if (showChargeDialog.value) loadChargeSales()
+})
+const chargeSales = computed(() => Number(props.cardChargeSales ?? 0))
+const chargeFromPercent = computed(() => Math.round(chargeSales.value * Number(chargeForm.percent || 0)) / 100)
+const chargeRate = computed(() => (chargeSales.value > 0 && chargeForm.amount ? (Number(chargeForm.amount) / chargeSales.value) * 100 : null))
 const chargeChannel = computed(() => (props.cardChargeChannels ?? []).find((c) => c.code === chargeForm.channel_code))
 const chargeComesFrom = (c: CardChargeChannel | undefined) =>
   !c ? '' : c.settles_to === 'supplier' ? `Added to what you owe ${c.vendor_name}` : `Taken from ${c.account_name}`
@@ -134,7 +152,11 @@ const openChargeDialog = () => {
   showChargeDialog.value = true
 }
 const submitCharge = () => {
-  chargeForm.post(`/${companySlug.value}/fuel/card-charges`, {
+  chargeForm.transform((data) => ({
+    ...data,
+    amount: chargeBy.value === 'amount' ? data.amount : null,
+    percent: chargeBy.value === 'percent' ? data.percent : null,
+  })).post(`/${companySlug.value}/fuel/card-charges`, {
     preserveScroll: true,
     onSuccess: () => { showChargeDialog.value = false },
   })
@@ -674,9 +696,16 @@ const todayTableData = computed(() => {
               <InputError :message="chargeForm.errors.charge_date" />
             </div>
             <div class="space-y-2">
-              <Label>Charge</Label>
-              <Input v-model.number="chargeForm.amount" type="number" min="0.01" step="0.01" />
-              <InputError :message="chargeForm.errors.amount" />
+              <div class="flex items-center justify-between gap-2">
+                <Label>Charge</Label>
+                <div class="flex rounded-md border text-xs" role="group" aria-label="Enter the charge as">
+                  <button type="button" class="px-2 py-0.5" :class="chargeBy === 'amount' ? 'bg-muted font-medium' : 'text-muted-foreground'" @click="chargeBy = 'amount'">Rs</button>
+                  <button type="button" class="px-2 py-0.5" :class="chargeBy === 'percent' ? 'bg-muted font-medium' : 'text-muted-foreground'" @click="chargeBy = 'percent'">%</button>
+                </div>
+              </div>
+              <Input v-if="chargeBy === 'amount'" v-model.number="chargeForm.amount" type="number" min="0.01" step="0.01" placeholder="From the statement" />
+              <Input v-else v-model.number="chargeForm.percent" type="number" min="0.01" max="10" step="0.01" placeholder="e.g. 0.78" />
+              <InputError :message="chargeForm.errors.amount || chargeForm.errors.percent" />
             </div>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
@@ -691,6 +720,13 @@ const todayTableData = computed(() => {
               <InputError :message="chargeForm.errors.period_to" />
             </div>
           </div>
+          <p class="text-xs text-muted-foreground">
+            <template v-if="cardChargeSales === null || cardChargeSales === undefined">Card sales loading…</template>
+            <template v-else-if="chargeSales <= 0">No card sales in this period.</template>
+            <template v-else>
+              Card sales {{ formatCurrency(chargeSales) }}<template v-if="chargeBy === 'percent' && chargeForm.percent"> · charge {{ formatCurrency(chargeFromPercent) }}</template><template v-else-if="chargeBy === 'amount' && chargeRate !== null"> · {{ +chargeRate.toFixed(2) }}%</template>
+            </template>
+          </p>
           <div class="space-y-2">
             <Label>Reference</Label>
             <Input v-model="chargeForm.reference" maxlength="100" placeholder="Statement no." />
@@ -698,7 +734,7 @@ const todayTableData = computed(() => {
           </div>
           <DialogFooter class="gap-2">
             <Button type="button" variant="outline" @click="showChargeDialog = false">Cancel</Button>
-            <Button type="submit" :disabled="chargeForm.processing || !chargeForm.channel_code || !chargeForm.amount">Record charge</Button>
+            <Button type="submit" :disabled="chargeForm.processing || !chargeForm.channel_code || !(chargeBy === 'amount' ? chargeForm.amount : chargeForm.percent)">Record charge</Button>
           </DialogFooter>
         </form>
       </DialogContent>

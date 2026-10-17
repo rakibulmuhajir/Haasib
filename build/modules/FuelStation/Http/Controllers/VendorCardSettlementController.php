@@ -20,7 +20,7 @@ class VendorCardSettlementController extends Controller
         private VendorCardSettlementService $vendorCardService
     ) {}
 
-    public function pending(): Response
+    public function pending(\Illuminate\Http\Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
 
@@ -46,6 +46,11 @@ class VendorCardSettlementController extends Controller
             'cardChargeChannels' => app(CardChargeService::class)->channels($company, true),
             'cardCharges' => app(CardChargeService::class)->recent($company->id),
             'canRecordCharge' => request()->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_CREATE),
+            // A card's sales over a period, for the Record charge dialog (asked for by a partial reload).
+            'cardChargeSales' => fn () => $request->filled(['charge_channel', 'charge_from', 'charge_to'])
+                ? app(CardChargeService::class)->cardSales($company->id, (string) $request->query('charge_channel'),
+                    \Illuminate\Support\Carbon::parse($request->query('charge_from'))->toDateString(), \Illuminate\Support\Carbon::parse($request->query('charge_to'))->toDateString())
+                : null,
         ]);
     }
 

@@ -25,6 +25,9 @@ return [
     'bank_transaction.create' => \App\Modules\Accounting\Actions\BankTransaction\CreateAction::class,
     'sale.create' => \App\Modules\Accounting\Actions\Sale\CreateAction::class,
     'expense.create' => \App\Modules\Accounting\Actions\Expense\CreateAction::class,
+    'expense.reverse' => \App\Modules\Accounting\Actions\Expense\ReverseAction::class,
+    'bank_transaction.reverse' => \App\Modules\Accounting\Actions\BankTransaction\ReverseAction::class,
+    'sale.void' => \App\Modules\Accounting\Actions\Sale\VoidAction::class,
 
     'user.invite' => \App\Modules\Accounting\Actions\User\InviteAction::class,
     'user.list' => \App\Modules\Accounting\Actions\User\IndexAction::class,

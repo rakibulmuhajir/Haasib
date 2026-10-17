@@ -191,7 +191,7 @@ describe('resolving', () => {
       status: 'ready',
       key: 'bank_transaction.create',
       params: { kind: 'deposit', date: '2026-10-16', amount: 5000, bank_account_id: 'bank-meezan', cash_account_id: 'cash-1' },
-      undoKey: null,
+      undoKey: 'bank_transaction.reverse',
     })
   })
 
@@ -461,5 +461,23 @@ describe('quick entry defaults from settings', () => {
   it('empty or stale settings change nothing', async () => {
     expect(await run('received 100 from al noor', withSettings({ receive_account_id: 'gone' }))).toMatchObject({ params: { deposit_account_id: 'cash-1' } })
     expect(await run('expense 100 tea', withSettings({}))).toMatchObject({ params: { paid_from_account_id: 'cash-1' } })
+  })
+})
+
+describe('undo', () => {
+  it('every verb names the command that takes it back', async () => {
+    const lk = lookups({ customer: [{ value: 'cust-1', label: 'Al Noor' }], vendor: [{ value: 'ven-1', label: 'Karachi Office' }] })
+    const undoOf = async (line: string) => {
+      const r = await resolveQuickEntry(parseQuickEntry(line)!, lk)
+      return r.status === 'ready' ? r.undoKey : r
+    }
+    expect(await undoOf('deposit 100 meezan')).toBe('bank_transaction.reverse')
+    expect(await undoOf('withdraw 100 meezan')).toBe('bank_transaction.reverse')
+    expect(await undoOf('transfer 100 meezan to hbl current')).toBe('bank_transaction.reverse')
+    expect(await undoOf('bank charge 50 meezan')).toBe('bank_transaction.reverse')
+    expect(await undoOf('expense 100 tea')).toBe('expense.reverse')
+    expect(await undoOf('sale 100')).toBe('sale.void')
+    expect(await undoOf('received 100 from al noor')).toBe('payment.void')
+    expect(await undoOf('paid 100 to karachi office')).toBe('bill_payment.void')
   })
 })

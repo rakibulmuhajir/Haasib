@@ -76,7 +76,7 @@ export interface Lookups {
   openBills: (vendorId: string) => Promise<OpenBill[]>
 }
 
-/** Where "Open" goes after posting, and which command (if any) takes it back. */
+/** Where "Open" goes after posting. */
 export type OpenKind = 'payment' | 'bill_payment' | 'journal' | 'redirect'
 
 export interface ReadyEntry {
@@ -550,7 +550,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         summary: deposit
           ? `Deposit ${money}: ${cash.value.name} to ${bank.value.name}`
           : `Withdraw ${money}: ${bank.value.name} to ${cash.value.name}`,
-        notes: [], open: 'journal', undoKey: null, ...when,
+        notes: [], open: 'journal', undoKey: 'bank_transaction.reverse', ...when,
       }
     }
 
@@ -565,7 +565,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         key: 'bank_transaction.create',
         params: { kind: 'transfer', ...base, amount: entry.amount, from_bank_account_id: from.value.id, to_bank_account_id: to.value.id },
         summary: `Transfer ${money}: ${from.value.name} to ${to.value.name}`,
-        notes: [], open: 'journal', undoKey: null, ...when,
+        notes: [], open: 'journal', undoKey: 'bank_transaction.reverse', ...when,
       }
     }
 
@@ -590,7 +590,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           expense_account_id: d.bank_charges_account_id, notes: note ?? undefined,
         },
         summary: `Bank charge ${money} on ${bank.value.name}${charges ? ` (${charges.name})` : ''}`,
-        notes: [], open: 'journal', undoKey: null, ...when,
+        notes: [], open: 'journal', undoKey: 'bank_transaction.reverse', ...when,
       }
     }
 
@@ -664,7 +664,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           paid_from_account_id: from.value.id, description: entry.what,
         },
         summary: `Expense ${money}: ${account.value.name}, paid from ${from.value.name}`,
-        notes: [], open: 'journal', undoKey: null, ...when,
+        notes: [], open: 'journal', undoKey: 'expense.reverse', ...when,
       }
     }
 
@@ -678,7 +678,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           deposit_account_id: into?.id,
         },
         summary: `Sale ${money}${entry.note ? `: ${entry.note}` : ''}${into ? `, into ${into.name}` : ''}`,
-        notes: [], open: 'redirect', undoKey: null, ...when,
+        notes: [], open: 'redirect', undoKey: 'sale.void', ...when,
       }
     }
   }

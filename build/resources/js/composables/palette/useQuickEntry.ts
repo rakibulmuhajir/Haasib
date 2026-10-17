@@ -243,6 +243,25 @@ export function useQuickEntry(opts: Options) {
     return true
   }
 
+  /** What went wrong, in the server's words: the first field error for a refused entry, else its message. */
+  function failureMessage(data: any, fallback: string): string {
+    if (data?.code === 'VALIDATION') {
+      const first = Object.values((data?.errors ?? {}) as Record<string, string[]>).flat()[0]
+      if (first) return first
+    }
+    return data?.message || fallback
+  }
+
+  /** Where "Open" goes after an undo: the reversal entry, or the sale's invoice. */
+  function undoUrlFor(key: string, data: any): string | null {
+    const slug = opts.slug()
+    if (!slug) return null
+    if (key === 'sale.void') return data?.redirect ?? (data?.data?.id ? `/${slug}/invoices/${data.data.id}` : null)
+    // Voiding a payment answers with the reversal's id; reversing a journal's own id is the reversal.
+    const id = key.endsWith('.reverse') ? data?.data?.id : data?.data?.reversal_id
+    return id ? `/${slug}/journals/${id}` : null
+  }
+
   function openUrlFor(r: ReadyEntry, data: any): string | null {
     const slug = opts.slug()
     const id = data?.data?.id
@@ -286,7 +305,7 @@ export function useQuickEntry(opts: Options) {
         opts.log('success', `✓ ${lastResult.value.message}`)
         opts.afterPost()
       } else {
-        opts.log('error', `✗ ${data.message || 'Could not post'}`)
+        opts.log('error', `✗ ${failureMessage(data, 'Could not post')}`)
         // The data may have changed under us (a date locked since the preview): look again.
         void run()
       }
@@ -319,9 +338,11 @@ export function useQuickEntry(opts: Options) {
       const data = await res.json().catch(() => ({}))
       if (data.ok) {
         result.undone = true
-        opts.log('success', `✓ ${data.message || 'Undone'}`)
+        result.message = data.message || 'Undone'
+        result.openUrl = undoUrlFor(result.undo.key, data)
+        opts.log('success', `✓ ${result.message}`)
       } else {
-        opts.log('error', `✗ ${data.message || 'Could not undo'}`)
+        opts.log('error', `✗ ${failureMessage(data, 'Could not undo')}`)
       }
     } catch (e) {
       opts.log('error', `✗ Network error: ${e instanceof Error ? e.message : 'Unknown'}`)

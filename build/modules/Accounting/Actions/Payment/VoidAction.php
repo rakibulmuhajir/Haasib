@@ -75,8 +75,9 @@ class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
                 }
             }
 
+            $reversal = null;
             if ($transaction) {
-                app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+                $reversal = app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
             }
 
             foreach ($allocations as $allocation) {
@@ -108,6 +109,7 @@ class VoidAction implements PaletteAction, \App\Contracts\DescribesPalette
                     PaletteFormatter::money($totalVoided, $payment->currency),
                 'data' => [
                     'id' => $payment->id,
+                    'reversal_id' => $reversal?->id,
                     'amount_voided' => PaletteFormatter::money($totalVoided, $payment->currency),
                 ],
             ];

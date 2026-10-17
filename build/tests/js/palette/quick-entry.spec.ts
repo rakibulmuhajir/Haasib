@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatDay,
+  resolveDate,
   isHelpRequest,
   isQuickEntry,
   matchAccounts,
@@ -327,5 +329,87 @@ describe('resolving', () => {
     const noCash: Lookups = { ...lookups(), defaults: { ...defaults, cash: [], default_cash_id: null } }
     const r = await resolveQuickEntry(parseQuickEntry('deposit 100 meezan')!, noCash)
     expect(r).toEqual({ status: 'error', message: 'Add a cash account first' })
+  })
+})
+
+describe('dates', () => {
+  const day = async (line: string, today = '2026-10-16') => {
+    const r = await resolveQuickEntry(parseQuickEntry(line)!, { ...lookups(), defaults: { ...defaults, today } })
+    return r.status === 'ready' ? r.params.date : r
+  }
+
+  it('keeps the rest of the line the same with or without a date', () => {
+    expect(parseQuickEntry('deposit 5000 meezan yesterday')).toMatchObject({ kind: 'deposit', amount: 5000, bank: 'meezan', date: { kind: 'relative', word: 'yesterday' } })
+    expect(parseQuickEntry('paid 8000 to karachi office on 14 oct')).toMatchObject({ kind: 'paid', party: 'karachi office', from: null, date: { kind: 'explicit', day: 14, month: 10, year: null } })
+    expect(parseQuickEntry('expense 250 tea from meezan tomorrow')).toMatchObject({ what: 'tea', from: 'meezan', date: { word: 'tomorrow' } })
+    expect(parseQuickEntry('sale 500 today')).toMatchObject({ kind: 'sale', note: null, date: { word: 'today' } })
+    expect(parseQuickEntry('sale 500 walk-in on 3/4')).toMatchObject({ note: 'walk-in', date: { day: 3, month: 4 } })
+    expect(parseQuickEntry('deposit 5000 meezan')).not.toHaveProperty('date')
+  })
+
+  it('does not mistake other words for a date', () => {
+    expect(parseQuickEntry('expense 250 on account')).toMatchObject({ what: 'on account' })
+    expect(parseQuickEntry('expense 250 tea on 3 tea')).toMatchObject({ what: 'tea on 3 tea' })
+    expect(parseQuickEntry('expense 250 tea on 3 oct 202')).toMatchObject({ what: 'tea on 3 oct 202' })
+    expect(parseQuickEntry('deposit yesterday')).toBeNull()
+  })
+
+  it.each([
+    ['deposit 100 yesterday', '2026-10-15'],
+    ['deposit 100 today', '2026-10-16'],
+    ['deposit 100 tomorrow', '2026-10-17'],
+    ['deposit 100 on 14 oct', '2026-10-14'],
+    ['deposit 100 on 14 Oct 2026', '2026-10-14'],
+    ['deposit 100 on 14 october 2025', '2025-10-14'],
+    ['deposit 100 on 14/10', '2026-10-14'],
+    ['deposit 100 on 14/10/2026', '2026-10-14'],
+    ['deposit 100 on 14-10-2026', '2026-10-14'],
+    ['deposit 100 on 14-10-26', '2026-10-14'],
+    ['deposit 100 on 2026-10-14', '2026-10-14'],
+    ['deposit 100 on 5 sept', '2026-09-05'],
+    ['deposit 100 on 29 feb 2028', '2028-02-29'],
+    ['deposit 100 ON 1/2', '2026-02-01'],
+  ])('%s is booked on %s', async (line, expected) => {
+    expect(await day(line)).toBe(expected)
+  })
+
+  it('counts relative words from the company date, across month and year ends', async () => {
+    expect(await day('deposit 100 yesterday', '2026-11-01')).toBe('2026-10-31')
+    expect(await day('deposit 100 yesterday', '2027-01-01')).toBe('2026-12-31')
+    expect(await day('deposit 100 tomorrow', '2026-12-31')).toBe('2027-01-01')
+    expect(await day('deposit 100 tomorrow', '2028-02-28')).toBe('2028-02-29')
+  })
+
+  it('takes a year-less date from the company year, unless that is months ahead', async () => {
+    expect(await day('deposit 100 on 28 dec', '2027-01-03')).toBe('2026-12-28')
+    expect(await day('deposit 100 on 28 dec', '2026-10-16')).toBe('2026-12-28')
+    expect(await day('deposit 100 on 5 jan', '2026-12-30')).toBe('2026-01-05')
+  })
+
+  it('refuses a day that does not exist', async () => {
+    expect(await day('deposit 100 on 31/02')).toEqual({ status: 'error', message: '31/02 is not a date' })
+    expect(await day('deposit 100 on 29 feb 2027')).toMatchObject({ status: 'error' })
+    expect(await day('deposit 100 on 14/13')).toMatchObject({ status: 'error' })
+    expect(resolveDate({ kind: 'explicit', day: 0, month: 1, year: 2026, text: '0/1' }, '2026-10-16')).toMatchObject({ ok: false })
+  })
+
+  it('carries the date to every verb', async () => {
+    const lk = lookups({ customer: [{ value: 'cust-1', label: 'Al Noor' }], vendor: [{ value: 'ven-1', label: 'Karachi Office' }] })
+    const params = async (line: string) => {
+      const r = await resolveQuickEntry(parseQuickEntry(line)!, lk)
+      return r.status === 'ready' ? { ...r.params, shown: r.date, label: r.dateLabel } : r
+    }
+    expect(await params('withdraw 100 yesterday')).toMatchObject({ date: '2026-10-15', shown: '2026-10-15' })
+    expect(await params('transfer 100 meezan to hbl current yesterday')).toMatchObject({ date: '2026-10-15' })
+    expect(await params('bank charge 50 meezan yesterday')).toMatchObject({ date: '2026-10-15' })
+    expect(await params('received 100 from al noor yesterday')).toMatchObject({ date: '2026-10-15' })
+    expect(await params('paid 100 to karachi office on 14 oct')).toMatchObject({ payment_date: '2026-10-14', label: 'Wed 14 Oct 2026' })
+    expect(await params('expense 100 tea yesterday')).toMatchObject({ date: '2026-10-15' })
+    expect(await params('sale 100 yesterday')).toMatchObject({ date: '2026-10-15' })
+  })
+
+  it('names the day for the preview header', () => {
+    expect(formatDay('2026-10-15')).toBe('Thu 15 Oct 2026')
+    expect(formatDay('2028-02-29')).toBe('Tue 29 Feb 2028')
   })
 })

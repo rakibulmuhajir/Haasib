@@ -259,7 +259,7 @@ watch(
                 </div>
 
                 <div v-else-if="quick.phase === 'preview' && quick.resolved && quick.preview" data-testid="quick-preview">
-                  <div class="quick-title">{{ quick.resolved.summary }}</div>
+                  <div class="quick-title">{{ quick.resolved.summary }} <span class="quick-meta" data-testid="quick-date">{{ quick.resolved.dateLabel }}</span></div>
                   <div class="quick-lines">
                     <div v-for="(line, index) in quick.preview.lines" :key="index" class="quick-line" data-testid="quick-line">
                       <span class="quick-side">{{ line.side === 'debit' ? 'Dr' : 'Cr' }}</span>

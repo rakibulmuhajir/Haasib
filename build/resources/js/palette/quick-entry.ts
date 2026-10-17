@@ -5,6 +5,7 @@
  *   transfer 100000 meezan to hbl   bank charge 500 meezan
  *   received 15000 from al noor     paid 8000 to karachi office
  *   expense 2500 tea                sale 12000
+ *   deposit 5000 meezan yesterday   paid 8000 to karachi office on 14 oct
  *
  * parseQuickEntry only reads the line. resolveQuickEntry turns names into ids and fills
  * what was left out (the date, the default cash or bank account). Neither posts anything:
@@ -18,7 +19,12 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type QuickEntry =
+/** A date typed at the end of the line: a word relative to the company's today, or day-month[-year]. */
+export type DateSpec =
+  | { kind: 'relative'; word: 'today' | 'yesterday' | 'tomorrow' }
+  | { kind: 'explicit'; day: number; month: number; year: number | null; text: string }
+
+export type QuickEntry = (
   | { kind: 'deposit'; amount: number; bank: string | null }
   | { kind: 'withdraw'; amount: number; bank: string | null }
   | { kind: 'transfer'; amount: number; from: string; to: string }
@@ -27,6 +33,10 @@ export type QuickEntry =
   | { kind: 'paid'; amount: number; party: string; from: string | null }
   | { kind: 'expense'; amount: number; what: string; from: string | null }
   | { kind: 'sale'; amount: number; note: string | null }
+) & {
+  /** Present only when the line carried a date; otherwise the entry is for the company's today. */
+  date?: DateSpec
+}
 
 export interface Account {
   id: string
@@ -77,6 +87,10 @@ export interface ReadyEntry {
   open: OpenKind
   /** The command that reverses this one, when there is one. */
   undoKey: string | null
+  /** The day it will be booked on (YYYY-MM-DD). */
+  date: string
+  /** That day for the preview header, e.g. `Thu 15 Oct 2026`. */
+  dateLabel: string
 }
 
 export interface ChoicesEntry {
@@ -176,9 +190,113 @@ function clean(text: string | undefined | null): string | null {
   return t === '' ? null : t
 }
 
+// ---------------------------------------------------------------------------
+// Dates
+// ---------------------------------------------------------------------------
+
+const MONTHS: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6,
+  jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10,
+  nov: 11, november: 11, dec: 12, december: 12,
+}
+
+const RELATIVE_DATE = /\s+(today|yesterday|tomorrow)$/i
+// "on 14 oct", "on 14 oct 2026", "on 14/10", "on 14-10-2026", "on 2026-10-14"
+const ON_DATE = /\s+on\s+(\d{1,2}\s+[a-z]{3,9}(?:\s+\d{2,4})?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{4}-\d{1,2}-\d{1,2})$/i
+
+function yearOf(token: string | undefined): number | null | undefined {
+  if (token === undefined) return null // no year typed
+  if (token.length === 2) return 2000 + Number(token)
+  if (token.length === 4) return Number(token)
+  return undefined // 3 digits: not a year
+}
+
+function explicitDate(phrase: string): DateSpec | null {
+  const text = phrase.trim().replace(/\s+/g, ' ')
+  let day: number
+  let month: number | undefined
+  let year: number | null | undefined
+
+  const isoForm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text)
+  const numeric = /^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/.exec(text)
+  const named = /^(\d{1,2}) ([a-z]+)(?: (\d{2,4}))?$/i.exec(text)
+  if (isoForm) {
+    year = Number(isoForm[1]); month = Number(isoForm[2]); day = Number(isoForm[3])
+  } else if (numeric) {
+    day = Number(numeric[1]); month = Number(numeric[2]); year = yearOf(numeric[3])
+  } else if (named) {
+    day = Number(named[1]); month = MONTHS[named[2].toLowerCase()]; year = yearOf(named[3])
+  } else {
+    return null
+  }
+  // A word that is not a month ("on 3 tea") is part of the line, not a date.
+  if (month === undefined || year === undefined) return null
+  return { kind: 'explicit', day, month, year, text }
+}
+
+/** Takes a trailing date off the line. The rest is what the verbs read. */
+function splitDate(line: string): { line: string; date?: DateSpec } {
+  const rel = RELATIVE_DATE.exec(line)
+  if (rel) {
+    return { line: line.slice(0, rel.index), date: { kind: 'relative', word: rel[1].toLowerCase() as 'today' | 'yesterday' | 'tomorrow' } }
+  }
+  const on = ON_DATE.exec(line)
+  if (on) {
+    const date = explicitDate(on[1])
+    if (date) return { line: line.slice(0, on.index), date }
+  }
+  return { line }
+}
+
+const isoDay = (y: number, m: number, d: number) => `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
+function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/**
+ * The day a typed date means. Relative words count from the company's today (never the browser's
+ * clock). With no year, the company's year is used, unless that lands more than six months ahead
+ * (typing `on 28 dec` in January means last December).
+ */
+export function resolveDate(spec: DateSpec, today: string): { ok: true; date: string } | { ok: false; message: string } {
+  if (spec.kind === 'relative') {
+    const offset = spec.word === 'yesterday' ? -1 : spec.word === 'tomorrow' ? 1 : 0
+    return { ok: true, date: addDays(today, offset) }
+  }
+  const valid = (y: number) => {
+    const t = new Date(Date.UTC(y, spec.month - 1, spec.day))
+    return spec.month >= 1 && spec.month <= 12 && t.getUTCFullYear() === y && t.getUTCMonth() === spec.month - 1 && t.getUTCDate() === spec.day
+  }
+  let year = spec.year ?? Number(today.slice(0, 4))
+  if (!valid(year)) return { ok: false, message: `${spec.text} is not a date` }
+  let date = isoDay(year, spec.month, spec.day)
+  if (spec.year === null && date > addDays(today, 183) && valid(year - 1)) {
+    year -= 1
+    date = isoDay(year, spec.month, spec.day)
+  }
+  return { ok: true, date }
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** `2026-10-15` as `Thu 15 Oct 2026`, without going through the browser's time zone. */
+export function formatDay(day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  return `${DAY_NAMES[weekday]} ${d} ${MONTH_NAMES[m - 1]} ${y}`
+}
+
 /** Reads one line. Null when it is not a quick entry (or the amount is not one we accept). */
 export function parseQuickEntry(text: string): QuickEntry | null {
-  const line = text.trim().replace(/\s+/g, ' ')
+  const { line, date } = splitDate(text.trim().replace(/\s+/g, ' '))
+  const entry = parseLine(line)
+  return entry && date ? { ...entry, date } : entry
+}
+
+function parseLine(line: string): QuickEntry | null {
   const verb = VERBS.find((v) => v.re.test(line))
   if (!verb) return null
 
@@ -362,7 +480,15 @@ function splitChargeTail(tail: string, banks: Account[]): { bank: string; note: 
 export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, picks: Picks = {}): Promise<Resolved> {
   const d = lookups.defaults
   const money = `${d.currency} ${fmt(entry.amount)}`
-  const base = { date: d.today }
+
+  let day = d.today
+  if (entry.date) {
+    const typed = resolveDate(entry.date, d.today)
+    if (!typed.ok) return { status: 'error', message: typed.message }
+    day = typed.date
+  }
+  const base = { date: day }
+  const when = { date: day, dateLabel: formatDay(day) }
 
   // A named bank, or the company default when none was typed.
   const bankFor = (field: string, name: string | null): Picked<Account> => {
@@ -402,7 +528,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         summary: deposit
           ? `Deposit ${money}: ${cash.value.name} to ${bank.value.name}`
           : `Withdraw ${money}: ${bank.value.name} to ${cash.value.name}`,
-        notes: [], open: 'journal', undoKey: null,
+        notes: [], open: 'journal', undoKey: null, ...when,
       }
     }
 
@@ -417,7 +543,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         key: 'bank_transaction.create',
         params: { kind: 'transfer', ...base, amount: entry.amount, from_bank_account_id: from.value.id, to_bank_account_id: to.value.id },
         summary: `Transfer ${money}: ${from.value.name} to ${to.value.name}`,
-        notes: [], open: 'journal', undoKey: null,
+        notes: [], open: 'journal', undoKey: null, ...when,
       }
     }
 
@@ -442,7 +568,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           expense_account_id: d.bank_charges_account_id, notes: note ?? undefined,
         },
         summary: `Bank charge ${money} on ${bank.value.name}${charges ? ` (${charges.name})` : ''}`,
-        notes: [], open: 'journal', undoKey: null,
+        notes: [], open: 'journal', undoKey: null, ...when,
       }
     }
 
@@ -458,10 +584,10 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           customer_id: customer.value.value, amount: entry.amount,
           // As the payments page does: a cash account raises the drawer, a bank account never does.
           method: d.cash.some((a) => a.id === into.value.id) ? 'cash' : 'bank_transfer',
-          date: d.today, deposit_account_id: into.value.id,
+          date: day, deposit_account_id: into.value.id,
         },
         summary: `Received ${money} from ${customer.value.label} into ${into.value.name}`,
-        notes: [], open: 'payment', undoKey: 'payment.void',
+        notes: [], open: 'payment', undoKey: 'payment.void', ...when,
       }
     }
 
@@ -492,14 +618,14 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
         status: 'ready',
         key: 'bill_payment.create',
         params: {
-          vendor_id: vendor.value.value, payment_date: d.today, amount: entry.amount,
+          vendor_id: vendor.value.value, payment_date: day, amount: entry.amount,
           currency: d.currency, base_currency: d.currency,
           payment_method: d.cash.some((a) => a.id === from.value.id) ? 'cash' : 'bank_transfer',
           payment_account_id: from.value.id,
           allocations,
         },
         summary: `Paid ${money} to ${vendor.value.label} from ${from.value.name}`,
-        notes, open: 'bill_payment', undoKey: 'bill_payment.void',
+        notes, open: 'bill_payment', undoKey: 'bill_payment.void', ...when,
       }
     }
 
@@ -516,7 +642,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           paid_from_account_id: from.value.id, description: entry.what,
         },
         summary: `Expense ${money}: ${account.value.name}, paid from ${from.value.name}`,
-        notes: [], open: 'journal', undoKey: null,
+        notes: [], open: 'journal', undoKey: null, ...when,
       }
     }
 
@@ -530,7 +656,7 @@ export async function resolveQuickEntry(entry: QuickEntry, lookups: Lookups, pic
           deposit_account_id: into?.id,
         },
         summary: `Sale ${money}${entry.note ? `: ${entry.note}` : ''}${into ? `, into ${into.name}` : ''}`,
-        notes: [], open: 'redirect', undoKey: null,
+        notes: [], open: 'redirect', undoKey: null, ...when,
       }
     }
   }
@@ -559,6 +685,7 @@ export function quickEntryHelpLines(): string[] {
     ...QUICK_ENTRY_HELP.map((h) => `  ${h.example}  -  ${h.does}`),
     '',
     'Amounts: 50000, 50,000, 50k, 1.5 lakh.',
+    'Dates: end the line with yesterday, tomorrow, or on 14 oct, on 14/10, on 14-10-2026.',
     'The palette shows what will be booked. Enter posts it.',
   ]
 }

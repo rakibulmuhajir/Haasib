@@ -48,7 +48,9 @@ class ViewAction implements PaletteAction, \App\Contracts\DescribesPalette
         // Get payment stats
         $paymentStats = DB::table('acct.payment_allocations as pa')
             ->join('acct.payments as p', 'pa.payment_id', '=', 'p.id')
+            ->whereNull('p.deleted_at')
             ->join('acct.invoices as i', 'pa.invoice_id', '=', 'i.id')
+            ->whereNull('i.deleted_at')
             ->where('i.customer_id', $customer->id)
             ->selectRaw('
                 COUNT(*) as payment_count,

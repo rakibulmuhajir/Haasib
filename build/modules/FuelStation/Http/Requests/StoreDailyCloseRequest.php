@@ -106,6 +106,9 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'credit_sales.*.reference' => 'nullable|string|max:100',
             // The customer's own vehicle/site this sale was for, when they use units.
             'credit_sales.*.unit_id' => 'nullable|uuid',
+            // "No discount" on this slip, with why: the customer's stored rate is not applied.
+            'credit_sales.*.no_discount' => 'nullable|boolean',
+            'credit_sales.*.no_discount_reason' => 'required_if_accepted:credit_sales.*.no_discount|nullable|string|max:255',
             // Optional fuel + litres on a manual row, so a per-litre customer discount can be
             // priced (see DailyCloseCreditSaleService::prepare, which refuses a per_litre
             // discount without litres); a percent discount needs only the amount above.
@@ -117,7 +120,10 @@ class StoreDailyCloseRequest extends BaseFormRequest
             'purchases.*.kept_bill_number' => 'nullable|string|max:50',
             'direct_sales.*.kept_invoice_id' => 'nullable|uuid',
             'direct_sales.*.kept_invoice_number' => 'nullable|string|max:50',
+            // Edit day carries each advance's id so the re-post updates that row instead of adding
+            // another; kept_advance_id additionally marks one with repayments (locked on the form).
             'employee_advances.*.kept_advance_id' => 'nullable|uuid',
+            'employee_advances.*.advance_id' => 'nullable|uuid',
             'credit_sales.*.litres' => 'nullable|numeric|min:0.01',
             'bank_deposits' => 'nullable|array',
             'bank_deposits.*.bank_account_id' => 'required|uuid',

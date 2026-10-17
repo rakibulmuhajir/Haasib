@@ -130,6 +130,7 @@ class CustomerController extends Controller
 
         $creditApplied = DB::table('acct.credit_note_applications as cna')
             ->join('acct.credit_notes as cn', 'cn.id', '=', 'cna.credit_note_id')
+            ->whereNull('cn.deleted_at')
             ->where('cn.company_id', $company->id)
             ->where(fn ($q) => $q->whereNull('cn.invoice_id')->orWhereNotIn('cn.invoice_id', Invoice::splitOriginals()))
             ->selectRaw('cn.customer_id, SUM(cna.amount_applied) AS total_applied')
@@ -240,6 +241,7 @@ class CustomerController extends Controller
 
         $creditApplied = DB::table('acct.credit_note_applications as cna')
             ->join('acct.credit_notes as cn', 'cn.id', '=', 'cna.credit_note_id')
+            ->whereNull('cn.deleted_at')
             ->where('cn.company_id', $company->id)
             ->where('cn.customer_id', $customer->id)
             ->where(fn ($q) => $q->whereNull('cn.invoice_id')->orWhereNotIn('cn.invoice_id', Invoice::splitOriginals()))

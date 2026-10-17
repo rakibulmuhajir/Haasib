@@ -21,7 +21,7 @@ class AmanatStatementService
         $dated = DB::table('fuel.amanat_transactions as a')
             ->leftJoin('acct.journal_entries as je', 'je.id', '=', 'a.journal_entry_id')
             ->leftJoin('acct.transactions as t', function ($join) {
-                $join->on('t.id', '=', 'je.transaction_id')->on('t.company_id', '=', 'a.company_id');
+                $join->on('t.id', '=', 'je.transaction_id')->on('t.company_id', '=', 'a.company_id')->whereNull('t.deleted_at');
             })
             ->where('a.company_id', $customer->company_id)
             ->where('a.customer_id', $customer->id)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localToday } from '@/composables/useEntryDate'
 import { computed, ref } from 'vue'
-import { Head, useForm, usePage } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -63,13 +63,79 @@ interface BankAccount {
   name: string
 }
 
+interface CardTaxChannel {
+  code: string
+  label: string
+  settles_to: 'clearing' | 'bank' | 'supplier'
+  vendor_name: string | null
+  account_name: string | null
+}
+
+interface CardTax {
+  id: string
+  date: string
+  channel: string
+  amount: number
+  section: string | null
+  reference: string | null
+  bill_id: string | null
+  undone: boolean
+}
+
 const props = defineProps<{
   pendingSales: VendorCardSale[]
   clearingAccounts: ClearingAccountSummary[]
   summary: VendorCardSummary
   todaySettlements: VendorCardSale[]
   bankAccounts: BankAccount[]
+  taxEnabled?: boolean
+  cardTaxChannels?: CardTaxChannel[]
+  cardTaxes?: CardTax[]
+  canRecordTax?: boolean
 }>()
+
+// Tax a card company deducted from card sales, entered by hand -- usually at month end, so the
+// date starts on the last day of last month (or today, when today is month end).
+const monthEnd = () => {
+  const today = localToday()
+  const [y, m, d] = today.split('-').map(Number)
+  if (new Date(y, m - 1, d + 1).getDate() === 1) return today
+  const last = new Date(y, m - 1, 0)
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
+}
+const showTaxDialog = ref(false)
+const taxForm = useForm({
+  channel_code: '',
+  deduction_date: monthEnd(),
+  amount: null as number | null,
+  section: '',
+  reference: '',
+  notes: '',
+})
+const taxChannel = computed(() => (props.cardTaxChannels ?? []).find((c) => c.code === taxForm.channel_code))
+const taxComesFrom = (c: CardTaxChannel | undefined) =>
+  !c ? '' : c.settles_to === 'supplier' ? `Added to what you owe ${c.vendor_name}` : `Taken from ${c.account_name}`
+const openTaxDialog = () => {
+  taxForm.reset()
+  taxForm.clearErrors()
+  taxForm.channel_code = props.cardTaxChannels?.[0]?.code ?? ''
+  taxForm.deduction_date = monthEnd()
+  showTaxDialog.value = true
+}
+const submitTax = () => {
+  taxForm.post(`/${companySlug.value}/fuel/card-tax`, {
+    preserveScroll: true,
+    onSuccess: () => { showTaxDialog.value = false },
+  })
+}
+const undoingTax = ref<string | null>(null)
+const undoTax = (tax: CardTax) => {
+  undoingTax.value = tax.id
+  router.delete(`/${companySlug.value}/fuel/card-tax/${tax.id}`, {
+    preserveScroll: true,
+    onFinish: () => { undoingTax.value = null },
+  })
+}
 
 const page = usePage()
 const { companySlug } = useCompanyRoute()
@@ -404,6 +470,38 @@ const todayTableData = computed(() => {
       </CardContent>
     </Card>
 
+    <!-- Tax the bank or the card's supplier deducted from card sales -->
+    <Card v-if="taxEnabled && ((cardTaxChannels ?? []).length || (cardTaxes ?? []).length)" class="border-border/80">
+      <CardHeader class="flex flex-row items-start justify-between gap-3">
+        <div>
+          <CardTitle class="text-base">Card tax</CardTitle>
+          <CardDescription>Tax deducted from card sales</CardDescription>
+        </div>
+        <Button v-if="canRecordTax && (cardTaxChannels ?? []).length" size="sm" @click="openTaxDialog">Record tax</Button>
+      </CardHeader>
+      <CardContent class="space-y-2">
+        <p v-if="!(cardTaxes ?? []).length" class="text-sm text-muted-foreground">None recorded yet.</p>
+        <div
+          v-for="tax in cardTaxes ?? []"
+          :key="tax.id"
+          class="flex items-center justify-between gap-3 rounded-lg border p-3"
+          :class="{ 'opacity-60': tax.undone }"
+        >
+          <div class="min-w-0">
+            <div class="font-medium" :class="{ 'line-through': tax.undone }">{{ tax.channel }}</div>
+            <div class="text-xs text-muted-foreground">
+              {{ formatDate(tax.date) }}<template v-if="tax.section"> · {{ tax.section }}</template><template v-if="tax.reference"> · {{ tax.reference }}</template>
+              <template v-if="tax.undone"> · Undone</template>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <MoneyText class="font-semibold" :amount="tax.amount" :currency="currencyCode" :fraction-digits="0" />
+            <Button v-if="canRecordTax && !tax.undone" size="sm" variant="ghost" :disabled="undoingTax === tax.id" @click="undoTax(tax)">Undo</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
     <!-- Today's Settlements -->
     <Card v-if="props.todaySettlements.length > 0" class="border-border/80">
       <CardHeader>
@@ -535,6 +633,55 @@ const todayTableData = computed(() => {
           <DialogFooter>
             <Button type="button" variant="outline" @click="showClearingDialog = false">Cancel</Button>
             <Button type="submit" :disabled="clearingSettlementForm.processing">Process Settlement</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    <Dialog v-model:open="showTaxDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record card tax</DialogTitle>
+          <DialogDescription>Tax the bank or supplier deducted from card sales.</DialogDescription>
+        </DialogHeader>
+        <form class="space-y-4" @submit.prevent="submitTax">
+          <div class="space-y-2">
+            <Label>Card</Label>
+            <Select v-model="taxForm.channel_code">
+              <SelectTrigger><SelectValue placeholder="Choose a card" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in cardTaxChannels ?? []" :key="c.code" :value="c.code">{{ c.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="taxChannel" class="text-xs text-muted-foreground">{{ taxComesFrom(taxChannel) }}</p>
+            <InputError :message="taxForm.errors.channel_code" />
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Date</Label>
+              <Input v-model="taxForm.deduction_date" type="date" />
+              <InputError :message="taxForm.errors.deduction_date" />
+            </div>
+            <div class="space-y-2">
+              <Label>Tax amount</Label>
+              <Input v-model.number="taxForm.amount" type="number" min="0.01" step="0.01" />
+              <InputError :message="taxForm.errors.amount" />
+            </div>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Section</Label>
+              <Input v-model="taxForm.section" maxlength="30" placeholder="Optional" />
+              <InputError :message="taxForm.errors.section" />
+            </div>
+            <div class="space-y-2">
+              <Label>Reference</Label>
+              <Input v-model="taxForm.reference" maxlength="100" placeholder="Statement or certificate no." />
+              <InputError :message="taxForm.errors.reference" />
+            </div>
+          </div>
+          <DialogFooter class="gap-2">
+            <Button type="button" variant="outline" @click="showTaxDialog = false">Cancel</Button>
+            <Button type="submit" :disabled="taxForm.processing || !taxForm.channel_code || !taxForm.amount">Record tax</Button>
           </DialogFooter>
         </form>
       </DialogContent>

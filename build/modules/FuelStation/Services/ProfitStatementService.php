@@ -269,6 +269,7 @@ class ProfitStatementService
             // Expense accounts payroll posts to: Salaries & wages, wherever else they are used.
             'payroll' => array_fill_keys(DB::table('acct.journal_entries as je')
                 ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                ->whereNull('t.deleted_at')
                 ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
                 ->where('t.company_id', $companyId)->where('a.type', 'expense')
                 ->where('t.transaction_type', 'like', 'payroll%')

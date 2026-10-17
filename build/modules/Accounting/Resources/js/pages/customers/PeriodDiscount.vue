@@ -36,6 +36,8 @@ const props = defineProps<{
         amount: number;
         invoice_count: number;
         excluded_count: number;
+        // Invoices marked "No discount", with why.
+        blocked: { id: string; number: string; date: string; reason: string | null }[];
         eligible_amount: number;
         litres: number;
         applied: number;
@@ -245,6 +247,15 @@ const breadcrumbs = computed(() => [
                         :currency="company.base_currency"
                     />
                 </div>
+            </div>
+            <div v-if="preview.blocked?.length" class="space-y-1 text-sm">
+                <p class="font-medium">No discount</p>
+                <ul class="space-y-1 text-muted-foreground">
+                    <li v-for="invoice in preview.blocked" :key="invoice.id">
+                        <Link :href="`/${company.slug}/invoices/${invoice.id}`" class="underline-offset-2 hover:underline">{{ invoice.number }}</Link>
+                        · {{ invoice.date }}<template v-if="invoice.reason"> · <span dir="auto">{{ invoice.reason }}</span></template>
+                    </li>
+                </ul>
             </div>
             <p class="text-sm text-muted-foreground">
                 Sales already discounted, credited, taxed, or recorded in

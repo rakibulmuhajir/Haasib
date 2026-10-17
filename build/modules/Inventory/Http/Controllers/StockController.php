@@ -33,7 +33,9 @@ class StockController extends Controller
 
         $query = StockLevel::where('inv.stock_levels.company_id', $company->id)
             ->join('inv.items', 'inv.stock_levels.item_id', '=', 'inv.items.id')
+            ->whereNull('inv.items.deleted_at')
             ->join('inv.warehouses', 'inv.stock_levels.warehouse_id', '=', 'inv.warehouses.id')
+            ->whereNull('inv.warehouses.deleted_at')
             ->select(
                 'inv.stock_levels.*',
                 'inv.items.sku',

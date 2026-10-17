@@ -35,6 +35,9 @@ class StoreFuelSaleRequest extends BaseFormRequest
             'description' => ['nullable', 'string', 'max:255'],
             'discount_per_liter' => ['nullable', 'numeric', 'min:0'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // "No discount" on this sale, with why: the buyer's stored rate is not applied.
+            'no_discount' => ['nullable', 'boolean'],
+            'no_discount_reason' => ['required_if_accepted:no_discount', 'nullable', 'string', 'max:255'],
             'payment_terms_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ];
     }

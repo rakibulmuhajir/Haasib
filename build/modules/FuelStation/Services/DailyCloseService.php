@@ -122,6 +122,7 @@ class DailyCloseService
 
         return BillLineItem::query()
             ->join('acct.bills', 'acct.bills.id', '=', 'acct.bill_line_items.bill_id')
+            ->whereNull('acct.bills.deleted_at')
             ->where('acct.bill_line_items.company_id', $companyId)
             ->where('acct.bill_line_items.item_id', $itemId)
             ->whereNotIn('acct.bills.status', ['void', 'cancelled', 'draft'])
@@ -183,6 +184,7 @@ class DailyCloseService
             if ($cashAccountId) {
                 $row = DB::table('acct.journal_entries as je')
                     ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                    ->whereNull('t.deleted_at')
                     ->where('t.company_id', $companyId)
                     ->where('je.account_id', $cashAccountId)
                     ->where('t.transaction_date', '<', $date)
@@ -1308,23 +1310,47 @@ class DailyCloseService
                 DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
                 DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
 
-                foreach ($data['employee_advances'] as $advance) {
+                $reusedAdvanceIds = [];
+                foreach ($data['employee_advances'] as $advanceIndex => $advance) {
                     $amount = (float) $advance['amount'];
                     $employeeAdvancesTotal += $amount;
 
-                    // An advance Edit day kept (it has repayments): pay it out again in this
-                    // journal and re-point the same record, so its repayments stay on it.
-                    $kept = ! empty($advance['kept_advance_id'])
-                        ? SalaryAdvance::where('company_id', $companyId)->find($advance['kept_advance_id'])
+                    // A row Edit day carried over names its advance: re-posting the day updates
+                    // that record (restoring it if the reopen trashed it) instead of leaving a
+                    // second copy. Repayments stay on it; an advance with repayments is kept as is.
+                    $reuseId = $advance['advance_id'] ?? $advance['kept_advance_id'] ?? null;
+                    $existing = $reuseId && ! isset($reusedAdvanceIds[$reuseId])
+                        ? SalaryAdvance::withTrashed()->where('company_id', $companyId)->find($reuseId)
                         : null;
-                    if ($kept) {
-                        $createdAdvances[] = $kept;
+                    // Only a record this day owned: trashed by the reopen, or detached from its journal.
+                    // A live one still on another posting is never taken over.
+                    if ($existing && ! $existing->trashed() && $existing->journal_entry_id !== null) {
+                        $existing = null;
+                    }
+                    if ($existing) {
+                        $reusedAdvanceIds[$existing->id] = true;
+                        if ($existing->trashed()) {
+                            $existing->restore();
+                        }
+                        if ((float) $existing->amount_recovered <= 0.004) {
+                            $existing->fill([
+                                'employee_id' => $advance['employee_id'],
+                                'advance_date' => $date,
+                                'amount' => $amount,
+                                'amount_outstanding' => $amount,
+                                'reason' => $advance['reason'] ?? 'Daily advance',
+                                'status' => 'pending',
+                                'payment_method' => 'cash',
+                            ])->save();
+                        }
+                        $data['employee_advances'][$advanceIndex]['advance_id'] = $existing->id;
+                        $createdAdvances[] = $existing;
 
                         continue;
                     }
 
                     // Create salary advance record
-                    $createdAdvances[] = SalaryAdvance::create([
+                    $createdAdvances[] = $newAdvance = SalaryAdvance::create([
                         'company_id' => $companyId,
                         'employee_id' => $advance['employee_id'],
                         'advance_date' => $date,
@@ -1335,6 +1361,8 @@ class DailyCloseService
                         'payment_method' => 'cash',
                         'recorded_by_user_id' => $user->id,
                     ]);
+                    // Stored with the close's form input, so Edit day can hand the id back to this row.
+                    $data['employee_advances'][$advanceIndex]['advance_id'] = $newAdvance->id;
                 }
             }
             $metadata['employee_advances'] = $employeeAdvancesTotal;

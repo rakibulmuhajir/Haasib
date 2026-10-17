@@ -39,6 +39,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
@@ -87,6 +89,10 @@ interface Invoice {
   payment_terms?: number
   notes?: string
   is_direct_delivery?: boolean
+  // "No discount": kept out of every discount, with the reason.
+  discount_blocked?: boolean
+  discount_block_reason?: string | null
+  discount_blocked_at?: string | null
   line_items: LineItem[]
   sent_at?: string
   viewed_at?: string
@@ -111,6 +117,8 @@ const props = defineProps<{
   // Company stamp + signature; the server sends it only for a final invoice when ticked.
   stamp?: DocumentStampData | null
   canCorrect?: boolean
+  canBlockDiscount?: boolean
+  discountBlockedBy?: string | null
   correctionCustomers?: { id: string; name: string }[]
   corrections?: Correction[]
   appliedPayments?: { number: string; party: string | null; amount: number | string }[]
@@ -133,6 +141,22 @@ const saveSlipDate = () => {
   const current = (props.invoice.slip_date ?? props.invoice.invoice_date ?? '').slice(0, 10)
   if (!slipDate.value || slipDate.value === current) return
   router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/reference`, { slip_date: slipDate.value }, { preserveScroll: true })
+}
+
+// "No discount" on this invoice, with a reason; allowing it again clears the reason.
+const blockingDiscount = ref(false)
+const blockReason = ref('')
+const blockError = ref<string | null>(null)
+const savingBlock = ref(false)
+const setDiscountBlock = (blocked: boolean) => {
+  blockError.value = null
+  savingBlock.value = true
+  router.patch(`/${props.company.slug}/invoices/${props.invoice.id}/discount-block`, { blocked, reason: blocked ? blockReason.value.trim() : null }, {
+    preserveScroll: true,
+    onSuccess: () => { blockingDiscount.value = false; blockReason.value = '' },
+    onError: (errors) => { blockError.value = errors.reason ?? errors.blocked ?? Object.values(errors)[0] ?? null },
+    onFinish: () => { savingBlock.value = false },
+  })
 }
 
 const setVehicle = (unitId: string) => {
@@ -458,6 +482,24 @@ const voidInvoice = () => {
           </CardContent>
         </Card>
 
+        <Card v-if="invoice.discount_blocked || (canBlockDiscount && !['void', 'cancelled', 'draft'].includes(invoice.status) && !(Number(invoice.discount_amount) > 0))" variant="detail">
+          <CardHeader>
+            <CardTitle>Discount</CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-3">
+            <template v-if="invoice.discount_blocked">
+              <MetaChip>No discount</MetaChip>
+              <p class="text-sm text-text-secondary" dir="auto">{{ invoice.discount_block_reason }}</p>
+              <p v-if="discountBlockedBy || invoice.discount_blocked_at" class="text-xs text-text-metadata">
+                {{ [discountBlockedBy, invoice.discount_blocked_at ? formatDateTime(invoice.discount_blocked_at) : null].filter(Boolean).join(', ') }}
+              </p>
+              <Button v-if="canBlockDiscount" class="w-full" variant="outline" :disabled="savingBlock" @click="setDiscountBlock(false)">Allow discount</Button>
+            </template>
+            <Button v-else class="w-full" variant="outline" @click="blockingDiscount = true">No discount</Button>
+            <p v-if="blockError && !blockingDiscount" class="text-sm text-destructive">{{ blockError }}</p>
+          </CardContent>
+        </Card>
+
         <CorrectionHistory :corrections="corrections ?? []" :slug="company.slug" />
 
         <Card v-if="history.length" variant="detail">
@@ -491,6 +533,24 @@ const voidInvoice = () => {
       :loading="voiding"
       @confirm="voidInvoice"
     />
+
+    <Dialog v-model:open="blockingDiscount">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>No discount on {{ invoice.invoice_number }}</DialogTitle>
+          <DialogDescription>Period discounts will skip it.</DialogDescription>
+        </DialogHeader>
+        <form class="space-y-2" @submit.prevent="setDiscountBlock(true)">
+          <Label for="discount-block-reason">Reason</Label>
+          <Input id="discount-block-reason" v-model="blockReason" maxlength="255" autofocus />
+          <p v-if="blockError" class="text-sm text-destructive">{{ blockError }}</p>
+          <DialogFooter class="pt-2">
+            <Button type="button" variant="outline" @click="blockingDiscount = false">Cancel</Button>
+            <Button type="submit" :disabled="savingBlock || !blockReason.trim()">No discount</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
 
     <CorrectRecordDialog
       :applied-payments="appliedPayments ?? []"

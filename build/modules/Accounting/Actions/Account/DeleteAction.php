@@ -45,6 +45,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInInvoices = DB::table('acct.invoice_line_items')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('income_account_id', $account->id)
             ->exists();
@@ -53,6 +54,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInBills = DB::table('acct.bill_line_items')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('expense_account_id', $account->id)
             ->exists();
@@ -61,6 +63,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInVendorCredits = DB::table('acct.vendor_credit_items')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('expense_account_id', $account->id)
             ->exists();
@@ -69,6 +72,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInCustomers = DB::table('acct.customers')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('ar_account_id', $account->id)
             ->exists();
@@ -77,6 +81,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInVendors = DB::table('acct.vendors')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('ap_account_id', $account->id)
             ->exists();
@@ -85,6 +90,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInPayments = DB::table('acct.payments')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('deposit_account_id', $account->id)
             ->exists();
@@ -93,6 +99,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $usedInBillPayments = DB::table('acct.bill_payments')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->where('payment_account_id', $account->id)
             ->exists();

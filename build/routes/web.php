@@ -197,6 +197,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
         Route::patch('/{company}/invoices/{invoice}/unit', [InvoiceController::class, 'setUnit'])->name('invoices.unit');
         Route::patch('/{company}/invoices/{invoice}/reference', [InvoiceController::class, 'setReference'])->name('invoices.reference');
+        Route::patch('/{company}/invoices/{invoice}/discount-block', [InvoiceController::class, 'setDiscountBlock'])->name('invoices.discount-block');
         Route::post('/{company}/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
         Route::post('/{company}/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
         Route::post('/{company}/invoices/{invoice}/correct', [\App\Modules\Accounting\Http\Controllers\CorrectionController::class, 'invoice'])->name('invoices.correct');

@@ -26,7 +26,8 @@ class Invoice extends Model
             // after the close too (SetUnitAction; the DB guard allows it since 2026_10_05_000005), and
             // so may the reference, the slip number (SetReferenceAction; 2026_10_05_000008).
             // The slip date (the customer's physical slip, for their documents) likewise: 2026_10_05_000009.
-            $settlement = ['paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount', 'unit_id', 'reference', 'slip_date'];
+            // The "no discount" flag (SetDiscountBlockAction) is a label too: 2026_10_17_000002.
+            $settlement = ['discount_blocked', 'discount_block_reason', 'discount_blocked_by_user_id', 'discount_blocked_at', 'paid_amount', 'balance', 'paid_at', 'updated_at', 'updated_by_user_id', 'status', 'discount_amount', 'total_amount', 'unit_id', 'reference', 'slip_date'];
             // total/discount only count as settlement when they move together as a discount:
             // the discount grows and the total falls by exactly that much. Any other change to
             // them is a change of principal and goes through assertMutable like everything else.
@@ -35,6 +36,10 @@ class Invoice extends Model
                 app(\App\Modules\Accounting\Services\CustomerDiscountPolicy::class)->assertInvoiceNotCovered($invoice->company_id, $invoice->id);
             }
             $oldDiscount = (float) $invoice->getOriginal('discount_amount');
+            // A blocked invoice gets no discount from anywhere, whichever service tries.
+            if ($invoice->discount_blocked && (float) $invoice->discount_amount > $oldDiscount) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['discount' => "No discount on {$invoice->invoice_number}: {$invoice->discount_block_reason}"]);
+            }
             $oldTotal = (float) $invoice->getOriginal('total_amount');
             $principalMoved = ($invoice->isDirty('total_amount') || $invoice->isDirty('discount_amount'))
                 && ! ((float) $invoice->discount_amount >= $oldDiscount
@@ -89,6 +94,10 @@ class Invoice extends Model
         'transaction_id',
         'is_direct_delivery',
         'included_in_close_id',
+        'discount_blocked',
+        'discount_block_reason',
+        'discount_blocked_by_user_id',
+        'discount_blocked_at',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -117,6 +126,9 @@ class Invoice extends Model
         'transaction_id' => 'string',
         'is_direct_delivery' => 'boolean',
         'included_in_close_id' => 'string',
+        'discount_blocked' => 'boolean',
+        'discount_blocked_by_user_id' => 'string',
+        'discount_blocked_at' => 'datetime',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',

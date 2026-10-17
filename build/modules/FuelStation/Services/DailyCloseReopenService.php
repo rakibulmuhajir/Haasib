@@ -121,8 +121,8 @@ class DailyCloseReopenService
             $this->revertPostCloseDiscounts($companyId, $close->id, $warnings);
             $this->removeCostCorrections($companyId, $close->id);
 
-            // Read before the invoices go: a vehicle named on one after the close was posted.
-            $vehicles = $this->creditSaleVehicles($companyId, $metadata);
+            // Read before the invoices go: a vehicle named, or "no discount" set, after the close was posted.
+            $labels = $this->creditSaleLabels($companyId, $metadata);
             $keptInvoices = $this->detachOrDeleteCreditSales($companyId, $metadata);
             $this->reverseDirectSales($companyId, $metadata, $keptDirectSales, $user->id);
             $this->reversePaymentsReceived($companyId, $metadata);
@@ -135,7 +135,7 @@ class DailyCloseReopenService
             $this->reverseStockReconciliations($companyId, $close->id);
             $this->reverseAmanat($companyId, $close->id);
             $this->reversePartnerTransactions($companyId, $close->id);
-            $this->reverseSalaryAdvances($companyId, $close->id, $warnings);
+            $closeAdvances = $this->reverseSalaryAdvances($companyId, $close->id, $warnings);
             $this->reversePayrollPayouts($companyId, $close->id);
             $this->deleteReadings($companyId, $businessDate);
 
@@ -148,8 +148,8 @@ class DailyCloseReopenService
             $formInput = $metadata['form_input'] ?? [];
             $formInput['date'] = $businessDate;
             $formInput['credit_sales'] = $this->markKeptCreditRows($formInput['credit_sales'] ?? [], $metadata, $keptInvoices);
-            $formInput['credit_sales'] = $this->carryVehicles($formInput['credit_sales'], $metadata, $vehicles);
-            $formInput = $this->markKeptDocuments($formInput, $metadata, $keptBills, $keptDirectSales, $keptAdvances);
+            $formInput['credit_sales'] = $this->carryLabels($formInput['credit_sales'], $metadata, $labels);
+            $formInput = $this->markKeptDocuments($formInput, $metadata, $keptBills, $keptDirectSales, $keptAdvances, $closeAdvances);
             app(DailyCloseReconciliationService::class)->park($companyId, $formInput, $user->id);
 
             // No live close left on a month's last day: that month's stock write-down goes with it.
@@ -635,7 +635,7 @@ class DailyCloseReopenService
      * Mark the draft rows whose documents were kept, so the form shows them read-only with a
      * link to the document and the re-post leaves them alone (they are already in the books).
      */
-    private function markKeptDocuments(array $formInput, array $metadata, array $keptBills, array $keptDirectSales, array $keptAdvances): array
+    private function markKeptDocuments(array $formInput, array $metadata, array $keptBills, array $keptDirectSales, array $keptAdvances, array $closeAdvances = []): array
     {
         // Purchases and direct sales were created in the order of their complete rows.
         $purchaseRows = array_keys(array_filter($formInput['purchases'] ?? [], fn ($row) => ! empty($row['supplier_id'])
@@ -656,10 +656,31 @@ class DailyCloseReopenService
                 $formInput['direct_sales'][$rowKey]['kept_invoice_number'] = $keptDirectSales[$detail['invoice_id']];
             }
         }
+        // Every advance the close made goes back onto its row, so the re-post updates that record
+        // rather than adding a copy. Closes posted since the ids were stored name them already;
+        // older ones are matched by employee and amount, each advance used once.
+        $claimed = [];
+        foreach ($formInput['employee_advances'] ?? [] as $row) {
+            if (! empty($row['advance_id'])) {
+                $claimed[$row['advance_id']] = true;
+            }
+        }
+        foreach ($closeAdvances as $advanceId => $advance) {
+            if (isset($claimed[$advanceId])) {
+                continue;
+            }
+            foreach ($formInput['employee_advances'] ?? [] as $k => $row) {
+                if (empty($row['advance_id']) && ($row['employee_id'] ?? null) === $advance['employee_id']
+                    && round((float) ($row['amount'] ?? 0), 2) === round($advance['amount'], 2)) {
+                    $formInput['employee_advances'][$k]['advance_id'] = $advanceId;
+                    $claimed[$advanceId] = true;
+                    break;
+                }
+            }
+        }
         foreach ($keptAdvances as $advanceId => $advance) {
             foreach ($formInput['employee_advances'] ?? [] as $k => $row) {
-                if (empty($row['kept_advance_id']) && ($row['employee_id'] ?? null) === $advance['employee_id']
-                    && round((float) ($row['amount'] ?? 0), 2) === round($advance['amount'], 2)) {
+                if (($row['advance_id'] ?? null) === $advanceId) {
                     $formInput['employee_advances'][$k]['kept_advance_id'] = $advanceId;
                     break;
                 }
@@ -671,26 +692,28 @@ class DailyCloseReopenService
 
     /** Point each draft credit row whose invoice was kept at that invoice (matched by customer, amount, reference). */
     /** Each typed credit row's invoice => the vehicle (unit) it names now. */
-    private function creditSaleVehicles(string $companyId, array $metadata): array
+    private function creditSaleLabels(string $companyId, array $metadata): array
     {
         $ids = collect($metadata['credit_sale_details'] ?? [])
             ->filter(fn ($c) => ($c['source'] ?? 'manual') === 'manual' && ! empty($c['invoice_id']))
             ->pluck('invoice_id')->all();
 
-        return $ids ? Invoice::where('company_id', $companyId)->whereIn('id', $ids)->whereNotNull('unit_id')->pluck('unit_id', 'id')->all() : [];
+        return $ids ? Invoice::where('company_id', $companyId)->whereIn('id', $ids)
+            ->get(['id', 'unit_id', 'discount_blocked', 'discount_block_reason'])->keyBy('id')->all() : [];
     }
 
     /**
-     * Put each invoice's vehicle back on the credit row it came from, matched as markKeptCreditRows
-     * matches (customer, amount, reference), so re-posting the day does not drop a vehicle that was
-     * named on the invoice after the close was posted. A row that already names one keeps it.
+     * Put each invoice's labels back on the credit row it came from, matched as markKeptCreditRows
+     * matches (customer, amount, reference), so re-posting the day does not drop a vehicle named, or
+     * a "no discount" set, on the invoice after the close was posted. A row that already names a
+     * vehicle keeps it; "no discount" follows the invoice, which is where it was last decided.
      */
-    private function carryVehicles(array $rows, array $metadata, array $vehicles): array
+    private function carryLabels(array $rows, array $metadata, array $labels): array
     {
         $used = [];
         foreach ($metadata['credit_sale_details'] ?? [] as $credit) {
-            $unitId = $vehicles[$credit['invoice_id'] ?? ''] ?? null;
-            if (! $unitId) {
+            $invoice = $labels[$credit['invoice_id'] ?? ''] ?? null;
+            if (! $invoice) {
                 continue;
             }
             foreach ($rows as $i => $row) {
@@ -701,9 +724,11 @@ class DailyCloseReopenService
                     && round((float) ($row['amount'] ?? 0), 2) === round((float) $credit['amount'], 2)
                     && ($row['reference'] ?? null) === ($credit['reference'] ?? null)) {
                     $used[$i] = true;
-                    if (empty($row['unit_id'])) {
-                        $rows[$i]['unit_id'] = $unitId;
+                    if (empty($row['unit_id']) && $invoice->unit_id) {
+                        $rows[$i]['unit_id'] = $invoice->unit_id;
                     }
+                    $rows[$i]['no_discount'] = (bool) $invoice->discount_blocked;
+                    $rows[$i]['no_discount_reason'] = $invoice->discount_blocked ? $invoice->discount_block_reason : null;
                     break;
                 }
             }
@@ -933,10 +958,13 @@ class DailyCloseReopenService
         app(\App\Services\PartnerLedgerService::class)->undoClose($companyId, $closeId, $entryIds);
     }
 
-    private function reverseSalaryAdvances(string $companyId, string $closeId, array &$warnings): void
+    /** @return array<string, array{employee_id: string, amount: float}> advance_id => its row, for the draft */
+    private function reverseSalaryAdvances(string $companyId, string $closeId, array &$warnings): array
     {
         $entryIds = JournalEntry::where('company_id', $companyId)->where('transaction_id', $closeId)->pluck('id');
-        foreach (SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $advance) {
+        $made = [];
+        foreach (SalaryAdvance::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->orderBy('created_at')->get() as $advance) {
+            $made[$advance->id] = ['employee_id' => $advance->employee_id, 'amount' => (float) $advance->amount];
             if ((float) $advance->amount_recovered > 0) {
                 // Kept (see advancesRepaid()): unhook it from the journal line about to be
                 // deleted; the re-posted close points it at its new line.
@@ -944,8 +972,11 @@ class DailyCloseReopenService
 
                 continue;
             }
+            // Hidden while the day is open; the re-post restores this same row (see DailyCloseService).
             $advance->delete();
         }
+
+        return $made;
     }
 
     private function reversePayrollPayouts(string $companyId, string $closeId): void

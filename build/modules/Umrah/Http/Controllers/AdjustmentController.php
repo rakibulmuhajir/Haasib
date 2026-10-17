@@ -42,6 +42,7 @@ class AdjustmentController extends Controller
         $payable = $accountFor('accounts_payable') ?: $company->ap_account_id;
 
         $rows = DB::table('acct.transactions as t')
+            ->whereNull('t.deleted_at')
             ->join('umrah.visa_groups as g', 'g.id', '=', 't.reference_id')
             ->leftJoin('acct.journal_entries as j', function ($join) use ($receivable, $payable) {
                 $join->on('j.transaction_id', '=', 't.id')

@@ -352,6 +352,7 @@ class CompanyController extends Controller
         $arOverdueCount = (clone $arOverdueQuery)->count();
 
         $paymentsMTD = DB::table('acct.payments')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum(DB::raw('COALESCE(base_amount, amount)'));
@@ -373,14 +374,17 @@ class CompanyController extends Controller
 
         $quickStats = [
             'invoices_sent_this_month' => DB::table('acct.invoices')
+                ->whereNull('deleted_at')
                 ->where('company_id', $company->id)
                 ->whereBetween('sent_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
             'payments_received_this_month' => DB::table('acct.payments')
+                ->whereNull('deleted_at')
                 ->where('company_id', $company->id)
                 ->whereBetween('payment_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                 ->count(),
             'new_customers_this_month' => DB::table('acct.customers')
+                ->whereNull('deleted_at')
                 ->where('company_id', $company->id)
                 ->whereBetween('created_at', [$monthStart->utc(), $monthEnd->utc()])
                 ->count(),
@@ -388,7 +392,9 @@ class CompanyController extends Controller
 
         // Recent activity (payments, invoices, customers)
         $recentPayments = DB::table('acct.payments as p')
+            ->whereNull('p.deleted_at')
             ->join('acct.customers as c', 'c.id', '=', 'p.customer_id')
+            ->whereNull('c.deleted_at')
             ->where('p.company_id', $company->id)
             ->orderByDesc('p.payment_date')
             ->limit(5)
@@ -411,7 +417,9 @@ class CompanyController extends Controller
             });
 
         $recentInvoices = DB::table('acct.invoices as i')
+            ->whereNull('i.deleted_at')
             ->join('acct.customers as c', 'c.id', '=', 'i.customer_id')
+            ->whereNull('c.deleted_at')
             ->where('i.company_id', $company->id)
             ->orderByDesc('i.invoice_date')
             ->limit(5)
@@ -432,6 +440,7 @@ class CompanyController extends Controller
             });
 
         $recentCustomers = DB::table('acct.customers')
+            ->whereNull('deleted_at')
             ->where('company_id', $company->id)
             ->orderByDesc('created_at')
             ->limit(5)
@@ -449,7 +458,9 @@ class CompanyController extends Controller
            would show one direction only and read as a broken table rather than
            a quiet month. */
         $recentBills = DB::table('acct.bills as b')
+            ->whereNull('b.deleted_at')
             ->join('acct.vendors as v', 'v.id', '=', 'b.vendor_id')
+            ->whereNull('v.deleted_at')
             ->where('b.company_id', $company->id)
             ->orderByDesc('b.bill_date')
             ->limit(5)

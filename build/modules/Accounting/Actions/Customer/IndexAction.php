@@ -55,6 +55,7 @@ class IndexAction implements PaletteAction, \App\Contracts\DescribesPalette
 
         // Get invoice totals for each customer
         $invoiceTotals = DB::table('acct.invoices')
+            ->whereNull('deleted_at')
             ->whereIn('customer_id', $customerIds)
             ->whereIn('status', ['draft', 'sent', 'viewed', 'partial', 'overdue'])
             ->where('balance', '>', 0)

@@ -36,6 +36,9 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
             'reference' => 'nullable|string|max:100',
             // The customer's own vehicle, site, room... this sale was for.
             'unit_id' => 'nullable|uuid',
+            // "No discount" from the start: withholding one needs no extra permission.
+            'no_discount' => 'nullable|boolean',
+            'no_discount_reason' => 'required_if_accepted:no_discount|nullable|string|max:255',
             'internal_notes' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
@@ -160,6 +163,10 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                 ]);
             }
             $baseAmount = round($total * ($exchangeRate ?? 1), 2);
+            $noDiscount = filter_var($params['no_discount'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($noDiscount && $discountAmount > 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['no_discount' => 'This invoice is marked no discount. Remove the line discounts.']);
+            }
 
             // Create invoice
             $invoice = Invoice::create([
@@ -192,6 +199,10 @@ class CreateAction implements PaletteAction, \App\Contracts\DescribesPalette
                     : null,
                 'unit_id' => $customerUnit?->id,
                 'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
+                'discount_blocked' => $noDiscount,
+                'discount_block_reason' => $noDiscount ? trim((string) $params['no_discount_reason']) : null,
+                'discount_blocked_by_user_id' => $noDiscount ? Auth::id() : null,
+                'discount_blocked_at' => $noDiscount ? now() : null,
                 'created_by_user_id' => Auth::id(),
             ]);
 

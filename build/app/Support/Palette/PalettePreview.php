@@ -207,6 +207,7 @@ final class PalettePreview
     {
         $row = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('t.company_id', $companyId)
             ->whereIn('t.status', ['posted', 'locked'])
             ->where('je.account_id', $accountId)

@@ -467,6 +467,7 @@ class ProductProfitabilityReportService
     private function addOffTankerSales(string $companyId, string $startDate, string $endDate, string $groupBy, string $product, array $items, array &$products, array &$periods): void
     {
         $tankItemIds = DB::table('inv.warehouses')
+            ->whereNull('deleted_at')
             ->where('company_id', $companyId)
             ->where('warehouse_type', 'tank')
             ->whereNotNull('linked_item_id')
@@ -620,6 +621,7 @@ class ProductProfitabilityReportService
     {
         $corrections = DB::table('fuel.daily_close_reading_corrections as corrections')
             ->join('acct.transactions as close_transactions', 'close_transactions.id', '=', 'corrections.close_transaction_id')
+            ->whereNull('close_transactions.deleted_at')
             ->where('corrections.company_id', $companyId)
             ->where('corrections.reading_type', 'tank')
             ->whereBetween('close_transactions.transaction_date', [

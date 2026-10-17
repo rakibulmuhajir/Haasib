@@ -38,8 +38,8 @@ class CompanyCurrencyController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $record = CompanyCurrency::where('company_id', $company->id)->findOrFail($currency);
-        $inUse = DB::table('acct.accounts')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists()
-            || DB::table('acct.transactions')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists();
+        $inUse = DB::table('acct.accounts')->whereNull('deleted_at')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists()
+            || DB::table('acct.transactions')->whereNull('deleted_at')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists();
         if ($inUse) {
             throw ValidationException::withMessages(['currency_code' => 'This currency is already used by an account or transaction.']);
         }

@@ -197,6 +197,7 @@ class DashboardService
     {
         // 1. Overdue Invoices
         $overdueInvoices = DB::table('acct.invoices')
+            ->whereNull('deleted_at')
             ->where('company_id', $companyId)
             ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
             ->where('due_date', '<', app(CompanyClock::class)->today())
@@ -205,6 +206,7 @@ class DashboardService
 
         // 2. Bills Due Soon (next 7 days)
         $billsDueSoonQuery = DB::table('acct.bills')
+            ->whereNull('deleted_at')
             ->where('company_id', $companyId)
             ->whereNotIn('status', ['draft', 'paid', 'void', 'cancelled'])
             ->whereBetween('due_date', [app(CompanyClock::class)->today(), app(CompanyClock::class)->now()->addDays(7)->toDateString()])
@@ -215,6 +217,7 @@ class DashboardService
 
         // 3. Unreconciled Bank Transactions
         $unreconciled = DB::table('acct.bank_transactions')
+            ->whereNull('deleted_at')
             ->where('company_id', $companyId)
             ->where('is_reconciled', false)
             ->count();
@@ -267,6 +270,7 @@ class DashboardService
 
         $results = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->join('acct.accounts as a', 'a.id', '=', 'je.account_id')
             ->where('t.company_id', $companyId)
             ->where('t.status', 'posted')

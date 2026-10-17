@@ -46,6 +46,7 @@ class DeleteAction implements PaletteAction, \App\Contracts\DescribesPalette
         }
 
         $creditCount = DB::table('acct.vendor_credits')
+            ->whereNull('deleted_at')
             ->where('vendor_id', $vendor->id)
             ->where('status', '!=', 'void')
             ->count();

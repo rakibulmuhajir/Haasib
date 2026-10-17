@@ -31,6 +31,7 @@ class PartnerStatementService
 
         $base = fn () => DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('t.company_id', $partner->company_id)
             ->whereIn('je.account_id', $accountIds)
             ->whereIn('t.status', self::POSTED);

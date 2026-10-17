@@ -126,6 +126,9 @@ npx vue-tsc --noEmit -p tsconfig.json
 node scripts/lint-palette.mjs
 node scripts/lint-palette.mjs --report     # shows which files
 
+# Raw DB::table reads of soft-deleting tables that ignore deleted_at (reopened closes leave trashed copies)
+python -I scripts/softdelete-audit.py .
+
 # PHP syntax only, instant
 php -l path\to\File.php
 

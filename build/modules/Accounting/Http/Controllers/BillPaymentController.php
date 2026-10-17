@@ -217,6 +217,7 @@ class BillPaymentController extends Controller
 
         return DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->whereNull('t.deleted_at')
             ->where('je.company_id', $companyId)
             ->where('t.company_id', $companyId)
             ->where('t.status', 'posted')

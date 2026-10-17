@@ -5,9 +5,11 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Extensions\BillNotes;
 use App\Modules\FuelStation\Models\CardCharge;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Services\CardChargeService;
+use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
@@ -17,9 +19,10 @@ use Inertia\Testing\AssertableInertia as Assert;
 require_once __DIR__.'/CreditCloseFixtures.php';
 
 /**
- * The charge the bank keeps on swipes, or the fuel supplier on its vendor card, entered by hand on
- * any date (usually month end): the card-charges expense, taken from where that card's money sits --
- * its clearing account, its bank, or (a supplier's vendor card) added to what the station owes.
+ * Card charges on a card set to manual charges: the real charge the bank or card supplier kept,
+ * entered from the statement on any date (usually month end) for a period of card sales. It posts
+ * once, to card charges, from where that card's money sits; each day's card sales and each
+ * supplier bill a vendor card paid show their share at charge / sales.
  */
 function cardChargeFixture(): array
 {
@@ -31,15 +34,17 @@ function cardChargeFixture(): array
         'type' => 'expense', 'subtype' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true]);
     $ap = Account::create(['company_id' => $f['company']->id, 'code' => '2000', 'name' => 'Accounts Payable',
         'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_active' => true]);
-    $parcoClearing = Account::create(['company_id' => $f['company']->id, 'code' => '1031', 'name' => 'PARCO card clearing',
+    $f['parcoClearing'] = Account::create(['company_id' => $f['company']->id, 'code' => '1031', 'name' => 'PARCO card clearing',
         'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit', 'currency' => 'PKR', 'is_active' => true]);
     $f['vendor'] = Vendor::create(['company_id' => $f['company']->id, 'vendor_number' => 'V-1', 'name' => 'PARCO',
         'base_currency' => 'PKR', 'is_active' => true, 'ap_account_id' => $ap->id]);
 
     StationSettings::where('company_id', $f['company']->id)->update(['payment_channels' => json_encode([
-        ['code' => 'pos', 'label' => 'HBL POS', 'type' => 'card_pos', 'enabled' => true, 'clearing_account_id' => $f['accounts']['1020']->id],
-        ['code' => 'parco', 'label' => 'PARCO card', 'type' => 'fuel_card', 'enabled' => true, 'settles_to' => 'supplier', 'fee_percent' => 1.5,
-            'settles_to_vendor_id' => $f['vendor']->id, 'clearing_account_id' => $parcoClearing->id],
+        ['code' => 'pos', 'label' => 'HBL POS', 'type' => 'card_pos', 'enabled' => true, 'charge_mode' => 'manual', 'fee_percent' => 2,
+            'clearing_account_id' => $f['accounts']['1020']->id],
+        ['code' => 'parco', 'label' => 'PARCO card', 'type' => 'fuel_card', 'enabled' => true, 'charge_mode' => 'manual', 'settles_to' => 'supplier',
+            'settles_to_vendor_id' => $f['vendor']->id, 'clearing_account_id' => $f['parcoClearing']->id],
+        ['code' => 'ubl', 'label' => 'UBL POS', 'type' => 'card_pos', 'enabled' => true, 'fee_percent' => 1, 'clearing_account_id' => $f['accounts']['1020']->id],
         ['code' => 'wallet', 'label' => 'Wallet', 'type' => 'mobile_wallet', 'enabled' => true, 'bank_account_id' => $f['accounts']['1020']->id],
     ])]);
 
@@ -57,26 +62,48 @@ function cardChargeBalance(string $companyId, string $accountId): float
     return round((float) JournalEntry::where('company_id', $companyId)->where('account_id', $accountId)->sum(DB::raw('debit_amount - credit_amount')), 2);
 }
 
-test('only the station card channels are offered, each saying where its charge comes from and any daily %', function () {
+test('cards are automatic or manual, and only manual cards can have charges recorded', function () {
     $f = cardChargeFixture();
-    $channels = collect(app(CardChargeService::class)->channels($f['company']))->keyBy('code');
+    $service = app(CardChargeService::class);
+    $all = collect($service->channels($f['company']))->keyBy('code');
 
-    expect($channels->keys()->all())->toBe(['pos', 'parco'])
-        ->and($channels['pos']['settles_to'])->toBe('clearing')
-        ->and($channels['pos']['account_id'])->toBe($f['accounts']['1020']->id)
-        ->and($channels['pos']['daily_percent'])->toBeNull()
-        ->and($channels['parco']['daily_percent'])->toBe(1.5)
-        ->and($channels['parco']['vendor_name'])->toBe('PARCO');
+    expect($all->keys()->all())->toBe(['pos', 'parco', 'ubl'])
+        ->and($all['ubl']['charge_mode'])->toBe('automatic')
+        ->and($all['pos']['charge_mode'])->toBe('manual')
+        ->and(collect($service->channels($f['company'], true))->pluck('code')->all())->toBe(['pos', 'parco']);
+    expect(fn () => cardChargeRecord($f, ['channel_code' => 'ubl', 'amount' => 100]))->toThrow(ValidationException::class)
+        ->and(fn () => cardChargeRecord($f, ['channel_code' => 'wallet', 'amount' => 100]))->toThrow(ValidationException::class);
 });
 
-test('a swipe card charge comes out of its clearing account as card charges, dated as entered', function () {
+test('a daily close takes no charge from a manual card, even with an old % still saved on it', function () {
     $f = cardChargeFixture();
-    $charge = cardChargeRecord($f, ['channel_code' => 'pos', 'amount' => 1500, 'reference' => 'HBL Sep stmt']);
+    creditClosePost($f);
 
-    $transaction = Transaction::where('company_id', $f['company']->id)->findOrFail($charge->transaction_id);
-    expect($transaction->transaction_date->toDateString())->toBe('2026-09-30')
-        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(1500.0)
-        ->and(cardChargeBalance($f['company']->id, $f['accounts']['1020']->id))->toBe(-1500.0);
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->sole();
+    $pos = collect($close->metadata['payment_receipt_postings'])->firstWhere('channel_code', 'pos');
+    expect((float) $pos['fee_amount'])->toBe(0.0)
+        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(0.0);
+});
+
+test('a month-end charge posts once from the clearing account and gives each day its share', function () {
+    $f = cardChargeFixture();
+    creditClosePost($f); // 15 Sep: HBL POS card sales 9,000
+
+    $charge = cardChargeRecord($f, ['channel_code' => 'pos', 'amount' => 180, 'reference' => 'HBL Sep stmt']);
+    expect($charge->period_from->toDateString())->toBe('2026-09-01')
+        ->and($charge->period_to->toDateString())->toBe('2026-09-30')
+        ->and(Transaction::find($charge->transaction_id)->transaction_date->toDateString())->toBe('2026-09-30')
+        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(180.0);
+
+    $service = app(CardChargeService::class);
+    expect($service->cardSales($f['company']->id, 'pos', '2026-09-01', '2026-09-30'))->toBe(9000.0)
+        ->and($service->rate($charge))->toBe(2.0);
+
+    $day = $service->forDay($f['company']->id, '2026-09-15');
+    expect($day['rates']['pos']['rate'])->toBe(2.0)->and($day['booked'])->toBe([]);
+    $monthEnd = $service->forDay($f['company']->id, '2026-09-30');
+    expect($monthEnd['booked'][0])->toMatchArray(['channel' => 'HBL POS', 'amount' => 180.0, 'rate' => 2.0]);
+    expect($service->forDay($f['company']->id, '2026-10-01')['rates'])->toBe([]);
 });
 
 test('undo reverses the charge on its own date and keeps the row as undone', function () {
@@ -88,29 +115,36 @@ test('undo reverses the charge on its own date and keeps the row as undone', fun
     expect($reversal->transaction_date->toDateString())->toBe('2026-09-30')
         ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(0.0)
         ->and(cardChargeBalance($f['company']->id, $f['accounts']['1020']->id))->toBe(0.0)
-        ->and(CardCharge::withTrashed()->find($charge->id)->trashed())->toBeTrue();
+        ->and(CardCharge::withTrashed()->find($charge->id)->trashed())->toBeTrue()
+        ->and(app(CardChargeService::class)->forDay($f['company']->id, '2026-09-15')['rates'])->toBe([]);
 });
 
-test('a supplier vendor card charge is a bill to that supplier, and undo voids it', function () {
+test('a vendor card charge is a bill to the supplier, and each fuel bill the card paid shows its share', function () {
     $f = cardChargeFixture();
-    $charge = cardChargeRecord($f, ['channel_code' => 'parco', 'amount' => 2400, 'reference' => 'PARCO Sep']);
+    $fuelBill = app(CompanyContextService::class)->withContext($f['company'], fn () => app(CommandBus::class)->dispatch('bill.create', [
+        'vendor_id' => $f['vendor']->id, 'bill_date' => '2026-09-10', 'due_date' => '2026-09-10', 'status' => 'received',
+        'currency' => 'PKR', 'base_currency' => 'PKR',
+        'line_items' => [['description' => 'Fuel', 'quantity' => 1, 'unit_price' => 50000, 'expense_account_id' => $f['charges']->id]],
+    ], $f['user'], true));
+    // 15 Sep close: 3,000 of PARCO card sales, paid to PARCO against its open bill.
+    $f['payload']['payment_receipts']['parco'] = ['entries' => [['amount' => 3000]]];
+    $f['payload']['closing_cash'] = 22000;
+    creditClosePost($f);
 
-    $bill = Bill::where('company_id', $f['company']->id)->findOrFail($charge->bill_id);
-    expect($bill->vendor_id)->toBe($f['vendor']->id)
-        ->and((float) $bill->total_amount)->toBe(2400.0)
-        ->and($bill->bill_date->toDateString())->toBe('2026-09-30')
-        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(2400.0)
-        ->and($charge->fresh()->transaction_id)->toBe($bill->transaction_id);
+    $charge = cardChargeRecord($f, ['channel_code' => 'parco', 'amount' => 60, 'reference' => 'PARCO Sep']);
+    $chargeBill = Bill::where('company_id', $f['company']->id)->findOrFail($charge->bill_id);
+    expect($chargeBill->vendor_id)->toBe($f['vendor']->id)
+        ->and((float) $chargeBill->total_amount)->toBe(60.0)
+        ->and(app(CardChargeService::class)->rate($charge))->toBe(2.0);
+
+    $notes = app(BillNotes::class)->for(Bill::find($fuelBill['data']['id']));
+    expect($notes)->toHaveCount(1)
+        ->and($notes[0]['label'])->toBe('PARCO card charge')
+        ->and($notes[0]['amount'])->toBe(60.0);
 
     app(CompanyContextService::class)->withContext($f['company'], fn () => app(CardChargeService::class)->undo($f['company'], $charge->fresh(), $f['user']));
-    expect($bill->fresh()->status)->toBe('void')
-        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(0.0);
-});
-
-test('a channel that is not a card is refused', function () {
-    $f = cardChargeFixture();
-    expect(fn () => cardChargeRecord($f, ['channel_code' => 'wallet', 'amount' => 100]))->toThrow(ValidationException::class);
-    expect(CardCharge::where('company_id', $f['company']->id)->count())->toBe(0);
+    expect($chargeBill->fresh()->status)->toBe('void')
+        ->and(app(BillNotes::class)->for(Bill::find($fuelBill['data']['id'])))->toBe([]);
 });
 
 test('the settlement page records and undoes card charges for someone who may take payments, not for others', function () {
@@ -125,12 +159,14 @@ test('the settlement page records and undoes card charges for someone who may ta
     $this->actingAs($f['user']);
     $slug = $f['company']->slug;
 
-    $this->post("/{$slug}/fuel/card-charges", ['channel_code' => 'pos', 'charge_date' => '2026-09-30', 'amount' => 1200])
+    $this->post("/{$slug}/fuel/card-charges", ['channel_code' => 'pos', 'charge_date' => '2026-09-30', 'amount' => 1200,
+        'period_from' => '2026-09-01', 'period_to' => '2026-09-30'])
         ->assertSessionHasNoErrors()->assertRedirect();
     $charge = CardCharge::where('company_id', $f['company']->id)->sole();
     $this->get("/{$slug}/fuel/vendor-cards/pending")->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('canRecordCharge', true)
         ->where('cardCharges.0.id', $charge->id)->where('cardCharges.0.amount', 1200)
+        ->where('cardCharges.0.period_from', '2026-09-01')
         ->has('cardChargeChannels', 2));
 
     $outsider = \App\Models\User::factory()->create();

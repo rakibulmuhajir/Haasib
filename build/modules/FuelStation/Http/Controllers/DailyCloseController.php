@@ -1402,6 +1402,8 @@ class DailyCloseController extends Controller
                     ->map(fn ($r) => ['id' => $r->id, 'label' => 'Nozzle '.$r->nozzle_id.' — '.$r->liters_dispensed.'L', 'current_value' => (float) $r->liters_dispensed]),
             ] : ['tank' => [], 'nozzle' => []],
             'reconciliation' => app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->view($txn),
+            // Manual card charges: each card's share rate for this day, and any charge booked on it.
+            'cardCharges' => app(\App\Modules\FuelStation\Services\CardChargeService::class)->forDay($companyModel->id, $txn->transaction_date->toDateString()),
             'periodDiscounts' => app(DailyClosePeriodDiscountService::class)->forDate($companyModel->id, $txn->transaction_date->toDateString()),
             // Fresh, current figures for each credit-sale invoice this close created or
             // absorbed -- not the frozen metadata.credit_sale_details, which never changes

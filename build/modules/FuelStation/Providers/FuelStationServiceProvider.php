@@ -99,6 +99,9 @@ class FuelStationServiceProvider extends ServiceProvider
                 && ($channel['clearing_account_id'] ?? null) === $accountId);
         });
 
+        // A supplier bill a vendor card's money paid shows its share of that card's charges.
+        \App\Modules\Accounting\Extensions\BillNotes::extend('fuel_station', fn (\App\Modules\Accounting\Models\Bill $bill) => app(\App\Modules\FuelStation\Services\CardChargeService::class)->billNotes($bill));
+
         // Invoice guard: assertMutable ran for every company before the hooks existed, so it
         // stays ungated (a no-op for invoices no daily close references).
         InvoiceMutationGuard::extend('fuel_station', function (Invoice $invoice, string $operation): void {

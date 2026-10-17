@@ -67,7 +67,6 @@ interface CardChargeChannel {
   code: string
   label: string
   settles_to: 'clearing' | 'bank' | 'supplier'
-  daily_percent: number | null
   vendor_name: string | null
   account_name: string | null
 }
@@ -77,6 +76,10 @@ interface CardChargeRow {
   date: string
   channel: string
   amount: number
+  period_from: string
+  period_to: string
+  sales: number
+  rate: number | null
   reference: string | null
   bill_id: string | null
   undone: boolean
@@ -102,10 +105,18 @@ const monthEnd = () => {
   const last = new Date(y, m - 1, 0)
   return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
 }
+// The card sales a charge covers: the month of its date unless changed.
+const monthOf = (date: string) => {
+  const [y, m] = date.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { from: `${y}-${String(m).padStart(2, '0')}-01`, to: `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}` }
+}
 const showChargeDialog = ref(false)
 const chargeForm = useForm({
   channel_code: '',
   charge_date: monthEnd(),
+  period_from: monthOf(monthEnd()).from,
+  period_to: monthOf(monthEnd()).to,
   amount: null as number | null,
   reference: '',
   notes: '',
@@ -118,6 +129,8 @@ const openChargeDialog = () => {
   chargeForm.clearErrors()
   chargeForm.channel_code = props.cardChargeChannels?.[0]?.code ?? ''
   chargeForm.charge_date = monthEnd()
+  chargeForm.period_from = monthOf(chargeForm.charge_date).from
+  chargeForm.period_to = monthOf(chargeForm.charge_date).to
   showChargeDialog.value = true
 }
 const submitCharge = () => {
@@ -469,13 +482,14 @@ const todayTableData = computed(() => {
     </Card>
 
     <!-- The charge the bank or the card's supplier kept on card sales -->
-    <Card v-if="(cardChargeChannels ?? []).length || (cardCharges ?? []).length" class="border-border/80">
+    <Card class="border-border/80">
       <CardHeader class="flex flex-row items-start justify-between gap-3">
         <div>
           <CardTitle class="text-base">Card charges</CardTitle>
           <CardDescription>Charges the bank or supplier kept</CardDescription>
         </div>
         <Button v-if="canRecordCharge && (cardChargeChannels ?? []).length" size="sm" @click="openChargeDialog">Record charge</Button>
+        <p v-else-if="!(cardChargeChannels ?? []).length" class="text-xs text-muted-foreground">Set a card to manual charges in Station settings.</p>
       </CardHeader>
       <CardContent class="space-y-2">
         <p v-if="!(cardCharges ?? []).length" class="text-sm text-muted-foreground">None recorded yet.</p>
@@ -488,7 +502,7 @@ const todayTableData = computed(() => {
           <div class="min-w-0">
             <div class="font-medium" :class="{ 'line-through': charge.undone }">{{ charge.channel }}</div>
             <div class="text-xs text-muted-foreground">
-              {{ formatDate(charge.date) }}<template v-if="charge.reference"> · {{ charge.reference }}</template>
+              {{ formatDate(charge.date) }} · sales {{ formatDate(charge.period_from) }} to {{ formatDate(charge.period_to) }}<template v-if="charge.rate !== null"> · {{ +charge.rate.toFixed(2) }}% of {{ formatCurrency(charge.sales) }}</template><template v-if="charge.reference"> · {{ charge.reference }}</template>
               <template v-if="charge.undone"> · Undone</template>
             </div>
           </div>
@@ -651,19 +665,30 @@ const todayTableData = computed(() => {
               </SelectContent>
             </Select>
             <p v-if="chargeChannel" class="text-xs text-muted-foreground">{{ chargeComesFrom(chargeChannel) }}</p>
-            <p v-if="chargeChannel?.daily_percent" class="text-xs text-status-attention">Daily close already charges {{ chargeChannel.daily_percent }}%.</p>
             <InputError :message="chargeForm.errors.channel_code" />
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label>Date</Label>
-              <Input v-model="chargeForm.charge_date" type="date" />
+              <Input v-model="chargeForm.charge_date" type="date" @update:model-value="(v) => { const p = monthOf(String(v)); chargeForm.period_from = p.from; chargeForm.period_to = p.to }" />
               <InputError :message="chargeForm.errors.charge_date" />
             </div>
             <div class="space-y-2">
               <Label>Charge</Label>
               <Input v-model.number="chargeForm.amount" type="number" min="0.01" step="0.01" />
               <InputError :message="chargeForm.errors.amount" />
+            </div>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Sales from</Label>
+              <Input v-model="chargeForm.period_from" type="date" />
+              <InputError :message="chargeForm.errors.period_from" />
+            </div>
+            <div class="space-y-2">
+              <Label>Sales to</Label>
+              <Input v-model="chargeForm.period_to" type="date" />
+              <InputError :message="chargeForm.errors.period_to" />
             </div>
           </div>
           <div class="space-y-2">

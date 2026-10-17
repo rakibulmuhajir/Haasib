@@ -20,12 +20,14 @@ class CardCharge extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'company_id', 'channel_code', 'channel_label', 'settles_to', 'charge_date', 'amount',
+        'company_id', 'channel_code', 'channel_label', 'settles_to', 'charge_date', 'period_from', 'period_to', 'amount',
         'reference', 'notes', 'transaction_id', 'bill_id', 'vendor_id', 'created_by_user_id',
     ];
 
     protected $casts = [
         'charge_date' => 'date',
+        'period_from' => 'date',
+        'period_to' => 'date',
         'amount' => 'decimal:2',
     ];
 }

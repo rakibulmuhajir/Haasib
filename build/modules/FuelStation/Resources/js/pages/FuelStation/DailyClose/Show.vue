@@ -91,6 +91,11 @@ const props = defineProps<{
   company: { id: string; name: string; slug: string; base_currency: string }
   periodDiscounts?: DailyClosePeriodDiscount[]
   transaction: TransactionData
+  // Manual card charges: share rates for this day, and charges booked on it.
+  cardCharges?: {
+    rates: Record<string, { rate: number; period_from: string; period_to: string }>
+    booked: Array<{ channel: string; amount: number; period_from: string; period_to: string; rate: number | null; reference: string | null }>
+  }
   expenseAccounts?: Array<{ id: string; name: string }>
   canAddActivity?: boolean
   canCorrectReadings?: boolean
@@ -542,8 +547,25 @@ const unlockTransaction = () => {
       :credit-rows="creditRows"
       :period-discounts="periodDiscounts || []"
       :can-apply-discount="canApplyPostCloseDiscount"
+      :card-charge-rates="cardCharges?.rates ?? {}"
       @apply-discount="openDiscountDialog"
     />
+
+    <!-- Card charges entered by hand on this date (the bank or supplier kept them; not drawer cash). -->
+    <Card v-if="cardCharges?.booked?.length" class="mt-6">
+      <CardHeader>
+        <CardTitle class="text-base">Card charges</CardTitle>
+      </CardHeader>
+      <CardContent class="space-y-2">
+        <div v-for="(c, i) in cardCharges.booked" :key="i" class="flex items-center justify-between gap-3 text-sm">
+          <span class="min-w-0">
+            <span class="font-medium">{{ c.channel }}</span>
+            <span class="text-muted-foreground"> · {{ c.period_from }} to {{ c.period_to }}<template v-if="c.rate !== null"> · {{ +c.rate.toFixed(2) }}%</template><template v-if="c.reference"> · {{ c.reference }}</template></span>
+          </span>
+          <MoneyText :amount="c.amount" :currency="currency" :fraction-digits="0" />
+        </div>
+      </CardContent>
+    </Card>
 
     <!-- Fuel Deliveries Received on Posting -->
     <Card v-if="(metadata.deliveries_received || []).length > 0" class="mt-6">

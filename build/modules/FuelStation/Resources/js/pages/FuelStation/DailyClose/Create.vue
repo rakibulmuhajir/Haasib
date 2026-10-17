@@ -1015,7 +1015,7 @@ const enabledChannels = computed(() => {
 // Bank charge on a card / wallet channel's sales, as set up in Station settings.
 const channelSum = (code: string) =>
     ((form.payment_receipts as any)[code]?.entries || []).reduce((t: number, e: any) => t + Number(e.amount || 0), 0);
-const channelFeePercent = (channel: any) => Number(channel.fee_percent ?? 0);
+const channelFeePercent = (channel: any) => (channel.charge_mode === 'manual' ? 0 : Number(channel.fee_percent ?? 0));
 const channelFee = (channel: any) => Math.round(channelSum(channel.code) * channelFeePercent(channel)) / 100;
 
 const searchMatches = (

@@ -428,6 +428,8 @@ class BillController extends Controller
             'editLock' => $editLock,
             'paidFromAdvances' => $paidFrom,
             'vendorAdvanceAvailable' => round($vendorAdvanceAvailable, 2),
+            // Read-only lines a module adds (e.g. a card charge's share of the money that paid it).
+            'billNotes' => app(\App\Modules\Accounting\Extensions\BillNotes::class)->for($record),
             // Corrections: who it can be moved to, and what was corrected before.
             'canCorrect' => \Illuminate\Support\Facades\Auth::user()?->hasCompanyPermission(\App\Constants\Permissions::BILL_UPDATE) ?? false,
             'correctionSuppliers' => \App\Modules\Accounting\Models\Vendor::where('company_id', $companyModel->id)

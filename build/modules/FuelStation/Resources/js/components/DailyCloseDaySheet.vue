@@ -37,6 +37,8 @@ const props = defineProps<{
   paymentSources?: Record<string, { direct: boolean; invoices: string }>
   creditRows: Array<{ invoice_id: string; invoice_number: string; customer_name: string | null; amount: number; discount_amount: number; balance: number; source?: string; split_from?: string }>
   canApplyDiscount?: boolean
+  // Manual card charges covering this day: the share rate (%) by card code (CardChargeService::forDay).
+  cardChargeRates?: Record<string, { rate: number; period_from: string; period_to: string }>
 }>()
 const emit = defineEmits<{ applyDiscount: [credit: any] }>()
 
@@ -177,7 +179,12 @@ const moneyOut = computed<Line[]>(() => {
   for (const r of (m.value.payment_receipt_postings || []) as any[]) {
     if (n(r.amount)) lines.push({
       label: r.channel_label ?? 'Card / bank sale',
-      detail: [`into ${accountName(r.account_id)}`, n(r.fee_amount) ? `charge ${r.fee_percent}% ${round0(n(r.fee_amount)).toLocaleString()}` : null].filter(Boolean).join(' · '),
+      detail: [
+        `into ${accountName(r.account_id)}`,
+        n(r.fee_amount) ? `charge ${r.fee_percent}% ${round0(n(r.fee_amount)).toLocaleString()}` : null,
+        // Its share of a charge entered by hand for the period (shown only; posted once, on the charge's date).
+        props.cardChargeRates?.[r.channel_code] ? `charge ${+props.cardChargeRates[r.channel_code].rate.toFixed(2)}% ${round0(n(r.amount) * props.cardChargeRates[r.channel_code].rate / 100).toLocaleString()}` : null,
+      ].filter(Boolean).join(' · '),
       amount: n(r.amount),
     })
   }

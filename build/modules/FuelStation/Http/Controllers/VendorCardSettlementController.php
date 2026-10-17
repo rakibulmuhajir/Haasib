@@ -43,7 +43,7 @@ class VendorCardSettlementController extends Controller
             'todaySettlements' => [],
             'bankAccounts' => $bankAccounts,
             // Card charges entered by hand (usually month end), next to the daily close's own %.
-            'cardChargeChannels' => app(CardChargeService::class)->channels($company),
+            'cardChargeChannels' => app(CardChargeService::class)->channels($company, true),
             'cardCharges' => app(CardChargeService::class)->recent($company->id),
             'canRecordCharge' => request()->user()->hasCompanyPermission(\App\Constants\Permissions::PAYMENT_CREATE),
         ]);

@@ -34,6 +34,8 @@ interface PaymentChannel {
   settles_to_vendor_id?: string | null
   // Bank's charge on this channel's sales, % (e.g. 0.8, 1, 1.2)
   fee_percent?: number | null
+  // Cards: the % taken at each close (automatic), or the real charge entered from the statement (manual).
+  charge_mode?: 'automatic' | 'manual' | null
 }
 
 interface CompanyVendor {
@@ -183,6 +185,15 @@ const updateChannelFee = (code: string, value: string | number) => {
   const idx = channels.findIndex(ch => ch.code === code)
   if (idx !== -1) {
     channels[idx] = { ...channels[idx], fee_percent: value === '' || value === null ? null : Number(value) }
+    form.payment_channels = channels
+  }
+}
+
+const updateChannelChargeMode = (code: string, value: 'automatic' | 'manual') => {
+  const channels = [...form.payment_channels]
+  const idx = channels.findIndex(ch => ch.code === code)
+  if (idx !== -1) {
+    channels[idx] = { ...channels[idx], charge_mode: value, fee_percent: value === 'manual' ? null : channels[idx].fee_percent }
     form.payment_channels = channels
   }
 }
@@ -529,7 +540,19 @@ const formatFuelCategory = (category: string | null) => {
                 <InputError :message="channelError(channelIndex, 'clearing_account_id')" />
               </div>
 
-              <div v-if="['card_pos', 'fuel_card', 'mobile_wallet', 'bank_transfer'].includes(channel.type)" class="space-y-2">
+              <div v-if="['card_pos', 'fuel_card'].includes(channel.type)" class="space-y-2">
+                <Label class="text-xs">Charges</Label>
+                <Select :model-value="channel.charge_mode ?? 'automatic'" @update:model-value="(v) => updateChannelChargeMode(channel.code, v as 'automatic' | 'manual')">
+                  <SelectTrigger class="w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="automatic">Automatic %</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="channel.charge_mode === 'manual'" class="text-xs text-muted-foreground">Record charges under Vendor Card Settlement.</p>
+              </div>
+
+              <div v-if="['card_pos', 'fuel_card', 'mobile_wallet', 'bank_transfer'].includes(channel.type) && channel.charge_mode !== 'manual'" class="space-y-2">
                 <Label :for="`fee-${channel.code}`" class="text-xs">Bank charge %</Label>
                 <Input
                   :id="`fee-${channel.code}`"
@@ -542,8 +565,6 @@ const formatFuelCategory = (category: string | null) => {
                   class="w-28"
                   @update:model-value="(v) => updateChannelFee(channel.code, v)"
                 />
-                <!-- Card charges can instead be entered by hand (CardChargeService), usually at month end. -->
-                <p v-if="['card_pos', 'fuel_card'].includes(channel.type)" class="text-xs text-muted-foreground">Taken at each daily close. Leave empty to record charges monthly.</p>
                 <InputError :message="channelError(channelIndex, 'fee_percent')" />
               </div>
 

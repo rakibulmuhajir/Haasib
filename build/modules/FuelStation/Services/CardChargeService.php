@@ -86,7 +86,19 @@ class CardChargeService
         if ($from > $to) {
             throw ValidationException::withMessages(['period_to' => 'The period ends before it starts.']);
         }
-        $amount = round((float) $data['amount'], 2);
+        if (! empty($data['percent'])) {
+            // A % is of the card's own sales over the period, worked out here so it always matches the closes.
+            $sales = $this->cardSales($company->id, $channel['code'], $from, $to);
+            if ($sales <= 0) {
+                throw ValidationException::withMessages(['percent' => 'No card sales in that period.']);
+            }
+            $amount = round($sales * (float) $data['percent'] / 100, 2);
+        } else {
+            $amount = round((float) $data['amount'], 2);
+        }
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Enter a charge above zero.']);
+        }
         app(DocumentDateLock::class)->assertOpen($company->id, $date, 'This card charge');
         $expense = app(DailyCloseService::class)->cardChargesAccountId($company->id);
 

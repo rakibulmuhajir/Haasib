@@ -177,3 +177,38 @@ test('the settlement page records and undoes card charges for someone who may ta
     $this->actingAs($f['user'])->delete("/{$slug}/fuel/card-charges/{$charge->id}")->assertSessionHasNoErrors()->assertRedirect();
     expect(CardCharge::where('company_id', $f['company']->id)->count())->toBe(0);
 });
+
+test('a charge entered as a % is worked out from that card sales over the period', function () {
+    $f = cardChargeFixture();
+    creditClosePost($f); // 15 Sep: HBL POS card sales 9,000
+
+    $charge = cardChargeRecord($f, ['channel_code' => 'pos', 'percent' => 0.78]);
+    expect((float) $charge->amount)->toBe(70.2)
+        ->and(cardChargeBalance($f['company']->id, $f['charges']->id))->toBe(70.2)
+        ->and(app(CardChargeService::class)->rate($charge))->toBe(0.78);
+
+    // No card sales in the period: a % has nothing to apply to.
+    expect(fn () => cardChargeRecord($f, ['channel_code' => 'pos', 'percent' => 0.78, 'charge_date' => '2026-08-31']))
+        ->toThrow(ValidationException::class);
+});
+
+test('the settlement page gives the dialog a card sales for its period and records a % charge', function () {
+    $f = cardChargeFixture();
+    $f['company']->enableModule('fuel_station');
+    DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(CompanyRbacBootstrapper::class)->bootstrap($f['company']);
+    addCompanyMemberRow($f['company'], $f['user'], 'owner');
+    app(CompanyContextService::class)->withContext($f['company'], fn () => app(CompanyContextService::class)->assignRole($f['user'], 'owner'));
+    DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    creditClosePost($f);
+    $this->actingAs($f['user']);
+    $slug = $f['company']->slug;
+
+    $this->get("/{$slug}/fuel/vendor-cards/pending?charge_channel=pos&charge_from=2026-09-01&charge_to=2026-09-30")
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('cardChargeSales', 9000));
+    $this->post("/{$slug}/fuel/card-charges", ['channel_code' => 'pos', 'charge_date' => '2026-09-30', 'percent' => 1,
+        'period_from' => '2026-09-01', 'period_to' => '2026-09-30'])->assertSessionHasNoErrors()->assertRedirect();
+    expect((float) CardCharge::where('company_id', $f['company']->id)->sole()->amount)->toBe(90.0);
+    $this->post("/{$slug}/fuel/card-charges", ['channel_code' => 'pos', 'charge_date' => '2026-09-30'])
+        ->assertSessionHasErrors(['amount', 'percent']);
+});

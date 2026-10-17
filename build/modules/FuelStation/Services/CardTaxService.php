@@ -18,7 +18,6 @@ use App\Modules\FuelStation\Models\CardTaxDeduction;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Services\AccountingWriteTransaction;
 use App\Services\CommandBus;
-use App\Support\CompanyClock;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -118,13 +117,13 @@ class CardTaxService
         });
     }
 
-    /** Take it back: reverse the posting (or void the supplier bill) and keep the row as undone. */
+    /** Take it back on its own date (a mistaken entry cancels within its month): reverse the posting, or void the supplier bill, and keep the row as undone. */
     public function undo(Company $company, CardTaxDeduction $deduction, User $user): void
     {
-        $today = app(CompanyClock::class)->today($company);
-        app(DocumentDateLock::class)->assertOpen($company->id, $today, 'Undoing this tax deduction');
+        $on = $deduction->deduction_date->toDateString();
+        app(DocumentDateLock::class)->assertOpen($company->id, $on, 'Undoing this tax deduction');
 
-        AccountingWriteTransaction::run(function () use ($company, $deduction, $user, $today) {
+        AccountingWriteTransaction::run(function () use ($company, $deduction, $user, $on) {
             if ($deduction->bill_id) {
                 $bill = Bill::where('company_id', $company->id)->lockForUpdate()->findOrFail($deduction->bill_id);
                 // An advance the supplier held may have been applied to this bill automatically;
@@ -132,10 +131,10 @@ class CardTaxService
                 BillPaymentAllocation::where('company_id', $company->id)->where('bill_id', $bill->id)->delete();
                 BillPaymentCreateAction::recomputeBillStatus($bill, 0);
                 $bill->save();
-                app(CommandBus::class)->dispatch('bill.void', ['id' => $bill->id, 'reason' => 'Card tax deduction undone', 'reversal_date' => $today], $user, true);
+                app(CommandBus::class)->dispatch('bill.void', ['id' => $bill->id, 'reason' => 'Card tax deduction undone', 'reversal_date' => $on], $user, true);
             } elseif ($deduction->transaction_id) {
                 $transaction = Transaction::where('company_id', $company->id)->findOrFail($deduction->transaction_id);
-                app(PostingService::class)->reverseTransaction($transaction, 'Card tax deduction undone', $today);
+                app(PostingService::class)->reverseTransaction($transaction, 'Card tax deduction undone', $on);
             }
             $deduction->delete();
         });
@@ -158,7 +157,7 @@ class CardTaxService
     {
         $lines = [];
         $rows = CardTaxDeduction::withTrashed()->where('company_id', $companyId)
-            ->where(fn ($q) => $q->whereBetween('deduction_date', [$from, $to])->orWhereNotNull('deleted_at'))->get();
+            ->whereBetween('deduction_date', [$from, $to])->get();
         foreach ($rows as $row) {
             $line = [
                 'payment_id' => $row->id, 'payment_number' => $row->reference ?: 'Card tax',
@@ -171,7 +170,7 @@ class CardTaxService
                 $lines[] = $line + ['date' => $date, 'kind' => 'deduction', 'gross' => 0.0, 'wht' => round((float) $row->amount, 2)];
             }
             if ($row->trashed()) {
-                $undone = $row->deleted_at->toDateString();
+                $undone = $date; // reversed on its own date, see undo()
                 if ($undone >= $from && $undone <= $to) {
                     $lines[] = $line + ['date' => $undone, 'kind' => 'reversal', 'gross' => 0.0, 'wht' => -round((float) $row->amount, 2)];
                 }

@@ -62,12 +62,23 @@ class AmanatStatementKind implements StatementKind
             ->values();
     }
 
+    /**
+     * Holders show under Amanat only, unless they also buy on credit: flagged as a credit customer,
+     * or simply invoiced (an opening balance "owed" entered on the Opening balances page never sets
+     * the flag). Those stay on Customer too, or their receivable would be on no statement at all.
+     */
     public function hiddenCustomerIds(Company $company): array
     {
-        return $this->holderIds($company)
-            ->filter(fn ($isCredit) => ! $isCredit)
-            ->keys()
-            ->all();
+        $holders = $this->holderIds($company)->filter(fn ($isCredit) => ! $isCredit)->keys();
+        if ($holders->isEmpty()) {
+            return [];
+        }
+        $invoiced = DB::table('acct.invoices')->where('company_id', $company->id)
+            ->whereIn('customer_id', $holders)->whereNull('deleted_at')
+            ->whereNotIn('status', ['draft', 'void', 'cancelled'])
+            ->distinct()->pluck('customer_id')->flip();
+
+        return $holders->reject(fn ($id) => $invoiced->has($id))->values()->all();
     }
 
     public function statement(Collection $options, ?string $id, string $from, string $to, bool $includeTrail): array

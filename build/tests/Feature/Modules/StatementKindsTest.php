@@ -165,3 +165,23 @@ test('registering a kind or link under the same key replaces it', function () {
         );
     }
 });
+
+test('a holder with an invoice stays on Customer even without the credit flag', function () {
+    $f = statementKindsFixture(fuelStation: true);
+    $company = $f['company'];
+    $owes = Customer::create([
+        'company_id' => $company->id, 'customer_number' => 'AM-3', 'name' => 'Holder Who Owes',
+        'customer_type' => 'business', 'base_currency' => 'PKR',
+    ]);
+    CustomerProfile::create(['company_id' => $company->id, 'customer_id' => $owes->id, 'is_amanat_holder' => true, 'is_credit_customer' => false]);
+    // An opening balance owed, as the Opening balances page records it: an invoice, no credit flag.
+    \App\Modules\Accounting\Models\Invoice::create([
+        'company_id' => $company->id, 'customer_id' => $owes->id, 'invoice_number' => 'INV-OPEN-1',
+        'invoice_date' => '2026-08-31', 'due_date' => '2026-08-31', 'status' => 'sent',
+        'currency' => 'PKR', 'base_currency' => 'PKR', 'exchange_rate' => 1,
+        'subtotal' => 7233, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => 7233,
+        'paid_amount' => 0, 'balance' => 7233, 'base_amount' => 7233,
+    ]);
+
+    expect((new AmanatStatementKind)->hiddenCustomerIds($company))->not->toContain($owes->id);
+});

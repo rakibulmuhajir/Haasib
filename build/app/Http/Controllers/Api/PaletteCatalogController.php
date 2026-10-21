@@ -17,6 +17,6 @@ class PaletteCatalogController extends Controller
             return response()->json(['message' => 'Authentication required'], 401);
         }
 
-        return response()->json(['commands' => $catalog->for($user, CompanyContext::getCompany())]);
+        return response()->json($catalog->payload($user, CompanyContext::getCompany()));
     }
 }

@@ -6,6 +6,7 @@ use App\Contracts\DescribesPalette;
 use App\Http\Controllers\CommandController;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Palette\Commands\PaletteCommandRegistry;
 use App\Services\CommandBus;
 use App\Support\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\Log;
@@ -25,7 +26,30 @@ final class PaletteCatalog
         private readonly CommandBus $bus,
         private readonly RuleIntrospector $introspector,
         private readonly ModuleRegistry $modules,
+        private readonly PaletteCommandRegistry $declared,
     ) {}
+
+    /**
+     * What the palette fetches when it opens: the declared sentence commands this user
+     * may run, and the CommandBus actions as before (until the old palette is retired).
+     *
+     * @return array{sentences: list<array<string, mixed>>, commands: list<array<string, mixed>>}
+     */
+    public function payload(User $user, ?Company $company): array
+    {
+        $sentences = [];
+        if ($company !== null) {
+            foreach ($this->declared->for($user, $company) as $command) {
+                try {
+                    $sentences[] = $command->toCatalog($company);
+                } catch (\Throwable $e) {
+                    Log::warning('palette_command_skip', ['command' => $command->name(), 'error' => $e->getMessage()]);
+                }
+            }
+        }
+
+        return ['sentences' => $sentences, 'commands' => $this->for($user, $company)];
+    }
 
     /** @return list<array{key: string, entity: string, verb: string, description: string, query: bool, form: bool, form_url: ?string, args: list<array>, flags: list<array>}> */
     public function for(User $user, ?Company $company): array

@@ -86,10 +86,15 @@ export function usePalette() {
   let pages: FindResult[] = []
 
   /** The current blank's choices, unless the user closed the list. */
-  const choices = computed<Option[]>(() => {
+  const choiceBlank = computed(() => {
     const b = blanks.value
-    const state = b?.blanks[b.current]?.state
-    return state?.state === 'choices' && !choicesClosed.value ? state.choices : []
+    if (!b || choicesClosed.value) return -1
+    if (b.blanks[b.current]?.state?.state === 'choices') return b.current
+    return b.blanks.findIndex((x) => x.state?.state === 'choices')
+  })
+  const choices = computed<Option[]>(() => {
+    const state = blanks.value?.blanks[choiceBlank.value]?.state
+    return state?.state === 'choices' ? state.choices : []
   })
 
   // ---- network ---------------------------------------------------------
@@ -141,7 +146,6 @@ export function usePalette() {
 
   function forgetReady() {
     ready = null
-    idempotencyKey = ''
     card.value = null
     balances.value = []
   }
@@ -156,7 +160,7 @@ export function usePalette() {
     message.value = null
     const slots: Record<string, { text?: string; value?: string }> = {}
     for (const b of set.blanks) {
-      if (b.picked) slots[b.name] = { value: b.picked.value }
+      if (b.picked) slots[b.name] = b.text !== '' ? { text: b.text, value: b.picked.value } : { value: b.picked.value }
       else if (b.text !== '') slots[b.name] = { text: b.text }
     }
     try {
@@ -186,7 +190,6 @@ export function usePalette() {
         status.value = next.flagMissing ? 'missing' : 'idle'
       } else {
         ready = { key: data.key, params: data.params, summary: data.summary }
-        idempotencyKey = uuid()
         card.value = data.card
         message.value = data.summary
         if (set.command.previewable && !set.command.query) {
@@ -271,6 +274,7 @@ export function usePalette() {
     seq++
     findSeq++
     forgetReady()
+    idempotencyKey = uuid() // one key per line: a retry of the same entry reuses it
     message.value = null
     choiceIndex.value = 0
     choicesClosed.value = false
@@ -317,9 +321,22 @@ export function usePalette() {
 
   watch(text, refresh, { flush: 'sync' })
   watch(slug, () => {
-    if (!isOpen.value) return
+    // A different company: nothing from the old one may be posted, undone or answered.
+    if (resolveTimer) clearTimeout(resolveTimer)
+    if (findTimer) clearTimeout(findTimer)
+    resolveTimer = findTimer = null
+    seq++
+    findSeq++
+    catalog.value = []
+    text.value = ''
     forgetReady()
-    void loadCatalog()
+    blanks.value = null
+    result.value = null
+    message.value = null
+    status.value = 'idle'
+    lastPosted = null
+    lastPostedText = ''
+    if (isOpen.value) void loadCatalog()
   }, { flush: 'sync' })
 
   // ---- Enter -----------------------------------------------------------
@@ -396,8 +413,8 @@ export function usePalette() {
         message.value = failureMessage(data, 'Could not post')
       }
     } catch (e) {
-      forgetReady()
-      status.value = 'error'
+      // The post may have landed: keep the entry and its key so Enter retries the same request.
+      status.value = 'ready'
       message.value = `Network error: ${e instanceof Error ? e.message : 'Unknown'}`
     }
   }
@@ -472,7 +489,8 @@ export function usePalette() {
       case 'pick': {
         const chosen = choices.value[choiceIndex.value]
         if (!chosen) return
-        blanks.value = pick(set, set.current, chosen)
+        blanks.value = pick(set, choiceBlank.value, chosen)
+        idempotencyKey = uuid()
         inflight = resolveNow().finally(() => { inflight = null })
         return
       }
@@ -494,7 +512,8 @@ export function usePalette() {
         blanks.value = flagged
         const bad = flagged.blanks[flagged.current]
         status.value = 'missing'
-        const label = bad.name.charAt(0).toUpperCase() + bad.name.slice(1)
+        const spaced = bad.name.replace(/_/g, ' ')
+        const label = spaced.charAt(0).toUpperCase() + spaced.slice(1)
         message.value = bad.state?.state === 'not_found' ? bad.state.message : `${label} needed`
       }
     }
@@ -552,6 +571,8 @@ export function usePalette() {
     findSeq++
     forgetReady()
     text.value = ''
+    lastPosted = null
+    lastPostedText = ''
     blanks.value = null
     result.value = null
     message.value = null

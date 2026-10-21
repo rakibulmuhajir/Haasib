@@ -91,3 +91,17 @@ test('a search slot with several hits gives choices and none gives not found', f
     paletteResolve($this, $f['owner'], $f['company'], $entry['key'], [$field['name'] => ['text' => 'zzz']])
         ->assertJsonPath("slots.{$field['name']}.state", 'not_found');
 });
+
+test('a required flag is written as a plain blank in the sentence, an optional one with a question mark', function () {
+    $command = new App\Support\Palette\Commands\GenericCommand([
+        'key' => 'thing.make', 'entity' => 'thing', 'verb' => 'make', 'description' => 'Make a thing',
+        'query' => false, 'form' => false, 'form_url' => null,
+        'args' => [['name' => 'name', 'required' => true, 'inputType' => 'text']],
+        'flags' => [
+            ['name' => 'size', 'required' => true, 'inputType' => 'number'],
+            ['name' => 'note', 'required' => false, 'inputType' => 'text'],
+        ],
+    ]);
+
+    expect($command->sentence())->toBe('Make a thing {name} {size} {note?}');
+});

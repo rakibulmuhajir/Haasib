@@ -116,3 +116,48 @@ function something()
 {
     // ..
 }
+
+/** A company with an owner and (optionally) a second member holding $otherRole. */
+function paletteFixture(bool $fuelStation, ?string $otherRole = null): array
+{
+    $owner = \App\Models\User::factory()->create();
+    $company = \App\Models\Company::create([
+        'name' => 'Palette Test',
+        'slug' => 'palette-'.str()->lower(str()->random(8)),
+        'owner_id' => $owner->id,
+        'base_currency' => 'PKR',
+    ]);
+    enterCompany($company);
+
+    \Illuminate\Support\Facades\DB::select("SELECT set_config('app.current_user_id', ?, false)", [$owner->id]);
+    \Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'true', false)");
+    app(\App\Services\CompanyRbacBootstrapper::class)->bootstrap($company);
+
+    $other = $otherRole ? \App\Models\User::factory()->create() : null;
+    $members = [[$owner, 'owner']];
+    if ($other) {
+        $members[] = [$other, $otherRole];
+    }
+
+    foreach ($members as [$u, $role]) {
+        \Illuminate\Support\Facades\DB::table('auth.company_user')->insert([
+            'company_id' => $company->id, 'user_id' => $u->id, 'role' => $role,
+            'joined_at' => now(), 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        app(\App\Services\CompanyContextService::class)->withContext($company, fn () => app(\App\Services\CompanyContextService::class)->assignRole($u, $role));
+    }
+
+    \Illuminate\Support\Facades\DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
+    \Illuminate\Support\Facades\DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    if ($fuelStation) {
+        $company->enableModule('fuel_station');
+    }
+
+    return compact('company', 'owner', 'other');
+}
+
+function paletteCatalog($test, \App\Models\User $user, \App\Models\Company $company): array
+{
+    return $test->actingAs($user)->withHeader("X-Company-Slug", $company->slug)->getJson("/api/palette/catalog")->assertOk()->json('commands');
+}

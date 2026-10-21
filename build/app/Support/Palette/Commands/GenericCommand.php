@@ -32,7 +32,7 @@ final class GenericCommand extends PaletteCommand
             $parts[] = '{'.$f['name'].'}';
         }
         foreach ($this->entry['flags'] as $f) {
-            $parts[] = '{'.$f['name'].'?}';
+            $parts[] = '{'.$f['name'].($f['required'] ? '' : '?').'}';
         }
 
         return implode(' ', $parts);

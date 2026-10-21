@@ -21,6 +21,10 @@ test('reads an amount', function (string $text, float $expected) {
     ['1,250.75', 1250.75],
     ['1.2345 lakh', 123450.0],
     ['1.23456 lakh', 123456.0],
+    ['2 lacs', 200000.0],
+    ['2lacs', 200000.0],
+    ['1.5 lakhs', 150000.0],
+    ['5 Lakhs', 500000.0],
 ]);
 
 test('refuses what it cannot read exactly', function (string $text) {
@@ -28,7 +32,7 @@ test('refuses what it cannot read exactly', function (string $text) {
 })->with([
     '', 'abc', '-50', '50.', '.5', '1e5', '0x10', '5o00', '50,00', '5,0000', '1,2,3', '12.345', '1.234 lakh0',
     '0', '0k', '50 thousand', '5 crore', '2 million', '3 m', '50kk', 'k', 'lakh', '1,000,000,000,000', '99999999999',
-    '1.23456789 lakh',
+    '1.23456789 lakh', '50 thousands', '5 crores', '2 hundred',
 ]);
 
 test('text after the amount is not an amount', function () {

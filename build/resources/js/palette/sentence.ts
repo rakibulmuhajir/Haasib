@@ -60,16 +60,28 @@ function extractDate(text: string): { text: string; date?: string } {
 // Matching
 // ---------------------------------------------------------------------------
 
-const AMOUNT_SHAPE = /^\d[\d,]*(\.\d+)?\s*(k|lakh|lac)?%?$/
-const CONNECTORS = new Set(['to', 'from', 'into', 'for', 'on'])
+const AMOUNT_SHAPE = /^\d[\d,]*(\.\d+)?\s*(k|lakhs?|lacs?)?%?$/
+const CONNECTORS = new Set(['to', 'from', 'into', 'in', 'for', 'on'])
+// Words the server does not read as amounts. Kept with the amount so "50 thousand" is refused, not posted as 50.
+const MAGNITUDE = new Set(['hundred', 'hundreds', 'thousand', 'thousands', 'million', 'millions', 'billion', 'billions', 'crore', 'crores'])
+// What follows an entity in an entity command ("expense list"): never the start of a sentence.
+const ENTITY_VERBS = new Set(['list', 'view', 'show', 'create', 'new', 'update', 'edit', 'delete'])
 
 const normalise = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ')
 
-/** The last amount-shaped run of one or two words: [start, end) in `words`, or null. */
-function lastAmountRun(words: string[]): [number, number] | null {
-  for (let start = words.length - 1; start >= 0; start--) {
+/**
+ * The first or last amount-shaped run of one or two words: [start, end) in `words`, or null.
+ * A magnitude word right after it joins the run, so the server sees "50 thousand" whole.
+ */
+function amountRun(words: string[], from: 'first' | 'last'): [number, number] | null {
+  const starts = words.map((_, i) => i)
+  if (from === 'last') starts.reverse()
+  for (const start of starts) {
     for (const len of [2, 1]) {
-      if (start + len <= words.length && AMOUNT_SHAPE.test(words.slice(start, start + len).join(' '))) return [start, start + len]
+      if (start + len <= words.length && AMOUNT_SHAPE.test(words.slice(start, start + len).join(' '))) {
+        const end = start + len
+        return MAGNITUDE.has(words[end] ?? '') ? [start, end + 1] : [start, end]
+      }
     }
   }
   return null
@@ -93,13 +105,15 @@ function fill(slots: SlotToken[], span: string[], out: Record<string, string>): 
   if (slots.length === 1) return put(slots[0], span)
 
   const at = slots.findIndex((s) => s.amount)
-  const run = at >= 0 ? lastAmountRun(span) : null
+  // Slots next to each other with no anchor. With a slot before the amount (Pay {vendor} {amount})
+  // the amount is the last amount-shaped run, so a name that contains a number ("7 star traders")
+  // stays whole. With the amount first (Sale {amount} {note}) it is the first run, so the number
+  // in "12000 2 bags" stays in the note.
+  const run = at >= 0 ? amountRun(span, at > 0 ? 'last' : 'first') : null
   if (at < 0 || !run) {
     // Nothing to tell the slots apart: the first one that is not an amount takes the lot.
     return put(slots.find((s) => !s.amount) ?? slots[0], span)
   }
-  // Slots next to each other with no anchor: the amount is the last amount-shaped run, so a
-  // name that contains a number ("7 star traders") stays whole.
   out[slots[at].name] = span.slice(run[0], run[1]).join(' ')
   const before = span.slice(0, run[0])
   const after = span.slice(run[1])
@@ -127,9 +141,24 @@ function findVerb(text: string, commands: CatalogCommand[]): { command: CatalogC
   return best
 }
 
+/**
+ * "expense create" is the entity command, not Spend with "create" in it: a generic command whose
+ * label is these two words (either order) wins, and an entity verb alone after the name matches nothing.
+ */
+function entityCommand(line: string, found: { command: CatalogCommand; verb: string }, commands: CatalogCommand[]) {
+  if (found.command.generic) return found
+  const next = line.slice(found.verb.length).trim().split(' ')[0] ?? ''
+  if (next === '') return found
+  const pair = [`${found.verb} ${next}`, `${next} ${found.verb}`]
+  const generic = commands.find((c) => c.generic && c.aliases.some((a) => pair.includes(normalise(a))))
+  if (generic) return { command: generic, verb: `${found.verb} ${next}` }
+  return ENTITY_VERBS.has(next) && line === pair[0] ? null : found
+}
+
 export function matchCommand(text: string, commands: CatalogCommand[]): Match | null {
   const line = normalise(text)
-  const found = findVerb(line, commands)
+  const verbFound = findVerb(line, commands)
+  const found = verbFound && entityCommand(line, verbFound, commands)
   if (!found) return null
   const { command, verb } = found
 

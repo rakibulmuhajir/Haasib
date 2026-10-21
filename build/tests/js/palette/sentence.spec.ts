@@ -159,6 +159,51 @@ describe('slots', () => {
   })
 })
 
+describe('which run is the amount', () => {
+  it('takes the first run when the amount comes before the other slots', () => {
+    expect(slots('sale 12000 2 bags')).toEqual({ amount: '12000', note: '2 bags' })
+    expect(slots('expense 2500 tea 2 cups')).toEqual({ amount: '2500', what: 'tea 2 cups' })
+    expect(slots('bank charge 500 meezan 2 txns')).toEqual({ amount: '500', bank: 'meezan 2 txns' })
+  })
+
+  it('still takes the last run when a name comes first', () => {
+    expect(slots('pay 7 star traders 5000')).toEqual({ vendor: '7 star traders', amount: '5000' })
+  })
+
+  it('keeps a magnitude word with the amount, so the server refuses it', () => {
+    expect(slots('sale 50 thousand')).toEqual({ amount: '50 thousand' })
+    expect(slots('pay ali 50 thousand')).toEqual({ vendor: 'ali', amount: '50 thousand' })
+  })
+
+  it('reads lakhs and lacs', () => {
+    expect(slots('sale 2 lacs')).toEqual({ amount: '2 lacs' })
+    expect(slots('sale 1.5 lakhs')).toEqual({ amount: '1.5 lakhs' })
+    expect(slots('sale 2 lacs walk-in')).toEqual({ amount: '2 lacs', note: 'walk-in' })
+  })
+
+  it('drops "in" in front of a name', () => {
+    expect(slots('deposit 50000 in meezan')).toEqual({ amount: '50000', bank: 'meezan' })
+  })
+})
+
+describe('entity commands are not sentences', () => {
+  const generic = cmd('expense.create', 'Create Expense {amount}', ['create expense'], { generic: true, label: 'Create Expense' })
+  const withGeneric = [...catalog, generic]
+
+  it('an entity verb after an alias does not match the sentence command', () => {
+    expect(matchCommand('expense list', catalog)).toBeNull()
+    expect(matchCommand('expense create', catalog)).toBeNull()
+    expect(named('expense 2500 tea')).toBe('spend')
+  })
+
+  it('a generic command whose label is the two words wins, in either order', () => {
+    expect(matchCommand('expense create', withGeneric)?.command.name).toBe('expense.create')
+    expect(matchCommand('create expense', withGeneric)?.command.name).toBe('expense.create')
+    expect(matchCommand('expense create 500', withGeneric)?.slotTexts).toEqual({ amount: '500' })
+    expect(matchCommand('expense 2500 tea', withGeneric)?.command.name).toBe('spend')
+  })
+})
+
 describe('dates', () => {
   it('takes a relative word out of the line', () => {
     expect(slots('paid ali 1000 yesterday')).toEqual({ vendor: 'ali', amount: '1000', date: 'yesterday' })

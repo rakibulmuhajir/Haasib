@@ -68,14 +68,15 @@ final class BankChargeCommand extends MoneyCommand
         $bank = null;
         $named = true;
         // `bank charge 500 meezan october fee` can arrive as one blank: the bank first, the rest is the note.
-        if ($bankValue === null && $bankText !== null && $note === null) {
+        // A picked account decides the bank; the split still gives the note.
+        if ($bankText !== null && $note === null) {
             $split = Accounts::splitChargeTail($bankText, $d['banks']);
-            if ($split === null) {
-                $states['bank'] = ['state' => 'not_found', 'message' => "No bank matches \"{$bankText}\""];
-                $named = false;
-            } else {
+            if ($split !== null) {
                 $bankText = $split['bank'];
                 $note = $split['note'];
+            } elseif ($bankValue === null) {
+                $states['bank'] = ['state' => 'not_found', 'message' => "No bank matches \"{$bankText}\""];
+                $named = false;
             }
         }
         if ($named) {

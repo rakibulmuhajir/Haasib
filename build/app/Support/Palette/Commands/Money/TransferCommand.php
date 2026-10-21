@@ -54,8 +54,8 @@ final class TransferCommand extends MoneyCommand
         $error = null;
 
         $amount = $this->amount($in, $states);
-        $from = $this->named($in, 'from', $ctx, $states, $error);
-        $to = $this->named($in, 'to', $ctx, $states, $error);
+        $from = $this->requiredBank($in, 'from', $ctx, $states, $error);
+        $to = $this->requiredBank($in, 'to', $ctx, $states, $error);
         $day = $this->day($in, $ctx, $states);
         if ($from !== null && $to !== null && $from['id'] === $to['id']) {
             $error ??= 'Choose two different banks';
@@ -76,7 +76,7 @@ final class TransferCommand extends MoneyCommand
     }
 
     /** A bank the line must name: there is no default to fall back on. */
-    private function named(SlotInput $in, string $slot, ResolveContext $ctx, array &$states, ?string &$error): ?array
+    private function requiredBank(SlotInput $in, string $slot, ResolveContext $ctx, array &$states, ?string &$error): ?array
     {
         $text = $in->text($slot);
         $value = $in->value($slot);

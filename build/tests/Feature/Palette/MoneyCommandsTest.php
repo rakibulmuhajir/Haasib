@@ -215,6 +215,16 @@ test('bank charge takes the bank and the note already split, or a note alone', f
     expect($bad['slots']['bank']['state'])->toBe('not_found');
 });
 
+test('bank charge keeps the note when the bank is picked from choices', function () {
+    $f = moneySeed();
+
+    $r = moneyResolve($this, $f, 'bank charge', ['amount' => '500', 'bank' => ['text' => 'hbl october fee', 'value' => $f['hbl2']->id]]);
+
+    expect($r['status'])->toBe('ready')
+        ->and($r['params']['bank_account_id'])->toBe($f['hbl2']->id)
+        ->and($r['params']['notes'])->toBe('october fee');
+});
+
 test('bank charge without a bank charges account says so', function () {
     $f = moneySeed();
     $f['charges']->update(['name' => 'Miscellaneous Costs']);

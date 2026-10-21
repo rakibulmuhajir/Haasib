@@ -6,7 +6,7 @@ import type { DefineComponent } from 'vue'
 import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
 import { useFlashMessages } from './composables/useFlashMessages'
-import CommandPalette from './components/palette/CommandPalette.vue'
+import Palette from './components/palette/v2/Palette.vue'
 import { usePaletteVisibility } from './composables/usePaletteVisibility'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Haasib'
@@ -101,8 +101,7 @@ createInertiaApp({
     const Root = defineComponent({
       name: 'AppRoot',
       setup() {
-        const { visible: paletteVisible, toggle: togglePalette, close: closePalette } =
-          usePaletteVisibility()
+        const { toggle: togglePalette } = usePaletteVisibility()
 
         // Initialize global flash message handler
         useFlashMessages()
@@ -112,13 +111,8 @@ createInertiaApp({
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault()
             togglePalette()
-            return
           }
-
-          // Escape to close (backup, palette handles this internally too)
-          if (e.key === 'Escape' && paletteVisible.value) {
-            closePalette()
-          }
+          // Escape belongs to the palette: it closes the choices, then clears the line, then closes.
         }
 
         onMounted(() => {
@@ -132,12 +126,7 @@ createInertiaApp({
         return () =>
           h(Fragment, [
             h(App, props),
-            h(CommandPalette, {
-              visible: paletteVisible.value,
-              'onUpdate:visible': (v: boolean) => {
-                paletteVisible.value = v
-              },
-            }),
+            h(Palette),
           ])
       },
     })

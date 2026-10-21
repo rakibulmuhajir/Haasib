@@ -61,7 +61,7 @@ abstract class PaletteCommand
         return false;
     }
 
-    final public function toCatalog(Company $company): array
+    public function toCatalog(Company $company): array
     {
         $optional = $this->optionalSlots();
         $slots = [];

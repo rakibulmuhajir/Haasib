@@ -6,6 +6,8 @@ use App\Contracts\DescribesPalette;
 use App\Http\Controllers\CommandController;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Palette\Commands\GenericCommand;
+use App\Support\Palette\Commands\PaletteCommand;
 use App\Support\Palette\Commands\PaletteCommandRegistry;
 use App\Services\CommandBus;
 use App\Support\Modules\ModuleRegistry;
@@ -39,7 +41,7 @@ final class PaletteCatalog
     {
         $sentences = [];
         if ($company !== null) {
-            foreach ($this->declared->for($user, $company) as $command) {
+            foreach ($this->commands($user, $company) as $command) {
                 try {
                     $sentences[] = $command->toCatalog($company);
                 } catch (\Throwable $e) {
@@ -49,6 +51,28 @@ final class PaletteCatalog
         }
 
         return ['sentences' => $sentences, 'commands' => $this->for($user, $company)];
+    }
+
+    /**
+     * Declared commands, then a generic one for every catalog entry no declared command targets.
+     *
+     * @return list<PaletteCommand>
+     */
+    public function commands(User $user, ?Company $company): array
+    {
+        if ($company === null) {
+            return [];
+        }
+
+        $commands = $this->declared->for($user, $company);
+        $targets = array_map(fn (PaletteCommand $c) => $c->target(), $commands);
+        foreach ($this->for($user, $company) as $entry) {
+            if (! in_array($entry['key'], $targets, true)) {
+                $commands[] = new GenericCommand($entry);
+            }
+        }
+
+        return $commands;
     }
 
     /** @return list<array{key: string, entity: string, verb: string, description: string, query: bool, form: bool, form_url: ?string, args: list<array>, flags: list<array>}> */

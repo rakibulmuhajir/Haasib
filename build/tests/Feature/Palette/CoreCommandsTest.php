@@ -171,3 +171,16 @@ test('a role that may not create vendors or accounts is not offered those comman
 
     expect($s)->not->toHaveKey('add vendor')->not->toHaveKey('add account');
 });
+
+test('add item is offered only to a company with the inventory module', function () {
+    $f = paletteFixture(false);
+    expect(coreSentences($this, $f))->toHaveKey('add item');
+
+    $company = $f['company'];
+    $company->settings = array_merge((array) $company->settings, ['modules' => ['inventory' => false]]);
+    $company->save();
+
+    expect(coreSentences($this, $f))->not->toHaveKey('add item');
+    $this->actingAs($f['owner'])->withHeader('X-Company-Slug', $company->slug)
+        ->postJson('/api/palette/resolve', ['command' => 'add item', 'slots' => []])->assertNotFound();
+});

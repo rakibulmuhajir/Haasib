@@ -48,16 +48,16 @@ final class CardChargeCommand extends MoneyCommand
 
     public function resolve(SlotInput $in, ResolveContext $ctx): Resolution
     {
-        $states = [];
         $channels = app(CardChargeService::class)->channels($ctx->company, true);
+        if ($channels === []) {
+            return Resolution::error('Add a card channel first');
+        }
 
+        $states = [];
         $channel = $this->channel($in, $channels, $states);
         [$amount, $percent] = $this->charge($in, $states);
         $day = $this->day($in, $ctx, $states);
 
-        if ($channels === []) {
-            return Resolution::error('Add a card channel first');
-        }
         if ($pending = $this->unsettled($states, null)) {
             return $pending;
         }

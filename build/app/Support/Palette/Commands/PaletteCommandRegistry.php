@@ -31,6 +31,9 @@ final class PaletteCommandRegistry
             try {
                 // slots() is read here so a broken declaration is skipped now, not when the catalog is built.
                 $command->slots();
+                if ($company !== null && ! $command->availableFor($company)) {
+                    continue;
+                }
                 $permission = $this->permissionFor($command);
                 if ($permission === null || $user->hasCompanyPermission($permission)) {
                     $allowed[] = $command;

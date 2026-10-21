@@ -37,6 +37,12 @@ abstract class PaletteCommand
         return Resolution::error('Not supported');
     }
 
+    /** False hides the command from a company, e.g. one without the module whose pages it opens. */
+    public function availableFor(Company $company): bool
+    {
+        return true;
+    }
+
     /** Where Open goes after posting: '/{company}/bill-payments/{id}', 'redirect' or null. */
     public function opens(): ?string
     {

@@ -33,4 +33,12 @@ describe('PaletteCard', () => {
     expect(text).toContain('What')
     expect(text).toContain('Fuel delivery')
   })
+
+  it('shows both What and Who when both are set', () => {
+    const text = mount(PaletteCard, { props: { card: { what: 'Void', who: 'INV-0012', currency: 'PKR' } } }).text()
+    expect(text).toContain('What')
+    expect(text).toContain('Void')
+    expect(text).toContain('Who')
+    expect(text).toContain('INV-0012')
+  })
 })

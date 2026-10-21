@@ -21,9 +21,15 @@ const accounts = computed(() =>
 <template>
   <div class="border-t border-rule-subtle px-4 py-3" data-testid="palette-card">
     <dl class="grid grid-cols-[6rem_1fr] items-baseline gap-x-4 gap-y-1.5 text-sm">
-      <template v-if="card.who || card.what">
-        <dt class="text-xs font-medium text-text-metadata">{{ card.what ? 'What' : whoLabel || 'Who' }}</dt>
-        <dd class="m-0 font-semibold text-text-primary">{{ card.what ?? card.who }}</dd>
+      <template v-if="card.what">
+        <dt class="text-xs font-medium text-text-metadata">What</dt>
+        <dd class="m-0 font-semibold text-text-primary">{{ card.what }}</dd>
+      </template>
+
+      <!-- Both rows when both are set: "Void" alone would hide which document Enter voids. -->
+      <template v-if="card.who">
+        <dt class="text-xs font-medium text-text-metadata">{{ whoLabel || 'Who' }}</dt>
+        <dd class="m-0 font-semibold text-text-primary">{{ card.who }}</dd>
       </template>
 
       <template v-if="card.amount !== undefined">

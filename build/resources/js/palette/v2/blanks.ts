@@ -115,7 +115,8 @@ export function lineOf(s: BlankSet): string {
 export function showsSentence(s: BlankSet | null, rawText: string, blankMode: boolean): boolean {
   if (!s) return false
   if (blankMode) return true
-  const line = rawText.trimStart().toLowerCase()
-  const verb = s.verb.trim().toLowerCase()
+  const squash = (t: string) => t.trimStart().toLowerCase().replace(/\s+/g, ' ')
+  const line = squash(rawText)
+  const verb = squash(s.verb).trim()
   return verb !== '' && line.startsWith(verb) && /\s/.test(line.charAt(verb.length))
 }

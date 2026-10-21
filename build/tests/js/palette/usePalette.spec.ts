@@ -269,3 +269,47 @@ describe('usePalette line and blank modes', () => {
     expect(p.text.value).toBe('pay ')
   })
 })
+
+describe('usePalette round 2', () => {
+  const full: CatalogCommand = {
+    ...pay,
+    sentence: 'Pay {vendor} {amount} from {account?}',
+    slots: [...pay.slots, { name: 'account', kind: 'account', optional: true }],
+  }
+  const opened = async () => {
+    fetchMock.mockImplementation((path: string) => (path === '/api/palette/catalog' ? json({ sentences: [full], commands: [] }) : json({})))
+    const p = usePalette()
+    p.open()
+    await tick()
+    return p
+  }
+
+  it('keeps every blank and pick when Esc leaves blank mode', async () => {
+    const p = await opened()
+    p.text.value = 'pay ali 1000 from cash'
+    p.editBlank(0, 'Seven Star from')
+    const set = p.blanks.value!
+    set.blanks[0].picked = { value: 'v1', label: 'Seven Star' }
+    p.onKeydown({ key: 'Escape', preventDefault: vi.fn() } as unknown as KeyboardEvent)
+    expect(p.mode.value).toBe('line')
+    expect(p.blanks.value?.blanks.map((b) => b.text)).toEqual(['Seven Star from', '1000', 'cash'])
+    expect(p.blanks.value?.blanks[0].picked?.value).toBe('v1')
+  })
+
+  it('treats a bare verb as a search: suggestions stay, nothing is resolved', async () => {
+    const p = await opened()
+    p.text.value = 'pay'
+    await vi.advanceTimersByTimeAsync(200)
+    expect(p.blanks.value).toBeNull()
+    expect(p.suggestions.value.length).toBeGreaterThan(0)
+    expect(calls('/api/palette/resolve')).toHaveLength(0)
+  })
+
+  it('lets the current blank follow the typing in line mode', async () => {
+    const p = await opened()
+    p.text.value = 'pay ali'
+    expect(p.blanks.value?.current).toBe(1)
+    p.text.value = 'pay ali 5'
+    expect(p.blanks.value?.current).toBe(2)
+  })
+})

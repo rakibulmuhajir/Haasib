@@ -27,7 +27,7 @@ watch(
   (visible) => {
     if (visible) {
       palette.open()
-      void nextTick(focusInput)
+      void nextTick(() => focusInput(true))
     } else palette.close()
   },
   { immediate: true },
@@ -42,17 +42,19 @@ const sentence = ref<InstanceType<typeof PaletteSentence> | null>(null)
 // Typing a line happens in the one input; the sentence (verb and chips) shows once the verb is followed by a space.
 const sentenceShown = computed(() => showsSentence(blanks.value, text.value, mode.value === 'blank'))
 
-function focusInput() {
+/** The caret goes to the end only when the line input is entered, so mid-line edits keep their place. */
+function focusInput(caretToEnd = false) {
   if (mode.value === 'blank' && blanks.value) sentence.value?.focus(blanks.value.current)
   else {
     const el = plain.value?.$el
     el?.focus()
-    el?.setSelectionRange(el.value.length, el.value.length)
+    if (caretToEnd) el?.setSelectionRange(el.value.length, el.value.length)
   }
 }
 
 // The focus follows the mode: blank inputs in blank mode, the line input otherwise.
-watch([mode, () => blanks.value?.current, () => blanks.value !== null], () => nextTick(focusInput), { flush: 'post' })
+watch(mode, () => nextTick(() => focusInput(true)), { flush: 'post' })
+watch(() => blanks.value?.current, () => nextTick(() => focusInput()), { flush: 'post' })
 
 function onKeydown(e: KeyboardEvent) {
   // Enter on the Open / Undo links is theirs.
@@ -71,11 +73,11 @@ const whoLabel = computed(() => WHO_LABEL[blanks.value?.command.name ?? ''] ?? '
 // ---- list ---------------------------------------------------------------
 
 /** What follows the verb: "Bank charge {amount} {account?}" -> "amount account". */
-const hint = (sentence: string) =>
-  parseTemplate(sentence)
-    .filter((t, n, all) => t.type === 'slot' || all.findIndex((x) => x.type === 'slot') < n)
-    .map((t) => (t.type === 'slot' ? t.name : t.text))
-    .join(' ')
+const hint = (sentence: string) => {
+  const tokens = parseTemplate(sentence)
+  const first = tokens.findIndex((t) => t.type === 'slot')
+  return first < 0 ? '' : tokens.slice(first).map((t) => (t.type === 'slot' ? t.name : t.text)).join(' ')
+}
 
 const items = computed<PaletteListItem[]>(() => {
   if (choices.value.length > 0) return choices.value.map((c) => ({ label: c.label, meta: c.meta }))
@@ -104,7 +106,7 @@ const footerStatus = computed(() => {
   if (status.value === 'posting') return 'Posting…'
   if (status.value === 'ready') return 'Ready'
   if (message.value && (status.value !== 'working' || notFound.value)) return message.value
-  if (!blanks.value) return ''
+  if (!blanks.value || !sentenceShown.value) return ''
   const done = required.value.filter((b) => b.state?.state === 'resolved').length
   return `${done} of ${required.value.length}`
 })
@@ -134,7 +136,7 @@ function openResult() {
       class="top-[20%] max-w-[600px] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-[600px] [&>button]:hidden"
       @keydown="onKeydown"
       @escape-key-down.prevent
-      @open-auto-focus.prevent="focusInput"
+      @open-auto-focus.prevent="focusInput(true)"
     >
       <DialogTitle class="sr-only">Command palette</DialogTitle>
       <DialogDescription class="sr-only">Type a command or search</DialogDescription>

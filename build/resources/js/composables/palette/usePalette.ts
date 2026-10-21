@@ -4,7 +4,7 @@ import { useNavGroups } from '@/composables/useNavGroups'
 import { getFrecencyScores, recordCommandUse } from '@/palette/frecency'
 import { matchCommand, suggestCommands } from '@/palette/v2/sentence'
 import {
-  applyResolve, enterOutcome, flag, fromMatch, lineOf, nextRequired, pick, setText, tab,
+  applyResolve, enterOutcome, flag, fromMatch, lineOf, nextRequired, pick, setText, showsSentence, tab,
   type BlankSet,
 } from '@/palette/v2/blanks'
 import type { CatalogCommand, Card, Option } from '@/palette/v2/types'
@@ -303,12 +303,14 @@ export function usePalette() {
     }
     result.value = null
 
-    const found = matchCommand(line, catalog.value)
+    let found = matchCommand(line, catalog.value)
+    // A bare verb ("pay" may be "payroll") is still a search: no sentence, no resolve.
+    if (found && mode.value === 'line' && !showsSentence(fromMatch(found), text.value, false)) found = null
     if (found) {
       const next = fromMatch(found)
       const old = blanks.value
       if (old && old.command.name === next.command.name) {
-        next.current = Math.min(old.current, next.blanks.length - 1)
+        if (mode.value === 'blank') next.current = Math.min(old.current, next.blanks.length - 1)
         // A blank whose text did not change keeps its pick and its answer.
         next.blanks.forEach((b, i) => {
           if (old.blanks[i]?.text === b.text) { b.picked = old.blanks[i].picked; b.state = old.blanks[i].state }
@@ -581,10 +583,11 @@ export function usePalette() {
       e.preventDefault()
       if (choices.value.length > 0) choicesClosed.value = true
       else if (mode.value === 'blank' && blanks.value) {
-        // Back to one line, caret at the end.
-        const line = lineOf(blanks.value)
+        // Back to one line without re-splitting it: the blanks, picks and answers stay as they are.
         mode.value = 'line'
-        text.value = `${line} `
+        rebuilding = true
+        text.value = `${lineOf(blanks.value)} `
+        rebuilding = false
       } else if (text.value !== '') text.value = ''
       else close()
     } else if (key === 'ArrowDown' || key === 'ArrowUp') {

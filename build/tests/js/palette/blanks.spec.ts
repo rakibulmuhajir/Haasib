@@ -90,5 +90,7 @@ describe('lineOf and showsSentence', () => {
     expect(showsSentence(s, 'pay ', false)).toBe(true)
     expect(showsSentence(s, 'payroll', true)).toBe(true)
     expect(showsSentence(null, 'pay ', false)).toBe(false)
+    expect(showsSentence({ ...set({}), verb: 'bank charge' }, 'bank  charge ', false)).toBe(true)
+    expect(showsSentence({ ...set({}), verb: 'bank charge' }, 'bank  charge', false)).toBe(false)
   })
 })

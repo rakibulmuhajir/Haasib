@@ -7,8 +7,8 @@
 import { reactive, watch } from 'vue'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { parseTemplate } from '@/palette/v2/sentence'
-import type { Blank, BlankSet } from '@/palette/v2/blanks'
+import { parseTemplate } from '@/palette/sentence'
+import type { Blank, BlankSet } from '@/palette/blanks'
 
 const props = defineProps<{ set: BlankSet; editing: boolean }>()
 const emit = defineEmits<{ edit: [index: number, value: string]; 'focus-blank': [index: number]; 'pick-blank': [index: number] }>()

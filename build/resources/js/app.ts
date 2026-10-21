@@ -6,7 +6,7 @@ import type { DefineComponent } from 'vue'
 import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
 import { useFlashMessages } from './composables/useFlashMessages'
-import Palette from './components/palette/v2/Palette.vue'
+import Palette from './components/palette/Palette.vue'
 import { usePaletteVisibility } from './composables/usePaletteVisibility'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Haasib'

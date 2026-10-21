@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyResolve, enterOutcome, fromMatch, lineOf, nextRequired, pick, setText, showsSentence, tab } from '@/palette/v2/blanks'
-import type { CatalogCommand, SlotSpec } from '@/palette/v2/types'
+import { applyResolve, enterOutcome, fromMatch, lineOf, nextRequired, pick, setText, showsSentence, tab } from '@/palette/blanks'
+import type { CatalogCommand, SlotSpec } from '@/palette/types'
 
 function cmd(over: Partial<CatalogCommand> = {}): CatalogCommand {
   const slots: SlotSpec[] = [

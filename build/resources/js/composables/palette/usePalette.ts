@@ -2,12 +2,12 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { useNavGroups } from '@/composables/useNavGroups'
 import { getFrecencyScores, recordCommandUse } from '@/palette/frecency'
-import { matchCommand, suggestCommands } from '@/palette/v2/sentence'
+import { matchCommand, suggestCommands } from '@/palette/sentence'
 import {
   applyResolve, enterOutcome, flag, fromMatch, lineOf, nextRequired, pick, setText, showsSentence, tab,
   type BlankSet,
-} from '@/palette/v2/blanks'
-import type { CatalogCommand, Card, Option } from '@/palette/v2/types'
+} from '@/palette/blanks'
+import type { CatalogCommand, Card, Option } from '@/palette/types'
 
 const RESOLVE_MS = 150
 const FIND_MS = 150

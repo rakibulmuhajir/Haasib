@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { matchCommand, parseTemplate, suggestCommands } from '@/palette/v2/sentence'
-import type { CatalogCommand, SlotSpec } from '@/palette/v2/types'
+import { matchCommand, parseTemplate, suggestCommands } from '@/palette/sentence'
+import type { CatalogCommand, SlotSpec } from '@/palette/types'
 
 const KINDS: Record<string, SlotSpec['kind']> = { amount: 'amount', date: 'date', vendor: 'search', customer: 'search', bank: 'search', from: 'search', to: 'search', account: 'account' }
 

@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import DateTimeText from '@/components/DateTimeText.vue'
 import MoneyText from '@/components/MoneyText.vue'
-import type { Card } from '@/palette/v2/types'
+import type { Card } from '@/palette/types'
 
 interface Balance { account_name: string; before: number; after: number }
 

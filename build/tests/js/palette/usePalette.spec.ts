@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import type { CatalogCommand } from '@/palette/v2/types'
+import type { CatalogCommand } from '@/palette/types'
 
 const slug = ref('acme')
 vi.mock('@/composables/useNavGroups', () => ({

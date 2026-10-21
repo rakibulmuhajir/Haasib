@@ -11,6 +11,7 @@ final class CoreSearchSources
     {
         PaletteSearchSources::register('customer', fn ($c, $q) => self::customers($c, $q));
         PaletteSearchSources::register('vendor', fn ($c, $q) => self::vendors($c, $q));
+        PaletteSearchSources::register('invoice', fn ($c, $q) => self::invoices($c, $q));
         PaletteSearchSources::register('bill', fn ($c, $q) => self::bills($c, $q));
         PaletteSearchSources::register('account', fn ($c, $q) => self::accounts($c, $q));
         PaletteSearchSources::register('item', fn ($c, $q) => self::items($c, $q));
@@ -47,6 +48,18 @@ final class CoreSearchSources
         return self::base('acct.vendors', $companyId, $query, ['name', 'vendor_number'])
             ->select('id', 'name', 'vendor_number')->orderBy('name')->get()
             ->map(fn ($r) => ['value' => $r->id, 'label' => $r->name, 'meta' => $r->vendor_number, 'icon' => '🏪'])->all();
+    }
+
+    private static function invoices(string $companyId, string $query): array
+    {
+        return self::base('acct.invoices', $companyId, $query, ['invoice_number'])
+            ->select('id', 'invoice_number', 'total_amount', 'currency')->orderByDesc('created_at')->get()
+            ->map(fn ($r) => [
+                'value' => $r->id,
+                'label' => $r->invoice_number ?: 'Draft',
+                'meta' => number_format((float) $r->total_amount, 2).' '.$r->currency,
+                'icon' => '🧾',
+            ])->all();
     }
 
     private static function bills(string $companyId, string $query): array

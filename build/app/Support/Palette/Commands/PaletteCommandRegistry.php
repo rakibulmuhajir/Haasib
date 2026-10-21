@@ -31,7 +31,7 @@ final class PaletteCommandRegistry
             try {
                 // slots() is read here so a broken declaration is skipped now, not when the catalog is built.
                 $command->slots();
-                $permission = $this->bus->permissionFor($command->target());
+                $permission = $this->permissionFor($command);
                 if ($permission === null || $user->hasCompanyPermission($permission)) {
                     $allowed[] = $command;
                 }
@@ -41,5 +41,19 @@ final class PaletteCommandRegistry
         }
 
         return $allowed;
+    }
+
+    /**
+     * The permission that gates a command. A page-only command (a form to open, a report to show)
+     * may target a permission key no CommandBus action carries, e.g. 'item.create'.
+     */
+    private function permissionFor(PaletteCommand $command): ?string
+    {
+        $target = $command->target();
+        if (! $this->bus->has($target) && ($command->formUrl() !== null || $command->query())) {
+            return $target;
+        }
+
+        return $this->bus->permissionFor($target);
     }
 }

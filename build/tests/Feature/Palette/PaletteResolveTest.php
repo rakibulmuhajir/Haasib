@@ -13,18 +13,18 @@ function paletteResolve($test, User $user, Company $company, string $command, ar
 test('a generic command with its required slot filled is ready', function () {
     $f = paletteFixture(false);
 
-    paletteResolve($this, $f['owner'], $f['company'], 'vendor.create', ['name' => ['text' => 'Ali Traders']])
+    paletteResolve($this, $f['owner'], $f['company'], 'customer_category.create', ['name' => ['text' => 'Government']])
         ->assertOk()
         ->assertJsonPath('status', 'ready')
-        ->assertJsonPath('key', 'vendor.create')
-        ->assertJsonPath('params.name', 'Ali Traders')
-        ->assertJsonPath('card.what', 'Create a vendor');
+        ->assertJsonPath('key', 'customer_category.create')
+        ->assertJsonPath('params.name', 'Government')
+        ->assertJsonPath('card.what', 'Create a customer category');
 });
 
 test('an empty required slot leaves the command pending', function () {
     $f = paletteFixture(false);
 
-    paletteResolve($this, $f['owner'], $f['company'], 'vendor.create')
+    paletteResolve($this, $f['owner'], $f['company'], 'customer_category.create')
         ->assertOk()
         ->assertJsonPath('status', 'pending')
         ->assertJsonPath('slots.name.state', 'missing');
@@ -47,7 +47,7 @@ test('a fuel command on a general company is a 404', function () {
 test('a command the user may not run is a 404', function () {
     $f = paletteFixture(false, 'operations');
 
-    paletteResolve($this, $f['other'], $f['company'], 'vendor.create', ['name' => ['text' => 'Nope']])->assertNotFound();
+    paletteResolve($this, $f['other'], $f['company'], 'add vendor', ['name' => ['text' => 'Nope']])->assertNotFound();
 });
 
 test('sentences list generic commands for catalog entries no declared command targets', function () {
@@ -55,11 +55,11 @@ test('sentences list generic commands for catalog entries no declared command ta
 
     $sentences = collect($this->actingAs($f['owner'])->withHeader('X-Company-Slug', $f['company']->slug)
         ->getJson('/api/palette/catalog')->assertOk()->json('sentences'));
-    $vendor = $sentences->firstWhere('name', 'vendor.create');
+    $vendor = $sentences->firstWhere('name', 'customer_category.create');
 
     expect($vendor['generic'])->toBeTrue()
-        ->and($vendor['key'])->toBe('vendor.create')
-        ->and($vendor['label'])->toBe('Create a vendor');
+        ->and($vendor['key'])->toBe('customer_category.create')
+        ->and($vendor['label'])->toBe('Create a customer category');
 });
 
 test('resolve needs a command name', function () {

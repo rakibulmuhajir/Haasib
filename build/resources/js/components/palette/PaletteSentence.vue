@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { parseTemplate } from '@/palette/sentence'
 import type { Blank, BlankSet } from '@/palette/blanks'
 
-const props = defineProps<{ set: BlankSet; editing: boolean }>()
+const props = defineProps<{ set: BlankSet; editing: boolean; readonly?: boolean }>()
 const emit = defineEmits<{ edit: [index: number, value: string]; 'focus-blank': [index: number]; 'pick-blank': [index: number] }>()
 
 const tokens = () => parseTemplate(props.set.command.sentence)
@@ -87,6 +87,7 @@ defineExpose({ focus })
         v-else-if="byName(t.name) >= 0"
         :ref="(el: unknown) => setRef(byName(t.name), el)"
         :model-value="local[t.name] ?? ''"
+        :readonly="readonly"
         :placeholder="t.name.replace(/_/g, ' ')"
         :aria-label="t.name.replace(/_/g, ' ')"
         :aria-invalid="kindOf(byName(t.name)) === 'missing' || undefined"

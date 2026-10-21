@@ -34,6 +34,8 @@ function csrf(): string {
 
 const uuid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 const normalise = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ')
+/** What a suggestion writes into the line: a generic command's name is its `entity.verb` key, so it writes its label. */
+const verbOf = (command: CatalogCommand) => (command.generic ? normalise(command.label) : command.name)
 
 /** What went wrong, in the server's words: the first field error for a refused entry, else its message. */
 function failureMessage(data: any, fallback: string): string {
@@ -74,6 +76,8 @@ export function usePalette() {
   const notes = ref<string[]>([])
   /** `line`: one input holds the whole line and the matcher re-splits it. `blank`: each blank edits only its own text. */
   const mode = ref<'line' | 'blank'>('line')
+  /** A post or undo is on the wire. Kept apart from `status`, which refresh() rewrites on every keystroke. */
+  const posting = ref(false)
   let rebuilding = false
 
   const catalog = ref<CatalogCommand[]>([])
@@ -358,7 +362,7 @@ export function usePalette() {
   /** Edits one blank's own text. The line is rebuilt from the blanks, never re-split. */
   function editBlank(i: number, value: string) {
     const set = blanks.value
-    if (!set?.blanks[i]) return
+    if (!set?.blanks[i] || posting.value) return
     const next = { ...setText(set, i, value.trim()), current: i, flagMissing: false }
     mode.value = 'blank'
     invalidate()
@@ -420,10 +424,12 @@ export function usePalette() {
 
   async function post() {
     const set = blanks.value
-    if (!ready || !set || status.value === 'posting') return
+    if (!ready || !set || posting.value) return
     const sent = ready
     const typed = text.value.trim()
+    const company = slug()
     const [entity, ...rest] = sent.key.split('.')
+    posting.value = true
     status.value = 'posting'
     try {
       const res = await fetch('/api/palette/execute', {
@@ -433,6 +439,8 @@ export function usePalette() {
         body: JSON.stringify({ entity, verb: rest.join('.'), params: sent.params }),
       })
       const data = await res.json().catch(() => ({}))
+      // The company changed while this was on the wire: its result belongs to the old one, so show nothing.
+      if (slug() !== company) return
       if (data.ok) {
         recordCommandUse(set.command.name)
         const id = data?.data?.id ? String(data.data.id) : null
@@ -453,20 +461,25 @@ export function usePalette() {
         message.value = failureMessage(data, 'Could not post')
       }
     } catch (e) {
+      if (slug() !== company) return
       // The post may have landed: keep the entry and its key so Enter retries the same request.
       status.value = 'ready'
       message.value = `Network error: ${e instanceof Error ? e.message : 'Unknown'}`
+    } finally {
+      posting.value = false
     }
   }
 
   async function undo(): Promise<void> {
     const last = lastPosted
-    if (status.value === 'posting') return
+    if (posting.value) return
     if (!last || !last.undoKey || !last.id || last.undone) {
       message.value = 'Nothing to undo'
       return
     }
+    const company = slug()
     const [entity, ...rest] = last.undoKey.split('.')
+    posting.value = true
     status.value = 'posting'
     try {
       const res = await fetch('/api/palette/execute', {
@@ -476,6 +489,7 @@ export function usePalette() {
         body: JSON.stringify({ entity, verb: rest.join('.'), params: { id: last.id } }),
       })
       const data = await res.json().catch(() => ({}))
+      if (slug() !== company) return
       if (data.ok) {
         last.undone = true
         result.value = { message: data.message || 'Undone', openUrl: undoUrlFor(last.undoKey, data), canUndo: false, undone: true }
@@ -486,13 +500,16 @@ export function usePalette() {
         message.value = failureMessage(data, 'Could not undo')
       }
     } catch (e) {
+      if (slug() !== company) return
       status.value = 'error'
       message.value = `Network error: ${e instanceof Error ? e.message : 'Unknown'}`
+    } finally {
+      posting.value = false
     }
   }
 
   async function onEnter() {
-    if (status.value === 'posting') return
+    if (posting.value) return
     const line = normalise(text.value)
     if (line === 'undo') {
       text.value = ''
@@ -505,7 +522,7 @@ export function usePalette() {
       const hit = findResults.value[choiceIndex.value]
       if (hit) return visit(hit.url)
       const suggested = suggestions.value[choiceIndex.value]
-      if (suggested) text.value = `${suggested.name} `
+      if (suggested) text.value = `${verbOf(suggested)} `
       return
     }
 
@@ -577,7 +594,7 @@ export function usePalette() {
         else blanks.value = tab(blanks.value, e.shiftKey ? -1 : 1)
       } else if (suggestions.value.length > 0 && text.value.trim() !== '') {
         e.preventDefault()
-        text.value = `${suggestions.value[choiceIndex.value]?.name ?? suggestions.value[0].name} `
+        text.value = `${verbOf(suggestions.value[choiceIndex.value] ?? suggestions.value[0])} `
       }
     } else if (key === 'Escape') {
       e.preventDefault()
@@ -641,6 +658,6 @@ export function usePalette() {
 
   return {
     text, blanks, suggestions, choices, choiceIndex, card, balances, status, message, result, findResults,
-    notes, mode, editBlank, enterBlank, isOpen, onKeydown, open, close, undo,
+    notes, mode, posting, editBlank, enterBlank, isOpen, onKeydown, open, close, undo,
   }
 }

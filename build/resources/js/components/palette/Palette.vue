@@ -19,7 +19,7 @@ import PaletteSentence from './PaletteSentence.vue'
 
 const visibility = usePaletteVisibility()
 const palette = usePalette()
-const { text, blanks, suggestions, choices, choiceIndex, card, balances, notes, mode, status, message, result, findResults } = palette
+const { text, blanks, suggestions, choices, choiceIndex, card, balances, notes, mode, status, message, result, findResults, posting } = palette
 
 // The shared flag drives the palette; the palette closing itself (Esc, after a visit) clears the flag.
 watch(
@@ -103,7 +103,7 @@ const required = computed(() => (blanks.value?.blanks ?? []).filter((b) => !b.sp
 const notFound = computed(() => (blanks.value?.blanks ?? []).some((b) => b.state?.state === 'not_found'))
 
 const footerStatus = computed(() => {
-  if (status.value === 'posting') return 'Posting…'
+  if (posting.value) return 'Posting…'
   if (status.value === 'ready') return 'Ready'
   if (message.value && (status.value !== 'working' || notFound.value)) return message.value
   if (!blanks.value || !sentenceShown.value) return ''
@@ -146,6 +146,7 @@ function openResult() {
           v-if="mode === 'line'"
           ref="plain"
           v-model="text"
+          :readonly="posting"
           placeholder="Type a command or search…"
           aria-label="Command"
           autocomplete="off"
@@ -157,6 +158,7 @@ function openResult() {
           ref="sentence"
           :set="blanks"
           :editing="mode === 'blank'"
+          :readonly="posting"
           :class="mode === 'line' && 'mt-2'"
           @edit="palette.editBlank"
           @focus-blank="focusBlank"

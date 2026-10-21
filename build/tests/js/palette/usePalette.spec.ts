@@ -90,6 +90,65 @@ describe('usePalette', () => {
     expect(p.status.value).toBe('posting')
   })
 
+  it('keeps the post guard when the line changes during a post', async () => {
+    const p = usePalette()
+    p.open()
+    await tick()
+    fetchMock.mockImplementation((path: string) => {
+      if (path === '/api/palette/resolve') return json(readyBody('Pay'))
+      if (path === '/api/palette/execute') return new Promise(() => {}) // never answers: stays posting
+      return json({})
+    })
+
+    p.text.value = 'pay ali 100'
+    await vi.advanceTimersByTimeAsync(150)
+    await tick()
+    p.onKeydown(enter())
+    await tick()
+    expect(p.posting.value).toBe(true)
+
+    // A change during the post re-resolves to ready; Enter must still not post again.
+    p.text.value = 'pay ali 200'
+    await vi.advanceTimersByTimeAsync(150)
+    await tick()
+    expect(p.status.value).toBe('ready')
+    p.onKeydown(enter())
+    await tick()
+    expect(calls('/api/palette/execute')).toHaveLength(1)
+    expect(p.posting.value).toBe(true)
+  })
+
+  it('shows nothing from a post that lands after the company changed', async () => {
+    fetchMock.mockImplementation((path: string) =>
+      path === '/api/palette/catalog' ? json({ sentences: [{ ...pay, undo: 'bill_payment.void' }], commands: [] }) : json({}))
+    const p = usePalette()
+    p.open()
+    await tick()
+    let land: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((path: string) => {
+      if (path === '/api/palette/resolve') return json(readyBody('Pay'))
+      if (path === '/api/palette/execute') return new Promise((resolve) => { land = resolve })
+      return json({})
+    })
+
+    p.text.value = 'pay ali 100'
+    await vi.advanceTimersByTimeAsync(150)
+    await tick()
+    p.onKeydown(enter())
+    await tick()
+    expect(calls('/api/palette/execute')).toHaveLength(1)
+
+    slug.value = 'beta'
+    land({ ok: true, json: () => Promise.resolve({ ok: true, message: 'Posted', data: { id: 'p1' } }) })
+    await tick()
+
+    expect(p.result.value).toBeNull()
+    expect(p.posting.value).toBe(false)
+    await p.undo()
+    expect(p.message.value).toBe('Nothing to undo')
+    expect(calls('/api/palette/execute')).toHaveLength(1)
+  })
+
   it('refetches the catalog when the company changes', async () => {
     const p = usePalette()
     p.open()
@@ -259,6 +318,23 @@ describe('usePalette line and blank modes', () => {
     expect(p.text.value).toBe('')
     p.onKeydown(esc)
     expect(p.isOpen.value).toBe(false)
+  })
+
+  it('fills the line from a generic suggestion with its label, never its key', async () => {
+    const generic: CatalogCommand = {
+      ...pay, name: 'customer_category.create', aliases: ['create a customer category'], label: 'Create a customer category',
+      sentence: 'Create a customer category {name}', key: 'customer_category.create',
+      slots: [{ name: 'name', kind: 'text', optional: false }], generic: true,
+    }
+    fetchMock.mockImplementation((path: string) => (path === '/api/palette/catalog' ? json({ sentences: [fullPay, generic], commands: [] }) : json({})))
+    const p = usePalette()
+    p.open()
+    await tick()
+    p.text.value = 'categ'
+    expect(p.suggestions.value.map((c) => c.name)).toEqual(['customer_category.create'])
+    p.onKeydown({ key: 'Tab', preventDefault: vi.fn(), shiftKey: false } as unknown as KeyboardEvent)
+    expect(p.text.value).toBe('create a customer category ')
+    expect(p.blanks.value?.command.name).toBe('customer_category.create')
   })
 
   it('fills the line from a suggestion on Enter with an empty line', async () => {

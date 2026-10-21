@@ -4,7 +4,7 @@ import { useNavGroups } from '@/composables/useNavGroups'
 import { getFrecencyScores, recordCommandUse } from '@/palette/frecency'
 import { matchCommand, suggestCommands } from '@/palette/v2/sentence'
 import {
-  applyResolve, enterOutcome, flag, fromMatch, nextRequired, pick, tab,
+  applyResolve, enterOutcome, flag, fromMatch, lineOf, nextRequired, pick, setText, tab,
   type BlankSet,
 } from '@/palette/v2/blanks'
 import type { CatalogCommand, Card, Option } from '@/palette/v2/types'
@@ -71,6 +71,10 @@ export function usePalette() {
   const message = ref<string | null>(null)
   const result = ref<Result | null>(null)
   const findResults = ref<FindResult[]>([])
+  const notes = ref<string[]>([])
+  /** `line`: one input holds the whole line and the matcher re-splits it. `blank`: each blank edits only its own text. */
+  const mode = ref<'line' | 'blank'>('line')
+  let rebuilding = false
 
   const catalog = ref<CatalogCommand[]>([])
   let ready: Ready | null = null
@@ -148,6 +152,7 @@ export function usePalette() {
     ready = null
     card.value = null
     balances.value = []
+    notes.value = []
   }
 
   async function resolveNow(): Promise<void> {
@@ -191,6 +196,7 @@ export function usePalette() {
       } else {
         ready = { key: data.key, params: data.params, summary: data.summary }
         card.value = data.card
+        notes.value = Array.isArray(data.notes) ? data.notes : []
         message.value = data.summary
         if (set.command.previewable && !set.command.query) {
           const preview = await fetch('/api/palette/preview', {
@@ -266,8 +272,8 @@ export function usePalette() {
     }, FIND_MS)
   }
 
-  /** Re-reads the line: which command, which blanks, what to ask the server. */
-  function refresh() {
+  /** Drops everything that described the old line: pending answers, the ready entry, the lists. */
+  function invalidate() {
     if (resolveTimer) clearTimeout(resolveTimer)
     if (findTimer) clearTimeout(findTimer)
     resolveTimer = findTimer = null
@@ -281,9 +287,15 @@ export function usePalette() {
     remote = []
     pages = []
     findResults.value = []
+  }
 
+  /** Re-reads the line: which command, which blanks, what to ask the server. */
+  function refresh() {
+    if (rebuilding) return
+    invalidate()
     const line = normalise(text.value)
     if (line === '') {
+      mode.value = 'line'
       blanks.value = null
       suggestions.value = suggestCommands('', catalog.value, getFrecencyScores())
       status.value = 'idle'
@@ -296,6 +308,7 @@ export function usePalette() {
       const next = fromMatch(found)
       const old = blanks.value
       if (old && old.command.name === next.command.name) {
+        next.current = Math.min(old.current, next.blanks.length - 1)
         // A blank whose text did not change keeps its pick and its answer.
         next.blanks.forEach((b, i) => {
           if (old.blanks[i]?.text === b.text) { b.picked = old.blanks[i].picked; b.state = old.blanks[i].state }
@@ -308,6 +321,7 @@ export function usePalette() {
       return
     }
 
+    mode.value = 'line'
     blanks.value = null
     status.value = 'idle'
     const go = line === 'go' || line.startsWith('go ')
@@ -338,6 +352,30 @@ export function usePalette() {
     lastPostedText = ''
     if (isOpen.value) void loadCatalog()
   }, { flush: 'sync' })
+
+  /** Edits one blank's own text. The line is rebuilt from the blanks, never re-split. */
+  function editBlank(i: number, value: string) {
+    const set = blanks.value
+    if (!set?.blanks[i]) return
+    const next = { ...setText(set, i, value.trim()), current: i, flagMissing: false }
+    mode.value = 'blank'
+    invalidate()
+    result.value = null
+    blanks.value = next
+    rebuilding = true
+    text.value = lineOf(next)
+    rebuilding = false
+    status.value = 'working'
+    scheduleResolve()
+  }
+
+  /** Moves into blank mode on blank `i` (a click on its chip). */
+  function enterBlank(i: number) {
+    const set = blanks.value
+    if (!set?.blanks[i]) return
+    mode.value = 'blank'
+    blanks.value = { ...set, current: i }
+  }
 
   // ---- Enter -----------------------------------------------------------
 
@@ -465,7 +503,7 @@ export function usePalette() {
       const hit = findResults.value[choiceIndex.value]
       if (hit) return visit(hit.url)
       const suggested = suggestions.value[choiceIndex.value]
-      if (line !== '' && suggested) text.value = `${suggested.name} `
+      if (suggested) text.value = `${suggested.name} `
       return
     }
 
@@ -496,7 +534,10 @@ export function usePalette() {
       }
       case 'advance': {
         const next = nextRequired(set)
-        if (next !== null) blanks.value = { ...set, current: next }
+        if (next !== null) {
+          mode.value = 'blank'
+          blanks.value = { ...set, current: next }
+        }
         return
       }
       case 'post':
@@ -529,7 +570,9 @@ export function usePalette() {
     } else if (key === 'Tab') {
       if (blanks.value) {
         e.preventDefault()
-        blanks.value = tab(blanks.value, e.shiftKey ? -1 : 1)
+        // The first Tab only steps into the blanks, at the one we were on.
+        if (mode.value === 'line') mode.value = 'blank'
+        else blanks.value = tab(blanks.value, e.shiftKey ? -1 : 1)
       } else if (suggestions.value.length > 0 && text.value.trim() !== '') {
         e.preventDefault()
         text.value = `${suggestions.value[choiceIndex.value]?.name ?? suggestions.value[0].name} `
@@ -537,7 +580,12 @@ export function usePalette() {
     } else if (key === 'Escape') {
       e.preventDefault()
       if (choices.value.length > 0) choicesClosed.value = true
-      else if (text.value !== '') text.value = ''
+      else if (mode.value === 'blank' && blanks.value) {
+        // Back to one line, caret at the end.
+        const line = lineOf(blanks.value)
+        mode.value = 'line'
+        text.value = `${line} `
+      } else if (text.value !== '') text.value = ''
       else close()
     } else if (key === 'ArrowDown' || key === 'ArrowUp') {
       const step = key === 'ArrowDown' ? 1 : -1
@@ -574,6 +622,7 @@ export function usePalette() {
     lastPosted = null
     lastPostedText = ''
     blanks.value = null
+    mode.value = 'line'
     result.value = null
     message.value = null
     status.value = 'idle'
@@ -589,6 +638,6 @@ export function usePalette() {
 
   return {
     text, blanks, suggestions, choices, choiceIndex, card, balances, status, message, result, findResults,
-    isOpen, onKeydown, open, close, undo,
+    notes, mode, editBlank, enterBlank, isOpen, onKeydown, open, close, undo,
   }
 }

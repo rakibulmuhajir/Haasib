@@ -4,10 +4,10 @@
  *   pay ali 1000  ->  vendor "ali", amount "1000", account (optional, empty)
  */
 import type { CatalogCommand, Option, ResolveResponse, SlotSpec, SlotState } from './types'
-import type { Match } from './sentence'
+import { parseTemplate, type Match } from './sentence'
 
 export interface Blank { name: string; spec: SlotSpec; text: string; picked: Option | null; state: SlotState | null }
-export interface BlankSet { command: CatalogCommand; blanks: Blank[]; current: number; flagMissing: boolean }
+export interface BlankSet { command: CatalogCommand; blanks: Blank[]; current: number; flagMissing: boolean; verb: string }
 
 export type EnterOutcome = 'pick' | 'advance' | 'post' | 'open' | 'flag'
 
@@ -25,7 +25,7 @@ export function fromMatch(m: Match): BlankSet {
     state: null,
   }))
   const empty = blanks.findIndex((b) => !b.spec.optional && b.text === '')
-  return { command: m.command, blanks, current: empty >= 0 ? empty : Math.max(0, blanks.length - 1), flagMissing: false }
+  return { command: m.command, blanks, current: empty >= 0 ? empty : Math.max(0, blanks.length - 1), flagMissing: false, verb: m.verbText }
 }
 
 /** New text means the old pick and the old answer no longer describe it. */
@@ -83,4 +83,39 @@ export function enterOutcome(s: BlankSet, ready: boolean, choicesOpen: boolean):
   const next = nextRequired(s)
   if (next !== null && (s.blanks[s.current]?.text ?? '') !== '') return 'advance'
   return 'flag'
+}
+
+const RELATIVE_DATE_WORD = /^(today|yesterday|tomorrow)$/i
+
+/**
+ * The line these blanks spell, built without re-splitting: the verb, then each filled blank with
+ * the anchor word before it. A blank with nothing in it leaves its anchor out ("on today" is just "today").
+ */
+export function lineOf(s: BlankSet): string {
+  const out: string[] = []
+  let anchors: string[] = []
+  let seenSlot = false
+  for (const t of parseTemplate(s.command.sentence)) {
+    if (t.type === 'word') {
+      if (seenSlot) anchors.push(t.text)
+      else out.push(t.text)
+      continue
+    }
+    seenSlot = true
+    const blank = s.blanks.find((b) => b.name === t.name)
+    const value = (blank?.text ?? '').trim()
+    const bare = blank?.spec.kind === 'date' && RELATIVE_DATE_WORD.test(value)
+    if (value !== '') out.push(...(bare ? [] : anchors), value)
+    anchors = []
+  }
+  return out.join(' ')
+}
+
+/** The sentence view starts once the matched verb is followed by a space: "pay" alone may be "payroll". */
+export function showsSentence(s: BlankSet | null, rawText: string, blankMode: boolean): boolean {
+  if (!s) return false
+  if (blankMode) return true
+  const line = rawText.trimStart().toLowerCase()
+  const verb = s.verb.trim().toLowerCase()
+  return verb !== '' && line.startsWith(verb) && /\s/.test(line.charAt(verb.length))
 }

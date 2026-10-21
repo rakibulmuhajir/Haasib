@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The typed command as a sentence: the verb, then a blank for each slot with the template's own
- * anchor words between them. Editing a blank rewrites the whole line, so the matcher stays the
- * only thing that decides which text belongs to which blank.
+ * anchor words between them. While the line is being typed the blanks are chips that show how the
+ * matcher split it; once editing, each blank is an input holding only its own text.
  */
 import { reactive, watch } from 'vue'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils'
 import { parseTemplate } from '@/palette/v2/sentence'
 import type { Blank, BlankSet } from '@/palette/v2/blanks'
 
-const props = defineProps<{ set: BlankSet }>()
-const emit = defineEmits<{ 'update:text': [line: string]; 'focus-blank': [index: number] }>()
+const props = defineProps<{ set: BlankSet; editing: boolean }>()
+const emit = defineEmits<{ edit: [index: number, value: string]; 'focus-blank': [index: number]; 'pick-blank': [index: number] }>()
 
 const tokens = () => parseTemplate(props.set.command.sentence)
 const byName = (name: string) => props.set.blanks.findIndex((b) => b.name === name)
@@ -26,32 +26,9 @@ watch(
   { immediate: true },
 )
 
-const RELATIVE = /^(today|yesterday|tomorrow)$/i
-
-/** The line these blanks spell, leaving out the anchor words of a blank with nothing in it. */
-function line(): string {
-  const out: string[] = []
-  let anchors: string[] = []
-  let seenSlot = false
-  for (const t of tokens()) {
-    if (t.type === 'word') {
-      if (seenSlot) anchors.push(t.text)
-      else out.push(t.text)
-      continue
-    }
-    seenSlot = true
-    const value = (local[t.name] ?? '').trim()
-    const kind = props.set.blanks[byName(t.name)]?.spec.kind
-    const bare = kind === 'date' && RELATIVE.test(value)
-    if (value !== '') out.push(...(bare ? [] : anchors), value)
-    anchors = []
-  }
-  return out.join(' ')
-}
-
 function edit(blank: Blank, value: string | number) {
   local[blank.name] = String(value)
-  emit('update:text', line())
+  emit('edit', props.set.blanks.indexOf(blank), String(value))
 }
 
 type BlankKind = 'missing' | 'current' | 'filled' | 'empty'
@@ -95,6 +72,17 @@ defineExpose({ focus })
   <div class="flex flex-wrap items-center gap-2 text-sm text-text-primary" data-testid="palette-sentence">
     <template v-for="(t, n) in tokens()" :key="n">
       <span v-if="t.type === 'word'" :class="n === 0 ? 'font-semibold' : 'text-text-secondary'">{{ t.text }}</span>
+      <span
+        v-else-if="!editing && byName(t.name) >= 0"
+        :class="cn(
+          'inline-flex h-7 min-w-8 cursor-text items-center rounded-md border px-2 text-sm',
+          ['amount', 'date'].includes(set.blanks[byName(t.name)].spec.kind) && 'font-mono',
+          KIND_CLASS[kindOf(byName(t.name))],
+          set.blanks[byName(t.name)].text === '' && 'text-muted-foreground',
+        )"
+        data-testid="palette-chip"
+        @click="emit('pick-blank', byName(t.name))"
+      >{{ set.blanks[byName(t.name)].text || t.name.replace(/_/g, ' ') }}</span>
       <Input
         v-else-if="byName(t.name) >= 0"
         :ref="(el: unknown) => setRef(byName(t.name), el)"

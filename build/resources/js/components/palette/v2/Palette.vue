@@ -7,6 +7,8 @@ import { router } from '@inertiajs/vue3'
 import { computed, nextTick, ref, watch } from 'vue'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { parseTemplate } from '@/palette/v2/sentence'
+import { showsSentence } from '@/palette/v2/blanks'
 import { usePalette } from '@/composables/palette/usePalette'
 import { usePaletteVisibility } from '@/composables/usePaletteVisibility'
 import PaletteCard from './PaletteCard.vue'
@@ -17,7 +19,7 @@ import PaletteSentence from './PaletteSentence.vue'
 
 const visibility = usePaletteVisibility()
 const palette = usePalette()
-const { text, blanks, suggestions, choices, choiceIndex, card, balances, status, message, result, findResults } = palette
+const { text, blanks, suggestions, choices, choiceIndex, card, balances, notes, mode, status, message, result, findResults } = palette
 
 // The shared flag drives the palette; the palette closing itself (Esc, after a visit) clears the flag.
 watch(
@@ -37,15 +39,24 @@ watch(palette.isOpen, (open) => {
 const plain = ref<{ $el: HTMLInputElement } | null>(null)
 const sentence = ref<InstanceType<typeof PaletteSentence> | null>(null)
 
+// Typing a line happens in the one input; the sentence (verb and chips) shows once the verb is followed by a space.
+const sentenceShown = computed(() => showsSentence(blanks.value, text.value, mode.value === 'blank'))
+
 function focusInput() {
-  if (blanks.value) sentence.value?.focus(blanks.value.current)
-  else plain.value?.$el?.focus()
+  if (mode.value === 'blank' && blanks.value) sentence.value?.focus(blanks.value.current)
+  else {
+    const el = plain.value?.$el
+    el?.focus()
+    el?.setSelectionRange(el.value.length, el.value.length)
+  }
 }
 
-// The plain box becomes the sentence once a command matches, and back again when it is cleared.
-watch(() => blanks.value !== null, () => nextTick(focusInput), { flush: 'post' })
+// The focus follows the mode: blank inputs in blank mode, the line input otherwise.
+watch([mode, () => blanks.value?.current, () => blanks.value !== null], () => nextTick(focusInput), { flush: 'post' })
 
 function onKeydown(e: KeyboardEvent) {
+  // Enter on the Open / Undo links is theirs.
+  if (e.key === 'Enter' && (e.target as HTMLElement | null)?.closest?.('button')) return
   palette.onKeydown(e)
   if (e.key === 'Tab' || e.key === 'Enter') void nextTick(focusInput)
 }
@@ -59,11 +70,16 @@ const whoLabel = computed(() => WHO_LABEL[blanks.value?.command.name ?? ''] ?? '
 
 // ---- list ---------------------------------------------------------------
 
-const hint = (sentence: string) => sentence.split(/\s+/).slice(1).join(' ').replace(/[{}?]/g, '')
+/** What follows the verb: "Bank charge {amount} {account?}" -> "amount account". */
+const hint = (sentence: string) =>
+  parseTemplate(sentence)
+    .filter((t, n, all) => t.type === 'slot' || all.findIndex((x) => x.type === 'slot') < n)
+    .map((t) => (t.type === 'slot' ? t.name : t.text))
+    .join(' ')
 
 const items = computed<PaletteListItem[]>(() => {
   if (choices.value.length > 0) return choices.value.map((c) => ({ label: c.label, meta: c.meta }))
-  if (blanks.value) return []
+  if (blanks.value && sentenceShown.value) return []
   if (findResults.value.length > 0) return findResults.value.map((r) => ({ label: r.label, meta: r.meta, group: r.group }))
   return suggestions.value.map((s) => ({ label: s.label, meta: hint(s.sentence) }))
 })
@@ -124,15 +140,8 @@ function openResult() {
       <DialogDescription class="sr-only">Type a command or search</DialogDescription>
 
       <div class="px-4 py-3">
-        <PaletteSentence
-          v-if="blanks"
-          ref="sentence"
-          :set="blanks"
-          @update:text="text = $event"
-          @focus-blank="focusBlank"
-        />
         <Input
-          v-else
+          v-if="mode === 'line'"
           ref="plain"
           v-model="text"
           placeholder="Type a command or search…"
@@ -140,6 +149,16 @@ function openResult() {
           autocomplete="off"
           spellcheck="false"
           class="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 md:text-sm"
+        />
+        <PaletteSentence
+          v-if="blanks && sentenceShown"
+          ref="sentence"
+          :set="blanks"
+          :editing="mode === 'blank'"
+          :class="mode === 'line' && 'mt-2'"
+          @edit="palette.editBlank"
+          @focus-blank="focusBlank"
+          @pick-blank="palette.enterBlank"
         />
       </div>
 
@@ -152,10 +171,11 @@ function openResult() {
       />
 
       <PaletteCard
-        v-if="card && blanks && choices.length === 0"
+        v-if="card && blanks && sentenceShown && choices.length === 0"
         :card="card"
         :balances="balances"
         :who-label="whoLabel"
+        :notes="notes"
       />
 
       <PaletteResult

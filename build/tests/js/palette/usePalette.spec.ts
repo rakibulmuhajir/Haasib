@@ -192,3 +192,80 @@ describe('usePalette', () => {
     expect(p.blanks.value?.current).toBe(1)
   })
 })
+
+describe('usePalette line and blank modes', () => {
+  const fullPay: CatalogCommand = {
+    ...pay,
+    sentence: 'Pay {vendor} {amount} from {account?}',
+    slots: [...pay.slots, { name: 'account', kind: 'account', optional: true }],
+  }
+  const opened = async () => {
+    fetchMock.mockImplementation((path: string) => (path === '/api/palette/catalog' ? json({ sentences: [fullPay], commands: [] }) : json({})))
+    const p = usePalette()
+    p.open()
+    await tick()
+    return p
+  }
+  const texts = (p: ReturnType<typeof usePalette>) => Object.fromEntries((p.blanks.value?.blanks ?? []).map((b) => [b.name, b.text]))
+
+  it('carries the resolve notes out and clears them with the entry', async () => {
+    const p = await opened()
+    fetchMock.mockImplementation((path: string) =>
+      path === '/api/palette/resolve' ? json({ ...readyBody('Pay'), notes: ['Settles BILL-7'] }) : json({}))
+    p.text.value = 'pay ali 100'
+    await vi.advanceTimersByTimeAsync(150)
+    await tick()
+    expect(p.notes.value).toEqual(['Settles BILL-7'])
+    p.text.value = 'pay ali 101'
+    expect(p.notes.value).toEqual([])
+  })
+
+  it('splits a line typed straight through', async () => {
+    const p = await opened()
+    for (const line of ['pay ', 'pay a', 'pay ali', 'pay ali 1', 'pay ali 1000', 'pay ali 1000 from', 'pay ali 1000 from cash']) p.text.value = line
+    expect(texts(p)).toEqual({ vendor: 'ali', amount: '1000', account: 'cash' })
+    expect(p.mode.value).toBe('line')
+  })
+
+  it('keeps the current blank while the command is unchanged', async () => {
+    const p = await opened()
+    p.text.value = 'pay ali'
+    p.enterBlank(0)
+    p.mode.value = 'line'
+    p.text.value = 'pay ali 5'
+    expect(p.blanks.value?.current).toBe(0)
+  })
+
+  it('edits one blank without moving text into another', async () => {
+    const p = await opened()
+    p.text.value = 'pay ali 1000 from cash'
+    p.editBlank(0, '7')
+    expect(texts(p)).toEqual({ vendor: '7', amount: '1000', account: 'cash' })
+    p.editBlank(0, '7 star from')
+    expect(texts(p)).toEqual({ vendor: '7 star from', amount: '1000', account: 'cash' })
+    expect(p.mode.value).toBe('blank')
+    expect(p.text.value).toBe('Pay 7 star from 1000 from cash')
+  })
+
+  it('goes back to the line on Esc from a blank, then clears, then closes', async () => {
+    const p = await opened()
+    const esc = { key: 'Escape', preventDefault: vi.fn() } as unknown as KeyboardEvent
+    p.text.value = 'pay ali 1000'
+    p.editBlank(0, 'ali')
+    p.onKeydown(esc)
+    expect(p.mode.value).toBe('line')
+    expect(p.text.value).toBe('Pay ali 1000 ')
+    p.onKeydown(esc)
+    expect(p.text.value).toBe('')
+    p.onKeydown(esc)
+    expect(p.isOpen.value).toBe(false)
+  })
+
+  it('fills the line from a suggestion on Enter with an empty line', async () => {
+    const p = await opened()
+    expect(p.suggestions.value.length).toBeGreaterThan(0)
+    p.onKeydown(enter())
+    await tick()
+    expect(p.text.value).toBe('pay ')
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyResolve, enterOutcome, fromMatch, nextRequired, pick, setText, tab } from '@/palette/v2/blanks'
+import { applyResolve, enterOutcome, fromMatch, lineOf, nextRequired, pick, setText, showsSentence, tab } from '@/palette/v2/blanks'
 import type { CatalogCommand, SlotSpec } from '@/palette/v2/types'
 
 function cmd(over: Partial<CatalogCommand> = {}): CatalogCommand {
@@ -72,5 +72,23 @@ describe('tab', () => {
     const s = { ...set({}), current: 0 }
     expect(tab(s, -1).current).toBe(2)
     expect(tab({ ...s, current: 2 }, 1).current).toBe(0)
+  })
+})
+
+describe('lineOf and showsSentence', () => {
+  const full = { sentence: 'Pay {vendor} {amount} from {account?} on {date?}' }
+  it('rebuilds the line without the anchors of empty blanks', () => {
+    const s = set({ vendor: '7 star', amount: '5000' }, full)
+    expect(lineOf(s)).toBe('Pay 7 star 5000')
+    expect(lineOf(setText(s, 2, 'cash'))).toBe('Pay 7 star 5000 from cash')
+    expect(lineOf(setText(s, 3, 'today'))).toBe('Pay 7 star 5000 today')
+  })
+  it('shows the sentence only once the verb is followed by a space', () => {
+    const s = set({ vendor: '' })
+    expect(showsSentence(s, 'pay', false)).toBe(false)
+    expect(showsSentence(s, 'payroll', false)).toBe(false)
+    expect(showsSentence(s, 'pay ', false)).toBe(true)
+    expect(showsSentence(s, 'payroll', true)).toBe(true)
+    expect(showsSentence(null, 'pay ', false)).toBe(false)
   })
 })

@@ -55,6 +55,7 @@ final class PaletteCatalog
 
     /**
      * Declared commands, then a generic one for every catalog entry no declared command targets.
+     * A generic list or view has nowhere to go until the palette shows tables, so it is left out.
      *
      * @return list<PaletteCommand>
      */
@@ -67,12 +68,37 @@ final class PaletteCatalog
         $commands = $this->declared->for($user, $company);
         $targets = array_map(fn (PaletteCommand $c) => $c->target(), $commands);
         foreach ($this->for($user, $company) as $entry) {
-            if (! in_array($entry['key'], $targets, true)) {
+            if (! $entry['query'] && ! in_array($entry['key'], $targets, true)) {
                 $commands[] = new GenericCommand($entry);
             }
         }
 
         return $commands;
+    }
+
+    /** One command by name. Generic names are `entity.verb` keys, so the catalog is only built for a dotted name. */
+    public function find(User $user, ?Company $company, string $name): ?PaletteCommand
+    {
+        if ($company === null) {
+            return null;
+        }
+
+        foreach ($this->declared->for($user, $company) as $command) {
+            if ($command->name() === $name) {
+                return $command;
+            }
+        }
+        if (! str_contains($name, '.')) {
+            return null;
+        }
+
+        foreach ($this->commands($user, $company) as $command) {
+            if ($command->name() === $name) {
+                return $command;
+            }
+        }
+
+        return null;
     }
 
     /** @return list<array{key: string, entity: string, verb: string, description: string, query: bool, form: bool, form_url: ?string, args: list<array>, flags: list<array>}> */

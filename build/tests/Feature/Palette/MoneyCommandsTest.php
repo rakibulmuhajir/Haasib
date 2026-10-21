@@ -295,6 +295,31 @@ test('an unknown customer is not found', function () {
         ->and($r['slots']['customer'])->toBe(['state' => 'not_found', 'message' => 'No customer matches "nobody"']);
 });
 
+test('an id picked from another company is never resolved', function () {
+    $b = moneySeed();
+    $vendor = moneyVendor($b, 'Other Co Vendor');
+    $customer = moneyCustomer($b, 'Other Co Customer');
+    $bill = moneyBill($b, $vendor, 'BILL-B1', '2026-10-01', 500);
+    $f = moneySeed(); // company A, the one every request below is sent under
+
+    $pay = moneyResolve($this, $f, 'pay', ['vendor' => ['value' => $vendor->id], 'amount' => '1000']);
+    expect($pay['status'])->not->toBe('ready')
+        ->and($pay['slots']['vendor']['state'])->toBeIn(['not_found', 'missing']);
+
+    $receive = moneyResolve($this, $f, 'receive', ['customer' => ['value' => $customer->id], 'amount' => '1000']);
+    expect($receive['status'])->not->toBe('ready')
+        ->and($receive['slots']['customer']['state'])->toBeIn(['not_found', 'missing']);
+
+    // With the other company's name typed too, the name is looked up here and is not found.
+    $named = moneyResolve($this, $f, 'pay', ['vendor' => ['text' => 'Other Co Vendor', 'value' => $vendor->id], 'amount' => '1000']);
+    expect($named['status'])->not->toBe('ready')
+        ->and($named['slots']['vendor']['state'])->toBe('not_found');
+
+    $void = moneyResolve($this, $f, 'void bill', ['bill' => ['value' => $bill->id]]);
+    expect($void['status'])->not->toBe('ready')
+        ->and($void['slots']['bill']['state'])->toBeIn(['not_found', 'missing']);
+});
+
 test('receive with no customer typed is missing that blank', function () {
     $f = moneySeed();
 

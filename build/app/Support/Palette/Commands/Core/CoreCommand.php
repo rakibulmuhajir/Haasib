@@ -70,10 +70,22 @@ abstract class CoreCommand extends PaletteCommand
 
     private function labelOf(string $entity, string $id, ResolveContext $ctx): ?string
     {
-        [$table, $column] = self::TABLES[$entity];
-        if (! Str::isUuid($id)) {
+        return self::ownedLabel($entity, $id, $ctx);
+    }
+
+    /** True when ownedLabel() can check this entity's ids. */
+    public static function checks(string $entity): bool
+    {
+        return isset(self::TABLES[$entity]);
+    }
+
+    /** The record's name when the id is one of the current company's live records, else null. */
+    public static function ownedLabel(string $entity, string $id, ResolveContext $ctx): ?string
+    {
+        if (! isset(self::TABLES[$entity]) || ! Str::isUuid($id)) {
             return null;
         }
+        [$table, $column] = self::TABLES[$entity];
 
         $label = DB::table($table)->where('company_id', $ctx->company->id)->whereNull('deleted_at')->where('id', $id)->value($column);
 

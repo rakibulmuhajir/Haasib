@@ -3,6 +3,7 @@
 namespace App\Support\Palette\Commands;
 
 use App\Models\Company;
+use App\Support\Palette\Commands\Core\CoreCommand;
 use App\Support\Palette\PaletteSearchSources;
 
 /**
@@ -23,6 +24,12 @@ final class GenericCommand extends PaletteCommand
     public function label(): string
     {
         return $this->entry['description'];
+    }
+
+    /** The name is an `entity.verb` key nobody types; the label, lower-cased, is what fills the line. */
+    public function aliases(): array
+    {
+        return [mb_strtolower($this->label())];
     }
 
     public function sentence(): string
@@ -127,11 +134,17 @@ final class GenericCommand extends PaletteCommand
         $type = $f['inputType'] ?? 'text';
 
         if ($type === 'search') {
-            if ($picked !== null) {
-                return [['state' => 'resolved', 'value' => $picked, 'label' => $text ?? $picked], $picked];
+            $entity = $f['searchEntity'] ?? $f['name'];
+            $label = $picked !== null ? $this->ownedLabel($entity, $picked, $text, $ctx) : null;
+            if ($label !== null) {
+                return [['state' => 'resolved', 'value' => $picked, 'label' => $label], $picked];
+            }
+            // A pick that is not this company's counts as no pick: the typed text is searched instead.
+            if ($text === null) {
+                return [['state' => 'not_found', 'message' => 'Not found'], null];
             }
 
-            return $this->search($f['searchEntity'] ?? $f['name'], (string) $text, $ctx);
+            return $this->search($entity, $text, $ctx);
         }
 
         if ($type === 'select') {
@@ -162,6 +175,27 @@ final class GenericCommand extends PaletteCommand
         }
 
         return [['state' => 'resolved', 'value' => $text, 'label' => $text], $text];
+    }
+
+    /**
+     * The picked record's name when it is the current company's. Entities with a known table are
+     * read directly; any other is checked against the company's own search for the typed text.
+     */
+    private function ownedLabel(string $entity, string $id, ?string $text, ResolveContext $ctx): ?string
+    {
+        if (CoreCommand::checks($entity)) {
+            return CoreCommand::ownedLabel($entity, $id, $ctx);
+        }
+        if ($text === null) {
+            return null;
+        }
+        foreach (PaletteSearchSources::search($entity, $ctx->company->id, $text) as $hit) {
+            if ((string) $hit['value'] === $id) {
+                return $hit['label'];
+            }
+        }
+
+        return null;
     }
 
     /** @return array{0: array<string, mixed>, 1: mixed} */

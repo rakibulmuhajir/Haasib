@@ -14,15 +14,7 @@ class PaletteResolveController extends Controller
 {
     public function __invoke(PaletteResolveRequest $request, PaletteCatalog $catalog): JsonResponse
     {
-        $name = $request->validated('command');
-
-        $command = null;
-        foreach ($catalog->commands($request->user(), CompanyContext::getCompany()) as $candidate) {
-            if ($candidate->name() === $name) {
-                $command = $candidate;
-                break;
-            }
-        }
+        $command = $catalog->find($request->user(), CompanyContext::getCompany(), $request->validated('command'));
 
         if ($command === null) {
             return response()->json(['status' => 'error', 'message' => 'Unknown command'], 404);

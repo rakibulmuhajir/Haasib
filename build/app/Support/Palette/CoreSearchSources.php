@@ -9,6 +9,7 @@ final class CoreSearchSources
 {
     public static function register(): void
     {
+        PaletteSearchSources::register('customer', fn ($c, $q) => self::customers($c, $q));
         PaletteSearchSources::register('vendor', fn ($c, $q) => self::vendors($c, $q));
         PaletteSearchSources::register('bill', fn ($c, $q) => self::bills($c, $q));
         PaletteSearchSources::register('account', fn ($c, $q) => self::accounts($c, $q));
@@ -32,6 +33,13 @@ final class CoreSearchSources
         }
 
         return $builder;
+    }
+
+    private static function customers(string $companyId, string $query): array
+    {
+        return self::base('acct.customers', $companyId, $query, ['name', 'email'])
+            ->select('id', 'name', 'email', 'base_currency')->orderBy('name')->get()
+            ->map(fn ($r) => ['value' => $r->id, 'label' => $r->name, 'meta' => $r->email ?? $r->base_currency, 'icon' => '👤'])->all();
     }
 
     private static function vendors(string $companyId, string $query): array

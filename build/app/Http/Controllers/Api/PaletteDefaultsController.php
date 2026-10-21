@@ -68,10 +68,16 @@ class PaletteDefaultsController extends Controller
     /** A vendor's open bills in the company currency, oldest first, so a payment can settle them in order. */
     public function openBills(PaletteOpenBillsRequest $request): JsonResponse
     {
-        $company = CompanyContext::getCompany();
+        $bills = self::openBillsFor(CompanyContext::getCompany(), $request->validated('vendor_id'));
 
-        $bills = Bill::where('company_id', $company->id)
-            ->where('vendor_id', $request->validated('vendor_id'))
+        return response()->json(['bills' => $bills])->header('Cache-Control', 'no-store');
+    }
+
+    /** @return list<array{id: string, bill_number: ?string, balance: float, currency: string}> */
+    public static function openBillsFor(Company $company, string $vendorId): array
+    {
+        return Bill::where('company_id', $company->id)
+            ->where('vendor_id', $vendorId)
             ->whereNotIn('status', ['paid', 'void', 'cancelled', 'draft'])
             ->where('balance', '>', 0)
             ->where('currency', $company->base_currency)
@@ -82,8 +88,6 @@ class PaletteDefaultsController extends Controller
                 'bill_number' => $b->bill_number,
                 'balance' => round((float) $b->balance, 2),
                 'currency' => $b->currency,
-            ]);
-
-        return response()->json(['bills' => $bills->values()])->header('Cache-Control', 'no-store');
+            ])->values()->all();
     }
 }

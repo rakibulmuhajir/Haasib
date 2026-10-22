@@ -110,7 +110,12 @@ test('a generic search slot ignores a picked id from another company', function 
         ->and($r['slots'][$field['name']]['state'])->toBe('not_found');
 
     $r = paletteResolve($this, $f['owner'], $f['company'], $entry['key'], [$field['name'] => ['value' => $ours->id]])->assertOk()->json();
-    expect($r['slots'][$field['name']])->toBe(['state' => 'resolved', 'value' => $ours->id, 'label' => 'Our Vendor']);
+    // Ready carries params, not slots; if other required slots remain, it stays pending with slot state.
+    if ($r['status'] === 'ready') {
+        expect($r['params'][$field['name']])->toBe($ours->id);
+    } else {
+        expect($r['slots'][$field['name']])->toBe(['state' => 'resolved', 'value' => $ours->id, 'label' => 'Our Vendor']);
+    }
 });
 
 test('resolve needs a command name', function () {

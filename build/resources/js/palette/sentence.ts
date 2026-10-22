@@ -63,7 +63,10 @@ function extractDate(text: string): { text: string; date?: string } {
 const AMOUNT_SHAPE = /^\d[\d,]*(\.\d+)?\s*(k|lakhs?|lacs?)?%?$/
 const CONNECTORS = new Set(['to', 'from', 'into', 'in', 'for', 'on'])
 // Words the server does not read as amounts. Kept with the amount so "50 thousand" is refused, not posted as 50.
-const MAGNITUDE = new Set(['hundred', 'hundreds', 'thousand', 'thousands', 'million', 'millions', 'billion', 'billions', 'crore', 'crores'])
+const MAGNITUDE = new Set([
+  'hundred', 'hundreds', 'thousand', 'thousands', 'million', 'millions', 'billion', 'billions', 'crore', 'crores',
+  'cr', 'm', 'mn', 'bn', 'b', 'l', 'lk', 'lks',
+])
 // What follows an entity in an entity command ("expense list"): never the start of a sentence.
 const ENTITY_VERBS = new Set(['list', 'view', 'show', 'create', 'new', 'update', 'edit', 'delete'])
 

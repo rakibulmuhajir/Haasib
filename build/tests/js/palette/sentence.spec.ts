@@ -173,6 +173,11 @@ describe('which run is the amount', () => {
   it('keeps a magnitude word with the amount, so the server refuses it', () => {
     expect(slots('sale 50 thousand')).toEqual({ amount: '50 thousand' })
     expect(slots('pay ali 50 thousand')).toEqual({ vendor: 'ali', amount: '50 thousand' })
+    expect(slots('sale 5 cr')).toEqual({ amount: '5 cr' })
+    expect(slots('sale 2 lk')).toEqual({ amount: '2 lk' })
+    expect(slots('sale 3 m walk-in')).toEqual({ amount: '3 m', note: 'walk-in' })
+    expect(slots('pay ali 2 lks')).toEqual({ vendor: 'ali', amount: '2 lks' })
+    expect(slots('deposit 1 bn meezan')).toEqual({ amount: '1 bn', bank: 'meezan' })
   })
 
   it('reads lakhs and lacs', () => {

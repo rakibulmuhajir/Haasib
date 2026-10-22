@@ -33,6 +33,7 @@ test('refuses what it cannot read exactly', function (string $text) {
     '', 'abc', '-50', '50.', '.5', '1e5', '0x10', '5o00', '50,00', '5,0000', '1,2,3', '12.345', '1.234 lakh0',
     '0', '0k', '50 thousand', '5 crore', '2 million', '3 m', '50kk', 'k', 'lakh', '1,000,000,000,000', '99999999999',
     '1.23456789 lakh', '50 thousands', '5 crores', '2 hundred',
+    '5 cr', '2 lk', '2 lks', '2 l', '3 mn', '1 bn', '1 b',
 ]);
 
 test('text after the amount is not an amount', function () {

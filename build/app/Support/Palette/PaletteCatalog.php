@@ -6,6 +6,9 @@ use App\Contracts\DescribesPalette;
 use App\Http\Controllers\CommandController;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Palette\Commands\GenericCommand;
+use App\Support\Palette\Commands\PaletteCommand;
+use App\Support\Palette\Commands\PaletteCommandRegistry;
 use App\Services\CommandBus;
 use App\Support\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\Log;
@@ -25,7 +28,78 @@ final class PaletteCatalog
         private readonly CommandBus $bus,
         private readonly RuleIntrospector $introspector,
         private readonly ModuleRegistry $modules,
+        private readonly PaletteCommandRegistry $declared,
     ) {}
+
+    /**
+     * What the palette fetches when it opens: the declared sentence commands this user
+     * may run, and the CommandBus actions as before (until the old palette is retired).
+     *
+     * @return array{sentences: list<array<string, mixed>>, commands: list<array<string, mixed>>}
+     */
+    public function payload(User $user, ?Company $company): array
+    {
+        $sentences = [];
+        if ($company !== null) {
+            foreach ($this->commands($user, $company) as $command) {
+                try {
+                    $sentences[] = $command->toCatalog($company);
+                } catch (\Throwable $e) {
+                    Log::warning('palette_command_skip', ['command' => $command->name(), 'error' => $e->getMessage()]);
+                }
+            }
+        }
+
+        return ['sentences' => $sentences, 'commands' => $this->for($user, $company)];
+    }
+
+    /**
+     * Declared commands, then a generic one for every catalog entry no declared command targets.
+     * A generic list or view has nowhere to go until the palette shows tables, so it is left out.
+     *
+     * @return list<PaletteCommand>
+     */
+    public function commands(User $user, ?Company $company): array
+    {
+        if ($company === null) {
+            return [];
+        }
+
+        $commands = $this->declared->for($user, $company);
+        $targets = array_map(fn (PaletteCommand $c) => $c->target(), $commands);
+        foreach ($this->for($user, $company) as $entry) {
+            if (! $entry['query'] && ! in_array($entry['key'], $targets, true)) {
+                $commands[] = new GenericCommand($entry);
+            }
+        }
+
+        return $commands;
+    }
+
+    /** One command by name. Generic names are `entity.verb` keys, so the catalog is only built for a dotted name. */
+    public function find(User $user, ?Company $company, string $name): ?PaletteCommand
+    {
+        if ($company === null) {
+            return null;
+        }
+
+        foreach ($this->declared->for($user, $company) as $command) {
+            if ($command->name() === $name) {
+                return $command;
+            }
+        }
+        if (! str_contains($name, '.')) {
+            return null;
+        }
+
+        foreach ($this->commands($user, $company) as $command) {
+            if ($command->name() === $name) {
+                return $command;
+            }
+        }
+
+        return null;
+    }
 
     /** @return list<array{key: string, entity: string, verb: string, description: string, query: bool, form: bool, form_url: ?string, args: list<array>, flags: list<array>}> */
     public function for(User $user, ?Company $company): array

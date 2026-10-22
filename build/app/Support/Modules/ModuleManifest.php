@@ -150,6 +150,16 @@ abstract class ModuleManifest
         return [];
     }
 
+    /**
+     * Sentence commands this module adds to the palette (gated by isEnabledFor like the rest of the manifest).
+     *
+     * @return list<\App\Support\Palette\Commands\PaletteCommand>
+     */
+    public function paletteCommands(): array
+    {
+        return [];
+    }
+
     /** Vendor type keys (Vendor::TYPES) only this module's companies are offered. */
     public function vendorTypes(): array
     {

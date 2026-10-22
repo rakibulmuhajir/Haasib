@@ -1,21 +1,15 @@
 <?php
 
 use App\Http\Controllers\CommandController;
-use App\Http\Controllers\PaletteSuggestionsController;
 use App\Http\Controllers\Api\PaletteCatalogController;
 use App\Http\Controllers\Api\PaletteDefaultsController;
-use App\Http\Controllers\Api\PaletteFlagController;
+use App\Http\Controllers\Api\PaletteFindController;
 use App\Http\Controllers\Api\PalettePreviewController;
+use App\Http\Controllers\Api\PaletteResolveController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/commands', CommandController::class)
     ->middleware(['web', 'auth', 'identify.company', 'throttle:commands']);
-
-Route::get('/palette/suggestions', [PaletteSuggestionsController::class, 'index'])
-    ->middleware(['web', 'auth', 'identify.company', 'throttle:60,1']);
-
-Route::get('/palette/flag-values', [PaletteFlagController::class, 'flagValues'])
-    ->middleware(['web', 'auth', 'identify.company', 'throttle:60,1']);
 
 Route::get('/palette/catalog', PaletteCatalogController::class)
     ->middleware(['web', 'auth', 'identify.company', 'throttle:60,1']);
@@ -28,6 +22,12 @@ Route::get('/palette/open-bills', [PaletteDefaultsController::class, 'openBills'
 
 Route::post('/palette/preview', PalettePreviewController::class)
     ->middleware(['web', 'auth', 'identify.company', 'throttle:60,1']);
+
+Route::get('/palette/find', PaletteFindController::class)
+    ->middleware(['web', 'auth', 'identify.company', 'throttle:120,1']);
+
+Route::post('/palette/resolve', PaletteResolveController::class)
+    ->middleware(['web', 'auth', 'identify.company', 'throttle:120,1']);
 
 Route::post('/palette/execute', function (Illuminate\Http\Request $request) {
     $controller = new App\Http\Controllers\CommandController();

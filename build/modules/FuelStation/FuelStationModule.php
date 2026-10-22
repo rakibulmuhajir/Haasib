@@ -6,6 +6,8 @@ use App\Constants\Permissions;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\FuelStation\Http\FuelHome;
+use App\Modules\FuelStation\Palette\CardChargeCommand;
+use App\Modules\FuelStation\Palette\CloseDayCommand;
 use App\Modules\FuelStation\Services\DailyCloseLockService;
 use App\Modules\FuelStation\Services\FuelNavigationAccess;
 use App\Modules\FuelStation\Services\FuelStationModuleInstaller;
@@ -24,6 +26,12 @@ class FuelStationModule extends ModuleManifest
     public function requires(): array { return ['inventory']; }
     public function commandPrefixes(): array { return ['fuel.', 'calculator.']; }
     public function capabilities(): array { return ['daily_close']; }
+
+    public function paletteCommands(): array
+    {
+        return [new CardChargeCommand, new CloseDayCommand];
+    }
+
     public function labels(): array { return ['consolidated.item' => 'Fuel', 'consolidated.quantity' => 'Litres']; }
 
     /** A company that is both fuel and umrah belongs to umrah (it answers first). */

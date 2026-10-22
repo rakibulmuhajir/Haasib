@@ -44,3 +44,5 @@ cookies.txt
 # Generated sample documents
 build/output/
 bash.exe.stackdump
+
+.superpowers/

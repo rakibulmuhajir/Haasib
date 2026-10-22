@@ -203,7 +203,7 @@ final class PalettePreview
     }
 
     /** Ledger balance in the account's own direction, from every posted or locked line (inside the dry-run transaction). */
-    private static function balance(string $companyId, string $accountId, ?string $normal): float
+    public static function balance(string $companyId, string $accountId, ?string $normal): float
     {
         $row = DB::table('acct.journal_entries as je')
             ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')

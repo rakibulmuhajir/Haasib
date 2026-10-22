@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PaletteOpenBillsRequest;
+use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Support\CompanyClock;
@@ -24,6 +25,12 @@ class PaletteDefaultsController extends Controller
             return response()->json(['message' => 'Choose a company first'], 400);
         }
 
+        return response()->json(self::defaultsFor($company))->header('Cache-Control', 'no-store');
+    }
+
+    /** The company date, currency, default accounts and the account lists a typed name is matched against. */
+    public static function defaultsFor(Company $company): array
+    {
         $accounts = fn (string $column, array $values) => Account::where('company_id', $company->id)
             ->where('is_active', true)->whereNull('deleted_at')->whereIn($column, $values)
             ->orderBy('code')->get(['id', 'code', 'name']);
@@ -44,7 +51,7 @@ class PaletteDefaultsController extends Controller
 
         $charges = $expense->first(fn ($a) => (bool) preg_match('/bank\s+(charge|fee|service)/i', $a->name));
 
-        return response()->json([
+        return [
             'today' => app(CompanyClock::class)->today(),
             'currency' => $company->base_currency,
             'default_bank_id' => $defaultBank?->id,
@@ -52,19 +59,25 @@ class PaletteDefaultsController extends Controller
             'receive_account_id' => $receive?->id,
             'pay_account_id' => $pay?->id,
             'bank_charges_account_id' => $charges?->id,
-            'banks' => $banks->values(),
-            'cash' => $cash->values(),
-            'expense' => $expense->values(),
-        ])->header('Cache-Control', 'no-store');
+            'banks' => $banks->values()->toArray(),
+            'cash' => $cash->values()->toArray(),
+            'expense' => $expense->values()->toArray(),
+        ];
     }
 
     /** A vendor's open bills in the company currency, oldest first, so a payment can settle them in order. */
     public function openBills(PaletteOpenBillsRequest $request): JsonResponse
     {
-        $company = CompanyContext::getCompany();
+        $bills = self::openBillsFor(CompanyContext::getCompany(), $request->validated('vendor_id'));
 
-        $bills = Bill::where('company_id', $company->id)
-            ->where('vendor_id', $request->validated('vendor_id'))
+        return response()->json(['bills' => $bills])->header('Cache-Control', 'no-store');
+    }
+
+    /** @return list<array{id: string, bill_number: ?string, balance: float, currency: string}> */
+    public static function openBillsFor(Company $company, string $vendorId): array
+    {
+        return Bill::where('company_id', $company->id)
+            ->where('vendor_id', $vendorId)
             ->whereNotIn('status', ['paid', 'void', 'cancelled', 'draft'])
             ->where('balance', '>', 0)
             ->where('currency', $company->base_currency)
@@ -75,8 +88,6 @@ class PaletteDefaultsController extends Controller
                 'bill_number' => $b->bill_number,
                 'balance' => round((float) $b->balance, 2),
                 'currency' => $b->currency,
-            ]);
-
-        return response()->json(['bills' => $bills->values()])->header('Cache-Control', 'no-store');
+            ])->values()->all();
     }
 }

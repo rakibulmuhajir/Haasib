@@ -86,7 +86,7 @@ test('balance is a query that shows the account balance and never executes', fun
     $period = AccountingPeriod::create(['company_id' => $cid, 'fiscal_year_id' => $fy->id, 'name' => 'October', 'period_number' => 10, 'start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
     $make = fn (string $code, string $name, string $type, string $subtype, string $normal) => Account::create([
         'company_id' => $cid, 'code' => $code, 'name' => $name, 'type' => $type, 'subtype' => $subtype,
-        'normal_balance' => $normal, 'currency' => 'PKR', 'is_active' => true,
+        'normal_balance' => $normal, 'currency' => in_array($subtype, ['bank', 'cash'], true) ? 'PKR' : null, 'is_active' => true,
     ]);
     $bank = $make('1060', 'Meezan Bank', 'asset', 'bank', 'debit');
     $sales = $make('4000', 'Sales', 'revenue', 'revenue', 'credit');

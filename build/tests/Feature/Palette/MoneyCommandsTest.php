@@ -23,7 +23,7 @@ function moneySeed(): array
     $f = paletteFixture(false);
     $make = fn (string $code, string $name, string $type, string $subtype) => Account::create([
         'company_id' => $f['company']->id, 'code' => $code, 'name' => $name, 'type' => $type, 'subtype' => $subtype,
-        'normal_balance' => $type === 'asset' || $type === 'expense' ? 'debit' : 'credit', 'currency' => 'PKR', 'is_active' => true,
+        'normal_balance' => $type === 'asset' || $type === 'expense' ? 'debit' : 'credit', 'currency' => in_array($subtype, ['bank', 'cash'], true) ? 'PKR' : null, 'is_active' => true,
     ]);
 
     $f['cash'] = $make('1050', 'Cash on Hand', 'asset', 'cash');

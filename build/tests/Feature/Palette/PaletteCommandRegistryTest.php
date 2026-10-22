@@ -96,6 +96,9 @@ function registryFixture(string $otherRole = 'operations'): array
     DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
     DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
+    // Direct PaletteCatalog calls have no request middleware to set the company the permission check reads.
+    app(\App\Services\CompanyContextService::class)->setContext($company);
+
     return compact('company', 'owner', 'other');
 }
 

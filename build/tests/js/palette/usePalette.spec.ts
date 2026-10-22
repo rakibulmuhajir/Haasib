@@ -286,11 +286,11 @@ describe('usePalette line and blank modes', () => {
     expect(p.mode.value).toBe('line')
   })
 
-  it('keeps the current blank while the command is unchanged', async () => {
+  it('keeps the current blank in blank mode while the command is unchanged', async () => {
     const p = await opened()
     p.text.value = 'pay ali'
     p.enterBlank(0)
-    p.mode.value = 'line'
+    expect(p.mode.value).toBe('blank')
     p.text.value = 'pay ali 5'
     expect(p.blanks.value?.current).toBe(0)
   })

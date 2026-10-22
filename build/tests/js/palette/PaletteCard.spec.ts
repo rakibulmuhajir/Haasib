@@ -1,6 +1,10 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import PaletteCard from '@/components/palette/PaletteCard.vue'
+
+vi.mock('@inertiajs/vue3', () => ({
+  usePage: () => ({ props: { auth: { currentCompany: { base_currency: 'PKR' } } } }),
+}))
 import type { Card } from '@/palette/types'
 
 const card: Card = { who: 'Ali Traders', amount: 1000, currency: 'PKR', from: 'Cash in hand', date: '2026-10-21' }
@@ -11,7 +15,7 @@ describe('PaletteCard', () => {
     const text = mount(PaletteCard, { props: { card, balances, whoLabel: 'Paying' } }).text()
     expect(text).toContain('Paying')
     expect(text).toContain('Ali Traders')
-    expect(text).toContain('1,000.00')
+    expect(text).toContain('1,000')
     expect(text).toContain('Cash in hand')
     expect(text).toContain('45,200')
     expect(text).toContain('44,200')

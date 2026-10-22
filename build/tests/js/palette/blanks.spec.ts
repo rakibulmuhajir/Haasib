@@ -76,7 +76,15 @@ describe('tab', () => {
 })
 
 describe('lineOf and showsSentence', () => {
-  const full = { sentence: 'Pay {vendor} {amount} from {account?} on {date?}' }
+  const full = {
+    sentence: 'Pay {vendor} {amount} from {account?} on {date?}',
+    slots: [
+      { name: 'vendor', kind: 'search', optional: false },
+      { name: 'amount', kind: 'amount', optional: false },
+      { name: 'account', kind: 'account', optional: true },
+      { name: 'date', kind: 'date', optional: true },
+    ] as SlotSpec[],
+  }
   it('rebuilds the line without the anchors of empty blanks', () => {
     const s = set({ vendor: '7 star', amount: '5000' }, full)
     expect(lineOf(s)).toBe('Pay 7 star 5000')

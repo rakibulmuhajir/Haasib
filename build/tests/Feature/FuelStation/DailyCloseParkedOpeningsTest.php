@@ -156,3 +156,25 @@ test('once the previous day is posted, openings and posting both use it normally
 
     test()->travelBack();
 });
+
+test('a closing reading left at zero can be parked but not posted', function () {
+    $f = parkedOpeningsFixture();
+    enableCloseHttp($f);
+    $url = "/{$f['company']->slug}/fuel/daily-close";
+    test()->travelTo(\Carbon\Carbon::parse('2026-09-16 09:00:00'));
+
+    $f['payload']['nozzle_readings'][0]['opening_electronic'] = 500;
+    $f['payload']['nozzle_readings'][0]['closing_electronic'] = 0;
+    $f['payload']['nozzle_readings'][0]['liters_sold'] = 0;
+
+    test()->post($url, $f['payload'] + ['intent' => 'park'])->assertSessionHasNoErrors();
+    expect(\Illuminate\Support\Facades\DB::table('fuel.daily_close_drafts')
+        ->where('company_id', $f['company']->id)->where('business_date', '2026-09-16')->count())->toBe(1);
+
+    $response = test()->post($url, $f['payload']);
+    $response->assertSessionHasErrors('nozzle_readings.0.closing_electronic');
+    expect(session('errors')->first('nozzle_readings.0.closing_electronic'))->toContain('No sale');
+    expect(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->count())->toBe(0);
+
+    test()->travelBack();
+});

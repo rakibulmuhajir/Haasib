@@ -2760,6 +2760,11 @@ class DailyCloseService
         $fmt = fn (float $v) => rtrim(rtrim(number_format($v, 2), '0'), '.');
 
         if (! $rolledOver) {
+            // A closing left at its default 0 is "not entered", not "went backwards".
+            if ($closing == 0.0 && $opening > 0) {
+                return 'No closing reading. Enter it or tick No sale.';
+            }
+
             return $closing < $opening
                 ? "Closing reading ({$fmt($closing)}) is below the opening reading ({$fmt($opening)}). "
                     .'A pump meter cannot go backwards. If this meter passed its last digit and started '

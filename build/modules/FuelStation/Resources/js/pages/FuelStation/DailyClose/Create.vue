@@ -1435,6 +1435,15 @@ const togglePump = (pumpId: string) => {
     else next.add(pumpId);
     openPumps.value = next;
 };
+// A server error on a nozzle's meter must not stay hidden inside a folded pump.
+const openPumpsWithErrors = (errors: Record<string, string>) => {
+    const keys = Object.keys(errors);
+    const next = new Set(openPumps.value);
+    nozzlesByPump.value.forEach((pump) => {
+        if (pump.nozzle_indices.some((i) => keys.some((k) => k.startsWith(`nozzle_readings.${i}.`)))) next.add(pump.pump_id);
+    });
+    openPumps.value = next;
+};
 const showManualReadings = ref(false);
 const pumpRate = (indices: number[]) => Number(form.nozzle_readings[indices[0]]?.sale_rate || 0);
 const pumpHasNoSale = (indices: number[]) => indices.length > 0 && indices.every((idx) => nozzleHasNoSale(idx));
@@ -3363,6 +3372,7 @@ const parkDailyClose = () => {
             preserveScroll: true,
             onError: (errors) => {
                 form.setError(errors as Record<string, string>);
+                openPumpsWithErrors(errors as Record<string, string>);
                 toast.error(String(Object.values(errors)[0]));
             },
             onFinish: () => {
@@ -3488,6 +3498,7 @@ const submitDailyClose = () => {
             onError: (errors) => {
                 // router.post bypasses form.post, so form.errors needs wiring up manually for InputError to see it
                 form.setError(errors as Record<string, string>);
+                openPumpsWithErrors(errors as Record<string, string>);
                 if (Object.keys(errors).some((key) => key === 'credit_sales' || key.startsWith('credit_sales.'))) {
                     activeTab.value = 'money-out';
                 }

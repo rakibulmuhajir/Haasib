@@ -35,13 +35,23 @@ function meterClose(array $f, array $reading, float $expectedRevenue): array
     return app(DailyCloseService::class)->processDailyClose($f['company']->id, $f['payload'], $f['user']);
 }
 
-test('a closing reading below the opening one is refused', function () {
+test('a closing reading left at zero is refused as not entered', function () {
     $f = creditCloseFixture();
 
     // Exactly day 13: the closing reading left at zero against an opening of 303,625.
     expect(fn () => meterClose($f, [
         'opening_electronic' => 303625,
         'closing_electronic' => 0,
+        'liters_sold' => 0,
+    ], 0))->toThrow(ValidationException::class, 'tick No sale');
+});
+
+test('a non-zero closing reading below the opening one is refused as going backwards', function () {
+    $f = creditCloseFixture();
+
+    expect(fn () => meterClose($f, [
+        'opening_electronic' => 303625,
+        'closing_electronic' => 303000,
         'liters_sold' => 0,
     ], 0))->toThrow(ValidationException::class, 'cannot go backwards');
 });
@@ -50,7 +60,7 @@ test('the refusal names both readings and the way out', function () {
     $f = creditCloseFixture();
 
     try {
-        meterClose($f, ['opening_electronic' => 303625, 'closing_electronic' => 0, 'liters_sold' => 0], 0);
+        meterClose($f, ['opening_electronic' => 303625, 'closing_electronic' => 303000, 'liters_sold' => 0], 0);
         $this->fail('The backwards reading was accepted.');
     } catch (ValidationException $e) {
         $message = $e->errors()['nozzle_readings.0.closing_electronic'][0] ?? '';
@@ -85,6 +95,20 @@ test('a declared rollover is closed with the litres either side of zero', functi
     ], 60000);
 
     expect((float) $posted['metadata']['total_revenue'])->toBe(60000.0);
+});
+
+test('a rolled-over meter reading exactly zero is still accepted', function () {
+    $f = creditCloseFixture();
+
+    // 9,999,900 passes the top and lands on 0: 100 litres at 300.
+    $posted = meterClose($f, [
+        'opening_electronic' => 9999900,
+        'closing_electronic' => 0,
+        'meter_rolled_over' => true,
+        'liters_sold' => 0,
+    ], 30000);
+
+    expect((float) $posted['metadata']['total_revenue'])->toBe(30000.0);
 });
 
 test('a rollover cannot be claimed for a meter nowhere near its top', function () {

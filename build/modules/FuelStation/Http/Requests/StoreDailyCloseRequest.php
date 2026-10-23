@@ -291,10 +291,17 @@ class StoreDailyCloseRequest extends BaseFormRequest
                     continue; // the field rules already report this
                 }
 
+                $rolled = filter_var($reading['meter_rolled_over'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+                // Parking stays lenient about a closing left at its default 0; posting refuses it.
+                if ($this->input('intent') === 'park' && ! $rolled && (float) $closing == 0.0 && (float) $opening > 0) {
+                    continue;
+                }
+
                 $problem = \App\Modules\FuelStation\Services\DailyCloseService::meterReadingProblem(
                     (float) $opening,
                     (float) $closing,
-                    filter_var($reading['meter_rolled_over'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    $rolled,
                 );
 
                 if ($problem !== null) {

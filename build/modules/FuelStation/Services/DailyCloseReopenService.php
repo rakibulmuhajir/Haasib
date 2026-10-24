@@ -940,7 +940,7 @@ class DailyCloseReopenService
     private function reverseAmanat(string $companyId, string $closeId): void
     {
         $entryIds = JournalEntry::where('company_id', $companyId)->where('transaction_id', $closeId)->pluck('id');
-        foreach (AmanatTransaction::where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $txn) {
+        foreach (AmanatTransaction::active()->where('company_id', $companyId)->whereIn('journal_entry_id', $entryIds)->get() as $txn) {
             $profile = CustomerProfile::where('company_id', $companyId)->where('customer_id', $txn->customer_id)->where('is_amanat_holder', true)->first();
             if ($profile) {
                 $sign = $txn->transaction_type === AmanatTransaction::TYPE_DEPOSIT ? -1 : 1;

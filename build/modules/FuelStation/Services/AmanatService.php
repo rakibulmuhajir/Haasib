@@ -27,6 +27,8 @@ class AmanatService
         $base = $prefix.'-'.strtoupper(substr($customerId, 0, 8)).'-'.date('Ymd', strtotime($date));
         $lastSequence = Transaction::where('company_id', $companyId)
             ->where('transaction_number', 'like', $base.'-%')
+            // Plain sequence numbers only: a reversal's "...-0001-REV" shares the prefix.
+            ->whereRaw('transaction_number ~ ?', ['^'.$base.'-[0-9]{4}$'])
             ->selectRaw('MAX((RIGHT(transaction_number, 4))::integer) as max_sequence')
             ->value('max_sequence');
 

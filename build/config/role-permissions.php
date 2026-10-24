@@ -216,6 +216,7 @@ return [
         // Fuel Station - Amanat
         'amanat.deposit',
         'amanat.withdraw',
+        'amanat.update',
 
         // Fuel Station - Sales
         'fuel_sale.create',
@@ -431,6 +432,7 @@ return [
         // Fuel Station - Amanat
         'amanat.deposit',
         'amanat.withdraw',
+        'amanat.update',
 
         // Fuel Station - Sales
         'fuel_sale.create',

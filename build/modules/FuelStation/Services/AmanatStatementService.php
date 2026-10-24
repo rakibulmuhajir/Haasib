@@ -25,6 +25,8 @@ class AmanatStatementService
             })
             ->where('a.company_id', $customer->company_id)
             ->where('a.customer_id', $customer->id)
+            // A corrected entry is history only; its replacement is the movement.
+            ->whereNull('a.voided_at')
             // A voided journal takes its movement with it.
             ->where(fn ($q) => $q->whereNull('t.id')->orWhereIn('t.status', ['posted', 'locked']))
             ->selectRaw('a.*, t.id as transaction_id, COALESCE(t.transaction_date, a.created_at::date) as movement_date');

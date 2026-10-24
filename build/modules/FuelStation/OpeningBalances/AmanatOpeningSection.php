@@ -120,7 +120,7 @@ class AmanatOpeningSection implements OpeningBalanceSection
 
     public function prepareReentry(string $companyId, array $entryIds): mixed
     {
-        $amanats = AmanatTransaction::whereIn('journal_entry_id', $entryIds)->get();
+        $amanats = AmanatTransaction::active()->whereIn('journal_entry_id', $entryIds)->get();
         foreach ($amanats as $amanat) {
             $profile = CustomerProfile::where('company_id', $companyId)->where('customer_id', $amanat->customer_id)->first();
             $balance = $profile ? (float) $profile->amanat_balance : 0.0;
@@ -143,7 +143,7 @@ class AmanatOpeningSection implements OpeningBalanceSection
 
     public function rows(string $companyId, array $entryIds): array
     {
-        return AmanatTransaction::whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
+        return AmanatTransaction::active()->whereIn('journal_entry_id', $entryIds)->with('customer:id,name')->get()
             ->map(fn ($t) => ['customer_id' => $t->customer_id, 'customer_name' => $t->customer?->name, 'amount' => (float) $t->amount])->values()->all();
     }
 }

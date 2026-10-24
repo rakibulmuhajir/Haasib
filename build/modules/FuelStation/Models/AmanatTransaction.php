@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -61,9 +62,28 @@ class AmanatTransaction extends Model
         'fuel_quantity' => 'decimal:2',
         'journal_entry_id' => 'string',
         'recorded_by_user_id' => 'string',
+        'voided_at' => 'datetime',
+        'voided_by_user_id' => 'string',
+        'replaced_by_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    /** Movements still in force: a corrected (voided) row is history only and counts nowhere. */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull($this->qualifyColumn('voided_at'));
+    }
+
+    public function isVoided(): bool
+    {
+        return $this->voided_at !== null;
+    }
+
+    public function replacedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'replaced_by_id');
+    }
 
     public function company(): BelongsTo
     {

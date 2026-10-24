@@ -105,7 +105,7 @@ test('changing the holder is refused when it would take the old holder below zer
     // The same move is fine once the holder may borrow.
     CustomerProfile::where('customer_id', $f['a']->id)->update(['allow_amanat_borrowing' => true]);
     test()->post("{$f['base']}/{$f['a']->id}/movements/{$deposit->id}/holder", ['customer_id' => $f['b']->id])
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasNoErrors()->assertSessionHas('success');
     expect(amanatCorrectionBalance($f['a']))->toBe(-800.0)
         ->and(amanatCorrectionBalance($f['b']))->toBe(1000.0);
 });
@@ -158,8 +158,8 @@ test('editing the amount of a standalone deposit reverses, voids and replaces it
 
     $change = AmanatTransactionChange::where('amanat_transaction_id', $original->id)->sole();
     expect($change->action)->toBe('amount_corrected')
-        ->and($change->before['amount'])->toBe(1000.0)
-        ->and($change->after['amount'])->toBe(700.0)
+        ->and($change->before['amount'])->toEqual(1000.0)
+        ->and($change->after['amount'])->toEqual(700.0)
         ->and($change->after['date'])->toBe('2026-09-16');
 });
 
@@ -167,7 +167,7 @@ test('a corrected row is not counted in the holder balance or the history totals
     $f = amanatCorrectionFixture();
     $original = amanatCorrectionDeposit($f, $f['a'], 1000);
     test()->post("{$f['base']}/{$f['a']->id}/movements/{$original->id}/amend", ['business_date' => '2026-09-15', 'amount' => 700])
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasNoErrors()->assertSessionHas('success');
 
     expect(AmanatTransaction::where('customer_id', $f['a']->id)->count())->toBe(2)
         ->and((float) AmanatTransaction::active()->where('customer_id', $f['a']->id)->sum('amount'))->toBe(700.0)
@@ -227,7 +227,7 @@ test('changing the holder is refused in a closed period and for a locked close',
 test('a withdrawal can be amended: the original is voided and the balance ends at the corrected figure', function () {
     $f = amanatCorrectionFixture();
     amanatCorrectionDeposit($f, $f['a'], 1000);
-    test()->post("{$f['base']}/{$f['a']->id}/withdraw", ['business_date' => '2026-09-15', 'amount' => 300])->assertSessionHasNoErrors();
+    test()->post("{$f['base']}/{$f['a']->id}/withdraw", ['business_date' => '2026-09-15', 'amount' => 300])->assertSessionHasNoErrors()->assertSessionHas('success');
     $withdrawal = AmanatTransaction::where('customer_id', $f['a']->id)->where('transaction_type', 'withdrawal')->sole();
     expect(amanatCorrectionBalance($f['a']))->toBe(700.0);
 
@@ -247,7 +247,7 @@ test('reopening a close after a holder change brings back the new holder and the
     $f = amanatCorrectionFixture();
     $movement = amanatCorrectionPostClose($f, $f['a'], 500);
     test()->post("{$f['base']}/{$f['a']->id}/movements/{$movement->id}/holder", ['customer_id' => $f['b']->id])
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasNoErrors()->assertSessionHas('success');
     $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
 
     app(\App\Modules\FuelStation\Services\DailyCloseReopenService::class)->reopen($close, $f['user'], 'Fix the day');
@@ -262,5 +262,16 @@ test('reopening a close after a holder change brings back the new holder and the
     $change = AmanatTransactionChange::where('company_id', $f['company']->id)->sole();
     expect($change->amanat_transaction_id)->toBeNull()
         ->and($change->after['customer_id'])->toBe($f['b']->id)
-        ->and($change->after['amount'])->toBe(500.0);
+        ->and($change->after['amount'])->toEqual(500.0);
+});
+
+test('a new deposit for the same holder and date still posts after a correction', function () {
+    $f = amanatCorrectionFixture();
+    $original = amanatCorrectionDeposit($f, $f['a'], 1000);
+    test()->post("{$f['base']}/{$f['a']->id}/movements/{$original->id}/amend", ['business_date' => '2026-09-15', 'amount' => 700])
+        ->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    amanatCorrectionDeposit($f, $f['a'], 50);
+
+    expect(amanatCorrectionBalance($f['a']))->toBe(750.0);
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import DateTimeText from '@/components/DateTimeText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -28,6 +30,23 @@ interface AmanatTransaction {
   created_at: string
   transaction_date?: string | null
   payment_account?: { code: string; name: string; subtype: string } | null
+  payment_account_id?: string | null
+  detail?: MovementDetail
+}
+
+interface MovementDetail {
+  voided: boolean
+  replaced_by_id: string | null
+  recorded_by_name: string | null
+  source: { kind: 'close' | 'standalone' | 'other'; label: string; href: string | null }
+  journal: { id: string; number: string; href: string } | null
+  can_change_holder: boolean
+  can_edit: boolean
+}
+
+interface Holder {
+  id: string
+  name: string
 }
 
 interface CustomerProfile {
@@ -64,6 +83,8 @@ const props = withDefaults(defineProps<{
   customer: Customer
   profile: CustomerProfile
   canRecordMovement?: boolean
+  canUpdateMovement?: boolean
+  holders?: Holder[]
   transactions: AmanatTransaction[] | PaginatedTransactions
   paymentAccounts?: PaymentAccount[]
   // This holder's opening balance line; null when the user may not manage opening balances.
@@ -71,6 +92,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   transactions: () => [],
   paymentAccounts: () => [],
+  holders: () => [],
 })
 
 const page = usePage()
@@ -94,6 +116,38 @@ const movement = useForm({ business_date: '', amount: 0, payment_account_id: '',
 const recordMovement = (kind: 'deposit' | 'withdraw') => movement.post(`/${companySlug.value}/fuel/amanat/${props.customer.id}/${kind}`, {
   preserveScroll: true,
   onSuccess: (page) => { if ((page.props as any).flash?.success) movement.reset('amount', 'reference') },
+})
+
+// Opening a movement: details, change holder, and (standalone entries) edit.
+const selected = ref<AmanatTransaction | null>(null)
+const sheetOpen = computed({
+  get: () => selected.value !== null,
+  set: (open: boolean) => { if (!open) selected.value = null },
+})
+const holderForm = useForm({ customer_id: '' })
+const amendForm = useForm({ business_date: '', amount: 0, payment_account_id: '', reference: '', notes: '' })
+const movementUrl = (action: 'holder' | 'amend') =>
+  `/${companySlug.value}/fuel/amanat/${props.customer.id}/movements/${selected.value?.id}/${action}`
+
+const openMovement = (row: { _raw: AmanatTransaction }) => {
+  const tx = row._raw
+  selected.value = tx
+  holderForm.reset()
+  holderForm.clearErrors()
+  amendForm.clearErrors()
+  amendForm.business_date = (tx.transaction_date ?? tx.created_at).slice(0, 10)
+  amendForm.amount = Number(tx.amount)
+  amendForm.payment_account_id = tx.payment_account_id ?? ''
+  amendForm.reference = tx.reference ?? ''
+  amendForm.notes = tx.notes ?? ''
+}
+const saveHolder = () => holderForm.post(movementUrl('holder'), {
+  preserveScroll: true,
+  onSuccess: () => { selected.value = null },
+})
+const saveAmend = () => amendForm.post(movementUrl('amend'), {
+  preserveScroll: true,
+  onSuccess: () => { selected.value = null },
 })
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
@@ -261,7 +315,7 @@ const getTypeBadge = (type: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <LedgerRegister :data="txTableData" :columns="txColumns">
+        <LedgerRegister :data="txTableData" :columns="txColumns" @row-click="openMovement">
           <template #empty>
             <EmptyState
               title="No transactions"
@@ -270,7 +324,12 @@ const getTypeBadge = (type: string) => {
           </template>
 
           <template #cell-date="{ row }">
-            <span :title="`recorded ${row.recordedAt}`">{{ row.date }}</span>
+            <span :class="{ 'text-muted-foreground': row._raw.detail?.voided }" :title="`recorded ${row.recordedAt}`">{{ row.date }}</span>
+          </template>
+
+          <template #cell-details="{ row }">
+            <span :class="{ 'text-muted-foreground line-through': row._raw.detail?.voided }">{{ row.details }}</span>
+            <span v-if="row._raw.detail?.voided" class="ml-2 text-xs text-muted-foreground">Corrected</span>
           </template>
 
           <template #cell-type="{ row }">
@@ -284,8 +343,9 @@ const getTypeBadge = (type: string) => {
             <span
               class="font-medium"
               :class="{
-                'text-status-success': row.type === 'deposit',
-                'text-status-critical': row.type === 'withdrawal' || row.type === 'fuel_purchase',
+                'text-muted-foreground line-through': row._raw.detail?.voided,
+                'text-status-success': !row._raw.detail?.voided && row.type === 'deposit',
+                'text-status-critical': !row._raw.detail?.voided && (row.type === 'withdrawal' || row.type === 'fuel_purchase'),
               }"
             >
               <MoneyText
@@ -298,6 +358,72 @@ const getTypeBadge = (type: string) => {
         </LedgerRegister>
       </CardContent>
     </Card>
+
+    <Sheet v-model:open="sheetOpen">
+      <SheetContent class="w-full overflow-y-auto sm:max-w-md">
+        <template v-if="selected">
+          <SheetHeader>
+            <SheetTitle>{{ getTypeBadge(selected.transaction_type).label }}</SheetTitle>
+            <SheetDescription v-if="selected.detail?.voided">Corrected. A new entry replaced this one.</SheetDescription>
+          </SheetHeader>
+
+          <dl class="space-y-2 px-4 text-sm">
+            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Date</dt><dd><DateTimeText :value="selected.transaction_date ?? selected.created_at" mode="date" locale="en-PK" /></dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Amount</dt><dd><MoneyText :amount="selected.amount" :currency="currencyCode" /></dd></div>
+            <div v-if="selected.payment_account" class="flex justify-between gap-4"><dt class="text-muted-foreground">Account</dt><dd>{{ selected.payment_account.code }} - {{ selected.payment_account.name }}</dd></div>
+            <div v-if="selected.reference" class="flex justify-between gap-4"><dt class="text-muted-foreground">Reference</dt><dd>{{ selected.reference }}</dd></div>
+            <div v-if="selected.notes" class="flex justify-between gap-4"><dt class="text-muted-foreground">Notes</dt><dd class="text-right">{{ selected.notes }}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Recorded by</dt><dd>{{ selected.detail?.recorded_by_name ?? '-' }}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Recorded</dt><dd><DateTimeText :value="selected.created_at" locale="en-PK" /></dd></div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-muted-foreground">Source</dt>
+              <dd>
+                <a v-if="selected.detail?.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">{{ selected.detail.source.label }}</a>
+                <span v-else>{{ selected.detail?.source.label }}</span>
+              </dd>
+            </div>
+            <div v-if="selected.detail?.journal" class="flex justify-between gap-4">
+              <dt class="text-muted-foreground">Journal</dt>
+              <dd><a :href="selected.detail.journal.href" class="underline underline-offset-2">{{ selected.detail.journal.number }}</a></dd>
+            </div>
+          </dl>
+
+          <div v-if="canUpdateMovement && selected.detail?.can_change_holder" class="space-y-2 border-t px-4 pt-4">
+            <Label>Change holder</Label>
+            <Select v-model="holderForm.customer_id">
+              <SelectTrigger><SelectValue placeholder="Pick a holder" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="holder in holders" :key="holder.id" :value="holder.id">{{ holder.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="holderForm.errors.customer_id" class="text-sm text-destructive">{{ holderForm.errors.customer_id }}</p>
+            <Button :disabled="holderForm.processing || !holderForm.customer_id" @click="saveHolder">Move</Button>
+          </div>
+
+          <div v-if="canUpdateMovement && selected.detail?.can_edit" class="space-y-2 border-t px-4 pt-4">
+            <Label>Date</Label><Input v-model="amendForm.business_date" type="date" />
+            <Label>Amount</Label><Input v-model.number="amendForm.amount" type="number" min="0.01" step="0.01" />
+            <Label>Account</Label>
+            <Select v-model="amendForm.payment_account_id">
+              <SelectTrigger><SelectValue placeholder="Cash on Hand" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="account in paymentAccounts" :key="account.id" :value="account.id">
+                  {{ account.code }} - {{ account.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Reference</Label><Input v-model="amendForm.reference" />
+            <Label>Notes</Label><Input v-model="amendForm.notes" />
+            <p v-for="(error, field) in amendForm.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
+            <Button :disabled="amendForm.processing" @click="saveAmend">Save correction</Button>
+          </div>
+
+          <div v-else-if="canUpdateMovement && selected.detail?.source.kind === 'close' && !selected.detail?.voided" class="border-t px-4 pt-4 text-sm">
+            <a v-if="selected.detail.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">Correct in Daily Close</a>
+          </div>
+        </template>
+      </SheetContent>
+    </Sheet>
 
   </PageShell>
 </template>

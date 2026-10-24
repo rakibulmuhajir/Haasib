@@ -1,0 +1,1 @@
+import{d as s,z as t,o as l,w as r,U as n,P as p,u as c,b8 as d}from"./app-BEA_enhi.js";const _=s({__name:"DialogClose",props:{asChild:{type:Boolean},as:{}},setup(e){const o=e;return(a,i)=>(l(),t(c(d),p({"data-slot":"dialog-close"},o),{default:r(()=>[n(a.$slots,"default")]),_:3},16))}});export{_};

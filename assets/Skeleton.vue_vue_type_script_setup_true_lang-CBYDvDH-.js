@@ -1,0 +1,1 @@
+import{d as a,c as n,o,p as t,u as r,ap as c}from"./app-BEA_enhi.js";const u=a({__name:"Skeleton",props:{class:{}},setup(s){const e=s;return(l,p)=>(o(),n("div",{"data-slot":"skeleton",class:t(r(c)("animate-pulse rounded-md bg-primary/10",e.class))},null,2))}});export{u as _};

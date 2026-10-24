@@ -1,0 +1,1 @@
+import{d as t,c as o,o as l,p as r,u as n,ap as c,U as p}from"./app-BEA_enhi.js";const m=t({__name:"DialogHeader",props:{class:{}},setup(e){const a=e;return(s,d)=>(l(),o("div",{"data-slot":"dialog-header",class:r(n(c)("flex flex-col gap-2 text-center sm:text-left",a.class))},[p(s.$slots,"default")],2))}});export{m as _};

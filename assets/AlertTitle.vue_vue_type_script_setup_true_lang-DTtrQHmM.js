@@ -1,0 +1,1 @@
+import{d as e,c as l,o as n,p as o,u as r,ap as c,U as i}from"./app-BEA_enhi.js";const d=e({__name:"AlertTitle",props:{class:{}},setup(s){const t=s;return(a,p)=>(n(),l("div",{"data-slot":"alert-title",class:o(r(c)("col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight",t.class))},[i(a.$slots,"default")],2))}});export{d as _};

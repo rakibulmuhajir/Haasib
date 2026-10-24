@@ -1,0 +1,1 @@
+import{d as a,c as r,o as l,p as t,u as n,ap as c,U as p}from"./app-BEA_enhi.js";const d=a({__name:"DialogFooter",props:{class:{}},setup(s){const e=s;return(o,f)=>(l(),r("div",{"data-slot":"dialog-footer",class:t(n(c)("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",e.class))},[p(o.$slots,"default")],2))}});export{d as _};

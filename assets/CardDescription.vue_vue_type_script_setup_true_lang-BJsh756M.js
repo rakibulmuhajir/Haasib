@@ -1,0 +1,1 @@
+import{d as t,c as o,o as r,p as n,u as c,ap as p,U as l}from"./app-BEA_enhi.js";const m=t({__name:"CardDescription",props:{class:{}},setup(s){const e=s;return(a,d)=>(r(),o("p",{"data-slot":"card-description",class:n(c(p)("text-sm text-text-secondary",e.class))},[l(a.$slots,"default")],2))}});export{m as _};

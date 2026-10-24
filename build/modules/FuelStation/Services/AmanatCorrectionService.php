@@ -278,6 +278,9 @@ class AmanatCorrectionService
     {
         // The locked, current copy of the close is the one rewritten, never a stale one.
         $close = Transaction::where('company_id', $close->company_id)->lockForUpdate()->findOrFail($close->id);
+        if ($close->is_locked) {
+            throw ValidationException::withMessages(['customer_id' => 'Unlock this day before changing its holder.']);
+        }
         $metadata = $close->metadata ?? [];
         $deposit = $movement->isDeposit();
         $amount = (float) $movement->amount;
@@ -322,18 +325,16 @@ class AmanatCorrectionService
 
         if (! $formMatched) {
             throw ValidationException::withMessages([
-                'customer_id' => "Couldn't find this deposit in the day's form. Correct it in Daily Close.",
+                'customer_id' => "Couldn't find this entry in the day's form. Correct it in Daily Close.",
             ]);
         }
 
         // A posted close's metadata is guarded by fuel.protect_close_snapshot; the reopening
         // setting is the sanctioned bypass (see DailyCloseCostCorrectionService::fold).
-        try {
-            DB::select("SELECT set_config('app.reopening_close_id', ?, true)", [$close->id]);
-            DB::table('acct.transactions')->where('id', $close->id)->where('company_id', $close->company_id)
-                ->update(['metadata' => json_encode($metadata)]);
-        } finally {
-            DB::select("SELECT set_config('app.reopening_close_id', '', true)");
-        }
+        // No finally: if the update throws, the transaction is aborted and rollback clears the setting.
+        DB::select("SELECT set_config('app.reopening_close_id', ?, true)", [$close->id]);
+        DB::table('acct.transactions')->where('id', $close->id)->where('company_id', $close->company_id)
+            ->update(['metadata' => json_encode($metadata)]);
+        DB::select("SELECT set_config('app.reopening_close_id', '', true)");
     }
 }

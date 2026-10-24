@@ -28,7 +28,8 @@ return new class extends Migration
         Schema::create('fuel.amanat_transaction_changes', function (Blueprint $table) {
             $table->uuid('id')->primary()->default(DB::raw('public.gen_random_uuid()'));
             $table->uuid('company_id');
-            $table->uuid('amanat_transaction_id');
+            // Nullable: a reopen deletes a close's amanat rows; the audit row outlives them (before/after say what it was).
+            $table->uuid('amanat_transaction_id')->nullable();
             $table->uuid('user_id')->nullable();
             $table->string('action', 30); // holder_changed, amount_corrected
             $table->jsonb('before');
@@ -36,13 +37,26 @@ return new class extends Migration
             $table->timestampTz('created_at')->useCurrent();
 
             $table->foreign('company_id')->references('id')->on('auth.companies')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->foreign('amanat_transaction_id')->references('id')->on('fuel.amanat_transactions')->cascadeOnDelete()->cascadeOnUpdate();
+            $table->foreign('amanat_transaction_id')->references('id')->on('fuel.amanat_transactions')->nullOnDelete()->cascadeOnUpdate();
             $table->foreign('user_id')->references('id')->on('auth.users')->nullOnDelete()->cascadeOnUpdate();
             $table->index(['company_id', 'amanat_transaction_id']);
         });
 
         DB::statement("ALTER TABLE fuel.amanat_transaction_changes ADD CONSTRAINT amanat_transaction_changes_action_check
             CHECK (action IN ('holder_changed', 'amount_corrected'))");
+        // Append-only. The one permitted update is the FK's SET NULL when the movement row is deleted.
+        DB::unprepared(<<<'SQL'
+CREATE FUNCTION fuel.prevent_amanat_change_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.amanat_transaction_id IS NULL AND OLD.amanat_transaction_id IS NOT NULL
+       AND (to_jsonb(NEW) - 'amanat_transaction_id') = (to_jsonb(OLD) - 'amanat_transaction_id') THEN
+        RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'Amanat change history is append-only';
+END $$;
+CREATE TRIGGER prevent_amanat_change_mutation BEFORE UPDATE OR DELETE ON fuel.amanat_transaction_changes
+FOR EACH ROW EXECUTE FUNCTION fuel.prevent_amanat_change_mutation();
+SQL);
         DB::statement('ALTER TABLE fuel.amanat_transaction_changes ENABLE ROW LEVEL SECURITY');
         DB::statement('ALTER TABLE fuel.amanat_transaction_changes FORCE ROW LEVEL SECURITY');
         DB::statement("CREATE POLICY amanat_transaction_changes_company_isolation ON fuel.amanat_transaction_changes
@@ -55,6 +69,8 @@ return new class extends Migration
 
     public function down(): void
     {
+        DB::statement('DROP TRIGGER IF EXISTS prevent_amanat_change_mutation ON fuel.amanat_transaction_changes');
+        DB::statement('DROP FUNCTION IF EXISTS fuel.prevent_amanat_change_mutation()');
         DB::statement('DROP POLICY IF EXISTS amanat_transaction_changes_company_isolation ON fuel.amanat_transaction_changes');
         Schema::dropIfExists('fuel.amanat_transaction_changes');
 

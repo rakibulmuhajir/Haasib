@@ -148,7 +148,7 @@ test('editing the amount of a standalone deposit reverses, voids and replaces it
         ->and((float) $replacement->amount)->toBe(700.0)
         ->and($replacement->reference)->toBe('Fixed')
         ->and(Transaction::where('company_id', $f['company']->id)->where('reversal_of_id', $originalJournal->id)->exists())->toBeTrue()
-        ->and(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'amanat_deposit')->count())->toBe(2)
+        ->and(Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'amanat_deposit')->whereNull('reversal_of_id')->count())->toBe(2)
         ->and(amanatCorrectionBalance($f['a']))->toBe(700.0);
 
     // Net of the reversal, the Amanat liability in the books is the corrected figure.
@@ -159,7 +159,8 @@ test('editing the amount of a standalone deposit reverses, voids and replaces it
     $change = AmanatTransactionChange::where('amanat_transaction_id', $original->id)->sole();
     expect($change->action)->toBe('amount_corrected')
         ->and($change->before['amount'])->toBe(1000.0)
-        ->and($change->after['amount'])->toBe(700.0);
+        ->and($change->after['amount'])->toBe(700.0)
+        ->and($change->after['date'])->toBe('2026-09-16');
 });
 
 test('a corrected row is not counted in the holder balance or the history totals', function () {
@@ -207,4 +208,59 @@ test('a user without amanat.update is refused', function () {
 
     expect($movement->fresh()->customer_id)->toBe($f['a']->id)
         ->and(amanatCorrectionBalance($f['a']))->toBe(1000.0);
+});
+
+test('changing the holder is refused in a closed period and for a locked close', function () {
+    $f = amanatCorrectionFixture();
+    $movement = amanatCorrectionDeposit($f, $f['a'], 1000);
+    DB::table('acct.accounting_periods')->where('company_id', $f['company']->id)->update(['is_closed' => true]);
+
+    test()->post("{$f['base']}/{$f['a']->id}/movements/{$movement->id}/holder", ['customer_id' => $f['b']->id])
+        ->assertSessionHasErrors();
+
+    expect($movement->fresh()->customer_id)->toBe($f['a']->id)
+        ->and(amanatCorrectionBalance($f['a']))->toBe(1000.0)
+        ->and(amanatCorrectionBalance($f['b']))->toBe(0.0)
+        ->and(AmanatTransactionChange::count())->toBe(0);
+});
+
+test('a withdrawal can be amended: the original is voided and the balance ends at the corrected figure', function () {
+    $f = amanatCorrectionFixture();
+    amanatCorrectionDeposit($f, $f['a'], 1000);
+    test()->post("{$f['base']}/{$f['a']->id}/withdraw", ['business_date' => '2026-09-15', 'amount' => 300])->assertSessionHasNoErrors();
+    $withdrawal = AmanatTransaction::where('customer_id', $f['a']->id)->where('transaction_type', 'withdrawal')->sole();
+    expect(amanatCorrectionBalance($f['a']))->toBe(700.0);
+
+    test()->post("{$f['base']}/{$f['a']->id}/movements/{$withdrawal->id}/amend", ['business_date' => '2026-09-15', 'amount' => 450])
+        ->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    $withdrawal = $withdrawal->fresh();
+    $replacement = AmanatTransaction::findOrFail($withdrawal->replaced_by_id);
+    expect($withdrawal->voided_at)->not->toBeNull()
+        ->and($replacement->transaction_type)->toBe('withdrawal')
+        ->and((float) $replacement->amount)->toBe(450.0)
+        ->and(amanatCorrectionBalance($f['a']))->toBe(550.0)
+        ->and((float) AmanatTransaction::active()->where('customer_id', $f['a']->id)->where('transaction_type', 'withdrawal')->sum('amount'))->toBe(450.0);
+});
+
+test('reopening a close after a holder change brings back the new holder and the balances net out', function () {
+    $f = amanatCorrectionFixture();
+    $movement = amanatCorrectionPostClose($f, $f['a'], 500);
+    test()->post("{$f['base']}/{$f['a']->id}/movements/{$movement->id}/holder", ['customer_id' => $f['b']->id])
+        ->assertSessionHasNoErrors();
+    $close = Transaction::where('company_id', $f['company']->id)->where('transaction_type', 'fuel_daily_close')->firstOrFail();
+
+    app(\App\Modules\FuelStation\Services\DailyCloseReopenService::class)->reopen($close, $f['user'], 'Fix the day');
+
+    $draft = app(\App\Modules\FuelStation\Services\DailyCloseReconciliationService::class)->draft($f['company']->id, '2026-09-15');
+    expect($draft['amanat_deposits'][0]['customer_id'])->toBe($f['b']->id)
+        ->and(amanatCorrectionBalance($f['a']))->toBe(0.0)
+        ->and(amanatCorrectionBalance($f['b']))->toBe(0.0)
+        ->and(AmanatTransaction::where('company_id', $f['company']->id)->count())->toBe(0);
+
+    // The audit row outlives the deleted movement and still says what it was.
+    $change = AmanatTransactionChange::where('company_id', $f['company']->id)->sole();
+    expect($change->amanat_transaction_id)->toBeNull()
+        ->and($change->after['customer_id'])->toBe($f['b']->id)
+        ->and($change->after['amount'])->toBe(500.0);
 });

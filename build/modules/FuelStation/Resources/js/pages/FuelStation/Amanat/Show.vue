@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, usePage, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3'
 import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
@@ -378,13 +378,13 @@ const getTypeBadge = (type: string) => {
             <div class="flex justify-between gap-4">
               <dt class="text-muted-foreground">Source</dt>
               <dd>
-                <a v-if="selected.detail?.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">{{ selected.detail.source.label }}</a>
+                <Link v-if="selected.detail?.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">{{ selected.detail.source.label }}</Link>
                 <span v-else>{{ selected.detail?.source.label }}</span>
               </dd>
             </div>
             <div v-if="selected.detail?.journal" class="flex justify-between gap-4">
               <dt class="text-muted-foreground">Journal</dt>
-              <dd><a :href="selected.detail.journal.href" class="underline underline-offset-2">{{ selected.detail.journal.number }}</a></dd>
+              <dd><Link :href="selected.detail.journal.href" class="underline underline-offset-2">{{ selected.detail.journal.number }}</Link></dd>
             </div>
           </dl>
 
@@ -396,7 +396,7 @@ const getTypeBadge = (type: string) => {
                 <SelectItem v-for="holder in holders" :key="holder.id" :value="holder.id">{{ holder.name }}</SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="holderForm.errors.customer_id" class="text-sm text-destructive">{{ holderForm.errors.customer_id }}</p>
+            <p v-for="(error, field) in holderForm.errors" :key="field" class="text-sm text-destructive">{{ error }}</p>
             <Button :disabled="holderForm.processing || !holderForm.customer_id" @click="saveHolder">Move</Button>
           </div>
 
@@ -419,7 +419,7 @@ const getTypeBadge = (type: string) => {
           </div>
 
           <div v-else-if="canUpdateMovement && selected.detail?.source.kind === 'close' && !selected.detail?.voided" class="border-t px-4 pt-4 text-sm">
-            <a v-if="selected.detail.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">Correct in Daily Close</a>
+            <Link v-if="selected.detail.source.href" :href="selected.detail.source.href" class="underline underline-offset-2">Correct in Daily Close</Link>
           </div>
         </template>
       </SheetContent>

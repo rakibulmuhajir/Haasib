@@ -44,7 +44,7 @@ final class CompanyPurger
      * anything not listed is caught by the sweep that follows.
      */
     private const ORDER = [
-        'fuel.daily_close_unlocks', 'fuel.daily_close_activity',
+        'fuel.daily_close_unlocks', 'fuel.daily_close_activity', 'fuel.amanat_transaction_changes',
         'fuel.daily_close_reading_corrections', 'fuel.daily_close_drafts',
 
         'umrah.payment_allocations', 'umrah.group_payments', 'umrah.voucher_passengers', 'umrah.vouchers',

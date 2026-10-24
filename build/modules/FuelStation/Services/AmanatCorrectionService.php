@@ -5,8 +5,10 @@ namespace App\Modules\FuelStation\Services;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\DocumentDateLock;
 use App\Modules\Accounting\Services\JournalReversalService;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\AmanatTransactionChange;
@@ -79,14 +81,26 @@ class AmanatCorrectionService
             if ($movement->customer_id === $newCustomerId) {
                 throw ValidationException::withMessages(['customer_id' => 'Pick a different holder.']);
             }
+            if ($source['kind'] === self::SOURCE_STANDALONE && $movement->isFuelPurchase() && $this->hasInvoice($movement)) {
+                throw ValidationException::withMessages(['customer_id' => 'This came from a fuel sale. Correct the sale instead.']);
+            }
+            $this->assertDayOpen($company, $source);
 
             $newCustomer = Customer::where('company_id', $company->id)->find($newCustomerId);
-            $newProfile = $newCustomer ? $this->lockProfile($company->id, $newCustomer->id) : null;
-            if (! $newCustomer || ! $newProfile->is_amanat_holder) {
+            if (! $newCustomer) {
+                throw ValidationException::withMessages(['customer_id' => 'Pick an amanat holder.']);
+            }
+            // Both profiles are locked in id order so two opposite moves cannot deadlock.
+            $profiles = [];
+            foreach (collect([$movement->customer_id, $newCustomer->id])->sort()->values() as $id) {
+                $profiles[$id] = $this->lockProfile($company->id, $id);
+            }
+            $newProfile = $profiles[$newCustomer->id];
+            $oldProfile = $profiles[$movement->customer_id];
+            if (! $newProfile->is_amanat_holder) {
                 throw ValidationException::withMessages(['customer_id' => 'Pick an amanat holder.']);
             }
             $oldCustomer = Customer::where('company_id', $company->id)->find($movement->customer_id);
-            $oldProfile = $this->lockProfile($company->id, $movement->customer_id);
 
             $amount = (float) $movement->amount;
             $isDeposit = $movement->isDeposit();
@@ -100,19 +114,23 @@ class AmanatCorrectionService
                 ]);
             }
 
+            // Before anything is written: a close whose form cannot be matched is refused whole.
+            if ($source['kind'] === self::SOURCE_CLOSE) {
+                $this->retargetCloseForm($source['transaction'], $movement, $oldCustomer?->id, $newCustomer);
+            }
+
             $oldProfile->adjustAmanatBalance($isDeposit ? -$amount : $amount);
             $newProfile->adjustAmanatBalance($isDeposit ? $amount : -$amount);
             $movement->forceFill(['customer_id' => $newCustomer->id])->save();
 
-            if ($source['kind'] === self::SOURCE_CLOSE) {
-                $this->retargetCloseForm($source['transaction'], $movement, $oldCustomer?->id, $newCustomer);
-            } elseif ($source['kind'] === self::SOURCE_STANDALONE) {
+            if ($source['kind'] === self::SOURCE_STANDALONE && ! $source['transaction']->is_locked) {
                 $this->renameInJournal($source['transaction'], $oldCustomer?->name, $newCustomer->name);
             }
 
+            $what = ['amanat_transaction_id' => $movement->id, 'type' => $movement->transaction_type, 'amount' => $amount];
             $this->record($company, $user, $movement, 'holder_changed',
-                ['customer_id' => $oldCustomer?->id, 'customer_name' => $oldCustomer?->name],
-                ['customer_id' => $newCustomer->id, 'customer_name' => $newCustomer->name],
+                $what + ['customer_id' => $oldCustomer?->id, 'customer_name' => $oldCustomer?->name],
+                $what + ['customer_id' => $newCustomer->id, 'customer_name' => $newCustomer->name],
             );
 
             return $movement->fresh();
@@ -166,10 +184,31 @@ class AmanatCorrectionService
             ]);
             $movement->forceFill(['replaced_by_id' => $replacement->id])->save();
 
-            $this->record($company, $user, $movement, 'amount_corrected', $before, $this->snapshot($replacement));
+            $this->record($company, $user, $movement, 'amount_corrected', $before, $this->snapshot($replacement, $replacement->journalEntry?->transaction));
 
             return $replacement;
         });
+    }
+
+    /** A holder change touches no totals, but it must not rewrite a closed period or a locked day. */
+    private function assertDayOpen(Company $company, array $source): void
+    {
+        $journal = $source['transaction'];
+        if (! $journal) {
+            return;
+        }
+        if ($source['kind'] === self::SOURCE_CLOSE && $journal->is_locked) {
+            throw ValidationException::withMessages(['customer_id' => 'Unlock this day before changing its holder.']);
+        }
+        $date = \Carbon\Carbon::parse($journal->transaction_date)->toDateString();
+        app(DocumentDateLock::class)->assertOpen($company->id, $date, 'This entry');
+    }
+
+    /** An amanat fuel purchase that settles a fuel sale carries that sale's invoice number as its reference. */
+    private function hasInvoice(AmanatTransaction $movement): bool
+    {
+        return $movement->reference !== null && Invoice::where('company_id', $movement->company_id)
+            ->where('invoice_number', $movement->reference)->exists();
     }
 
     private function lockMovement(Company $company, string $movementId): AmanatTransaction
@@ -237,6 +276,8 @@ class AmanatCorrectionService
      */
     private function retargetCloseForm(Transaction $close, AmanatTransaction $movement, ?string $oldId, Customer $new): void
     {
+        // The locked, current copy of the close is the one rewritten, never a stale one.
+        $close = Transaction::where('company_id', $close->company_id)->lockForUpdate()->findOrFail($close->id);
         $metadata = $close->metadata ?? [];
         $deposit = $movement->isDeposit();
         $amount = (float) $movement->amount;
@@ -246,6 +287,7 @@ class AmanatCorrectionService
             ? [['form_input', 'amanat_deposits'], ['amanat_deposit_details']]
             : [['form_input', 'amanat_disbursements'], ['amanat_disbursement_details']];
 
+        $formMatched = false;
         foreach ($lists as $path) {
             $rows = $metadata;
             foreach ($path as $key) {
@@ -255,13 +297,17 @@ class AmanatCorrectionService
                 }
             }
             foreach ($rows as $i => $row) {
-                $rowKind = $row['kind'] ?? 'withdrawal';
+                $rowAccount = ($row['payment_account_id'] ?? null) ?: null;
                 if (($row['customer_id'] ?? null) === $oldId
                     && abs((float) ($row['amount'] ?? 0) - $amount) < 0.005
-                    && ($deposit || $rowKind === $kind)) {
+                    && ($deposit || ($row['kind'] ?? 'withdrawal') === $kind)
+                    && ($rowAccount === null || $movement->payment_account_id === null || $rowAccount === $movement->payment_account_id)) {
                     $rows[$i]['customer_id'] = $new->id;
                     if (array_key_exists('customer_name', $row)) {
                         $rows[$i]['customer_name'] = $new->name;
+                    }
+                    if ($path[0] === 'form_input') {
+                        $formMatched = true;
                     }
                     break;
                 }
@@ -274,6 +320,20 @@ class AmanatCorrectionService
             unset($target);
         }
 
-        $close->forceFill(['metadata' => $metadata])->save();
+        if (! $formMatched) {
+            throw ValidationException::withMessages([
+                'customer_id' => "Couldn't find this deposit in the day's form. Correct it in Daily Close.",
+            ]);
+        }
+
+        // A posted close's metadata is guarded by fuel.protect_close_snapshot; the reopening
+        // setting is the sanctioned bypass (see DailyCloseCostCorrectionService::fold).
+        try {
+            DB::select("SELECT set_config('app.reopening_close_id', ?, true)", [$close->id]);
+            DB::table('acct.transactions')->where('id', $close->id)->where('company_id', $close->company_id)
+                ->update(['metadata' => json_encode($metadata)]);
+        } finally {
+            DB::select("SELECT set_config('app.reopening_close_id', '', true)");
+        }
     }
 }

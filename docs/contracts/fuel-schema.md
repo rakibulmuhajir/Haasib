@@ -501,10 +501,13 @@ enum VarianceReason: string {
   - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE) (added by migration 2026_09_15_000001).
   - `recorded_by_user_id` uuid not null FK → `auth.users.id` (SET NULL/CASCADE).
   - `notes` text nullable.
+  - `voided_at` timestamptz nullable - set when the entry was corrected (amount/date/account edit); the row stays as history.
+  - `voided_by_user_id` uuid nullable FK -> `auth.users.id` (SET NULL/CASCADE).
+  - `replaced_by_id` uuid nullable self FK -> `fuel.amanat_transactions.id` (SET NULL/CASCADE) - the corrected entry that replaced this one.
   - `created_at`, `updated_at` timestamps.
 - Indexes/constraints:
   - PK `id`.
-  - Index: `company_id`; `customer_id`; (`company_id`, `transaction_type`).
+  - Index: `company_id`; `customer_id`; (`company_id`, `transaction_type`); (`company_id`, `customer_id`, `voided_at`).
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'fuel.amanat_transactions'; $keyType = 'string'; public $incrementing = false;`
@@ -523,6 +526,16 @@ enum VarianceReason: string {
   - Fuel purchase: subtracts from balance, creates sale.
   - Balance cannot go negative.
   - **Tech debt:** May be refactored to generic `acct.deposits` later.
+  - **Corrections (permission `amanat.update`, commands `fuel.amanat.change_holder` / `fuel.amanat.amend`):**
+    - Change holder (any source except opening balances): moves `customer_id` and both holders' `amanat_balance` (deposit: -old +new; withdrawal/fuel purchase: +old -new). Refused if the holder who would be drawn below zero does not have `allow_amanat_borrowing`. A Daily Close row also moves inside that close's `metadata.form_input.amanat_deposits` / `amanat_disbursements` and `amanat_deposit_details` / `amanat_disbursement_details`, so a reopen shows the new holder. Books totals do not change.
+    - Amend amount/date/account/reference/notes: standalone deposits and withdrawals only (a Daily Close row is corrected in Daily Close). The original journal is reversed (`JournalReversalService::AMANAT`, on its own date), the row is voided (`voided_at`, `voided_by_user_id`, `replaced_by_id`) and its balance effect undone, then the corrected movement is posted through `AmanatService`.
+    - **A voided row (`voided_at` not null) is never counted** - balances, statements, reopen and opening-balance re-entry read `AmanatTransaction::active()`. The holder page lists it greyed as "Corrected".
+
+### fuel.amanat_transaction_changes
+- Purpose: append-only audit of corrections to `fuel.amanat_transactions` (who, when, before/after).
+- Columns: `id` uuid PK; `company_id` uuid FK -> `auth.companies.id` (CASCADE); `amanat_transaction_id` uuid FK -> `fuel.amanat_transactions.id` (CASCADE) - the original row; `user_id` uuid nullable FK -> `auth.users.id` (SET NULL); `action` varchar(30) - 'holder_changed', 'amount_corrected'; `before` jsonb; `after` jsonb; `created_at` timestamptz.
+- Indexes: (`company_id`, `amanat_transaction_id`). RLS: company_id + super-admin override.
+- Model: `AmanatTransactionChange` (no `updated_at`).
 
 ### fuel.attendant_handovers
 - Purpose: Cash transit from attendants to company. **Control surface for fraud/mistakes.**

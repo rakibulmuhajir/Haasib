@@ -166,6 +166,7 @@ return [
         'amanat' => [
             'amanat.deposit',
             'amanat.withdraw',
+            'amanat.update',
         ],
 
         // Fuel Sales

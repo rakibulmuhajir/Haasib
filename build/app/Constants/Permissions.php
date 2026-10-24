@@ -250,6 +250,8 @@ class Permissions
 
     public const AMANAT_WITHDRAW = 'amanat.withdraw';
 
+    public const AMANAT_UPDATE = 'amanat.update';
+
     // Fuel Station - Sales
     public const FUEL_SALE_CREATE = 'fuel_sale.create';
 

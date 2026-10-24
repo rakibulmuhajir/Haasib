@@ -25,9 +25,12 @@ class JournalReversalService
 
     public const BANK_TRANSACTION = 'bank_transaction';
 
+    public const AMANAT = 'amanat';
+
     private const LABELS = [
         self::EXPENSE => 'expense',
         self::BANK_TRANSACTION => 'bank transaction',
+        self::AMANAT => 'amanat entry',
     ];
 
     public function __construct(
@@ -75,6 +78,9 @@ class JournalReversalService
             self::EXPENSE => $transaction->reference_type === 'acct.expenses' && $transaction->transaction_type === 'expense',
             // Bank-feed matches reference their statement line; a hand-typed movement references nothing.
             self::BANK_TRANSACTION => $transaction->reference_type === 'acct.bank_transactions' && $transaction->reference_id === null,
+            // A standalone amanat deposit or withdrawal; a Daily Close's amanat lines belong to the close.
+            self::AMANAT => $transaction->reference_type === 'fuel.amanat_transactions'
+                && in_array($transaction->transaction_type, ['amanat_deposit', 'amanat_withdrawal'], true),
             default => false,
         };
     }

@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
+use App\Modules\FuelStation\Services\AmanatCorrectionService;
 use App\Modules\FuelStation\Services\AmanatService;
 use App\Services\CommandBus;
 use App\Services\CurrentCompany;
@@ -182,13 +183,28 @@ class AmanatController extends Controller
             ->orderByDesc('transaction_date')
             ->orderByDesc('fuel.amanat_transactions.created_at')
             ->orderByDesc('fuel.amanat_transactions.id')
-            ->paginate(50);
+            ->paginate(50)
+            ->through(function (AmanatTransaction $t) use ($company) {
+                $t->setAttribute('detail', $this->detailFor($t, $company->slug));
+
+                return $t;
+            });
 
         return Inertia::render('FuelStation/Amanat/Show', [
             'customer' => $customerModel,
             'profile' => $profile,
             'transactions' => $transactions,
             'canRecordMovement' => $request->user()->hasCompanyPermission(\App\Constants\Permissions::DAILY_CLOSE_CREATE),
+            'canUpdateMovement' => $request->user()->hasCompanyPermission(Permissions::AMANAT_UPDATE),
+            'holders' => CustomerProfile::where('company_id', $company->id)
+                ->where('is_amanat_holder', true)
+                ->where('customer_id', '!=', $customerModel->id)
+                ->with('customer:id,name')
+                ->get()
+                ->filter(fn (CustomerProfile $p) => $p->customer !== null)
+                ->map(fn (CustomerProfile $p) => ['id' => $p->customer_id, 'name' => $p->customer->name])
+                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values(),
             'opening' => $this->openingFor($customerModel->id, $request->user()),
             'paymentAccounts' => Account::where('company_id', $company->id)
                 ->where('is_active', true)->whereNull('deleted_at')
@@ -196,6 +212,75 @@ class AmanatController extends Controller
                 ->orderBy('code')
                 ->get(['id', 'code', 'name', 'subtype']),
         ]);
+    }
+
+    /**
+     * What the detail sheet shows for one movement that the row itself does not carry: where it
+     * came from, its journal, who entered it, and whether (and how) it can still be corrected.
+     */
+    private function detailFor(AmanatTransaction $movement, string $companySlug): array
+    {
+        $source = app(AmanatCorrectionService::class)->sourceOf($movement);
+        $journal = $source['transaction'];
+        $closeDate = $source['kind'] === AmanatCorrectionService::SOURCE_CLOSE && $journal?->transaction_date
+            ? \Carbon\Carbon::parse($journal->transaction_date)->toDateString() : null;
+
+        return [
+            'voided' => $movement->isVoided(),
+            'replaced_by_id' => $movement->replaced_by_id,
+            'recorded_by_name' => $movement->recordedBy?->name,
+            'source' => [
+                'kind' => $source['kind'],
+                'label' => match ($source['kind']) {
+                    AmanatCorrectionService::SOURCE_CLOSE => 'Daily Close '.$closeDate,
+                    AmanatCorrectionService::SOURCE_STANDALONE => 'Entered on this page',
+                    default => $movement->notes === 'Opening balance' ? 'Opening balance' : 'Other',
+                },
+                'href' => $closeDate ? "/{$companySlug}/fuel/daily-close/{$journal->id}" : null,
+            ],
+            'journal' => $journal ? [
+                'id' => $journal->id,
+                'number' => $journal->transaction_number,
+                'href' => "/{$companySlug}/journals/{$journal->id}",
+            ] : null,
+            // Opening balances are changed in Opening balances; everything else can change holder.
+            'can_change_holder' => ! $movement->isVoided() && ! ($movement->journal_entry_id && $source['kind'] === AmanatCorrectionService::SOURCE_OTHER),
+            'can_edit' => ! $movement->isVoided()
+                && $source['kind'] === AmanatCorrectionService::SOURCE_STANDALONE
+                && ! $movement->isFuelPurchase(),
+        ];
+    }
+
+    public function changeHolder(\App\Modules\FuelStation\Http\Requests\ChangeAmanatHolderRequest $request): RedirectResponse
+    {
+        return $this->correct($request, 'fuel.amanat.change_holder', $request->validated(), 'Holder changed.');
+    }
+
+    public function amend(\App\Modules\FuelStation\Http\Requests\AmendAmanatMovementRequest $request): RedirectResponse
+    {
+        return $this->correct($request, 'fuel.amanat.amend', $request->validated(), 'Entry corrected.');
+    }
+
+    private function correct(Request $request, string $command, array $params, string $message): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $customer = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
+        abort_unless($customer, 404);
+        $movementId = (string) $request->route('movement');
+        // The URL's holder must be the movement's current holder, so a stale page cannot act on a moved row.
+        abort_unless(
+            Str::isUuid($movementId) && AmanatTransaction::where('company_id', $company->id)->where('customer_id', $customer->id)->whereKey($movementId)->exists(),
+            404,
+        );
+
+        try {
+            app(CommandBus::class)->dispatch($command, ['id' => $movementId] + $params, $request->user());
+        } catch (\InvalidArgumentException $e) {
+            // AmanatService's own refusals (e.g. a withdrawal beyond the balance).
+            throw ValidationException::withMessages(['amount' => $e->getMessage()]);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**

@@ -31,9 +31,6 @@ class ExpenseReportController extends Controller
             $company->id,
             $startDate->toDateString(),
             $endDate->toDateString(),
-            (string) $request->query('group_by', 'day'),
-            (string) $request->query('account_id', 'all'),
-            (string) $request->query('source', 'all'),
         );
 
         return Inertia::render('FuelStation/Reports/Expenses', [

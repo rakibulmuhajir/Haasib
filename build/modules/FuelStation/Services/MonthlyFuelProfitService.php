@@ -66,8 +66,11 @@ class MonthlyFuelProfitService
                 continue;
             }
 
-            $opening = $carried['closing_value'] ?? round((float) $stock['opening'] * $openingRate, 2);
-            $closing = round((float) $stock['closing'] * $closingRate, 2);
+            // Fuel held in temporary storage either side of the month is stock too, at the same rate.
+            $tempOpening = (float) ($stock['temporary_opening'] ?? 0);
+            $tempClosing = (float) ($stock['temporary_closing'] ?? 0);
+            $opening = $carried['closing_value'] ?? round(((float) $stock['opening'] + $tempOpening) * $openingRate, 2);
+            $closing = round(((float) $stock['closing'] + $tempClosing) * $closingRate, 2);
             $sales = round((float) $stock['sale_amount'], 2);
             $purchases = round((float) $stock['purchase_amount'], 2);
             $profit = round($sales + $closing - $opening - $purchases, 2);
@@ -77,6 +80,7 @@ class MonthlyFuelProfitService
                 'purchased_liters' => (float) ($stock['received'] ?? 0), 'purchases' => $purchases,
                 'sold_liters' => (float) $stock['sold'], 'sales' => $sales,
                 'closing_liters' => (float) $stock['closing'], 'closing_rate' => $closingRate, 'closing_value' => $closing,
+                'temporary_opening_liters' => $tempOpening, 'temporary_closing_liters' => $tempClosing,
                 'fuel_profit' => $profit,
             ];
             $bookAccountIds = array_merge($bookAccountIds, array_filter([$item->income_account_id, $item->expense_account_id]));

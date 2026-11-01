@@ -563,7 +563,8 @@ class ProductProfitabilityReportService
             foreach ($temporaryBills as $bill) {
                 $statement['rows'][] = ['date' => (string) $bill->bill_date, 'bills' => [['id' => $bill->id, 'bill_number' => $bill->bill_number, 'amount' => (float) $bill->total]]];
             }
-            $purchases = (float) ($statement['totals']['purchase_amount'] ?? 0) + (float) $temporaryBills->sum('total');
+            // The statement's purchases already hold the temporary-storage bills.
+            $purchases = (float) ($statement['totals']['purchase_amount'] ?? 0);
             $opening = $valuation->accountBalance($companyId, $accountId, $dayBefore);
             $closing = $valuation->accountBalance($companyId, $accountId, $endDate);
             $row['book_opening'] = round($opening, 2);

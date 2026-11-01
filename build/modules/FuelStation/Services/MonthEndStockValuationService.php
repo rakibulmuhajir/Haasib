@@ -150,7 +150,7 @@ class MonthEndStockValuationService
 
     private function syncItem(string $companyId, string $month, string $lastDay, string $nextFirst, object $item, bool $closed, ?Transaction $existing): array
     {
-        $quantity = $cost = $walkCost = $book = 0.0;
+        $quantity = $tankQuantity = $cost = $walkCost = $book = 0.0;
         $rate = null;
         $desired = 0.0;
         $basis = 'books';
@@ -160,6 +160,11 @@ class MonthEndStockValuationService
             $quantity = (float) DB::table('fuel.tank_readings')
                 ->where('company_id', $companyId)->where('item_id', $item->id)
                 ->whereDate('reading_date', $lastDay)->sum('dip_measurement_liters');
+            // Fuel still in temporary storage is the station's stock too, and sits on the same
+            // stock account: it is valued with the tanks, though the cost walk is the tanks' alone.
+            $temporary = app(TemporaryFuelStockService::class)->balance($companyId, $item->id, $lastDay);
+            $tankQuantity = $quantity;
+            $quantity += max(0.0, $temporary['quantity']);
             $walkCost = $this->costs->costForDay($companyId, $item->id, $lastDay);
             $rate = $this->rates->rateFor($companyId, $item->id, $month);
 
@@ -168,7 +173,7 @@ class MonthEndStockValuationService
                 ->where('id', '!=', $item->id)->whereNull('deleted_at')->exists();
             if ($shared) {
                 $basis = 'cost_walk';
-                $book = $quantity * $walkCost;
+                $book = $tankQuantity * $walkCost + max(0.0, $temporary['value']);
             } else {
                 // The account's value before this month's own write-down (a reversed pair nets to zero by itself).
                 $book = $this->accountBalance($companyId, $item->asset_account_id, $lastDay)
@@ -205,13 +210,13 @@ class MonthEndStockValuationService
             return $row;
         }
 
-        AccountingWriteTransaction::run(function () use ($companyId, $month, $lastDay, $item, $existing, $desired, $quantity, $cost, $walkCost, $book, $basis, $rate, &$row) {
+        AccountingWriteTransaction::run(function () use ($companyId, $month, $lastDay, $item, $existing, $desired, $quantity, $tankQuantity, $cost, $walkCost, $book, $basis, $rate, &$row) {
             if ($existing) {
                 $this->undo($existing);
                 $row['action'] = 'reversed';
             }
             if (abs($desired) >= 0.005) {
-                $this->post($companyId, $month, $lastDay, $item, $desired, $quantity, $cost, $walkCost, $book, $basis, (float) $rate);
+                $this->post($companyId, $month, $lastDay, $item, $desired, $quantity, $cost, $walkCost, $book, $basis, (float) $rate, $tankQuantity);
                 $row['action'] = $existing ? 'replaced' : 'posted';
             }
         });
@@ -253,7 +258,7 @@ class MonthEndStockValuationService
             ->delete();
     }
 
-    private function post(string $companyId, string $month, string $lastDay, object $item, float $amount, float $quantity, float $cost, float $walkCost, float $book, string $basis, float $rate): void
+    private function post(string $companyId, string $month, string $lastDay, object $item, float $amount, float $quantity, float $cost, float $walkCost, float $book, string $basis, float $rate, ?float $tankQuantity = null): void
     {
         $currency = DB::table('auth.companies')->where('id', $companyId)->value('base_currency') ?: 'PKR';
         $litres = rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
@@ -301,7 +306,7 @@ class MonthEndStockValuationService
             'unit_cost' => null,
             // The walk carries its own cost, which can differ from the books: this lands it exactly on
             // the new rate (Q x R) the next day, whatever the write-down (W) turned out to be.
-            'total_cost' => round($quantity * $rate - $quantity * $walkCost, 2),
+            'total_cost' => round(($tankQuantity ?? $quantity) * $rate - ($tankQuantity ?? $quantity) * $walkCost, 2),
             'gl_transaction_id' => $transaction->id,
             'reference_type' => 'fuel.stock_writedown',
             'reference_id' => $transaction->id,

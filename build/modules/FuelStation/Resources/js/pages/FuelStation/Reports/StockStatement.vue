@@ -59,6 +59,13 @@ interface Row {
   stock_value?: number | null
   variance?: number
   bills?: Bill[]
+  // Temporary storage: its money counts, its litres stay out of the tank balance.
+  temporary_bills?: Bill[]
+  temporary_invoices?: DirectInvoice[]
+  temporary_bought?: number
+  temporary_sold?: number
+  temporary_purchase?: number
+  temporary_sale?: number
 }
 
 interface Totals {
@@ -265,11 +272,20 @@ const apply = () => {
             <tr v-for="r in rows" :key="r.date" class="border-t border-rule-default">
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
-                <td class="px-3 py-1.5 text-right">{{ r.received ? litres(r.received) : '' }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  {{ r.received ? litres(r.received) : '' }}
+                <div v-if="r.temporary_bought" class="text-xs text-muted-foreground">{{ litres(r.temporary_bought) }} temporary</div>
+                </td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.purchase_amount" side="left">
                     <MoneyText :amount="r.purchase_amount" :currency="currency" :fraction-digits="0" />
-                    <template #content>@ {{ fmt.format(r.purchase_rate ?? 0) }} / {{ rowUnit(r) }}</template>
+                    <template #content>
+                      <p class="font-medium">@ {{ fmt.format(r.purchase_rate ?? 0) }} / {{ rowUnit(r) }}</p>
+                      <div v-for="b in r.temporary_bills ?? []" :key="b.id" class="flex justify-between gap-4">
+                        <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }} · temporary</Link>
+                        <span>{{ litres(b.quantity) }} {{ rowUnit(r) }} · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
+                      </div>
+                    </template>
                   </Hint>
                 </td>
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
@@ -292,6 +308,7 @@ const apply = () => {
                     <template #content>{{ litres(r.received_direct) }} {{ rowUnit(r) }} sold straight off the tanker.</template>
                   </Hint>
                   <template v-else>{{ r.received ? litres(r.received) : '' }}</template>
+                <div v-if="r.temporary_bought" class="text-xs text-muted-foreground">{{ litres(r.temporary_bought) }} temporary</div>
                 </td>
                 <!-- The rate and the bills behind the amount. -->
                 <td class="px-3 py-1.5 text-right">
@@ -301,6 +318,10 @@ const apply = () => {
                       <p class="font-medium">@ {{ fmt.format(r.purchase_rate ?? 0) }} / {{ rowUnit(r) }}</p>
                       <div v-for="b in r.bills ?? []" :key="b.id" class="flex justify-between gap-4">
                         <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }}</Link>
+                        <span>{{ litres(b.quantity) }} {{ rowUnit(r) }} · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
+                      </div>
+                      <div v-for="b in r.temporary_bills ?? []" :key="b.id" class="flex justify-between gap-4">
+                        <Link :href="`/${company.slug}/bills/${b.id}`" class="underline underline-offset-2">{{ b.bill_number || 'Bill' }} · temporary</Link>
                         <span>{{ litres(b.quantity) }} {{ rowUnit(r) }} · <MoneyText :amount="b.amount ?? 0" :currency="currency" :fraction-digits="0" /></span>
                       </div>
                     </template>
@@ -316,6 +337,7 @@ const apply = () => {
                     </template>
                   </Hint>
                   <template v-else>{{ r.sold ? litres(r.sold) : '' }}</template>
+                <div v-if="r.temporary_sold" class="text-xs text-muted-foreground">{{ litres(r.temporary_sold) }} temporary</div>
                 </td>
                 <!-- The rate (both, on a day the rate changed) and the off-tanker invoices. -->
                 <td class="px-3 py-1.5 text-right">
@@ -323,8 +345,12 @@ const apply = () => {
                     <MoneyText :amount="r.sale_amount" :currency="currency" :fraction-digits="0" />
                     <template #content>
                       <p class="font-medium">@ {{ rateText(r.rates) }} / {{ rowUnit(r) }}</p>
-                      <template v-if="r.direct_amount">
-                        <div class="flex justify-between gap-4"><span>Pumps</span><MoneyText :amount="(r.sale_amount ?? 0) - r.direct_amount" :currency="currency" :fraction-digits="0" /></div>
+                      <template v-if="r.direct_amount || r.temporary_sale">
+                        <div class="flex justify-between gap-4"><span>Pumps</span><MoneyText :amount="(r.sale_amount ?? 0) - (r.direct_amount ?? 0) - (r.temporary_sale ?? 0)" :currency="currency" :fraction-digits="0" /></div>
+                        <div v-for="inv in r.temporary_invoices ?? []" :key="inv.id" class="flex justify-between gap-4">
+                          <Link :href="`/${company.slug}/invoices/${inv.id}`" class="underline underline-offset-2">{{ inv.invoice_number }} · temporary</Link>
+                          <MoneyText :amount="inv.amount" :currency="currency" :fraction-digits="0" />
+                        </div>
                         <div v-for="inv in r.direct_invoices ?? []" :key="inv.id" class="flex justify-between gap-4">
                           <Link :href="`/${company.slug}/invoices/${inv.id}`" class="underline underline-offset-2">{{ inv.invoice_number }}</Link>
                           <MoneyText :amount="inv.amount" :currency="currency" :fraction-digits="0" />

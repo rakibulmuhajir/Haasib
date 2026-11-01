@@ -114,6 +114,9 @@ class StockStatementService
         // tanker, which never enter the tank and so never show in a close's dip arithmetic.
         $bought = $this->purchases($companyId, $itemId, $startDate, $endDate);
         $directSales = $this->directSales($companyId, $itemId, $startDate, $endDate, $bought);
+        // Fuel bought into temporary storage and sold from there: its money is the fuel's, but its
+        // litres never pass through the tank, so they stay out of the tank's balance and dip.
+        $temporary = $this->temporary($companyId, $itemId, $startDate, $endDate);
 
         $today = \Illuminate\Support\Carbon::parse(app(CompanyClock::class)->today());
         $rows = [];
@@ -121,7 +124,8 @@ class StockStatementService
         $first = true;
         $openingTotal = null;
         $closing = null;
-        $tot = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'variance' => 0.0];
+        $tot = ['received' => null, 'purchase_amount' => 0.0, 'sold' => 0.0, 'sale_amount' => 0.0, 'variance' => 0.0,
+            'temporary_bought' => 0.0, 'temporary_sold' => 0.0];
 
         for ($d = Carbon::parse($startDate)->startOfDay(), $e = Carbon::parse($endDate)->startOfDay(); $d->lte($e); $d->addDay()) {
             $date = $d->toDateString();
@@ -132,16 +136,27 @@ class StockStatementService
             $dayPurchase = (float) array_sum(array_column($dayBills, 'amount'));
             $dayPurchaseRate = $dayBought > 0 ? round($dayPurchase / $dayBought, 2) : null;
             $dayDirectAmount = $directSales[$date]['amount'] ?? 0.0;
+            $tempBills = $temporary['bills'][$date] ?? [];
+            $tempInvoices = $temporary['sales'][$date] ?? [];
+            $tempIn = (float) array_sum(array_column($tempBills, 'quantity'));
+            $tempOut = (float) array_sum(array_column($tempInvoices, 'quantity'));
+            $tempPurchase = (float) array_sum(array_column($tempBills, 'amount'));
+            $tempSale = (float) array_sum(array_column($tempInvoices, 'amount'));
+            $tempFields = ['temporary_bills' => $tempBills, 'temporary_invoices' => $tempInvoices,
+                'temporary_bought' => $tempIn, 'temporary_sold' => $tempOut, 'temporary_purchase' => $tempPurchase, 'temporary_sale' => $tempSale];
+            $tot['temporary_bought'] += $tempIn;
+            $tot['temporary_sold'] += $tempOut;
+            $dayPurchase += $tempPurchase;
             if (! $t) {
                 if ($d->lte($today)) {
                     // No close, but a purchase that day still counts as bought.
                     $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
                     $tot['purchase_amount'] += $dayPurchase;
                     $tot['sold'] += $dayDirect;
-                    $tot['sale_amount'] += $dayDirectAmount;
+                    $tot['sale_amount'] += $dayDirectAmount + $tempSale;
                     $rows[] = ['date' => $date, 'missing' => true, 'received' => $dayBought, 'bills' => $dayBills,
-                        'direct_invoices' => $directSales[$date]['invoices'] ?? [],
-                        'sale_amount' => $dayDirectAmount, 'sale_running' => $tot['sale_amount'],
+                        'direct_invoices' => $directSales[$date]['invoices'] ?? [], 'direct_amount' => $dayDirectAmount,
+                        'sale_amount' => $dayDirectAmount + $tempSale, 'sale_running' => $tot['sale_amount'], ...$tempFields,
                         'purchase_amount' => $dayPurchase, 'purchase_rate' => $dayPurchaseRate, 'purchase_running' => $tot['purchase_amount']];
                 }
 
@@ -192,7 +207,7 @@ class StockStatementService
             $opening = $prevDip;
             $soldPumps = $sold;
             $sold += $dayDirect;
-            $saleAmount += $dayDirectAmount;
+            $saleAmount += $dayDirectAmount + $tempSale;
             // The row reads across: opening + bought − sold = expected; the dip against it is the variance.
             $rowExpected = $opening === null ? $expected : $opening + $dayBought - $sold;
 
@@ -219,6 +234,7 @@ class StockStatementService
                     && count(array_filter($tanks, fn ($tk) => ($tk['physical_liters'] ?? null) !== null)) === count($tanks),
                 'variance' => $dip - $rowExpected,
                 'bills' => $dayBills,
+                ...$tempFields,
             ];
 
             $tot['received'] = ($tot['received'] ?? 0.0) + $dayBought;
@@ -246,11 +262,16 @@ class StockStatementService
             'received' => $tot['received'],
             'sold' => $tot['sold'],
             'sale_amount' => $tot['sale_amount'],
-            'rate' => $tot['sold'] > 0 ? round($tot['sale_amount'] / $tot['sold'], 2) : null,
+            'rate' => $tot['sold'] + $tot['temporary_sold'] > 0 ? round($tot['sale_amount'] / ($tot['sold'] + $tot['temporary_sold']), 2) : null,
             'purchase_amount' => $tot['purchase_amount'],
-            'purchase_rate' => ($tot['received'] ?? 0) > 0 ? round($tot['purchase_amount'] / $tot['received'], 2) : null,
+            'purchase_rate' => ($tot['received'] ?? 0) + $tot['temporary_bought'] > 0 ? round($tot['purchase_amount'] / (($tot['received'] ?? 0) + $tot['temporary_bought']), 2) : null,
             'closing' => $closing,
             'variance' => $tot['variance'],
+            // Temporary storage: litres in and out over the range, and what it held either side.
+            'temporary_bought' => $tot['temporary_bought'],
+            'temporary_sold' => $tot['temporary_sold'],
+            'temporary_opening' => $temporary['opening'],
+            'temporary_closing' => $temporary['closing'],
         ];
 
         $result = $this->withStockValues($companyId, $itemId, $startDate, $endDate, $result);
@@ -441,6 +462,46 @@ class StockStatementService
      * @param  array<string, array<int, array{direct:float}>>  $bought
      * @return array<string, array{amount:float, invoices:array}>
      */
+    /**
+     * Temporary storage (TemporaryFuelStockService) for one fuel over a range: bill lines received
+     * into it by bill date, invoices it was sold on by sale date, and the litres it held the night
+     * before the range and on its last day.
+     *
+     * @return array{bills:array<string,array<int,array<string,mixed>>>,sales:array<string,array<int,array<string,mixed>>>,opening:float,closing:float}
+     */
+    private function temporary(string $companyId, string $itemId, string $start, string $end): array
+    {
+        $temp = DB::table('inv.warehouses')->where('company_id', $companyId)->where('code', TemporaryFuelStockService::CODE)->pluck('id')->all();
+        $out = ['bills' => [], 'sales' => [], 'opening' => 0.0, 'closing' => 0.0];
+        if ($temp === []) {
+            return $out;
+        }
+        $bills = DB::table('acct.bill_line_items as l')->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
+            ->where('b.company_id', $companyId)->where('l.item_id', $itemId)->whereIn('l.warehouse_id', $temp)
+            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
+            ->whereBetween('b.bill_date', [$start, $end])->orderBy('b.bill_number')
+            ->get(['b.id', 'b.bill_number', 'b.bill_date', 'l.quantity', 'l.total']);
+        foreach ($bills as $b) {
+            $out['bills'][Carbon::parse($b->bill_date)->toDateString()][] = ['id' => $b->id, 'bill_number' => $b->bill_number, 'quantity' => (float) $b->quantity, 'amount' => (float) $b->total];
+        }
+        $sales = DB::table('inv.stock_movements as sm')->join('acct.invoices as i', 'i.id', '=', 'sm.reference_id')
+            ->where('sm.company_id', $companyId)->where('sm.item_id', $itemId)->whereIn('sm.warehouse_id', $temp)
+            ->where('sm.reference_type', 'acct.invoices')->where('sm.movement_type', 'sale')
+            ->whereNull('i.deleted_at')->whereNotIn('i.status', ['draft', 'void', 'cancelled'])
+            ->whereBetween('sm.movement_date', [$start, $end])
+            ->get(['i.id', 'i.invoice_number', 'i.total_amount', 'sm.movement_date', 'sm.quantity']);
+        foreach ($sales as $m) {
+            $line = (float) DB::table('acct.invoice_line_items')->where('invoice_id', $m->id)->where('item_id', $itemId)->whereNull('deleted_at')->sum('total');
+            $out['sales'][Carbon::parse($m->movement_date)->toDateString()][] = ['id' => $m->id, 'invoice_number' => $m->invoice_number,
+                'quantity' => abs((float) $m->quantity), 'amount' => $line > 0 ? $line : (float) $m->total_amount];
+        }
+        $stock = app(TemporaryFuelStockService::class);
+        $out['opening'] = $stock->balance($companyId, $itemId, Carbon::parse($start)->subDay()->toDateString())['quantity'];
+        $out['closing'] = $stock->balance($companyId, $itemId, $end)['quantity'];
+
+        return $out;
+    }
+
     private function directSales(string $companyId, string $itemId, string $start, string $end, array $bought): array
     {
         $out = [];

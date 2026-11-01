@@ -230,3 +230,89 @@ test('a product taken out of its tank keeps no write-down', function () {
 
     expect(monthEndLive($cid))->toHaveCount(0);
 });
+
+/** A delivery bill into the tank on $date at $rate a litre (the last-delivery-price method reads these). */
+function monthEndDelivery(array $f, string $date, float $rate, float $litres = 1000, string $number = 'BILL-LD-1'): void
+{
+    $bill = pendingDeliveryBill($f, $date, $litres, 0.0, $f['tank']->id, $number);
+    DB::table('acct.bill_line_items')->where('bill_id', $bill->id)->update(['unit_price' => $rate, 'line_total' => $rate * $litres, 'total' => $rate * $litres]);
+}
+
+test('last delivery price writes the stock down to the last bill rate, ignoring a higher rate on the 1st', function () {
+    $f = monthEndFixture(450); // 1 Oct rate is higher than cost: it must not matter
+    $cid = $f['company']->id;
+    \App\Modules\FuelStation\Models\StationSettings::forCompany($cid)->update(['month_end_stock_valuation' => 'last_delivery_price']);
+    monthEndDelivery($f, '2026-09-20', 400);
+
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    $live = monthEndLive($cid);
+    expect($live)->toHaveCount(1)
+        ->and((float) $live->first()->metadata['amount'])->toBe(round(725 * (407.4456 - 400), 2))
+        ->and((float) $live->first()->metadata['new_rate'])->toBe(400.0)
+        ->and($live->first()->metadata['method'])->toBe('last_delivery_price')
+        ->and($live->first()->description)->toContain('last delivery price')
+        ->and(app(MonthEndStockValuationService::class)->accountBalance($cid, $f['accounts']['1200']->id, '2026-09-30'))->toBe(round(725 * 400, 2));
+});
+
+test('last delivery price writes the stock up to a higher bill rate, ignoring a lower rate on the 1st', function () {
+    $f = monthEndFixture(380); // 1 Oct rate is lower than cost: it must not matter
+    $cid = $f['company']->id;
+    \App\Modules\FuelStation\Models\StationSettings::forCompany($cid)->update(['month_end_stock_valuation' => 'last_delivery_price']);
+    monthEndDelivery($f, '2026-09-20', 420);
+
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    $live = monthEndLive($cid);
+    expect($live)->toHaveCount(1)
+        ->and((float) $live->first()->metadata['amount'])->toBe(round(725 * 407.4456 - 725 * 420, 2))
+        ->and(app(MonthEndStockValuationService::class)->accountBalance($cid, $f['accounts']['1200']->id, '2026-09-30'))->toBe(round(725 * 420, 2));
+});
+
+test('changing the valuation setting re-values an unlocked closed month', function () {
+    $f = monthEndFixture(395.80);
+    $cid = $f['company']->id;
+    monthEndDelivery($f, '2026-09-20', 420);
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+    $first = monthEndLive($cid)->first();
+    expect((float) $first->metadata['new_rate'])->toBe(395.8);
+
+    app(\App\Modules\FuelStation\Services\StationSettingsService::class)
+        ->update($cid, ['month_end_stock_valuation' => 'last_delivery_price'], $f['user']->id);
+
+    $live = monthEndLive($cid);
+    expect($live)->toHaveCount(1)
+        ->and($live->first()->id)->not->toBe($first->id)
+        ->and((float) $live->first()->metadata['new_rate'])->toBe(420.0)
+        ->and($first->fresh()->reversed_by_id)->not->toBeNull();
+});
+
+test('the next month statement opens at last month closing value after its month-end write-down', function () {
+    test()->travelTo(\Carbon\Carbon::parse('2026-10-02 09:00:00'));
+    $f = monthEndFixture(395.80);
+    $cid = $f['company']->id;
+    $itemId = $f['item']->id;
+    $tankId = $f['tank']->id;
+    monthEndDelivery($f, '2026-09-20', 400); // the last bill rate differs from the month-end rate
+    app(MonthEndStockValuationService::class)->sync($cid, '2026-09');
+
+    // The 30 Sep count the October statement opens from, and the 1 Oct close.
+    $snapshot = fn (float $dip) => ['fuel_sales' => [], 'posting_snapshot' => ['tanks' => [[
+        'tank_id' => $tankId, 'item_id' => $itemId, 'expected_liters' => 725, 'physical_liters' => $dip, 'variance_liters' => 0,
+    ]], 'nozzles' => []]];
+    foreach (['2026-09-30', '2026-10-01'] as $date) {
+        Transaction::create([
+            'company_id' => $cid, ...fixtureYearAndPeriod($cid),
+            'transaction_number' => 'DC-'.$date.'-'.str()->random(4), 'transaction_type' => 'fuel_daily_close',
+            'transaction_date' => $date, 'posting_date' => $date, 'description' => 'Daily close '.$date,
+            'currency' => 'PKR', 'total_debit' => 0, 'total_credit' => 0, 'status' => 'posted', 'metadata' => $snapshot(725),
+        ]);
+    }
+
+    $totals = app(\App\Modules\FuelStation\Services\StockStatementService::class)->run($cid, $itemId, '2026-10-01', '2026-10-31')['totals'];
+
+    expect((float) $totals['opening'])->toBe(725.0)
+        ->and((float) $totals['opening_value'])->toBe(round(725 * 395.80, 2)) // not 725 x the last bill rate of 400
+        ->and((float) $totals['opening_rate'])->toBe(395.8)
+        ->and((float) $totals['available_value'])->toBe(round(725 * 395.80, 2) + (float) $totals['purchase_amount']);
+});

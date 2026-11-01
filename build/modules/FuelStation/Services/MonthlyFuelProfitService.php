@@ -22,6 +22,8 @@ class MonthlyFuelProfitService
         $start = Carbon::parse($month.'-01');
         $end = $start->copy()->endOfMonth();
         $next = $end->copy()->addDay()->toDateString();
+        $rates = app(MonthEndRateService::class);
+        $method = $rates->method($companyId);
         $lines = [];
         $missing = [];
         $totals = ['sales' => 0.0, 'opening_value' => 0.0, 'purchases' => 0.0, 'closing_value' => 0.0, 'fuel_profit' => 0.0];
@@ -44,8 +46,8 @@ class MonthlyFuelProfitService
 
             $statement = $this->statements->run($companyId, $item->id, $start->toDateString(), $end->toDateString());
             $stock = $statement['totals'];
-            $openingRate = $this->rateAt($companyId, $item->id, $start->toDateString());
-            $closingRate = $this->rateAt($companyId, $item->id, $next);
+            $openingRate = $rates->rateFor($companyId, $item->id, $start->copy()->subMonth()->format('Y-m'));
+            $closingRate = $rates->rateFor($companyId, $item->id, $month);
             $carried = collect($previous['lines'] ?? [])->firstWhere('item_id', $item->id);
             if ($carried !== null) {
                 $openingRate = $carried['closing_rate'];
@@ -104,7 +106,7 @@ class MonthlyFuelProfitService
         return [
             'month' => $month, 'next_rate_date' => $next, 'complete' => $missing === [] && $lines !== [],
             'missing_products' => $missing, 'lines' => $lines, 'totals' => $totals,
-            'method' => 'next_month_purchase_rate', 'finalized' => false,
+            'method' => $method, 'finalized' => false,
             'reconciliation' => $canReconcile ? [
                 'book_fuel_profit' => $books['fuel_profit'], 'book_net_profit' => $product === 'all' ? $books['net_profit'] : null,
                 'adjustment' => $adjustment,
@@ -121,7 +123,7 @@ class MonthlyFuelProfitService
             return;
         }
         $method = DB::table('fuel.station_settings')->where('company_id', $companyId)->value('month_end_stock_valuation');
-        if ($method !== 'next_month_purchase_rate') {
+        if (! in_array($method, ['next_month_purchase_rate', 'last_delivery_price'], true)) {
             return;
         }
         $payload = $this->run($companyId, $month);
@@ -187,13 +189,5 @@ class MonthlyFuelProfitService
             'fuel_profit' => round((float) $rows->whereIn('id', array_unique($fuelAccountIds))->sum('net'), 2),
             'net_profit' => round((float) $rows->sum('net'), 2),
         ];
-    }
-
-    private function rateAt(string $companyId, string $itemId, string $date): ?float
-    {
-        $rate = DB::table('fuel.rate_changes')->where('company_id', $companyId)->where('item_id', $itemId)
-            ->whereDate('effective_date', '<=', $date)->orderByDesc('effective_date')->value('purchase_rate');
-
-        return $rate === null ? null : (float) $rate;
     }
 }

@@ -187,7 +187,7 @@ class StationPerformanceReportService
                 }
                 $saved = DB::table('fuel.month_profit_snapshots')->where('company_id', $companyId)
                     ->where('month', $month->toDateString())->whereNull('reopened_at')->exists();
-                if ($valuationMethod !== 'next_month_purchase_rate' && ! $saved) {
+                if ($valuationMethod === 'inventory_cost' && ! $saved) {
                     continue;
                 }
                 $monthlyFuelProfit[] = app(MonthlyFuelProfitService::class)->run($companyId, $month->format('Y-m'), $product);

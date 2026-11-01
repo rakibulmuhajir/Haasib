@@ -81,8 +81,8 @@ class StockStatementReportController extends Controller
             ],
             // A station that carries last month's stock into the next (Settings: month-end stock
             // valuation at the next month's rate) reads its statement with the opening counted in.
-            'includeOpeningDefault' => \Illuminate\Support\Facades\DB::table('fuel.station_settings')
-                ->where('company_id', $company->id)->value('month_end_stock_valuation') === 'next_month_purchase_rate',
+            'includeOpeningDefault' => (\Illuminate\Support\Facades\DB::table('fuel.station_settings')
+                ->where('company_id', $company->id)->value('month_end_stock_valuation') ?: 'inventory_cost') !== 'inventory_cost',
             // One tank fuel: how its profit over the range is worked out (bottom of the page).
             'categories' => $categories,
             'profitWorking' => empty($report['combined']) && $itemId !== '' && $categoryId === ''

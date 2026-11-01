@@ -1237,8 +1237,8 @@ class DailyCloseController extends Controller
 
         return Inertia::render('FuelStation/DailyClose/Month', [
             // Opening stock counted in by default when the station carries stock into the next month.
-            'includeOpeningDefault' => \Illuminate\Support\Facades\DB::table('fuel.station_settings')
-                ->where('company_id', $company->id)->value('month_end_stock_valuation') === 'next_month_purchase_rate',
+            'includeOpeningDefault' => (\Illuminate\Support\Facades\DB::table('fuel.station_settings')
+                ->where('company_id', $company->id)->value('month_end_stock_valuation') ?: 'inventory_cost') !== 'inventory_cost',
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,

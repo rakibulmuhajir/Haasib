@@ -157,7 +157,7 @@ const props = defineProps<{
   productOptions: ProductOption[]
   cashRows: CashRow[]
   movementTotals: MovementTotals
-  monthEndStockValuation: 'inventory_cost' | 'next_month_purchase_rate'
+  monthEndStockValuation: 'inventory_cost' | 'next_month_purchase_rate' | 'last_delivery_price'
   monthlyFuelProfit: MonthlyFuelProfit[]
 }>()
 
@@ -391,10 +391,10 @@ const movementCards = computed(() => [
         </CardContent>
       </Card>
 
-      <Card v-if="groupBy === 'month' && (monthEndStockValuation === 'next_month_purchase_rate' || monthlyFuelProfit.length)">
+      <Card v-if="groupBy === 'month' && (monthEndStockValuation !== 'inventory_cost' || monthlyFuelProfit.length)">
         <CardHeader>
           <CardTitle>Monthly fuel profit at purchase rates</CardTitle>
-          <CardDescription>Opening stock uses this month's first-day purchase rate. Closing stock uses the next month's first-day rate. This management calculation does not change the accounting Profit &amp; Loss.</CardDescription>
+          <CardDescription>{{ monthEndStockValuation === 'last_delivery_price' ? 'Stock at the last delivery price of each month.' : "Stock at the purchase rate on the next month's 1st." }}</CardDescription>
         </CardHeader>
         <CardContent class="space-y-5">
           <p v-if="!monthlyFuelProfit.length" class="text-sm text-muted-foreground">Select a complete calendar month to see the stock valuation.</p>

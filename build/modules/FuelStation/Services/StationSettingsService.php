@@ -25,11 +25,45 @@ class StationSettingsService
             $fuelProducts = $validated['fuel_products'] ?? [];
             unset($validated['fuel_products']);
 
+            $valuationChanged = array_key_exists('month_end_stock_valuation', $validated)
+                && $validated['month_end_stock_valuation'] !== $settings->month_end_stock_valuation;
+
             $settings->update($validated);
             app(StationAccountMapper::class)->ensureMappings($settings->fresh(), $userId);
             $this->updateFuelProductMappings($companyId, $fuelProducts);
 
+            if ($valuationChanged) {
+                $this->revalueClosedMonths($companyId);
+            }
+
         });
+    }
+
+    /**
+     * The valuation method changed: re-value every closed month, oldest first. Locked months keep
+     * the value they were locked with.
+     */
+    private function revalueClosedMonths(string $companyId): void
+    {
+        $locked = app(DailyCloseLockService::class)->lockedMonths($companyId);
+        $service = app(MonthEndStockValuationService::class);
+
+        $months = DB::table('acct.transactions')
+            ->where('company_id', $companyId)
+            ->where('transaction_type', 'fuel_daily_close')
+            ->whereIn('status', ['posted', 'locked'])
+            ->whereNull('deleted_at')->whereNull('reversed_by_id')
+            ->pluck('transaction_date')
+            ->map(fn ($date) => \Carbon\Carbon::parse($date))
+            ->filter(fn ($day) => $day->toDateString() === $day->copy()->endOfMonth()->toDateString())
+            ->map(fn ($day) => $day->format('Y-m'))
+            ->unique()->sort()->values();
+
+        foreach ($months as $month) {
+            if (! in_array($month, $locked, true)) {
+                $service->syncWithin($companyId, $month);
+            }
+        }
     }
 
     private function updateFuelProductMappings(string $companyId, array $fuelProducts): void

@@ -55,7 +55,7 @@ interface FuelProductAccountMapping {
 interface StationSettingsData {
   id: string
   fuel_vendor: string
-  month_end_stock_valuation: 'inventory_cost' | 'next_month_purchase_rate'
+  month_end_stock_valuation: 'inventory_cost' | 'next_month_purchase_rate' | 'last_delivery_price'
   supplier_payment_allocation?: 'oldest_first' | 'keep_as_credit'
   has_partners: boolean
   has_amanat: boolean
@@ -413,20 +413,27 @@ const formatFuelCategory = (category: string | null) => {
             <SelectContent>
               <SelectItem value="inventory_cost">Recorded inventory cost</SelectItem>
               <SelectItem value="next_month_purchase_rate">Purchase rate on the next month's first day</SelectItem>
+              <SelectItem value="last_delivery_price">Last delivery price of the month</SelectItem>
             </SelectContent>
           </Select>
           <!-- How each choice works out a month's fuel profit, in plain words, with a worked example. -->
           <div class="max-w-2xl rounded-md border border-rule-default p-3 text-sm">
             <p class="mb-2 font-medium">How a month's fuel profit is worked out</p>
-            <template v-if="form.month_end_stock_valuation === 'next_month_purchase_rate'">
+            <template v-if="form.month_end_stock_valuation !== 'inventory_cost'">
               <ol class="list-decimal space-y-0.5 pl-5">
                 <li>Sales for the month</li>
-                <li>+ fuel left in the tank (closing dip) × the purchase rate on the 1st of next month</li>
+                <li v-if="form.month_end_stock_valuation === 'last_delivery_price'">+ fuel left in the tank (closing dip) × the month's last delivery price</li>
+                <li v-else>+ fuel left in the tank (closing dip) × the purchase rate on the 1st of next month</li>
                 <li>− last month's stock (its closing value, carried in)</li>
                 <li>− everything bought this month (bills)</li>
                 <li>= fuel profit — tank gains and losses are included, as the dip counts what is really there</li>
               </ol>
-              <p class="mt-2 text-xs text-muted-foreground">
+              <p v-if="form.month_end_stock_valuation === 'last_delivery_price'" class="mt-2 text-xs text-muted-foreground">
+                Example, petrol: closing 6,040 L × 384.23 last delivery = 2,320,749.
+                Last month's stock is counted in Bought on the stock statement and month summary.
+                The books value that stock at this price on the month's last day, up or down.
+              </p>
+              <p v-else class="mt-2 text-xs text-muted-foreground">
                 Example, diesel: sales 14,415,246 + 725 L × 395.80 = 286,955 − 2,671,421 last month − 11,388,054 bought = 642,727.
                 Last month's stock is counted in Bought on the stock statement and month summary.
                 The books value that stock at the new rate on the month's last day, up or down, so their profit matches this.

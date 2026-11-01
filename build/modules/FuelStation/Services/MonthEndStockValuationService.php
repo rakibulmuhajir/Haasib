@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
 
 /**
  * Month-end value of the fuel in the tanks: lower of cost or the next month's purchase rate --
- * or, when the station values month-end stock at the next month's rate, that rate either way.
+ * or, when the station values month-end stock at a rate (the next month's purchase rate, or the
+ * last delivery price -- see MonthEndRateService), that rate either way.
  *
  * The fuel left in the tanks on a month's last day is valued at what it cost
  * (FuelCostService), unless the purchase rate in force on the 1st of the next month is lower:
@@ -41,6 +42,7 @@ class MonthEndStockValuationService
     public function __construct(
         private readonly FuelCostService $costs,
         private readonly GlPostingService $posting,
+        private readonly MonthEndRateService $rates,
     ) {}
 
     /**
@@ -118,13 +120,14 @@ class MonthEndStockValuationService
         }
     }
 
-    /** After a close for $date posts (or re-posts) or is reopened: only a month's last day matters. */
+    /**
+     * After a close for $date posts (or re-posts) or is reopened: re-values that date's month. sync()
+     * does nothing until the month's last day is closed, so a mid-month day is harmless -- and a
+     * reopened mid-month day that adds or edits a delivery bill re-values a closed month.
+     */
     public function syncForCloseDate(string $companyId, string $date): void
     {
-        $day = Carbon::parse($date);
-        if ($day->toDateString() === $day->copy()->endOfMonth()->toDateString()) {
-            $this->syncWithin($companyId, $day->format('Y-m'));
-        }
+        $this->syncWithin($companyId, Carbon::parse($date)->format('Y-m'));
     }
 
     /**
@@ -158,11 +161,7 @@ class MonthEndStockValuationService
                 ->where('company_id', $companyId)->where('item_id', $item->id)
                 ->whereDate('reading_date', $lastDay)->sum('dip_measurement_liters');
             $walkCost = $this->costs->costForDay($companyId, $item->id, $lastDay);
-            $latest = DB::table('fuel.rate_changes')
-                ->where('company_id', $companyId)->where('item_id', $item->id)
-                ->whereDate('effective_date', '<=', $nextFirst)
-                ->orderByDesc('effective_date')->first(['purchase_rate']);
-            $rate = $latest ? (float) $latest->purchase_rate : null;
+            $rate = $this->rates->rateFor($companyId, $item->id, $month);
 
             $shared = ! $item->asset_account_id || DB::table('inv.items')
                 ->where('company_id', $companyId)->where('asset_account_id', $item->asset_account_id)
@@ -183,7 +182,7 @@ class MonthEndStockValuationService
                 // stock is the station's and will be sold at the new prices either way); at
                 // recorded cost a rise waits until the fuel is sold.
                 $difference = round($book - $quantity * $rate, 2);
-                if ($difference > 0 || ($difference < 0 && $this->valuesAtNextRate($companyId))) {
+                if ($difference > 0 || ($difference < 0 && $this->writesUp($companyId))) {
                     $desired = $difference;
                 }
             }
@@ -221,10 +220,10 @@ class MonthEndStockValuationService
         return $row;
     }
 
-    private function valuesAtNextRate(string $companyId): bool
+    /** Both rate methods write up as well as down; inventory_cost only writes down. */
+    private function writesUp(string $companyId): bool
     {
-        return DB::table('fuel.station_settings')->where('company_id', $companyId)
-            ->value('month_end_stock_valuation') === 'next_month_purchase_rate';
+        return $this->rates->method($companyId) !== 'inventory_cost';
     }
 
     /** Debit minus credit on an account up to and including a day, over posted or locked, live transactions. */
@@ -258,7 +257,9 @@ class MonthEndStockValuationService
     {
         $currency = DB::table('auth.companies')->where('id', $companyId)->value('base_currency') ?: 'PKR';
         $litres = rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
-        $text = sprintf('%s stock at new rate: %s L x (%s - %s)', $item->name, $litres, number_format($cost, 2, '.', ''), number_format($rate, 2, '.', ''));
+        $method = $this->rates->method($companyId);
+        $text = sprintf($method === 'last_delivery_price' ? '%s stock at last delivery price: %s L x (%s - %s)' : '%s stock at new rate: %s L x (%s - %s)',
+            $item->name, $litres, number_format($cost, 2, '.', ''), number_format($rate, 2, '.', ''));
 
         $transaction = $this->posting->postBalancedTransaction([
             'company_id' => $companyId,
@@ -272,7 +273,7 @@ class MonthEndStockValuationService
             'metadata' => [
                 'month' => $month, 'item_id' => $item->id, 'quantity' => round($quantity, 3),
                 'cost_rate' => round($cost, 4), 'new_rate' => round($rate, 2), 'amount' => $amount,
-                'book_value' => round($book, 2), 'basis' => $basis,
+                'book_value' => round($book, 2), 'basis' => $basis, 'method' => $method,
             ],
         ], $amount > 0 ? [
             ['account_id' => $item->expense_account_id, 'type' => 'debit', 'amount' => $amount, 'description' => $text],

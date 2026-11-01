@@ -85,7 +85,7 @@ const props = defineProps<{
   includeOpeningDefault?: boolean
   // One tank fuel: how its profit is worked out, from the books (StockStatementService::profitWorking).
   profitWorking?: {
-    method: 'inventory_cost' | 'next_month_purchase_rate'
+    method: 'inventory_cost' | 'next_month_purchase_rate' | 'last_delivery_price'
     opening_litres: number; bought_litres: number; sold_litres: number
     should_be_left: number; closing_litres: number; variance_litres: number
     sales: number; closing_value: number; closing_rate: number | null
@@ -251,7 +251,7 @@ const apply = () => {
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="totals.opening_value" side="left">
                     <MoneyText :amount="totals.opening_value" :currency="currency" :fraction-digits="0" />
-                    <template #content>{{ litres(totals.opening) }} {{ unitLabel }} @ {{ fmt.format(totals.opening_rate ?? 0) }}</template>
+                    <template #content>{{ litres(totals.opening) }} {{ unitLabel }} × {{ fmt.format(totals.opening_rate ?? 0) }} = {{ fmt.format(totals.opening_value ?? 0) }}</template>
                   </Hint>
                 </td>
                 <td class="px-3 py-1.5 text-right"><MoneyText v-if="totals.opening_value" :amount="totals.opening_value" :currency="currency" :fraction-digits="0" /></td>
@@ -406,7 +406,7 @@ const apply = () => {
         <h3 class="mb-3 font-semibold">
           How {{ item.name }}'s profit is worked out
           <span class="ml-1 text-xs font-normal text-muted-foreground">
-            · {{ profitWorking.method === 'next_month_purchase_rate' ? "stock at next month's purchase rate" : 'stock at recorded cost' }} (Station settings)
+            · {{ profitWorking.method === 'next_month_purchase_rate' ? "stock at next month's purchase rate" : profitWorking.method === 'last_delivery_price' ? 'stock at last delivery price' : 'stock at recorded cost' }} (Station settings)
           </span>
         </h3>
         <p class="mb-1 text-xs font-medium text-muted-foreground">Litres</p>

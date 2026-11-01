@@ -253,7 +253,23 @@ class StockStatementService
             'variance' => $tot['variance'],
         ];
 
-        return $this->withStockValues($companyId, $itemId, $startDate, $endDate, $result);
+        $result = $this->withStockValues($companyId, $itemId, $startDate, $endDate, $result);
+
+        // A product with its own stock account opens at last month's closing as the books carry it
+        // (after that month's end valuation), so the opening matches the month-end write-down and the
+        // accountant -- not the last bill's rate. Shared accounts keep the last-delivery rate.
+        $totals = $result['totals'];
+        // An opening the books never valued (litres with a zero balance) keeps the last-delivery
+        // estimate rather than reading as free stock.
+        if (($result['stock_value_basis'] ?? null) === 'books' && $totals['opening'] !== null
+            && ! ((float) $totals['opening'] > 0.0001 && abs((float) ($totals['opening_stock_value'] ?? 0)) < 0.005)) {
+            $openingValue = (float) $totals['opening_stock_value'];
+            $result['totals']['opening_value'] = $openingValue;
+            $result['totals']['opening_rate'] = $totals['opening'] > 0 ? round($openingValue / $totals['opening'], 4) : null;
+            $result['totals']['available_value'] = $openingValue + $totals['purchase_amount'];
+        }
+
+        return $result;
     }
 
     /**
@@ -332,32 +348,7 @@ class StockStatementService
      */
     private function openingRate(string $companyId, string $itemId, string $start, bool $tank): ?float
     {
-        $bills = fn () => DB::table('acct.bill_line_items as l')
-            ->join('acct.bills as b', 'b.id', '=', 'l.bill_id')
-            ->where('b.company_id', $companyId)
-            ->whereNull('b.deleted_at')->whereNull('l.deleted_at')
-            ->whereNotIn('b.status', ['draft', 'void', 'cancelled'])
-            ->where('l.item_id', $itemId)
-            ->when($tank, fn ($q) => $q->whereNotNull('l.warehouse_id'))
-            ->where('b.bill_date', '<', $start);
-        $lastDate = $bills()->max('b.bill_date');
-        if ($lastDate) {
-            $row = $bills()->whereDate('b.bill_date', $lastDate)->selectRaw('SUM(l.total) as amount, SUM(l.quantity) as qty')->first();
-            if ((float) $row->qty > 0) {
-                return round((float) $row->amount / (float) $row->qty, 4);
-            }
-        }
-
-        $opening = DB::table('inv.stock_movements')
-            ->where('company_id', $companyId)
-            ->where('item_id', $itemId)
-            ->where('movement_type', 'opening')
-            ->where('movement_date', '<', $start)
-            ->where('unit_cost', '>', 0)
-            ->selectRaw('SUM(total_cost) as amount, SUM(quantity) as qty')
-            ->first();
-
-        return $opening && (float) $opening->qty > 0 ? round((float) $opening->amount / (float) $opening->qty, 4) : null;
+        return app(MonthEndRateService::class)->lastDeliveryRate($companyId, $itemId, $start, $tank);
     }
 
     private function liveCloses(string $companyId)

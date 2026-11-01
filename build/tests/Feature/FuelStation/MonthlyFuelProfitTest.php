@@ -174,3 +174,61 @@ test('station settings persist the selected method and reject an unsupported met
         ->assertSessionHasErrors('month_end_stock_valuation');
     expect(StationSettings::where('company_id', $company->id)->value('month_end_stock_valuation'))->toBe('next_month_purchase_rate');
 });
+
+test('last delivery price values closing at the delivery rate and opening at the previous month delivery rate', function () {
+    $fixture = creditCloseFixture();
+    $cid = $fixture['company']->id;
+    $item = Item::where('company_id', $cid)->where('sku', 'PETROL')->sole();
+    $item->update(['fuel_category' => 'petrol']);
+    $tank = Warehouse::where('company_id', $cid)->where('linked_item_id', $item->id)->first();
+    $tank->update(['warehouse_type' => 'tank', 'capacity' => 40000, 'is_active' => true]);
+    StationSettings::where('company_id', $cid)->update(['month_end_stock_valuation' => 'last_delivery_price']);
+    // Purchase rates on the 1st are different and must be ignored.
+    RateChange::create(['company_id' => $cid, 'item_id' => $item->id, 'effective_date' => '2026-09-01', 'purchase_rate' => 1, 'sale_rate' => 400]);
+    RateChange::create(['company_id' => $cid, 'item_id' => $item->id, 'effective_date' => '2026-10-01', 'purchase_rate' => 2, 'sale_rate' => 410]);
+
+    $vendorId = (string) str()->uuid();
+    DB::table('acct.vendors')->insert(['id' => $vendorId, 'company_id' => $cid, 'vendor_number' => 'V-'.str()->random(5), 'name' => 'Supplier', 'base_currency' => 'PKR']);
+    // One delivery in August at 380 and one in September at 384.23.
+    foreach ([['2026-08-20', 380, 'BILL-AUG'], ['2026-09-25', 384.23, 'BILL-SEP']] as [$date, $rate, $number]) {
+        $billId = (string) str()->uuid();
+        DB::table('acct.bills')->insert([
+            'id' => $billId, 'company_id' => $cid, 'vendor_id' => $vendorId, 'bill_number' => $number,
+            'bill_date' => $date, 'due_date' => $date, 'status' => 'received', 'currency' => 'PKR', 'base_currency' => 'PKR',
+            'subtotal' => 1000 * $rate, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => 1000 * $rate,
+            'paid_amount' => 0, 'balance' => 1000 * $rate, 'base_amount' => 1000 * $rate, 'payment_terms' => 30,
+        ]);
+        DB::table('acct.bill_line_items')->insert([
+            'id' => (string) str()->uuid(), 'company_id' => $cid, 'bill_id' => $billId, 'line_number' => 1,
+            'description' => 'Petrol', 'quantity' => 1000, 'unit_price' => $rate, 'tax_rate' => 0, 'discount_rate' => 0,
+            'line_total' => 1000 * $rate, 'tax_amount' => 0, 'total' => 1000 * $rate,
+            'item_id' => $item->id, 'warehouse_id' => $tank->id,
+        ]);
+    }
+
+    $statement = Mockery::mock(StockStatementService::class);
+    $statement->shouldReceive('run')->once()->andReturn([
+        'rows' => [['date' => '2026-09-30', 'dip' => 500, 'physical_reading_complete' => true]],
+        'totals' => ['opening' => 100, 'closing' => 500, 'received' => 1000, 'sold' => 600, 'sale_amount' => 240000, 'purchase_amount' => 384230],
+    ]);
+    app()->instance(StockStatementService::class, $statement);
+
+    $result = app(MonthlyFuelProfitService::class)->run($cid, '2026-09', 'petrol');
+
+    expect($result['method'])->toBe('last_delivery_price')
+        ->and($result['totals']['opening_value'])->toBe(38000.0)   // 100 L x the August delivery, 380
+        ->and($result['totals']['closing_value'])->toBe(192115.0)  // 500 L x the September delivery, 384.23
+        ->and($result['lines'][0]['closing_rate'])->toBe(384.23);
+});
+
+test('station settings accept the last delivery price method', function () {
+    $fixture = creditCloseFixture();
+    $company = $fixture['company'];
+    $company->update(['settings' => ['modules' => ['fuel_station' => true]]]);
+    $admin = \App\Models\User::factory()->create(['id' => '00000000-0000-0000-0000-'.bin2hex(random_bytes(6))]);
+
+    $this->actingAs($admin)->put("/{$company->slug}/fuel/settings", ['month_end_stock_valuation' => 'last_delivery_price'])
+        ->assertRedirect()->assertSessionHas('success');
+
+    expect(StationSettings::where('company_id', $company->id)->value('month_end_stock_valuation'))->toBe('last_delivery_price');
+});

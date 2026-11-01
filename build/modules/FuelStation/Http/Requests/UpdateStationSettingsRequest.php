@@ -27,7 +27,7 @@ class UpdateStationSettingsRequest extends BaseFormRequest
         $companyId = app(CurrentCompany::class)->get()->id;
 
         return [
-            'month_end_stock_valuation' => ['sometimes', 'required', Rule::in(['inventory_cost', 'next_month_purchase_rate'])],
+            'month_end_stock_valuation' => ['sometimes', 'required', Rule::in(\App\Modules\FuelStation\Services\MonthEndRateService::METHODS)],
             'supplier_payment_allocation' => ['sometimes', 'required', Rule::in(['oldest_first', 'keep_as_credit'])],
             'has_partners' => 'boolean',
             'has_amanat' => 'boolean',

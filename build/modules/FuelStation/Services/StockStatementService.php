@@ -40,10 +40,12 @@ class StockStatementService
         $books = app(MonthEndStockValuationService::class);
         $openingValue = $books->accountBalance($companyId, $accountId, Carbon::parse($startDate)->subDay()->toDateString());
         $closingValue = $books->accountBalance($companyId, $accountId, $endDate);
-        $opening = (float) ($t['opening'] ?? 0);
-        $bought = (float) ($t['received'] ?? 0);
-        $sold = (float) ($t['sold'] ?? 0);
-        $closing = (float) ($t['closing'] ?? 0);
+        // All the fuel's litres, temporary storage included: in and out on both sides, so the tank
+        // gain or loss comes out the same as the tank's own.
+        $opening = (float) ($t['opening'] ?? 0) + (float) ($t['temporary_opening'] ?? 0);
+        $bought = (float) ($t['received'] ?? 0) + (float) ($t['temporary_bought'] ?? 0);
+        $sold = (float) ($t['sold'] ?? 0) + (float) ($t['temporary_sold'] ?? 0);
+        $closing = (float) ($t['closing'] ?? 0) + (float) ($t['temporary_closing'] ?? 0);
         $sales = round((float) ($t['sale_amount'] ?? 0), 2);
         $purchases = round((float) ($t['purchase_amount'] ?? 0), 2);
         $closingRate = $closing > 0 ? $closingValue / $closing : null;
@@ -272,6 +274,9 @@ class StockStatementService
             'temporary_sold' => $tot['temporary_sold'],
             'temporary_opening' => $temporary['opening'],
             'temporary_closing' => $temporary['closing'],
+            // Litres bought and sold with temporary storage counted in, for the totals shown.
+            'received_total' => ($tot['received'] ?? 0.0) + $tot['temporary_bought'],
+            'sold_total' => $tot['sold'] + $tot['temporary_sold'],
         ];
 
         $result = $this->withStockValues($companyId, $itemId, $startDate, $endDate, $result);

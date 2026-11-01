@@ -84,6 +84,10 @@ interface Totals {
   available_value: number | null
   opening_stock_value?: number | null
   closing_value?: number | null
+  temporary_bought?: number
+  temporary_sold?: number
+  received_total?: number | null
+  sold_total?: number
 }
 
 const props = defineProps<{
@@ -123,7 +127,9 @@ const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 // in. Recorded cost: the opening sits on its own line and Available = opening + bought shows below.
 const includeOpening = computed(() => Boolean(props.includeOpeningDefault))
 const openingValue = computed(() => (includeOpening.value ? props.totals.opening_value ?? 0 : 0))
-const boughtTotal = computed(() => (includeOpening.value ? props.totals.available : props.totals.received))
+// Temporary storage counts in the litres bought and sold, though not in the tank balance.
+const tempBought = computed(() => props.totals.temporary_bought ?? 0)
+const boughtTotal = computed(() => (includeOpening.value ? (props.totals.available === null ? null : props.totals.available + tempBought.value) : props.totals.received_total ?? props.totals.received))
 const purchaseTotal = computed(() => (includeOpening.value ? props.totals.available_value ?? props.totals.purchase_amount : props.totals.purchase_amount))
 const purchaseRateTotal = computed(() => {
   const litres = boughtTotal.value ?? 0
@@ -391,7 +397,10 @@ const apply = () => {
                 </Hint>
               </td>
               <td></td>
-              <td class="px-3 py-2 text-right">{{ litres(totals.sold) }}</td>
+              <td class="px-3 py-2 text-right">
+                {{ litres(totals.sold_total ?? totals.sold) }}
+                <div v-if="totals.temporary_sold" class="text-xs font-normal text-muted-foreground">{{ litres(totals.temporary_sold) }} temporary</div>
+              </td>
               <td class="px-3 py-2 text-right">
                 <Hint side="left">
                   <MoneyText :amount="totals.sale_amount" :currency="currency" :fraction-digits="0" />

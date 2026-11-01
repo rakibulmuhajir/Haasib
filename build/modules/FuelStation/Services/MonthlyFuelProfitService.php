@@ -77,8 +77,8 @@ class MonthlyFuelProfitService
             $lines[] = [
                 'item_id' => $item->id, 'item' => $item->name, 'category' => $category,
                 'opening_liters' => (float) $stock['opening'], 'opening_rate' => $openingRate, 'opening_value' => $opening,
-                'purchased_liters' => (float) ($stock['received'] ?? 0), 'purchases' => $purchases,
-                'sold_liters' => (float) $stock['sold'], 'sales' => $sales,
+                'purchased_liters' => (float) ($stock['received_total'] ?? $stock['received'] ?? 0), 'purchases' => $purchases,
+                'sold_liters' => (float) ($stock['sold_total'] ?? $stock['sold']), 'sales' => $sales,
                 'closing_liters' => (float) $stock['closing'], 'closing_rate' => $closingRate, 'closing_value' => $closing,
                 'temporary_opening_liters' => $tempOpening, 'temporary_closing_liters' => $tempClosing,
                 'fuel_profit' => $profit,

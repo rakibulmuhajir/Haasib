@@ -128,6 +128,9 @@ const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 const includeOpening = computed(() => Boolean(props.includeOpeningDefault))
 const openingValue = computed(() => (includeOpening.value ? props.totals.opening_value ?? 0 : 0))
 // Temporary storage counts in the litres bought and sold, though not in the tank balance.
+// A day's litres in and out, temporary storage included (its litres stay out of the tank balance).
+const boughtOf = (r: Row) => (r.received ?? 0) + (r.temporary_bought ?? 0)
+const soldOf = (r: Row) => (r.sold ?? 0) + (r.temporary_sold ?? 0)
 const tempBought = computed(() => props.totals.temporary_bought ?? 0)
 const boughtTotal = computed(() => (includeOpening.value ? (props.totals.available === null ? null : props.totals.available + tempBought.value) : props.totals.received_total ?? props.totals.received))
 const purchaseTotal = computed(() => (includeOpening.value ? props.totals.available_value ?? props.totals.purchase_amount : props.totals.purchase_amount))
@@ -279,8 +282,7 @@ const apply = () => {
               <template v-if="r.missing">
                 <td class="px-3 py-1.5 text-muted-foreground">{{ shortDate(r.date) }}</td>
                 <td class="px-3 py-1.5 text-right">
-                  {{ r.received ? litres(r.received) : '' }}
-                <div v-if="r.temporary_bought" class="text-xs text-muted-foreground">{{ litres(r.temporary_bought) }} temporary</div>
+                  {{ boughtOf(r) ? litres(boughtOf(r)) : '' }}
                 </td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.purchase_amount" side="left">
@@ -310,11 +312,10 @@ const apply = () => {
                 <td v-if="combined" class="px-3 py-1.5">{{ r.product }}</td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.received_direct" side="left">
-                    {{ litres(r.received) }}
+                    {{ litres(boughtOf(r)) }}
                     <template #content>{{ litres(r.received_direct) }} {{ rowUnit(r) }} sold straight off the tanker.</template>
                   </Hint>
-                  <template v-else>{{ r.received ? litres(r.received) : '' }}</template>
-                <div v-if="r.temporary_bought" class="text-xs text-muted-foreground">{{ litres(r.temporary_bought) }} temporary</div>
+                  <template v-else>{{ boughtOf(r) ? litres(boughtOf(r)) : '' }}</template>
                 </td>
                 <!-- The rate and the bills behind the amount. -->
                 <td class="px-3 py-1.5 text-right">
@@ -336,14 +337,13 @@ const apply = () => {
                 <td class="px-3 py-1.5 text-right text-muted-foreground"><MoneyText :amount="(r.purchase_running ?? 0) + openingValue" :currency="currency" :fraction-digits="0" /></td>
                 <td class="px-3 py-1.5 text-right">
                   <Hint v-if="r.sold_direct" side="left">
-                    {{ litres(r.sold) }}
+                    {{ litres(soldOf(r)) }}
                     <template #content>
                       <div class="flex justify-between gap-4"><span>Pumps</span><span>{{ litres(r.sold_pumps ?? 0) }} {{ rowUnit(r) }}</span></div>
-                      <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct) }} {{ rowUnit(r) }}</span></div>
+                      <div class="flex justify-between gap-4"><span>Off the tanker</span><span>{{ litres(r.sold_direct + (r.temporary_sold ?? 0)) }} {{ rowUnit(r) }}</span></div>
                     </template>
                   </Hint>
-                  <template v-else>{{ r.sold ? litres(r.sold) : '' }}</template>
-                <div v-if="r.temporary_sold" class="text-xs text-muted-foreground">{{ litres(r.temporary_sold) }} temporary</div>
+                  <template v-else>{{ soldOf(r) ? litres(soldOf(r)) : '' }}</template>
                 </td>
                 <!-- The rate (both, on a day the rate changed) and the off-tanker invoices. -->
                 <td class="px-3 py-1.5 text-right">
@@ -399,7 +399,6 @@ const apply = () => {
               <td></td>
               <td class="px-3 py-2 text-right">
                 {{ litres(totals.sold_total ?? totals.sold) }}
-                <div v-if="totals.temporary_sold" class="text-xs font-normal text-muted-foreground">{{ litres(totals.temporary_sold) }} temporary</div>
               </td>
               <td class="px-3 py-2 text-right">
                 <Hint side="left">

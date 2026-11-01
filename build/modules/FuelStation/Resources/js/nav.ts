@@ -59,14 +59,14 @@ export const fuelStationNav: ModuleNavConfig = {
         ...item('investors', 'Investors', '/fuel/investors', UsersRound, fuelNavigation?.hasInvestors === true),
       ] },
       { label: t('reports'), items: [
-        // Nine reports, not twelve: the rest open from inside these pages -- the stock statement is a
-        // Statements tab, Tank Gains & Losses links from Month Summary and the stock statement,
-        // Trial Balance from the Balance Sheet, Journal Entries from all three accounting reports.
-        // Expenses has its own entry: a month's spending, no opening balance.
+        // Ten reports: the rest open from inside these pages -- the stock statement is a Statements
+        // tab, Trial Balance from the Balance Sheet, Journal Entries from all three accounting
+        // reports. Expenses and Tank Gains & Losses have their own entries: each is read monthly.
         ...item('reports', 'Month Summary', '/fuel/daily-close/month', CalendarDays),
         ...item('reports', 'Profit by day', '/fuel/reports/performance', BarChart3),
         ...item('reports', 'Fuel Profit', '/fuel/reports/product-profitability', Package),
         ...item('reports', 'Expenses', '/fuel/reports/expenses', ReceiptText),
+        ...item('reports', 'Tank Gains & Losses', '/fuel/reports/stock-variance', Droplets),
         ...item('reports', 'Profit & Loss', '/reports/profit-loss', BarChart3),
         ...item('reports', 'Balance Sheet', '/reports/balance-sheet', Scale),
         ...item('reports', 'Who Owes Us', '/reports/receivables-aging', Clock),

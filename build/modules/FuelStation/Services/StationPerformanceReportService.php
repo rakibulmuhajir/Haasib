@@ -209,7 +209,50 @@ class StationPerformanceReportService
             'movementTotals' => $movementTotals,
             'monthEndStockValuation' => $valuationMethod,
             'monthlyFuelProfit' => $monthlyFuelProfit,
+            // By day over whole months: the stock rolled over in from the month before and out to
+            // the next, litres x the rate the books carry it at.
+            'rolledOver' => $groupBy === 'day' ? [
+                'in' => Carbon::parse($startDate)->day === 1
+                    ? $this->rolledOverStock($companyId, Carbon::parse($startDate)->subDay()->toDateString(), $product) : null,
+                'out' => Carbon::parse($endDate)->isLastOfMonth()
+                    ? $this->rolledOverStock($companyId, $endDate, $product) : null,
+            ] : null,
         ];
+    }
+
+    /**
+     * The fuel in the tanks at the end of $date as the books carry it: the dip litres, and the
+     * stock account's balance that night (after a month-end valuation on its last day). Tank fuels
+     * with a stock account of their own only -- a shared account cannot say one fuel's value.
+     *
+     * @return array{month:string,lines:array<int,array<string,mixed>>}|null
+     */
+    private function rolledOverStock(string $companyId, string $date, string $product): ?array
+    {
+        $items = DB::table('inv.warehouses as w')
+            ->join('inv.items as i', 'i.id', '=', 'w.linked_item_id')
+            ->where('w.company_id', $companyId)->where('w.warehouse_type', 'tank')
+            ->whereNull('w.deleted_at')->whereNull('i.deleted_at')->whereNotNull('i.asset_account_id')
+            ->distinct()->get(['i.id', 'i.name', 'i.fuel_category', 'i.asset_account_id']);
+        $valuation = app(MonthEndStockValuationService::class);
+        $lines = [];
+        foreach ($items as $item) {
+            $category = $item->fuel_category ?: str($item->name)->slug('-')->toString();
+            if ($product !== 'all' && $category !== $product) {
+                continue;
+            }
+            $shared = DB::table('inv.items')->where('company_id', $companyId)->where('asset_account_id', $item->asset_account_id)
+                ->where('id', '!=', $item->id)->whereNull('deleted_at')->exists();
+            $litres = (float) DB::table('fuel.tank_readings')->where('company_id', $companyId)->where('item_id', $item->id)
+                ->whereDate('reading_date', $date)->sum('dip_measurement_liters');
+            if ($shared || $litres <= 0) {
+                continue;
+            }
+            $value = $valuation->accountBalance($companyId, $item->asset_account_id, $date);
+            $lines[] = ['item' => $item->name, 'litres' => $litres, 'rate' => round($value / $litres, 2), 'value' => $value];
+        }
+
+        return $lines === [] ? null : ['month' => Carbon::parse($date)->format('F'), 'lines' => $lines];
     }
 
     /**

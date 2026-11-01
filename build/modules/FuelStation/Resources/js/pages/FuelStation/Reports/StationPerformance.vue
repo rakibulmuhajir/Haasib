@@ -148,6 +148,9 @@ interface MonthlyFuelProfit {
   reconciliation: { book_fuel_profit: number; book_net_profit: number | null; adjustment: number | null; net_station_profit: number | null } | null
 }
 
+// Stock rolled over between months: litres x the rate the books carry it at.
+interface RolledOver { month: string; lines: { item: string; litres: number; rate: number; value: number }[] }
+
 const props = defineProps<{
   company: Company
   filters: Filters
@@ -159,6 +162,7 @@ const props = defineProps<{
   movementTotals: MovementTotals
   monthEndStockValuation: 'inventory_cost' | 'next_month_purchase_rate' | 'last_delivery_price'
   monthlyFuelProfit: MonthlyFuelProfit[]
+  rolledOver?: { in: RolledOver | null; out: RolledOver | null } | null
 }>()
 
 const startDate = ref(props.filters.start_date)
@@ -495,6 +499,10 @@ const movementCards = computed(() => [
             </CardDescription>
           </CardHeader>
           <CardContent class="p-0">
+            <div v-if="rolledOver?.in" class="flex flex-wrap gap-x-6 gap-y-1 border-b border-rule-default px-4 py-2 text-sm tabular-nums">
+              <span class="font-medium">Rolled over from {{ rolledOver.in.month }}</span>
+              <span v-for="l in rolledOver.in.lines" :key="l.item">{{ l.item }}: {{ number(l.litres) }} L × {{ number(l.rate, 2) }} = <MoneyText :amount="l.value" :currency="company.base_currency" /></span>
+            </div>
             <LedgerRegister :data="rows" :columns="performanceColumns" key-field="key" :expanded="(row: any) => isOpen(row)">
               <template #empty>No posted Daily Close records found for this range.</template>
 
@@ -583,6 +591,10 @@ const movementCards = computed(() => [
                 </div>
               </template>
             </LedgerRegister>
+            <div v-if="rolledOver?.out" class="flex flex-wrap gap-x-6 gap-y-1 border-t border-rule-default px-4 py-2 text-sm tabular-nums">
+              <span class="font-medium">Rolled over to next month ({{ rolledOver.out.month }} closing)</span>
+              <span v-for="l in rolledOver.out.lines" :key="l.item">{{ l.item }}: {{ number(l.litres) }} L × {{ number(l.rate, 2) }} = <MoneyText :amount="l.value" :currency="company.base_currency" /></span>
+            </div>
           </CardContent>
         </Card>
 

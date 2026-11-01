@@ -1,0 +1,1 @@
+function r(e){switch(e){case"cash":return"Cash";case"bank_transfer":return"Bank Transfer";case"card":return"Card";case"cheque":case"check":return"Cheque";default:{const a=(e||"").replace(/_/g," ");return a.charAt(0).toUpperCase()+a.slice(1)}}}export{r as p};
